@@ -1306,9 +1306,10 @@ class ProductImportService
             return 0.0;
         }
 
-        $lumens = $rawLumens < 100.0 ? $rawLumens * 1000.0 : $rawLumens;
-
-        return $lumens * max(1, $numLamps);
+        // EULUMDAT declara este campo en lumen, también cuando el flujo es
+        // menor de 100 lm (común en señales y luminarias de emergencia).
+        // Interpretarlo como klm convertía, por ejemplo, 20 lm en 20 000 lm.
+        return $rawLumens * max(1, $numLamps);
     }
 
     /**

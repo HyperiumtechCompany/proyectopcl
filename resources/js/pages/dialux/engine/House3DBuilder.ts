@@ -632,8 +632,33 @@ export class House3DBuilder {
         return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
     }
 
+    /** Ningún proyecto real supera esta escala; un vértice más allá es dato corrupto (NaN/drag degenerado), no geometría legítima. */
+    static readonly MAX_ROOM_COORD_M = 5000;
+
     sanitizeRoomShape(room: Room): Vector3[] {
-        const uniqueVertices = room.vertices.filter((vertex, index, array) => {
+        // Un vértice no finito o astronómicamente grande (ej. un drag de
+        // vértice que capturó un frame con cámara degenerada, o corrupción
+        // de datos previa) sobrevive al filtro de duplicados de abajo — los
+        // hypot() de un NaN/valor enorme siguen siendo "> 1e-5" — y produce
+        // un mesh 3D estirado a una geometría grotesca (un solo vértice malo
+        // arruina el recinto completo). Se descarta aquí, antes de cualquier
+        // cálculo geométrico, y se avisa una sola vez por recinto.
+        const filteredVertices = room.vertices.filter((vertex) => {
+            const ok =
+                Number.isFinite(vertex.x) &&
+                Number.isFinite(vertex.y) &&
+                Math.abs(vertex.x) < House3DBuilder.MAX_ROOM_COORD_M &&
+                Math.abs(vertex.y) < House3DBuilder.MAX_ROOM_COORD_M;
+            if (!ok && !this.warnedInvalidRooms.has(room.id)) {
+                this.warnedInvalidRooms.add(room.id);
+                console.warn(
+                    `Room ${room.id}: vértice fuera de rango descartado (${vertex.x}, ${vertex.y})`,
+                );
+            }
+            return ok;
+        });
+
+        const uniqueVertices = filteredVertices.filter((vertex, index, array) => {
             const previous =
                 index === 0 ? array[array.length - 1] : array[index - 1];
 

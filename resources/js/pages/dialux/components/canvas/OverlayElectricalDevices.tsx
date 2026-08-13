@@ -357,6 +357,21 @@ export const OverlayElectricalDevices = memo(function OverlayElectricalDevices({
                         style={{ cursor: 'pointer' }}
                         onClick={(e) => { e.stopPropagation(); onSelect(dev.id); }}
                     >
+                        {/* Área de clic — todos los símbolos de este overlay se dibujan
+                            con `fill="none"` (solo el trazo del borde queda pintado), así
+                            que sin esta forma invisible rellena el interior del símbolo
+                            (TD/TG/medidor/etc.) queda sin pointer-events: a mayor zoom el
+                            hueco vacío crece y hace casi imposible acertar el trazo fino
+                            de 1.5px, obligando a alejar el zoom para volver a seleccionar.
+                            Mismo criterio que OverlayFixtures.tsx (fill="transparent"). */}
+                        <ellipse
+                            cx={0}
+                            cy={0}
+                            rx={safeNum(hw * 1.4)}
+                            ry={safeNum(hh * 1.4)}
+                            fill="transparent"
+                        />
+
                         {/* Selection indicator */}
                         {isSelected && (
                             <rect x={-hw - 5} y={-hh - 5} width={(hw + 5) * 2} height={(hh + 5) * 2}

@@ -36,7 +36,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
 
     if (selectedId?.startsWith('wire:dev-') && scene) {
         const [, , sourceId, targetId] = selectedId.split(':');
-        const device = scene.electricalDevices?.find(d => d.id === sourceId);
+        const device = scene.electricalDevices?.find((d) => d.id === sourceId);
         if (device) {
             return (
                 <VirtualWireProps
@@ -48,15 +48,21 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
                                 ...(device.wireProps ?? {}),
                                 [selectedId]: {
                                     ...(device.wireProps?.[selectedId] ?? {
-                                        wireCount: selectedId.includes('dev-dev') ? 3 : 2,
-                                        routeType: selectedId.includes('dev-sw') ? 'wall_ceiling' : 'floor',
+                                        wireCount: selectedId.includes(
+                                            'dev-dev',
+                                        )
+                                            ? 3
+                                            : 2,
+                                        routeType: selectedId.includes('dev-sw')
+                                            ? 'wall_ceiling'
+                                            : 'floor',
                                         tubeSize: 20,
                                         conductorType: 'THW-90',
                                         sectionMm2: 2.5,
                                     }),
-                                    ...patch
-                                }
-                            }
+                                    ...patch,
+                                },
+                            },
                         });
                     }}
                     onDelete={() => store.removeObject(selectedId)}
@@ -66,12 +72,16 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
     }
 
     if (selectedFixtureIds.length > 1 && scene) {
-        const firstFixture = scene.fixtures.find(f => f.id === selectedFixtureIds[0]);
+        const firstFixture = scene.fixtures.find(
+            (f) => f.id === selectedFixtureIds[0],
+        );
         if (firstFixture) {
             return (
                 <FixtureProps
                     fixture={firstFixture}
-                    onUpdate={(patch) => store.updateFixtures(selectedFixtureIds, patch)}
+                    onUpdate={(patch) =>
+                        store.updateFixtures(selectedFixtureIds, patch)
+                    }
                     multiple={true}
                     count={selectedFixtureIds.length}
                 />
@@ -86,16 +96,22 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
     const canopy = scene?.canopies.find((c) => c.id === selectedId);
     const fixture = scene?.fixtures.find((f) => f.id === selectedId);
     const partition = scene?.partitions?.find((p) => p.id === selectedId);
-    const structuralObstacle = scene?.structuralObstacles?.find((o) => o.id === selectedId);
+    const structuralObstacle = scene?.structuralObstacles?.find(
+        (o) => o.id === selectedId,
+    );
     const lightSwitch = scene?.lightSwitches?.find((s) => s.id === selectedId);
     const conductor = scene?.conductors?.find((c) => c.id === selectedId);
-    const electricalDevice = scene?.electricalDevices?.find((d) => d.id === selectedId);
+    const electricalDevice = scene?.electricalDevices?.find(
+        (d) => d.id === selectedId,
+    );
 
     if (electricalDevice) {
         return (
             <ElectricalDeviceProps
                 device={electricalDevice}
-                onUpdate={(patch) => store.updateElectricalDevice(electricalDevice.id, patch)}
+                onUpdate={(patch) =>
+                    store.updateElectricalDevice(electricalDevice.id, patch)
+                }
             />
         );
     }
@@ -114,17 +130,22 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
                 onUpdate={(patch) => {
                     store.beginHistoryGesture();
                     circuitConductorIds.forEach((id) => {
-                        const targetConductor = scene?.conductors?.find(c => c.id === id);
+                        const targetConductor = scene?.conductors?.find(
+                            (c) => c.id === id,
+                        );
                         if (!targetConductor) return;
 
                         const finalPatch = { ...patch };
-                        
+
                         // Inteligencia de grupo: si estamos cambiando la cantidad de conductores,
                         // solo lo aplicamos a otros tramos que compartían nuestra misma cantidad original.
                         // (Ej: Si edito la línea principal de 3 a 4, no quiero que mis bajadas a
                         // interruptor que son de 2 se conviertan en 4).
                         if ('wireCount' in patch) {
-                            if (targetConductor.wireCount !== conductor.wireCount) {
+                            if (
+                                targetConductor.wireCount !==
+                                conductor.wireCount
+                            ) {
                                 delete finalPatch.wireCount;
                                 delete finalPatch.wireLabel;
                             }
@@ -140,6 +161,12 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
                     store.updateConductor(conductor.id, patch);
                 }}
                 onDelete={() => store.removeObject(conductor.id)}
+                onDeleteGroup={() => {
+                    store.beginHistoryGesture();
+                    circuitConductorIds.forEach((id) => store.removeObject(id));
+                    store.endHistoryGesture();
+                    store.setSelectedId(null);
+                }}
             />
         );
     }
@@ -157,7 +184,9 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
         return (
             <StructuralObstacleProps
                 obstacle={structuralObstacle}
-                onUpdate={(patch) => store.updateStructuralObstacle(structuralObstacle.id, patch)}
+                onUpdate={(patch) =>
+                    store.updateStructuralObstacle(structuralObstacle.id, patch)
+                }
             />
         );
     }
@@ -166,7 +195,9 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
         return (
             <LightSwitchProps
                 lightSwitch={lightSwitch}
-                onUpdate={(patch) => store.updateLightSwitch(lightSwitch.id, patch)}
+                onUpdate={(patch) =>
+                    store.updateLightSwitch(lightSwitch.id, patch)
+                }
             />
         );
     }
@@ -248,5 +279,9 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
         );
     }
 
-    return <p className="text-[10px] text-slate-400 dark:text-gray-500">Objeto no encontrado</p>;
+    return (
+        <p className="text-[10px] text-slate-400 dark:text-gray-500">
+            Objeto no encontrado
+        </p>
+    );
 });

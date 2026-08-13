@@ -1,4 +1,13 @@
-import { Check, Grid, Link2, Pencil, ToggleLeft, Upload, X, Zap } from 'lucide-react';
+import {
+    Check,
+    Grid,
+    Link2,
+    Pencil,
+    ToggleLeft,
+    Upload,
+    X,
+    Zap,
+} from 'lucide-react';
 import React, { useState } from 'react';
 import type {
     DrawTool,
@@ -89,7 +98,6 @@ export const LuzPanel: React.FC<{
     onOpenImportModal,
     onSetElecDevice,
 }) => {
-
     const [activeSection, setActiveSection] =
         useState<InsertSection>('luminaires');
 
@@ -121,7 +129,7 @@ export const LuzPanel: React.FC<{
             className={`flex h-14 flex-col items-center justify-center gap-1 rounded border px-2 py-1.5 text-[10px] transition-colors ${
                 activeTool === item.tool
                     ? item.activeClass
-                    : 'border-slate-200 dark:border-gray-700/50 bg-slate-50 dark:bg-gray-800/40 text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-700/60 hover:text-slate-800 dark:hover:text-gray-200'
+                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-800 dark:border-gray-700/50 dark:bg-gray-800/40 dark:text-gray-400 dark:hover:bg-gray-700/60 dark:hover:text-gray-200'
             }`}
         >
             <span className={`text-[12px] font-bold ${item.symbolClass}`}>
@@ -130,7 +138,6 @@ export const LuzPanel: React.FC<{
             <span className="max-w-full truncate">{item.label}</span>
         </button>
     );
-
 
     return (
         <>
@@ -161,21 +168,24 @@ export const LuzPanel: React.FC<{
                                 tool="fixture-grid"
                                 icon={<Grid size={13} />}
                                 active={activeTool}
-                                onSet={onSetTool}
+                                onSet={(tool) => {
+                                    onSetAreaMode('draw');
+                                    onSetTool(tool);
+                                }}
                                 tip="Matriz de luminarias"
-                                sublabel={`${gridRows} x ${gridCols}`}
+                                sublabel="Dibujar área libre"
                             />
                         </div>
                         {activeTool === 'fixture-grid' && (
-                            <div className="mt-2 rounded border border-gray-300 dark:border-gray-700/40 bg-gray-200 dark:bg-gray-900/40 p-2">
+                            <div className="mt-2 rounded border border-gray-300 bg-gray-200 p-2 dark:border-gray-700/40 dark:bg-gray-900/40">
                                 <div className="grid grid-cols-2 gap-1">
                                     <button
                                         type="button"
                                         onClick={() => onSetAreaMode('room')}
                                         className={`flex items-center justify-center gap-1 rounded px-2 py-1.5 text-[9.5px] font-medium transition-colors ${
                                             areaMode === 'room'
-                                                ? 'bg-cyan-600/25 text-cyan-700 dark:text-cyan-200 ring-1 ring-cyan-500/50'
-                                                : 'bg-gray-300 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-400/40 dark:hover:bg-gray-700/60'
+                                                ? 'bg-cyan-600/25 text-cyan-700 ring-1 ring-cyan-500/50 dark:text-cyan-200'
+                                                : 'bg-gray-300 text-gray-600 hover:bg-gray-400/40 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700/60'
                                         }`}
                                         title="Un clic sobre un ambiente usa el ambiente completo"
                                     >
@@ -186,8 +196,8 @@ export const LuzPanel: React.FC<{
                                         onClick={() => onSetAreaMode('draw')}
                                         className={`flex items-center justify-center gap-1 rounded px-2 py-1.5 text-[9.5px] font-medium transition-colors ${
                                             areaMode === 'draw'
-                                                ? 'bg-cyan-600/25 text-cyan-700 dark:text-cyan-200 ring-1 ring-cyan-500/50'
-                                                : 'bg-gray-300 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-400/40 dark:hover:bg-gray-700/60'
+                                                ? 'bg-cyan-600/25 text-cyan-700 ring-1 ring-cyan-500/50 dark:text-cyan-200'
+                                                : 'bg-gray-300 text-gray-600 hover:bg-gray-400/40 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700/60'
                                         }`}
                                         title="Dibuja un poligono libre en el plano (como Recinto): clic para cada vertice, clic cerca del primero para cerrar"
                                     >
@@ -205,9 +215,11 @@ export const LuzPanel: React.FC<{
                                             max={20}
                                             value={gridRows}
                                             onChange={(e) =>
-                                                onSetRows(Number(e.target.value))
+                                                onSetRows(
+                                                    Number(e.target.value),
+                                                )
                                             }
-                                            className="h-7 w-full rounded border border-gray-300 dark:border-gray-700 bg-gray-300 dark:bg-gray-950 px-2 text-[11px] text-gray-800 dark:text-gray-200 outline-none focus:border-cyan-500/50"
+                                            className="h-7 w-full rounded border border-gray-300 bg-gray-300 px-2 text-[11px] text-gray-800 outline-none focus:border-cyan-500/50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200"
                                         />
                                     </label>
                                     <label className="space-y-1 text-[10px] text-gray-500 dark:text-gray-500">
@@ -218,9 +230,11 @@ export const LuzPanel: React.FC<{
                                             max={20}
                                             value={gridCols}
                                             onChange={(e) =>
-                                                onSetCols(Number(e.target.value))
+                                                onSetCols(
+                                                    Number(e.target.value),
+                                                )
                                             }
-                                            className="h-7 w-full rounded border border-gray-300 dark:border-gray-700 bg-gray-300 dark:bg-gray-950 px-2 text-[11px] text-gray-800 dark:text-gray-200 outline-none focus:border-cyan-500/50"
+                                            className="h-7 w-full rounded border border-gray-300 bg-gray-300 px-2 text-[11px] text-gray-800 outline-none focus:border-cyan-500/50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200"
                                         />
                                     </label>
                                 </div>
@@ -233,7 +247,12 @@ export const LuzPanel: React.FC<{
                                         step={1}
                                         value={fixtureRotation}
                                         onChange={(event) =>
-                                            onSetFixtureRotation(((Number(event.target.value) % 360) + 360) % 360)
+                                            onSetFixtureRotation(
+                                                ((Number(event.target.value) %
+                                                    360) +
+                                                    360) %
+                                                    360,
+                                            )
                                         }
                                         className="h-7 w-full rounded border border-gray-300 bg-gray-300 px-2 text-[11px] text-gray-800 outline-none focus:border-cyan-500/50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200"
                                     />
@@ -241,12 +260,16 @@ export const LuzPanel: React.FC<{
 
                                 {areaMode === 'room' ? (
                                     <p className="mt-2 text-[9px] leading-snug text-cyan-700 dark:text-cyan-500">
-                                        Clic sobre un ambiente para proyectar la grilla en todo su espacio.
+                                        Clic sobre un ambiente para proyectar la
+                                        grilla en todo su espacio.
                                     </p>
                                 ) : pendingArea ? (
                                     <div className="mt-2 rounded border border-emerald-500/40 bg-emerald-950/20 p-2">
                                         <p className="text-[9.5px] leading-snug text-emerald-300">
-                                            Área proyectada ({pendingArea.length} vértices). Ajusta Filas/Columnas arriba y confirma.
+                                            Área proyectada (
+                                            {pendingArea.length} vértices).
+                                            Ajusta Filas/Columnas arriba y
+                                            confirma.
                                         </p>
                                         <div className="mt-2 flex gap-1.5">
                                             <button
@@ -268,7 +291,10 @@ export const LuzPanel: React.FC<{
                                     </div>
                                 ) : (
                                     <p className="mt-2 text-[9px] leading-snug text-cyan-700 dark:text-cyan-500">
-                                        Dibuja el contorno en el plano: clic por cada vértice, clic cerca del primero para cerrar. Después elegís la cantidad y confirmás.
+                                        Dibuja el contorno en el plano: clic por
+                                        cada vértice, clic cerca del primero
+                                        para cerrar. Después elegís la cantidad
+                                        y confirmás.
                                     </p>
                                 )}
                             </div>
@@ -291,7 +317,8 @@ export const LuzPanel: React.FC<{
                             variant="compact-grid"
                             fixtureItemsPerPage={15}
                             onSelect={() => {
-                                if (activeTool === 'fixture-grid') onSetTool('fixture-grid');
+                                if (activeTool === 'fixture-grid')
+                                    onSetTool('fixture-grid');
                             }}
                         />
                     </PanelCard>
@@ -322,7 +349,7 @@ export const LuzPanel: React.FC<{
                                     activeTool === 'switch' &&
                                     switchTemplate.type === item.type
                                         ? 'bg-cyan-600/25 text-cyan-200 ring-1 ring-cyan-600/30'
-                                        : 'text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-700/50 hover:text-slate-900 dark:hover:text-gray-100'
+                                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-gray-100'
                                 }`}
                             >
                                 <span className="w-8 shrink-0 font-mono text-[10px] text-slate-400 dark:text-gray-500">
@@ -339,60 +366,63 @@ export const LuzPanel: React.FC<{
 
             {activeSection === 'wire' && (
                 <PanelCard title="Cable">
-                            <div className="grid grid-cols-1 gap-1">
-                                <PanelToolBtn
-                                    tool="wire"
-                                    icon={<Link2 size={13} />}
-                                    active={activeTool}
-                                    onSet={onSetTool}
-                                    tip="Cableado (U)"
-                                    sublabel="Conectar puntos"
-                                />
-                            </div>
-                            <div className="mt-2 grid grid-cols-3 gap-1">
-                                {CONDUCTOR_WIRE_OPTIONS.slice(0, 9).map(
-                                    (item) => (
-                                        <button
-                                            key={item.value}
-                                            type="button"
-                                            onClick={() =>
-                                                setWireTool({
-                                                    wireCount: item.count,
-                                                    wireLabel: item.value,
-                                                })
-                                            }
-                                            className={`rounded border px-1.5 py-1 text-center font-mono text-[9.5px] transition-colors ${
-                                                activeTool === 'wire' &&
-                                                wireTemplate.wireLabel ===
-                                                    item.value
-                                                    ? 'border-cyan-500/50 bg-cyan-600/20 text-cyan-700 dark:text-cyan-200'
-                                                    : 'border-slate-200 dark:border-gray-700/40 bg-slate-50 dark:bg-gray-950/60 text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-700/50 hover:text-slate-900 dark:hover:text-gray-100'
-                                            }`}
-                                            title={`${item.label}: ${item.count} conductores`}
-                                        >
-                                            {item.label}
-                                        </button>
-                                    ),
-                                )}
-                            </div>
-                            <p className="mt-2 text-[9px] text-slate-500 dark:text-gray-500">
-                                El cálculo de longitud de cable está en el botón "Cálculo CT" de la barra superior (selecciona un ambiente primero).
-                            </p>
+                    <div className="mb-2 rounded border border-cyan-200 bg-cyan-50 px-2 py-1.5 text-[9.5px] leading-relaxed text-cyan-800 dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-cyan-300">
+                        <strong>Clic derecho</strong> sobre luminaria o interruptor:
+                        cableado de alumbrado. <strong>Alt + clic derecho</strong>{' '}
+                        sobre tomacorriente: cableado de tomas.
+                    </div>
+                    <div className="grid grid-cols-1 gap-1">
+                        <PanelToolBtn
+                            tool="wire"
+                            icon={<Link2 size={13} />}
+                            active={activeTool}
+                            onSet={onSetTool}
+                            tip="Cableado (U)"
+                            sublabel="Conectar puntos"
+                        />
+                    </div>
+                    <div className="mt-2 grid grid-cols-3 gap-1">
+                        {CONDUCTOR_WIRE_OPTIONS.slice(0, 9).map((item) => (
+                            <button
+                                key={item.value}
+                                type="button"
+                                onClick={() =>
+                                    setWireTool({
+                                        wireCount: item.count,
+                                        wireLabel: item.value,
+                                    })
+                                }
+                                className={`rounded border px-1.5 py-1 text-center font-mono text-[9.5px] transition-colors ${
+                                    activeTool === 'wire' &&
+                                    wireTemplate.wireLabel === item.value
+                                        ? 'border-cyan-500/50 bg-cyan-600/20 text-cyan-700 dark:text-cyan-200'
+                                        : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:border-gray-700/40 dark:bg-gray-950/60 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-gray-100'
+                                }`}
+                                title={`${item.label}: ${item.count} conductores`}
+                            >
+                                {item.label}
+                            </button>
+                        ))}
+                    </div>
+                    <p className="mt-2 text-[9px] text-slate-500 dark:text-gray-500">
+                        El cálculo de longitud de cable está en el botón
+                        "Cálculo CT" de la barra superior (selecciona un
+                        ambiente primero).
+                    </p>
                 </PanelCard>
             )}
 
             {activeSection === 'equipment' && (
                 <PanelCard title="Equipos electricos">
-                            <p className="mb-2 text-[9.5px] leading-relaxed text-slate-500 dark:text-gray-500">
-                                Insertar en plano. Clic = colocar libre. Clic
-                                cerca de pared = anclar.
-                            </p>
-                            <div className="grid grid-cols-2 gap-1">
-                                {EQUIPMENT_DEVICE_ITEMS.map(renderDeviceButton)}
-                            </div>
+                    <p className="mb-2 text-[9.5px] leading-relaxed text-slate-500 dark:text-gray-500">
+                        Insertar en plano. Clic = colocar libre. Clic cerca de
+                        pared = anclar.
+                    </p>
+                    <div className="grid grid-cols-2 gap-1">
+                        {EQUIPMENT_DEVICE_ITEMS.map(renderDeviceButton)}
+                    </div>
                 </PanelCard>
             )}
         </>
     );
 };
- 

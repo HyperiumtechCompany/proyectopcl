@@ -530,7 +530,7 @@ export const useEditorStore = create<EditorState>()(
             hiddenElectricalIds: [],
             planReloadTick: 0,
             fixtureGridGuideEditor: null,
-            fixtureGridAreaMode: 'room',
+            fixtureGridAreaMode: 'draw',
             pendingFixtureGridArea: null,
         },
 

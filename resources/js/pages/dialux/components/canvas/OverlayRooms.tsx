@@ -23,17 +23,27 @@ interface Props {
     zoom: number;
     onSelect: (id: string) => void;
     screenPoint: ScreenFn;
-    screenDistance?: (dx: number, dy: number, origin: { x: number; y: number }) => number;
+    screenDistance?: (
+        dx: number,
+        dy: number,
+        origin: { x: number; y: number },
+    ) => number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const ARROW: Record<StairFlight['direction'], string> = {
-    north: '↑', south: '↓', east: '→', west: '←',
+    north: '↑',
+    south: '↓',
+    east: '→',
+    west: '←',
 };
 
 function bboxOf(verts: { x: number; y: number }[]) {
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
     for (const v of verts) {
         if (v.x < minX) minX = v.x;
         if (v.y < minY) minY = v.y;
@@ -46,7 +56,12 @@ function bboxOf(verts: { x: number; y: number }[]) {
 // ─── Sub-componentes (cada uno se memoiza por separado) ───────────────────────
 
 const RoomPolygon = memo(function RoomPolygon({
-    room, pts, ctr, isSelected, zoom, onSelect,
+    room,
+    pts,
+    ctr,
+    isSelected,
+    zoom,
+    onSelect,
 }: {
     room: Room;
     pts: string;
@@ -62,19 +77,21 @@ const RoomPolygon = memo(function RoomPolygon({
     const lineOffset = safeNum(Math.max(10, 13 * zoom));
     const showMetrics = zoom >= 0.4 && area > 0;
     return (
-        <g
-            style={{ pointerEvents: 'none' }}
-        >
+        <g style={{ pointerEvents: 'none' }}>
             <polygon points={pts} fill="#1e3a5f" fillOpacity={0.22} />
             {isSelected && (
                 <polygon
-                    points={pts} fill="none"
-                    stroke="#93c5fd" strokeWidth={6}
-                    strokeLinejoin="miter" opacity={0.3}
+                    points={pts}
+                    fill="none"
+                    stroke="#93c5fd"
+                    strokeWidth={6}
+                    strokeLinejoin="miter"
+                    opacity={0.3}
                 />
             )}
             <polygon
-                points={pts} fill="none"
+                points={pts}
+                fill="none"
                 stroke={isSelected ? '#60a5fa' : '#3b82f6'}
                 strokeWidth={isSelected ? 3 : 2}
                 strokeLinejoin="miter"
@@ -82,22 +99,28 @@ const RoomPolygon = memo(function RoomPolygon({
                 onClick={() => onSelect(room.id)}
             />
             <text
-                x={safeNum(ctr.x)} y={safeNum(showMetrics ? ctr.y - lineOffset / 2 : ctr.y)}
-                textAnchor="middle" dominantBaseline="middle"
+                x={safeNum(ctr.x)}
+                y={safeNum(showMetrics ? ctr.y - lineOffset / 2 : ctr.y)}
+                textAnchor="middle"
+                dominantBaseline="middle"
                 fill={isSelected ? '#e2e8f0' : '#93c5fd'}
                 fontSize={labelFontSize}
-                fontFamily="sans-serif" fontWeight={600}
+                fontFamily="sans-serif"
+                fontWeight={600}
                 pointerEvents="none"
             >
                 {room.name}
             </text>
             {showMetrics && (
                 <text
-                    x={safeNum(ctr.x)} y={safeNum(ctr.y + lineOffset / 2)}
-                    textAnchor="middle" dominantBaseline="middle"
+                    x={safeNum(ctr.x)}
+                    y={safeNum(ctr.y + lineOffset / 2)}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
                     fill="#60a5fa"
                     fontSize={subFontSize}
-                    fontFamily="monospace" fontWeight={400}
+                    fontFamily="monospace"
+                    fontWeight={400}
                     pointerEvents="none"
                 >
                     {`${area.toFixed(2)}m²  Ø${perimeter.toFixed(2)}m`}
@@ -108,7 +131,12 @@ const RoomPolygon = memo(function RoomPolygon({
 });
 
 const CorridorPolygon = memo(function CorridorPolygon({
-    room, pts, ctr, isSelected, zoom, onSelect,
+    room,
+    pts,
+    ctr,
+    isSelected,
+    zoom,
+    onSelect,
 }: {
     room: Room;
     pts: string;
@@ -130,38 +158,65 @@ const CorridorPolygon = memo(function CorridorPolygon({
             onClick={() => onSelect(room.id)}
         >
             <defs>
-                <pattern id={patId} patternUnits="userSpaceOnUse" width={10} height={10}>
-                    <line x1={0} y1={0} x2={10} y2={10}
-                        stroke="#f59e0b" strokeWidth={0.8} strokeOpacity={0.55} />
-                    <line x1={10} y1={0} x2={0} y2={10}
-                        stroke="#f59e0b" strokeWidth={0.8} strokeOpacity={0.55} />
+                <pattern
+                    id={patId}
+                    patternUnits="userSpaceOnUse"
+                    width={10}
+                    height={10}
+                >
+                    <line
+                        x1={0}
+                        y1={0}
+                        x2={10}
+                        y2={10}
+                        stroke="#f59e0b"
+                        strokeWidth={0.8}
+                        strokeOpacity={0.55}
+                    />
+                    <line
+                        x1={10}
+                        y1={0}
+                        x2={0}
+                        y2={10}
+                        stroke="#f59e0b"
+                        strokeWidth={0.8}
+                        strokeOpacity={0.55}
+                    />
                 </pattern>
             </defs>
             <polygon points={pts} fill="#78350f" fillOpacity={0.18} />
             <polygon points={pts} fill={`url(#${patId})`} fillOpacity={1} />
             <polygon
-                points={pts} fill="none"
+                points={pts}
+                fill="none"
                 stroke={isSelected ? '#fbbf24' : '#f59e0b'}
                 strokeWidth={isSelected ? 2.5 : 1.8}
                 strokeDasharray={isSelected ? '0' : '6,3'}
             />
             <text
-                x={safeNum(ctr.x)} y={safeNum(showMetrics ? ctr.y - lineOffset / 2 : ctr.y)}
-                textAnchor="middle" dominantBaseline="middle"
+                x={safeNum(ctr.x)}
+                y={safeNum(showMetrics ? ctr.y - lineOffset / 2 : ctr.y)}
+                textAnchor="middle"
+                dominantBaseline="middle"
                 fill={isSelected ? '#fbbf24' : '#d97706'}
                 fontSize={labelFontSize}
-                fontFamily="sans-serif" fontWeight={600}
-                pointerEvents="none" letterSpacing={0.5}
+                fontFamily="sans-serif"
+                fontWeight={600}
+                pointerEvents="none"
+                letterSpacing={0.5}
             >
                 {room.name}
             </text>
             {showMetrics && (
                 <text
-                    x={safeNum(ctr.x)} y={safeNum(ctr.y + lineOffset / 2)}
-                    textAnchor="middle" dominantBaseline="middle"
+                    x={safeNum(ctr.x)}
+                    y={safeNum(ctr.y + lineOffset / 2)}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
                     fill="#fbbf24"
                     fontSize={subFontSize}
-                    fontFamily="monospace" fontWeight={400}
+                    fontFamily="monospace"
+                    fontWeight={400}
                     pointerEvents="none"
                 >
                     {`${area.toFixed(2)}m²  Ø${perimeter.toFixed(2)}m`}
@@ -172,7 +227,14 @@ const CorridorPolygon = memo(function CorridorPolygon({
 });
 
 const StairPolygon = memo(function StairPolygon({
-    room, screenVerts, pts, ctr, isSelected, zoom, onSelect, screenDistance,
+    room,
+    screenVerts,
+    pts,
+    ctr,
+    isSelected,
+    zoom,
+    onSelect,
+    screenDistance,
 }: {
     room: Room;
     screenVerts: { x: number; y: number }[];
@@ -181,12 +243,16 @@ const StairPolygon = memo(function StairPolygon({
     isSelected: boolean;
     zoom: number;
     onSelect: (id: string) => void;
-    screenDistance?: (dx: number, dy: number, origin: { x: number; y: number }) => number;
+    screenDistance?: (
+        dx: number,
+        dy: number,
+        origin: { x: number; y: number },
+    ) => number;
 }) {
-    const sc         = room.stairConfig;
-    const flights    = sc?.flights ?? [];
+    const sc = room.stairConfig;
+    const flights = sc?.flights ?? [];
     const hasFlights = flights.length > 0;
-    const startElev  = sc?.startElevation ?? 0;
+    const startElev = sc?.startElevation ?? 0;
 
     // Dirección efectiva del primer tramo
     const primaryDir: StairFlight['direction'] = hasFlights
@@ -195,47 +261,77 @@ const StairPolygon = memo(function StairPolygon({
     const isHorizontalAscent = primaryDir === 'east' || primaryDir === 'west';
 
     // Para U-stair (2 tramos NS opuestos o 2 EW opuestos), usamos patrón dividido
-    const isUStair = hasFlights && flights.length === 2 && (() => {
-        const d0 = flights[0].direction;
-        const d1 = flights[1].direction;
-        return (
-            (d0 === 'north' && d1 === 'south') || (d0 === 'south' && d1 === 'north') ||
-            (d0 === 'east'  && d1 === 'west')  || (d0 === 'west'  && d1 === 'east')
-        );
-    })();
+    const isUStair =
+        hasFlights &&
+        flights.length === 2 &&
+        (() => {
+            const d0 = flights[0].direction;
+            const d1 = flights[1].direction;
+            return (
+                (d0 === 'north' && d1 === 'south') ||
+                (d0 === 'south' && d1 === 'north') ||
+                (d0 === 'east' && d1 === 'west') ||
+                (d0 === 'west' && d1 === 'east')
+            );
+        })();
 
-    const stepPx    = Math.max(8, 11 * zoom);
-    const patId     = `hatch-stair-${room.id}`;
-    const patId2    = `hatch-stair2-${room.id}`;
-    const clipId    = `clip-stair-${room.id}`;
+    const stepPx = Math.max(8, 11 * zoom);
+    const patId = `hatch-stair-${room.id}`;
+    const patId2 = `hatch-stair2-${room.id}`;
+    const clipId = `clip-stair-${room.id}`;
     const clipHalf0 = `clip-half0-${room.id}`;
     const clipHalf1 = `clip-half1-${room.id}`;
-    const bb        = bboxOf(screenVerts);
-    const fontSize  = safeNum(Math.max(7, 9 * zoom));
+    const bb = bboxOf(screenVerts);
+    const fontSize = safeNum(Math.max(7, 9 * zoom));
     const arrowSize = safeNum(Math.max(10, 13 * zoom));
-    const subSize   = safeNum(Math.max(6, 7.5 * zoom));
+    const subSize = safeNum(Math.max(6, 7.5 * zoom));
 
     const totalSteps = hasFlights
         ? flights.reduce((s, f) => s + f.stepCount, 0)
         : (sc?.stepCount ?? 1);
-    const totalH = (totalSteps * (sc?.riserHeight ?? 0.175) + startElev).toFixed(2);
+    const totalH = (
+        totalSteps * (sc?.riserHeight ?? 0.175) +
+        startElev
+    ).toFixed(2);
 
     // Líneas de rajado horizontal (⊥ al movimiento N/S) o vertical (⊥ E/W)
-    const hatchLineNS = <line x1={0} y1={0} x2={1000} y2={0}
-        stroke="#fb923c" strokeWidth={1.2} strokeOpacity={0.65} />;
-    const hatchLineEW = <line x1={0} y1={0} x2={0} y2={1000}
-        stroke="#fb923c" strokeWidth={1.2} strokeOpacity={0.65} />;
+    const hatchLineNS = (
+        <line
+            x1={0}
+            y1={0}
+            x2={1000}
+            y2={0}
+            stroke="#fb923c"
+            strokeWidth={1.2}
+            strokeOpacity={0.65}
+        />
+    );
+    const hatchLineEW = (
+        <line
+            x1={0}
+            y1={0}
+            x2={0}
+            y2={1000}
+            stroke="#fb923c"
+            strokeWidth={1.2}
+            strokeOpacity={0.65}
+        />
+    );
 
     // Rectángulos de mitad izquierda/derecha (para U-stair NS) o arriba/abajo (U-stair EW)
     const halfMidX = (bb.minX + bb.maxX) / 2;
     const halfMidY = (bb.minY + bb.maxY) / 2;
-    const flightGapPx = isUStair && sc?.flightGap
-        ? Math.max(0, screenDistance?.(
-            isHorizontalAscent ? 0 : sc.flightGap,
-            isHorizontalAscent ? sc.flightGap : 0,
-            { x: 0, y: 0 },
-        ) ?? 0)
-        : 0;
+    const flightGapPx =
+        isUStair && sc?.flightGap
+            ? Math.max(
+                  0,
+                  screenDistance?.(
+                      isHorizontalAscent ? 0 : sc.flightGap,
+                      isHorizontalAscent ? sc.flightGap : 0,
+                      { x: 0, y: 0 },
+                  ) ?? 0,
+              )
+            : 0;
     const halfGapPx = flightGapPx / 2;
 
     return (
@@ -261,7 +357,9 @@ const StairPolygon = memo(function StairPolygon({
                 )}
 
                 {/* Patrón principal */}
-                <pattern id={patId} patternUnits="userSpaceOnUse"
+                <pattern
+                    id={patId}
+                    patternUnits="userSpaceOnUse"
                     width={isHorizontalAscent ? stepPx : 1000}
                     height={isHorizontalAscent ? 1000 : stepPx}
                 >
@@ -270,7 +368,9 @@ const StairPolygon = memo(function StairPolygon({
 
                 {/* Patrón secundario (dirección opuesta para U-stair) */}
                 {isUStair && (
-                    <pattern id={patId2} patternUnits="userSpaceOnUse"
+                    <pattern
+                        id={patId2}
+                        patternUnits="userSpaceOnUse"
                         width={isHorizontalAscent ? 1000 : stepPx}
                         height={isHorizontalAscent ? stepPx : 1000}
                     >
@@ -289,26 +389,58 @@ const StairPolygon = memo(function StairPolygon({
                     <rect
                         x={isHorizontalAscent ? bb.minX - 2 : bb.minX - 2}
                         y={isHorizontalAscent ? bb.minY - 2 : bb.minY - 2}
-                        width={isHorizontalAscent ? bb.w + 4 : halfMidX - halfGapPx - bb.minX + 2}
-                        height={isHorizontalAscent ? halfMidY - halfGapPx - bb.minY + 2 : bb.h + 4}
+                        width={
+                            isHorizontalAscent
+                                ? bb.w + 4
+                                : halfMidX - halfGapPx - bb.minX + 2
+                        }
+                        height={
+                            isHorizontalAscent
+                                ? halfMidY - halfGapPx - bb.minY + 2
+                                : bb.h + 4
+                        }
                         fill={`url(#${patId})`}
                         clipPath={`url(#${clipId})`}
                         pointerEvents="none"
                     />
                     {/* Mitad 1 — segundo tramo (patrón opuesto) */}
                     <rect
-                        x={isHorizontalAscent ? bb.minX - 2 : halfMidX + halfGapPx - 2}
-                        y={isHorizontalAscent ? halfMidY + halfGapPx - 2 : bb.minY - 2}
-                        width={isHorizontalAscent ? bb.w + 4 : bb.maxX - halfMidX - halfGapPx + 4}
-                        height={isHorizontalAscent ? bb.maxY - halfMidY - halfGapPx + 4 : bb.h + 4}
+                        x={
+                            isHorizontalAscent
+                                ? bb.minX - 2
+                                : halfMidX + halfGapPx - 2
+                        }
+                        y={
+                            isHorizontalAscent
+                                ? halfMidY + halfGapPx - 2
+                                : bb.minY - 2
+                        }
+                        width={
+                            isHorizontalAscent
+                                ? bb.w + 4
+                                : bb.maxX - halfMidX - halfGapPx + 4
+                        }
+                        height={
+                            isHorizontalAscent
+                                ? bb.maxY - halfMidY - halfGapPx + 4
+                                : bb.h + 4
+                        }
                         fill={`url(#${patId2})`}
                         clipPath={`url(#${clipId})`}
                         pointerEvents="none"
                     />
                     {flightGapPx > 0 && (
                         <rect
-                            x={isHorizontalAscent ? bb.minX : halfMidX - halfGapPx}
-                            y={isHorizontalAscent ? halfMidY - halfGapPx : bb.minY}
+                            x={
+                                isHorizontalAscent
+                                    ? bb.minX
+                                    : halfMidX - halfGapPx
+                            }
+                            y={
+                                isHorizontalAscent
+                                    ? halfMidY - halfGapPx
+                                    : bb.minY
+                            }
                             width={isHorizontalAscent ? bb.w : flightGapPx}
                             height={isHorizontalAscent ? flightGapPx : bb.h}
                             fill="#020617"
@@ -323,16 +455,21 @@ const StairPolygon = memo(function StairPolygon({
                         y1={isHorizontalAscent ? halfMidY : bb.minY}
                         x2={isHorizontalAscent ? bb.maxX : halfMidX}
                         y2={isHorizontalAscent ? halfMidY : bb.maxY}
-                        stroke="#fb923c" strokeWidth={1.5} strokeDasharray="4 3"
-                        strokeOpacity={0.7} pointerEvents="none"
+                        stroke="#fb923c"
+                        strokeWidth={1.5}
+                        strokeDasharray="4 3"
+                        strokeOpacity={0.7}
+                        pointerEvents="none"
                         clipPath={`url(#${clipId})`}
                     />
                 </>
             ) : (
                 /* Escalera directa o multi-tramo no-U: patrón uniforme */
                 <rect
-                    x={bb.minX - 2} y={bb.minY - 2}
-                    width={bb.w + 4} height={bb.h + 4}
+                    x={bb.minX - 2}
+                    y={bb.minY - 2}
+                    width={bb.w + 4}
+                    height={bb.h + 4}
                     fill={`url(#${patId})`}
                     clipPath={`url(#${clipId})`}
                     pointerEvents="none"
@@ -340,61 +477,81 @@ const StairPolygon = memo(function StairPolygon({
             )}
 
             {/* Flechas por tramo */}
-            {hasFlights && flights.length > 1
-                ? flights.map((flight, idx) => {
+            {hasFlights && flights.length > 1 ? (
+                flights.map((flight, idx) => {
                     // Para U-stair NS: flechas en cada mitad horizontal
                     // Para el resto: posición proporcional en el eje principal
-                    const isFlightNS = flight.direction === 'north' || flight.direction === 'south';
+                    const isFlightNS =
+                        flight.direction === 'north' ||
+                        flight.direction === 'south';
                     let arrowX: number, arrowY: number;
                     if (isUStair) {
                         if (isHorizontalAscent) {
                             arrowX = ctr.x;
-                            arrowY = idx === 0
-                                ? (bb.minY + halfMidY) / 2
-                                : (halfMidY + bb.maxY) / 2;
+                            arrowY =
+                                idx === 0
+                                    ? (bb.minY + halfMidY) / 2
+                                    : (halfMidY + bb.maxY) / 2;
                         } else {
-                            arrowX = idx === 0
-                                ? (bb.minX + halfMidX) / 2
-                                : (halfMidX + bb.maxX) / 2;
+                            arrowX =
+                                idx === 0
+                                    ? (bb.minX + halfMidX) / 2
+                                    : (halfMidX + bb.maxX) / 2;
                             arrowY = ctr.y;
                         }
                     } else {
-                        const ratio = idx / flights.length + 0.5 / flights.length;
+                        const ratio =
+                            idx / flights.length + 0.5 / flights.length;
                         arrowX = isFlightNS ? ctr.x : bb.minX + bb.w * ratio;
                         arrowY = isFlightNS ? bb.minY + bb.h * ratio : ctr.y;
                     }
                     return (
                         <text
                             key={flight.id}
-                            x={safeNum(arrowX)} y={safeNum(arrowY)}
-                            textAnchor="middle" dominantBaseline="middle"
-                            fill="#fdba74" fontSize={arrowSize}
-                            fontFamily="sans-serif" fontWeight={700}
+                            x={safeNum(arrowX)}
+                            y={safeNum(arrowY)}
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                            fill="#fdba74"
+                            fontSize={arrowSize}
+                            fontFamily="sans-serif"
+                            fontWeight={700}
                             pointerEvents="none"
                         >
                             {ARROW[flight.direction]}
                         </text>
                     );
                 })
-                : <text
-                    x={safeNum(ctr.x)} y={safeNum(ctr.y - Math.max(6, 8 * zoom))}
-                    textAnchor="middle" dominantBaseline="middle"
-                    fill="#fdba74" fontSize={arrowSize}
-                    fontFamily="sans-serif" fontWeight={700}
+            ) : (
+                <text
+                    x={safeNum(ctr.x)}
+                    y={safeNum(ctr.y - Math.max(6, 8 * zoom))}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill="#fdba74"
+                    fontSize={arrowSize}
+                    fontFamily="sans-serif"
+                    fontWeight={700}
                     pointerEvents="none"
                 >
                     {ARROW[primaryDir]}
                 </text>
-            }
+            )}
 
             {/* Contorno */}
             {isSelected && (
-                <polygon points={pts} fill="none"
-                    stroke="#fdba74" strokeWidth={6}
-                    strokeLinejoin="miter" opacity={0.3}
+                <polygon
+                    points={pts}
+                    fill="none"
+                    stroke="#fdba74"
+                    strokeWidth={6}
+                    strokeLinejoin="miter"
+                    opacity={0.3}
                 />
             )}
-            <polygon points={pts} fill="none"
+            <polygon
+                points={pts}
+                fill="none"
                 stroke={isSelected ? '#fdba74' : '#f97316'}
                 strokeWidth={isSelected ? 2.5 : 1.8}
                 strokeLinejoin="miter"
@@ -404,11 +561,14 @@ const StairPolygon = memo(function StairPolygon({
             <text
                 x={safeNum(ctr.x)}
                 y={safeNum(ctr.y + Math.max(6, 8 * zoom))}
-                textAnchor="middle" dominantBaseline="middle"
+                textAnchor="middle"
+                dominantBaseline="middle"
                 fill={isSelected ? '#fdba74' : '#fb923c'}
                 fontSize={fontSize}
-                fontFamily="sans-serif" fontWeight={600}
-                pointerEvents="none" letterSpacing={0.3}
+                fontFamily="sans-serif"
+                fontWeight={600}
+                pointerEvents="none"
+                letterSpacing={0.3}
             >
                 {room.name}
             </text>
@@ -416,17 +576,19 @@ const StairPolygon = memo(function StairPolygon({
             {/* Subtítulo: tramos + elevación */}
             <text
                 x={safeNum(ctr.x)}
-                y={safeNum(ctr.y + Math.max(6, 8 * zoom) + Math.max(7, 9 * zoom))}
-                textAnchor="middle" dominantBaseline="middle"
+                y={safeNum(
+                    ctr.y + Math.max(6, 8 * zoom) + Math.max(7, 9 * zoom),
+                )}
+                textAnchor="middle"
+                dominantBaseline="middle"
                 fill="#a3660a"
                 fontSize={subSize}
                 fontFamily="monospace"
                 pointerEvents="none"
             >
                 {hasFlights
-                    ? `${flights.map(f => ARROW[f.direction]).join('')} · ${totalSteps}esc · ${startElev > 0 ? `+${startElev.toFixed(2)}→` : ''}${totalH}m`
-                    : `${ARROW[primaryDir]} · ${sc?.stepCount ?? '?'}esc · ${startElev > 0 ? `+${startElev.toFixed(2)}→` : ''}${totalH}m`
-                }
+                    ? `${flights.map((f) => ARROW[f.direction]).join('')} · ${totalSteps}esc · ${startElev > 0 ? `+${startElev.toFixed(2)}→` : ''}${totalH}m`
+                    : `${ARROW[primaryDir]} · ${sc?.stepCount ?? '?'}esc · ${startElev > 0 ? `+${startElev.toFixed(2)}→` : ''}${totalH}m`}
             </text>
         </g>
     );
@@ -435,25 +597,32 @@ const StairPolygon = memo(function StairPolygon({
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export const OverlayRooms = memo(function OverlayRooms({
-    rooms, selectedId, zoom, onSelect, screenPoint, screenDistance,
+    rooms,
+    selectedId,
+    zoom,
+    onSelect,
+    screenPoint,
+    screenDistance,
 }: Props) {
     if (!rooms.length) return null;
 
-    const recintos  = rooms.filter(r => !r.roomType || r.roomType === 'room');
-    const ambientes = rooms.filter(r => r.roomType === 'ambient');
-    const pasadizos = rooms.filter(r => r.roomType === 'corridor');
-    const escaleras = rooms.filter(r => r.roomType === 'stair');
+    const recintos = rooms.filter((r) => !r.roomType || r.roomType === 'room');
+    const ambientes = rooms.filter((r) => r.roomType === 'ambient');
+    const pasadizos = rooms.filter((r) => r.roomType === 'corridor');
+    const escaleras = rooms.filter((r) => r.roomType === 'stair');
     // Fase 16 (panel de Emergencia): sin este balde, un roomType no
     // reconocido por ninguno de los 4 de arriba nunca se dibuja — quedaban
     // invisibles en el canvas 2D. Se renderizan con el mismo `RoomPolygon`
     // genérico (fallback de `renderOne`), distinguidos por su propio color.
     const emergencias = rooms.filter(
-        r => r.roomType === 'evacuation-route' || r.roomType === 'antipanic-area',
+        (r) =>
+            r.roomType === 'evacuation-route' ||
+            r.roomType === 'antipanic-area',
     );
 
     const renderOne = (room: Room) => {
-        const sv  = room.vertices.map(v => screenPoint(v));
-        const pts = sv.map(p => `${safeNum(p.x)},${safeNum(p.y)}`).join(' ');
+        const sv = room.vertices.map((v) => screenPoint(v));
+        const pts = sv.map((p) => `${safeNum(p.x)},${safeNum(p.y)}`).join(' ');
         const ctr = centroid(sv);
         const sel = selectedId === room.id;
 
@@ -505,45 +674,61 @@ export const OverlayRooms = memo(function OverlayRooms({
             {pasadizos.map(renderOne)}
             {escaleras.map(renderOne)}
             {emergencias.map(renderOne)}
-            {rooms.filter((room) => room.id === selectedId).map((room) => {
-                const vertices = room.vertices.map(screenPoint);
-                return (
-                    <g key={`edit-${room.id}`} className="room-polyline-handles">
-                        {vertices.map((vertex, index) => {
-                            const next = vertices[(index + 1) % vertices.length];
-                            return (
-                                <g key={`${room.id}-vertex-${index}`}>
-                                    <rect
-                                        data-room-edge-id={room.id}
-                                        data-room-edge-index={index}
-                                        x={safeNum((vertex.x + next.x) / 2 - 3.5)}
-                                        y={safeNum((vertex.y + next.y) / 2 - 3.5)}
-                                        width={7}
-                                        height={7}
-                                        rx={1}
-                                        fill="#22d3ee"
-                                        stroke="#083344"
-                                        strokeWidth={1.5}
-                                        opacity={0.9}
-                                        style={{ cursor: 'copy', pointerEvents: 'all' }}
-                                    />
-                                    <circle
-                                        data-room-vertex-id={room.id}
-                                        data-room-vertex-index={index}
-                                        cx={safeNum(vertex.x)}
-                                        cy={safeNum(vertex.y)}
-                                        r={5}
-                                        fill="#22c55e"
-                                        stroke="#052e16"
-                                        strokeWidth={2}
-                                        style={{ cursor: 'move', pointerEvents: 'all' }}
-                                    />
-                                </g>
-                            );
-                        })}
-                    </g>
-                );
-            })}
+            {rooms
+                .filter((room) => room.id === selectedId)
+                .map((room) => {
+                    const vertices = room.vertices.map(screenPoint);
+                    return (
+                        <g
+                            key={`edit-${room.id}`}
+                            className="room-polyline-handles"
+                        >
+                            {vertices.map((vertex, index) => {
+                                const next =
+                                    vertices[(index + 1) % vertices.length];
+                                return (
+                                    <g key={`${room.id}-vertex-${index}`}>
+                                        <rect
+                                            data-room-edge-id={room.id}
+                                            data-room-edge-index={index}
+                                            x={safeNum(
+                                                (vertex.x + next.x) / 2 - 6,
+                                            )}
+                                            y={safeNum(
+                                                (vertex.y + next.y) / 2 - 6,
+                                            )}
+                                            width={12}
+                                            height={12}
+                                            rx={2}
+                                            fill="#22d3ee"
+                                            stroke="#083344"
+                                            strokeWidth={1.5}
+                                            opacity={0.9}
+                                            style={{
+                                                cursor: 'copy',
+                                                pointerEvents: 'all',
+                                            }}
+                                        />
+                                        <circle
+                                            data-room-vertex-id={room.id}
+                                            data-room-vertex-index={index}
+                                            cx={safeNum(vertex.x)}
+                                            cy={safeNum(vertex.y)}
+                                            r={8}
+                                            fill="#22c55e"
+                                            stroke="#052e16"
+                                            strokeWidth={2}
+                                            style={{
+                                                cursor: 'move',
+                                                pointerEvents: 'all',
+                                            }}
+                                        />
+                                    </g>
+                                );
+                            })}
+                        </g>
+                    );
+                })}
         </g>
     );
 });

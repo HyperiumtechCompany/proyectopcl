@@ -6,9 +6,46 @@ import {
     polygonAreaM2,
     polygonCentroid,
     polygonPerimeterM,
+    polygonBounds,
+    rectangleFromPolygonBounds,
+    resizePolygonBounds,
     sanitizePolygon,
     validatePolygon,
 } from './polygonGeometry';
+
+describe('resizePolygonBounds', () => {
+    it('convierte un cuadrado en rectangulo conservando su centro', () => {
+        const resized = resizePolygonBounds(
+            [
+                { x: 0, y: 0 },
+                { x: 2, y: 0 },
+                { x: 2, y: 2 },
+                { x: 0, y: 2 },
+            ],
+            6,
+            3,
+        );
+        expect(polygonBounds(resized)).toMatchObject({ width: 6, height: 3 });
+        expect(resized[0]).toEqual({ x: -2, y: -0.5 });
+    });
+});
+
+describe('rectangleFromPolygonBounds', () => {
+    it('convierte una forma libre en un rectangulo editable', () => {
+        expect(
+            rectangleFromPolygonBounds([
+                { x: 1, y: 2 },
+                { x: 5, y: 3 },
+                { x: 4, y: 8 },
+            ]),
+        ).toEqual([
+            { x: 1, y: 2 },
+            { x: 5, y: 2 },
+            { x: 5, y: 8 },
+            { x: 1, y: 8 },
+        ]);
+    });
+});
 
 /** Rectángulo del caso de referencia del bug de escalado: 8.000 m × 5.012 m */
 const REFERENCE_RECT = [
@@ -29,7 +66,10 @@ describe('polygonAreaM2 — caso de referencia del plan (AC-001)', () => {
     });
 
     it('el área es invariante ante traslación (mover la cámara no cambia coordenadas de mundo)', () => {
-        const translated = REFERENCE_RECT.map((v) => ({ x: v.x + 123.456, y: v.y - 78.9 }));
+        const translated = REFERENCE_RECT.map((v) => ({
+            x: v.x + 123.456,
+            y: v.y - 78.9,
+        }));
         expect(polygonAreaM2(translated)).toBeCloseTo(40.096, 9);
     });
 
@@ -47,7 +87,12 @@ describe('polygonAreaM2 — degenerados', () => {
     it('menos de 3 vértices distintos → 0', () => {
         expect(polygonAreaM2([])).toBe(0);
         expect(polygonAreaM2([{ x: 0, y: 0 }])).toBe(0);
-        expect(polygonAreaM2([{ x: 0, y: 0 }, { x: 5, y: 5 }])).toBe(0);
+        expect(
+            polygonAreaM2([
+                { x: 0, y: 0 },
+                { x: 5, y: 5 },
+            ]),
+        ).toBe(0);
     });
 
     it('vértices colineales → 0', () => {
@@ -72,7 +117,10 @@ describe('polygonAreaM2 — degenerados', () => {
             { x: 3.333333333, y: 0 },
             { x: 0, y: 2.222222222 },
         ];
-        expect(polygonAreaM2(tri)).toBeCloseTo((3.333333333 * 2.222222222) / 2, 12);
+        expect(polygonAreaM2(tri)).toBeCloseTo(
+            (3.333333333 * 2.222222222) / 2,
+            12,
+        );
     });
 });
 
@@ -126,7 +174,9 @@ describe('pointInPolygon', () => {
 
 describe('distanceToPolygonEdge', () => {
     it('distancia desde el centro al borde más próximo', () => {
-        expect(distanceToPolygonEdge({ x: 4, y: 2.506 }, REFERENCE_RECT)).toBeCloseTo(2.506, 9);
+        expect(
+            distanceToPolygonEdge({ x: 4, y: 2.506 }, REFERENCE_RECT),
+        ).toBeCloseTo(2.506, 9);
     });
 });
 
@@ -145,7 +195,18 @@ describe('isSelfIntersecting / validatePolygon', () => {
 
     it('valida el rectángulo de referencia y rechaza polígonos degenerados', () => {
         expect(validatePolygon(REFERENCE_RECT).valid).toBe(true);
-        expect(validatePolygon([{ x: 0, y: 0 }, { x: 1, y: 1 }]).valid).toBe(false);
-        expect(validatePolygon([{ x: 0, y: 0 }, { x: NaN, y: 1 }, { x: 2, y: 2 }]).valid).toBe(false);
+        expect(
+            validatePolygon([
+                { x: 0, y: 0 },
+                { x: 1, y: 1 },
+            ]).valid,
+        ).toBe(false);
+        expect(
+            validatePolygon([
+                { x: 0, y: 0 },
+                { x: NaN, y: 1 },
+                { x: 2, y: 2 },
+            ]).valid,
+        ).toBe(false);
     });
 });

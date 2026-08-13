@@ -3,6 +3,10 @@ import {
     cycleCandidate,
     hitTestAtPoint,
 } from '@/pages/dialux/selection/hitTest';
+import {
+    acceptsWireNode,
+    type WireFamily,
+} from '@/pages/dialux/selection/wireNodeFamily';
 import { getCanopyDraftStart } from './cadInteraction';
 import { resolveWireNodePosition } from './wireNodePosition';
 import { defaultWireCurveMidpoint } from './wireCurveGeometry';
@@ -178,6 +182,7 @@ interface DrawState {
     /** Vértices acumulados para la herramienta measure-area (metros de escena). */
     measureAreaVertices: CanvasPoint[];
     wireStartNode: { type: 'switch' | 'fixture' | 'device'; id: string } | null;
+    wireFamily: WireFamily | null;
     /** Puntos intermedios acumulados mientras se traza un cable (clics en vacío entre nodos). */
     wireWaypoints: CanvasPoint[];
     isDragging: boolean;
@@ -289,6 +294,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         measurementStart: null,
         measureAreaVertices: [],
         wireStartNode: null,
+        wireFamily: null,
         wireWaypoints: [],
         isDragging: false,
         dragStartScene: null,
@@ -309,6 +315,11 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         }
         if (activeTool !== 'measure-area') {
             stateRef.current.measureAreaVertices = [];
+        }
+        if (activeTool !== 'wire') {
+            stateRef.current.wireStartNode = null;
+            stateRef.current.wireWaypoints = [];
+            stateRef.current.wireFamily = null;
         }
         // Trazo de room/corridor/stair (polígono) inconcluso al cambiar de
         // herramienta: sin esto, el usuario que se confunde y cambia de
@@ -402,57 +413,72 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         y: number;
     };
     const pickWireNodeCandidate = useCallback(
-        (cx: number, cy: number): WireNodeCandidate | null => {
-            const switchHit = findNearestLightSwitch(cx, cy);
-            const fixtureHit = findNearestFixture(cx, cy);
-            const deviceHit = findNearestElectricalDevice(cx, cy);
+        (
+            cx: number,
+            cy: number,
+            family: DrawState['wireFamily'] = null,
+        ): WireNodeCandidate | null => {
+            // Reutilizar el mismo hit-test que la herramienta de selección hace
+            // que el área cableable siga el tamaño visible del símbolo al hacer
+            // zoom. Antes, una segunda validación fija de 15–18 px descartaba el
+            // nodo que los helpers ya habían reconocido correctamente.
+            const winner = hitTestAtPoint(
+                { fixtures, lightSwitches, electricalDevices },
+                { x: cx, y: cy },
+                canvasToScene(cx, cy),
+                sceneToCanvas,
+            ).find((candidate) =>
+                acceptsWireNode(
+                    family,
+                    candidate.kind,
+                    candidate.kind === 'electrical-device'
+                        ? electricalDevices.find(
+                              (device) => device.id === candidate.id,
+                          )?.type
+                        : undefined,
+                ),
+            );
 
-            const dist2 = (p: { x: number; y: number } | null): number => {
-                if (!p) return Infinity;
-                const s = sceneToCanvas(p.x, p.y);
-                return (s.x - cx) ** 2 + (s.y - cy) ** 2;
-            };
-            const dist2Switch = dist2(switchHit);
-            const dist2Fixture = dist2(fixtureHit);
-            const dist2Device = dist2(deviceHit);
+            if (!winner) return null;
 
-            // El candidato más cercano gana (switch 15px, fixture 18px, device 18px — reducido para no solapar)
-            const SNAP_SW = 15 * 15;
-            const SNAP_FIX = 18 * 18;
-            const SNAP_DEV = 18 * 18;
+            if (winner.kind === 'fixture') {
+                const fixture = fixtures.find((item) => item.id === winner.id);
+                return fixture
+                    ? {
+                          kind: 'fixture',
+                          id: fixture.id,
+                          x: fixture.x,
+                          y: fixture.y,
+                      }
+                    : null;
+            }
 
-            const candidates: (WireNodeCandidate & { dist2: number })[] = [];
-            if (switchHit && dist2Switch <= SNAP_SW)
-                candidates.push({
-                    kind: 'switch',
-                    id: switchHit.id,
-                    x: switchHit.x,
-                    y: switchHit.y,
-                    dist2: dist2Switch,
-                });
-            if (fixtureHit && dist2Fixture <= SNAP_FIX)
-                candidates.push({
-                    kind: 'fixture',
-                    id: fixtureHit.id,
-                    x: fixtureHit.x,
-                    y: fixtureHit.y,
-                    dist2: dist2Fixture,
-                });
-            if (deviceHit && dist2Device <= SNAP_DEV)
-                candidates.push({
-                    kind: 'device',
-                    id: deviceHit.id,
-                    x: deviceHit.x,
-                    y: deviceHit.y,
-                    dist2: dist2Device,
-                });
-            candidates.sort((a, b) => a.dist2 - b.dist2);
-            return candidates[0] ?? null;
+            if (winner.kind === 'switch') {
+                const lightSwitch = lightSwitches.find(
+                    (item) => item.id === winner.id,
+                );
+                return lightSwitch
+                    ? {
+                          kind: 'switch',
+                          id: lightSwitch.id,
+                          x: lightSwitch.x,
+                          y: lightSwitch.y,
+                      }
+                    : null;
+            }
+
+            const device = electricalDevices.find(
+                (item) => item.id === winner.id,
+            );
+            return device
+                ? { kind: 'device', id: device.id, x: device.x, y: device.y }
+                : null;
         },
         [
-            findNearestLightSwitch,
-            findNearestFixture,
-            findNearestElectricalDevice,
+            canvasToScene,
+            electricalDevices,
+            fixtures,
+            lightSwitches,
             sceneToCanvas,
         ],
     );
@@ -461,7 +487,11 @@ export function useCanvasInteraction(opts: InteractionOptions) {
     const getPrevPointM = useCallback(
         (tool: string, s: DrawState): CanvasPoint | null => {
             if (
-                (tool === 'room' || tool === 'corridor' || tool === 'stair' || tool === 'structural-obstacle' || tool === 'fixture-grid') &&
+                (tool === 'room' ||
+                    tool === 'corridor' ||
+                    tool === 'stair' ||
+                    tool === 'structural-obstacle' ||
+                    tool === 'fixture-grid') &&
                 s.roomVertices.length > 0
             )
                 return s.roomVertices[s.roomVertices.length - 1];
@@ -484,7 +514,11 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         (tool: string, s: DrawState, cx: number, cy: number): number[] => {
             const inferred = getGuideAngles(cx, cy);
             const vertices =
-                tool === 'room' || tool === 'corridor' || tool === 'stair' || tool === 'structural-obstacle' || tool === 'fixture-grid'
+                tool === 'room' ||
+                tool === 'corridor' ||
+                tool === 'stair' ||
+                tool === 'structural-obstacle' ||
+                tool === 'fixture-grid'
                     ? s.roomVertices
                     : isWallTool(tool)
                       ? s.wallVertices
@@ -525,7 +559,8 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 activeTool === 'corridor' ||
                 activeTool === 'stair' ||
                 activeTool === 'structural-obstacle' ||
-                (activeTool === 'fixture-grid' && fixtureGridAreaMode === 'draw')
+                (activeTool === 'fixture-grid' &&
+                    fixtureGridAreaMode === 'draw')
             ) {
                 if (s.roomVertices.length > 2) {
                     const first = sceneToCanvas(
@@ -640,10 +675,14 @@ export function useCanvasInteraction(opts: InteractionOptions) {
 
             const s = stateRef.current;
             const eventElement = e.target as SVGElement;
-            const curveHandle = eventElement.closest<SVGElement>('[data-wire-curve-id]');
+            const curveHandle = eventElement.closest<SVGElement>(
+                '[data-wire-curve-id]',
+            );
             const curveConductorId = curveHandle?.dataset.wireCurveId;
             if (activeTool === 'select' && curveConductorId) {
-                const conductor = conductors.find((item) => item.id === curveConductorId);
+                const conductor = conductors.find(
+                    (item) => item.id === curveConductorId,
+                );
                 if (conductor) {
                     onSelectObject(curveConductorId);
                     s.isDragging = true;
@@ -655,18 +694,31 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 }
             }
 
-            const vertexHandle = eventElement.closest<SVGElement>('[data-room-vertex-id]');
-            const edgeHandle = eventElement.closest<SVGElement>('[data-room-edge-id]');
-            const handledRoomId = vertexHandle?.dataset.roomVertexId ?? edgeHandle?.dataset.roomEdgeId;
+            const vertexHandle = eventElement.closest<SVGElement>(
+                '[data-room-vertex-id]',
+            );
+            const edgeHandle = eventElement.closest<SVGElement>(
+                '[data-room-edge-id]',
+            );
+            const handledRoomId =
+                vertexHandle?.dataset.roomVertexId ??
+                edgeHandle?.dataset.roomEdgeId;
             if (activeTool === 'select' && handledRoomId) {
                 const room = rooms.find((item) => item.id === handledRoomId);
-                const rawIndex = vertexHandle?.dataset.roomVertexIndex ?? edgeHandle?.dataset.roomEdgeIndex;
+                const rawIndex =
+                    vertexHandle?.dataset.roomVertexIndex ??
+                    edgeHandle?.dataset.roomEdgeIndex;
                 const handleIndex = Number(rawIndex);
                 if (room && Number.isInteger(handleIndex)) {
-                    let vertices = room.vertices.map((vertex) => ({ ...vertex }));
+                    let vertices = room.vertices.map((vertex) => ({
+                        ...vertex,
+                    }));
                     let dragIndex = handleIndex;
                     if (edgeHandle) {
-                        const inserted = insertPolygonEdgeMidpoint(vertices, handleIndex);
+                        const inserted = insertPolygonEdgeMidpoint(
+                            vertices,
+                            handleIndex,
+                        );
                         vertices = inserted.vertices;
                         dragIndex = inserted.insertedIndex;
                         onUpdateRoomVertices?.(room.id, vertices);
@@ -695,13 +747,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             ).map((v) => sceneToCanvas(v.x, v.y));
 
             const prevPointM = getPrevPointM(activeTool, s);
-            const noSnapTools = [
-                'switch',
-                'wire',
-                'fixture',
-                'select',
-                'pan',
-            ];
+            const noSnapTools = ['switch', 'wire', 'fixture', 'select', 'pan'];
             // fixture-grid en modo 'room' es un clic simple sobre el ambiente
             // completo bajo el cursor (el snap de posicion/angulo no aplica).
             // En modo 'draw' es un poligono libre vertice a vertice, igual
@@ -758,7 +804,10 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 return;
             }
 
-            if (activeTool === 'fixture-grid' && fixtureGridAreaMode === 'room') {
+            if (
+                activeTool === 'fixture-grid' &&
+                fixtureGridAreaMode === 'room'
+            ) {
                 // Modo clasico: un clic toma el room bajo el cursor y proyecta
                 // sobre el room completo.
                 const roomHit = findNearestRoom(cx, cy);
@@ -912,7 +961,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
 
             if (activeTool === 'wire') {
                 const scPt = canvasToScene(cx, cy);
-                const winner = pickWireNodeCandidate(cx, cy);
+                const winner = pickWireNodeCandidate(cx, cy, s.wireFamily);
 
                 if (winner) {
                     const start = s.wireStartNode;
@@ -942,6 +991,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 // Clic en vacío sin nada → cancelar
                 s.wireStartNode = null;
                 s.wireWaypoints = [];
+                s.wireFamily = null;
                 return;
             }
 
@@ -1000,8 +1050,9 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                             ? (tgtCanvas.x - cx) ** 2 + (tgtCanvas.y - cy) ** 2
                             : Infinity;
                         if (srcPos && tgtPos) {
-                            const curveMidpoint = selectedConductor.curveMidpoint
-                                ?? defaultWireCurveMidpoint(
+                            const curveMidpoint =
+                                selectedConductor.curveMidpoint ??
+                                defaultWireCurveMidpoint(
                                     srcPos,
                                     tgtPos,
                                     selectedConductor.routeType,
@@ -1039,8 +1090,8 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                     if (selectedRoom && selectedRoom.vertices.length >= 3) {
                         const vertexTolerance2 = 11 * 11;
                         const midpointTolerance2 = 9 * 9;
-                        const screenVertices = selectedRoom.vertices.map((vertex) =>
-                            sceneToCanvas(vertex.x, vertex.y),
+                        const screenVertices = selectedRoom.vertices.map(
+                            (vertex) => sceneToCanvas(vertex.x, vertex.y),
                         );
                         const vertexIndex = screenVertices.findIndex(
                             (vertex) =>
@@ -1048,25 +1099,39 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                                 vertexTolerance2,
                         );
 
-                        let vertices = selectedRoom.vertices.map((vertex) => ({ ...vertex }));
+                        let vertices = selectedRoom.vertices.map((vertex) => ({
+                            ...vertex,
+                        }));
                         let dragIndex = vertexIndex;
                         if (dragIndex < 0) {
-                            const edgeIndex = screenVertices.findIndex((vertex, index) => {
-                                const next = screenVertices[(index + 1) % screenVertices.length];
-                                const midpoint = {
-                                    x: (vertex.x + next.x) / 2,
-                                    y: (vertex.y + next.y) / 2,
-                                };
-                                return (
-                                    (midpoint.x - cx) ** 2 + (midpoint.y - cy) ** 2 <=
-                                    midpointTolerance2
-                                );
-                            });
+                            const edgeIndex = screenVertices.findIndex(
+                                (vertex, index) => {
+                                    const next =
+                                        screenVertices[
+                                            (index + 1) % screenVertices.length
+                                        ];
+                                    const midpoint = {
+                                        x: (vertex.x + next.x) / 2,
+                                        y: (vertex.y + next.y) / 2,
+                                    };
+                                    return (
+                                        (midpoint.x - cx) ** 2 +
+                                            (midpoint.y - cy) ** 2 <=
+                                        midpointTolerance2
+                                    );
+                                },
+                            );
                             if (edgeIndex >= 0) {
-                                const inserted = insertPolygonEdgeMidpoint(vertices, edgeIndex);
+                                const inserted = insertPolygonEdgeMidpoint(
+                                    vertices,
+                                    edgeIndex,
+                                );
                                 vertices = inserted.vertices;
                                 dragIndex = inserted.insertedIndex;
-                                onUpdateRoomVertices?.(selectedRoom.id, vertices);
+                                onUpdateRoomVertices?.(
+                                    selectedRoom.id,
+                                    vertices,
+                                );
                             }
                         }
 
@@ -1261,13 +1326,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             ).map((v) => sceneToCanvas(v.x, v.y));
 
             const prevPointM = getPrevPointM(activeTool, s);
-            const noSnapTools = [
-                'switch',
-                'wire',
-                'fixture',
-                'select',
-                'pan',
-            ];
+            const noSnapTools = ['switch', 'wire', 'fixture', 'select', 'pan'];
             // fixture-grid en modo 'room' es un clic simple sobre el ambiente
             // completo bajo el cursor (el snap de posicion/angulo no aplica).
             // En modo 'draw' es un poligono libre vertice a vertice, igual
@@ -1407,6 +1466,19 @@ export function useCanvasInteraction(opts: InteractionOptions) {
 
             if (s.isDragging && s.dragObjectId && s.dragStartScene) {
                 const currentScene = canvasToScene(cx, cy);
+                // Guarda única para TODO arrastre (vértice, luminaria, room,
+                // canopy, dispositivo...): si el motor CAD devuelve un punto no
+                // finito (cámara degenerada, división por cero interna), un
+                // solo frame corrupto puede quedar escrito en la geometría
+                // persistida (ej. un vértice de ambiente en Infinity/NaN) y
+                // reventar tanto el motor 3D como el fitToView del 2D al
+                // volver. Ignorar el frame en vez de propagarlo.
+                if (
+                    !Number.isFinite(currentScene.x) ||
+                    !Number.isFinite(currentScene.y)
+                ) {
+                    return;
+                }
                 const dxM = currentScene.x - s.dragStartScene.x;
                 const dyM = currentScene.y - s.dragStartScene.y;
 
@@ -1429,18 +1501,40 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                             // permite alinear dos luminarias moviendo la segunda
                             // cerca de la primera, sin coordenadas manuales.
                             const ALIGN_SNAP_PX = 6;
-                            const draggedCanvas = sceneToCanvas(targetX, targetY);
-                            let bestX: { value: number; distPx: number } | null = null;
-                            let bestY: { value: number; distPx: number } | null = null;
+                            const draggedCanvas = sceneToCanvas(
+                                targetX,
+                                targetY,
+                            );
+                            let bestX: {
+                                value: number;
+                                distPx: number;
+                            } | null = null;
+                            let bestY: {
+                                value: number;
+                                distPx: number;
+                            } | null = null;
                             for (const other of fixtures) {
                                 if (other.id === s.dragObjectId) continue;
-                                const otherCanvas = sceneToCanvas(other.x, other.y);
-                                const distXPx = Math.abs(otherCanvas.x - draggedCanvas.x);
-                                if (distXPx <= ALIGN_SNAP_PX && (!bestX || distXPx < bestX.distPx)) {
+                                const otherCanvas = sceneToCanvas(
+                                    other.x,
+                                    other.y,
+                                );
+                                const distXPx = Math.abs(
+                                    otherCanvas.x - draggedCanvas.x,
+                                );
+                                if (
+                                    distXPx <= ALIGN_SNAP_PX &&
+                                    (!bestX || distXPx < bestX.distPx)
+                                ) {
                                     bestX = { value: other.x, distPx: distXPx };
                                 }
-                                const distYPx = Math.abs(otherCanvas.y - draggedCanvas.y);
-                                if (distYPx <= ALIGN_SNAP_PX && (!bestY || distYPx < bestY.distPx)) {
+                                const distYPx = Math.abs(
+                                    otherCanvas.y - draggedCanvas.y,
+                                );
+                                if (
+                                    distYPx <= ALIGN_SNAP_PX &&
+                                    (!bestY || distYPx < bestY.distPx)
+                                ) {
                                     bestY = { value: other.y, distPx: distYPx };
                                 }
                             }
@@ -1766,10 +1860,18 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         }
     }, [activeTool, onAddWall, onMeasureAreaFinish, onDoubleClick]);
 
-    const beginWireFromNode = useCallback((id: string, type: 'switch' | 'fixture' | 'device') => {
-        stateRef.current.wireStartNode = { id, type };
-        stateRef.current.wireWaypoints = [];
-    }, []);
+    const beginWireFromNode = useCallback(
+        (
+            id: string,
+            type: 'switch' | 'fixture' | 'device',
+            family: DrawState['wireFamily'] = null,
+        ) => {
+            stateRef.current.wireStartNode = { id, type };
+            stateRef.current.wireWaypoints = [];
+            stateRef.current.wireFamily = family;
+        },
+        [],
+    );
 
     /**
      * Quita el último vértice colocado de la figura que se está dibujando

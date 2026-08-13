@@ -3,7 +3,10 @@ import {
     deriveAmbientSpaces,
     deriveSceneAmbientSpaces,
 } from '@/pages/dialux/hooks/ambientSpaces';
-import { calculatePolygonArea, calculatePolygonPerimeter } from '@/pages/dialux/hooks/lightingCalculations';
+import {
+    calculatePolygonArea,
+    calculatePolygonPerimeter,
+} from '@/pages/dialux/hooks/lightingCalculations';
 import { ensureStandardDataLoaded } from '@/pages/dialux/hooks/normativeRemoteData';
 import {
     buildRoomLightingInputs,
@@ -33,19 +36,21 @@ export const RoomProps: React.FC<{
     scene: Scene | null;
     parentRoom?: Room | null;
     selectedAmbient?:
-        | ReturnType<typeof deriveSceneAmbientSpaces>[number]
-        | null;
+        ReturnType<typeof deriveSceneAmbientSpaces>[number] | null;
     onUpdate: (patch: Partial<Omit<Room, 'id'>>) => void;
 }> = ({ room, scene, parentRoom = null, selectedAmbient = null, onUpdate }) => {
     const store = useEditorStore();
     const isCorridorAmbient = room.roomType === 'corridor';
     const isRecinto = !room.roomType || room.roomType === 'room';
-    const isAmbiente = room.roomType === 'ambient' || room.roomType === 'corridor';
+    const isAmbiente =
+        room.roomType === 'ambient' || room.roomType === 'corridor';
     const calculationRoom = selectedAmbient?.room ?? room;
     const area = calculatePolygonArea(calculationRoom.vertices);
     const perimeter = calculatePolygonPerimeter(calculationRoom.vertices);
     const generatedOutletsCount = (scene?.electricalDevices ?? []).filter(
-        (device) => device.generatedBy === 'outlet-rule' && device.roomId === calculationRoom.id,
+        (device) =>
+            device.generatedBy === 'outlet-rule' &&
+            device.roomId === calculationRoom.id,
     ).length;
     const fixturesInRoom = selectedAmbient
         ? selectedAmbient.fixtures
@@ -105,12 +110,14 @@ export const RoomProps: React.FC<{
                 isRecinto={isRecinto}
                 parentRoom={parentRoom}
                 inheritedHeight={inheritedHeight}
-                area={area}
-                perimeter={perimeter}
+                area={calculatePolygonArea(room.vertices)}
+                perimeter={calculatePolygonPerimeter(room.vertices)}
                 ambientCount={ambientSpaces.length}
             />
 
-            {isRecinto && <RoomConstructionSection room={room} onUpdate={onUpdate} />}
+            {isRecinto && (
+                <RoomConstructionSection room={room} onUpdate={onUpdate} />
+            )}
 
             {(isRecinto || isAmbiente) && (
                 <RoomSurfaceMaterialsSection room={room} onUpdate={onUpdate} />

@@ -60,7 +60,10 @@ import {
     wallLength,
 } from '@/pages/dialux/hooks/useInteractionHelpers';
 import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
-import { loadWasmModule, useWasmEngine } from '@/pages/dialux/hooks/useWasmEngine';
+import {
+    loadWasmModule,
+    useWasmEngine,
+} from '@/pages/dialux/hooks/useWasmEngine';
 import { getPeruWallPreset } from '@/pages/dialux/hooks/wallNorms';
 import {
     applyLegacyLinkUpdate,
@@ -111,6 +114,10 @@ import {
     classifyConductorLayer,
     isElectricalItemVisible,
 } from '@/pages/dialux/electrical/electricalLayerVisibility';
+import {
+    acceptsWireNode,
+    wireFamilyFromShortcut,
+} from '@/pages/dialux/selection/wireNodeFamily';
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
@@ -208,6 +215,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         } | null>(null);
         const [isDragging, setIsDragging] = useState(false);
         const [viewTick, setViewTick] = useState(0);
+        const pendingMiddleDrawPointRef = useRef<CanvasPoint | null>(null);
         const scaleConfig = normalizeScaleConfig(scene?.scaleConfig);
         const effectiveScale = getEffectiveScale(scaleConfig);
         const visibleCalibrationLine =
@@ -455,9 +463,14 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     store.removeObject(existingWire.id);
                 } else {
                     const endpointPosition = (id: string) => {
-                        const node = scene?.fixtures.find((item) => item.id === id)
-                            ?? scene?.lightSwitches.find((item) => item.id === id)
-                            ?? scene?.electricalDevices?.find((item) => item.id === id);
+                        const node =
+                            scene?.fixtures.find((item) => item.id === id) ??
+                            scene?.lightSwitches.find(
+                                (item) => item.id === id,
+                            ) ??
+                            scene?.electricalDevices?.find(
+                                (item) => item.id === id,
+                            );
                         return node ? { x: node.x, y: node.y } : null;
                     };
                     const sourcePosition = endpointPosition(sourceId);
@@ -476,15 +489,18 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                                 isOutletDeviceType(device.type),
                         ),
                     );
-                    
-                    const isFixture = (id: string) => scene?.fixtures.some(f => f.id === id);
-                    const isSwitch = (id: string) => scene?.lightSwitches.some(s => s.id === id);
-                    
-                    const connectsToSwitch = isSwitch(sourceId) || isSwitch(targetId);
-                        
+
+                    const isFixture = (id: string) =>
+                        scene?.fixtures.some((f) => f.id === id);
+                    const isSwitch = (id: string) =>
+                        scene?.lightSwitches.some((s) => s.id === id);
+
+                    const connectsToSwitch =
+                        isSwitch(sourceId) || isSwitch(targetId);
+
                     let defaultWireCount = ui.wireTemplate.wireCount;
                     let defaultWireLabel = ui.wireTemplate.wireLabel;
-                    
+
                     if (connectsToSwitch) {
                         // Para interruptores, el default es 2 (con posibilidad de editar a 3 para conmutados)
                         defaultWireCount = 2;
@@ -624,8 +640,9 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         (r) => !r.roomType || r.roomType === 'room',
                     ).length ?? 0;
                 const evacuationRouteCount =
-                    scene?.rooms.filter((r) => r.roomType === 'evacuation-route')
-                        .length ?? 0;
+                    scene?.rooms.filter(
+                        (r) => r.roomType === 'evacuation-route',
+                    ).length ?? 0;
                 const antipanicAreaCount =
                     scene?.rooms.filter((r) => r.roomType === 'antipanic-area')
                         .length ?? 0;
@@ -1068,7 +1085,9 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         const dynInputPrevScene = isDynInputTool ? getDraftPrevPoint() : null;
         const dynInputPreviewScene = isDynInputTool
             ? ui.activeTool === 'wall' || ui.activeTool === 'education-wall'
-                ? (wallPreview?.length ? wallPreview[wallPreview.length - 1] : null)
+                ? wallPreview?.length
+                    ? wallPreview[wallPreview.length - 1]
+                    : null
                 : roomPreviewPt
             : null;
         const dynInputVisible = Boolean(
@@ -1090,7 +1109,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             const dx = dynInputPreviewScreen.x - dynInputPrevScreen.x;
             const dy = dynInputPreviewScreen.y - dynInputPrevScreen.y;
             dynInputLiveAngleDeg =
-                (((Math.atan2(dy, dx) * 180) / Math.PI) + 360) % 360;
+                ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
         }
         const handleDynamicInputCommit = useCallback(
             (distanceM: number, angleDeg: number) => {
@@ -1221,8 +1240,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             let sameY: number | null = null;
             for (const other of scene.fixtures) {
                 if (other.id === dragged.id) continue;
-                if (sameX === null && Math.abs(other.x - dragged.x) < EPS) sameX = other.x;
-                if (sameY === null && Math.abs(other.y - dragged.y) < EPS) sameY = other.y;
+                if (sameX === null && Math.abs(other.x - dragged.x) < EPS)
+                    sameX = other.x;
+                if (sameY === null && Math.abs(other.y - dragged.y) < EPS)
+                    sameY = other.y;
                 if (sameX !== null && sameY !== null) break;
             }
             if (sameX === null && sameY === null) return null;
@@ -1415,8 +1436,14 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                             // camino .dxf, en vez de dejarlo en manos del
                             // fallback tardío de exportación.
                             const wasmModule = await loadWasmModule();
-                            const normalizedScale = normalizeScaleConfig(scene?.scaleConfig);
-                            const engineResult = extractDxfEntitiesFromEngineDocument(normalizedScale, wasmModule);
+                            const normalizedScale = normalizeScaleConfig(
+                                scene?.scaleConfig,
+                            );
+                            const engineResult =
+                                extractDxfEntitiesFromEngineDocument(
+                                    normalizedScale,
+                                    wasmModule,
+                                );
 
                             if (engineResult.entities.length > 0) {
                                 console.log(
@@ -1547,6 +1574,90 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             return () => el.removeEventListener('wheel', onWheel);
         }, [engine, hasCadView, zoom, store]);
 
+        // El motor CAD instala sus propios listeners sobre el canvas nativo y
+        // puede consumir el boton central antes de que llegue al SVG/React.
+        // Capturarlo en window garantiza el atajo, pero solo cuando el puntero
+        // esta realmente dentro de este editor 2D.
+        useEffect(() => {
+            const activateFixtureArea = (event: MouseEvent) => {
+                if (event.button !== 1) return;
+                const wrapper = wrapperRef.current;
+                if (!wrapper || !isVisible) return;
+                const rect = wrapper.getBoundingClientRect();
+                const isInside =
+                    event.clientX >= rect.left &&
+                    event.clientX <= rect.right &&
+                    event.clientY >= rect.top &&
+                    event.clientY <= rect.bottom;
+                if (!isInside) return;
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                let point = {
+                    x: event.clientX - rect.left,
+                    y: event.clientY - rect.top,
+                };
+                try {
+                    const scenePoint = worldPoint(point.x, point.y);
+                    const snappedCad = engine.getOsnapPoint({
+                        x: metersToCad(scenePoint.x, scaleConfig),
+                        y: metersToCad(scenePoint.y, scaleConfig),
+                    });
+                    if (snappedCad) {
+                        point = screenPoint({
+                            x: cadToMeters(snappedCad.x, scaleConfig),
+                            y: cadToMeters(snappedCad.y, scaleConfig),
+                        });
+                    }
+                } catch {
+                    // Un DXF malformado no debe impedir el dibujo libre.
+                }
+                if (
+                    useEditorStore.getState().ui.activeTool ===
+                        'fixture-grid' &&
+                    useEditorStore.getState().ui.fixtureGridAreaMode === 'draw'
+                ) {
+                    commitDrawVertex(
+                        point.x,
+                        point.y,
+                        setRoomVertices,
+                        setWallPreview,
+                    );
+                    return;
+                }
+                pendingMiddleDrawPointRef.current = point;
+                store.setFixtureGridAreaMode('draw');
+                store.setTool('fixture-grid');
+            };
+            window.addEventListener('mousedown', activateFixtureArea, true);
+            return () => {
+                window.removeEventListener(
+                    'mousedown',
+                    activateFixtureArea,
+                    true,
+                );
+            };
+        }, [
+            commitDrawVertex,
+            engine,
+            isVisible,
+            scaleConfig,
+            screenPoint,
+            store,
+            worldPoint,
+        ]);
+
+        useEffect(() => {
+            if (
+                ui.activeTool !== 'fixture-grid' ||
+                ui.fixtureGridAreaMode !== 'draw'
+            )
+                return;
+            const point = pendingMiddleDrawPointRef.current;
+            if (!point) return;
+            pendingMiddleDrawPointRef.current = null;
+            commitDrawVertex(point.x, point.y, setRoomVertices, setWallPreview);
+        }, [commitDrawVertex, ui.activeTool, ui.fixtureGridAreaMode]);
+
         // ─────────────────────────────────────────────────────────────────────────
         return (
             <div
@@ -1557,6 +1668,18 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 #cad-engine-container { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; }
                 #cad-engine-container canvas { width: 100% !important; height: 100% !important; display: block !important; }
             `}</style>
+
+                {ui.activeTool === 'fixture-grid' &&
+                    ui.fixtureGridAreaMode === 'draw' && (
+                        <div className="pointer-events-none absolute top-3 left-1/2 z-30 -translate-x-1/2 rounded-lg border border-cyan-400/60 bg-slate-950/90 px-3 py-2 text-center text-xs font-medium text-cyan-200 shadow-xl">
+                            Proyección activa · clic central o izquierdo para
+                            puntos
+                            <span className="mt-0.5 block text-[10px] font-normal text-slate-400">
+                                Cierra cerca del primer punto · ajuste magnético
+                                al plano activo
+                            </span>
+                        </div>
+                    )}
 
                 {/* Motor CAD nativo (z=0) */}
                 <div
@@ -1628,23 +1751,71 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     }}
                     onDoubleClick={onDoubleClick}
                     onContextMenu={(event) => {
-                        const rect = event.currentTarget.getBoundingClientRect();
-                        const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-                        const candidates = [
-                            ...(scene?.fixtures ?? []).map((item) => ({ id: item.id, type: 'fixture' as const, x: item.x, y: item.y })),
-                            ...(scene?.lightSwitches ?? []).map((item) => ({ id: item.id, type: 'switch' as const, x: item.x, y: item.y })),
-                            ...(scene?.electricalDevices ?? []).map((item) => ({ id: item.id, type: 'device' as const, x: item.x, y: item.y })),
-                        ].map((item) => {
-                            const screen = screenPoint(item);
-                            return { ...item, distance: Math.hypot(screen.x - point.x, screen.y - point.y) };
-                        }).sort((a, b) => a.distance - b.distance);
-                        const node = candidates[0];
-                        if (!node || node.distance > 28) return;
                         event.preventDefault();
+                        const rect =
+                            event.currentTarget.getBoundingClientRect();
+                        const point = {
+                            x: event.clientX - rect.left,
+                            y: event.clientY - rect.top,
+                        };
+                        const family = wireFamilyFromShortcut(event.altKey);
+                        const candidates = [
+                            ...(scene?.fixtures ?? []).map((item) => ({
+                                id: item.id,
+                                type: 'fixture' as const,
+                                x: item.x,
+                                y: item.y,
+                            })),
+                            ...(scene?.lightSwitches ?? []).map((item) => ({
+                                id: item.id,
+                                type: 'switch' as const,
+                                x: item.x,
+                                y: item.y,
+                            })),
+                            ...(scene?.electricalDevices ?? []).map((item) => ({
+                                id: item.id,
+                                type: 'device' as const,
+                                x: item.x,
+                                y: item.y,
+                            })),
+                        ]
+                            .filter((item) =>
+                                acceptsWireNode(
+                                    family,
+                                    item.type === 'device'
+                                        ? 'electrical-device'
+                                        : item.type,
+                                    item.type === 'device'
+                                        ? scene?.electricalDevices?.find(
+                                              (device) => device.id === item.id,
+                                          )?.type
+                                        : undefined,
+                                ),
+                            )
+                            .map((item) => {
+                                const screen = screenPoint(item);
+                                return {
+                                    ...item,
+                                    distance: Math.hypot(
+                                        screen.x - point.x,
+                                        screen.y - point.y,
+                                    ),
+                                };
+                            })
+                            .sort((a, b) => a.distance - b.distance);
+                        const node = candidates[0];
+                        const hitRadius = Math.max(
+                            28,
+                            screenDistance(
+                                family === 'outlets' ? 0.22 : 0.15,
+                                0,
+                            ),
+                        );
+                        if (!node || node.distance > hitRadius) return;
                         event.stopPropagation();
                         store.setSelectedId(node.id);
                         store.setTool('wire');
-                        beginWireFromNode(node.id, node.type);
+                        beginWireFromNode(node.id, node.type, family);
                     }}
                 >
                     <CanvasSvgDefs />
@@ -1705,7 +1876,9 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                                         screenDistance={screenDistance}
                                     />
                                     <OverlayStructuralObstacles
-                                        obstacles={ghostScene.structuralObstacles ?? []}
+                                        obstacles={
+                                            ghostScene.structuralObstacles ?? []
+                                        }
                                         selectedId={null}
                                         zoom={zoom}
                                         onSelect={() => undefined}
@@ -1785,23 +1958,6 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         onSelect={overlaySelect}
                         opacity={1}
                     />
-                    <OverlayFixtures
-                        fixtures={
-                            ui.electricalLayerVisibility.fixtures
-                                ? (scene?.fixtures ?? []).filter(
-                                      (item) =>
-                                          !ui.hiddenElectricalIds.includes(
-                                              item.id,
-                                          ),
-                                  )
-                                : []
-                        }
-                        selectedFixtureIds={ui.selectedFixtureIds ?? []}
-                        zoom={zoom}
-                        onSelect={overlaySelectFixture}
-                        screenPoint={screenPoint}
-                        screenDistance={screenDistance}
-                    />
                     <OverlayWires
                         conductors={(scene?.conductors ?? []).filter((item) => {
                             if (ui.hiddenElectricalIds.includes(item.id))
@@ -1827,6 +1983,31 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                             ui.electricalLayerVisibility.fixtures
                         }
                         reconnectPreview={wireReconnectPreview}
+                    />
+                    {/* Luminarias SIEMPRE encima de los cables: el área de clic
+                        invisible del conductor (22px) corre hasta el centro
+                        exacto de cada nodo conectado, y si se pintara antes que
+                        la luminaria, ese corredor le robaba el clic al querer
+                        volver a seleccionarla en modo 'select' (obligaba a
+                        hacer zoom hasta encontrar un punto del símbolo fuera
+                        del cable). Switches/dispositivos ya se pintaban después
+                        de OverlayWires; esto iguala el criterio para fixtures. */}
+                    <OverlayFixtures
+                        fixtures={
+                            ui.electricalLayerVisibility.fixtures
+                                ? (scene?.fixtures ?? []).filter(
+                                      (item) =>
+                                          !ui.hiddenElectricalIds.includes(
+                                              item.id,
+                                          ),
+                                  )
+                                : []
+                        }
+                        selectedFixtureIds={ui.selectedFixtureIds ?? []}
+                        zoom={zoom}
+                        onSelect={overlaySelectFixture}
+                        screenPoint={screenPoint}
+                        screenDistance={screenDistance}
                     />
                     <OverlayLightSwitches
                         lightSwitches={
@@ -1911,39 +2092,74 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         onRotate={handleRotate}
                     />
                     {ui.fixtureGridGuideEditor &&
-                        scene?.rooms.some((r) => r.id === ui.fixtureGridGuideEditor?.roomId) && (
+                        scene?.rooms.some(
+                            (r) => r.id === ui.fixtureGridGuideEditor?.roomId,
+                        ) && (
                             <OverlayFixtureGridGuides
                                 editor={ui.fixtureGridGuideEditor}
                                 screenPoint={screenPoint}
                                 worldPoint={worldPoint}
                                 toLocalPoint={toLocalPoint}
                                 onDragGuide={(axis, index, value) =>
-                                    store.setFixtureGridGuide(axis, index, value)
+                                    store.setFixtureGridGuide(
+                                        axis,
+                                        index,
+                                        value,
+                                    )
                                 }
                             />
                         )}
                     {fixtureAlignmentGuides && (
-                        <g className="overlay-fixture-alignment-guides" style={{ pointerEvents: 'none' }}>
-                            {fixtureAlignmentGuides.x !== null && (() => {
-                                const p1 = screenPoint({ x: fixtureAlignmentGuides.x, y: -500 });
-                                const p2 = screenPoint({ x: fixtureAlignmentGuides.x, y: 500 });
-                                return (
-                                    <line
-                                        x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                                        stroke="#ec4899" strokeWidth={1.5} strokeDasharray="4 3" opacity={0.9}
-                                    />
-                                );
-                            })()}
-                            {fixtureAlignmentGuides.y !== null && (() => {
-                                const p1 = screenPoint({ x: -500, y: fixtureAlignmentGuides.y });
-                                const p2 = screenPoint({ x: 500, y: fixtureAlignmentGuides.y });
-                                return (
-                                    <line
-                                        x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                                        stroke="#ec4899" strokeWidth={1.5} strokeDasharray="4 3" opacity={0.9}
-                                    />
-                                );
-                            })()}
+                        <g
+                            className="overlay-fixture-alignment-guides"
+                            style={{ pointerEvents: 'none' }}
+                        >
+                            {fixtureAlignmentGuides.x !== null &&
+                                (() => {
+                                    const p1 = screenPoint({
+                                        x: fixtureAlignmentGuides.x,
+                                        y: -500,
+                                    });
+                                    const p2 = screenPoint({
+                                        x: fixtureAlignmentGuides.x,
+                                        y: 500,
+                                    });
+                                    return (
+                                        <line
+                                            x1={p1.x}
+                                            y1={p1.y}
+                                            x2={p2.x}
+                                            y2={p2.y}
+                                            stroke="#ec4899"
+                                            strokeWidth={1.5}
+                                            strokeDasharray="4 3"
+                                            opacity={0.9}
+                                        />
+                                    );
+                                })()}
+                            {fixtureAlignmentGuides.y !== null &&
+                                (() => {
+                                    const p1 = screenPoint({
+                                        x: -500,
+                                        y: fixtureAlignmentGuides.y,
+                                    });
+                                    const p2 = screenPoint({
+                                        x: 500,
+                                        y: fixtureAlignmentGuides.y,
+                                    });
+                                    return (
+                                        <line
+                                            x1={p1.x}
+                                            y1={p1.y}
+                                            x2={p2.x}
+                                            y2={p2.y}
+                                            stroke="#ec4899"
+                                            strokeWidth={1.5}
+                                            strokeDasharray="4 3"
+                                            opacity={0.9}
+                                        />
+                                    );
+                                })()}
                         </g>
                     )}
                 </svg>

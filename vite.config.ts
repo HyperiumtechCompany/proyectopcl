@@ -4,8 +4,17 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import laravel from 'laravel-vite-plugin';
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
+  resolve: {
+    // Una ruta con `/resources` se interpreta desde la raiz de la unidad en
+    // Windows (C:\\resources). Resolver el alias desde este archivo funciona
+    // igual en desarrollo, CI y produccion Linux.
+    alias: {
+      '@': fileURLToPath(new URL('./resources/js', import.meta.url)),
+    },
+  },
   build: {
     // Un deploy no debe borrar los chunks que una pestaña ya abierta todavía
     // puede solicitar al cambiar entre 2D y 3D. El manifest nuevo se reemplaza

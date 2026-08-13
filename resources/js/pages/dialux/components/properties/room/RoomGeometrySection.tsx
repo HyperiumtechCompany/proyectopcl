@@ -1,6 +1,17 @@
 import { Square } from 'lucide-react';
+import {
+    polygonBounds,
+    rectangleFromPolygonBounds,
+    resizePolygonBounds,
+} from '@/pages/dialux/geometry/polygonGeometry';
 import type { CorridorType, Room } from '@/pages/dialux/hooks/types';
-import { EditField, PropField, SectionWrapper, SelectField, TextField } from '../PropertyFields';
+import {
+    EditField,
+    PropField,
+    SectionWrapper,
+    SelectField,
+    TextField,
+} from '../PropertyFields';
 import { StairConfigPanel } from './StairConfigPanel';
 
 const CORRIDOR_TYPE_OPTIONS: Array<{ value: CorridorType; label: string }> = [
@@ -40,24 +51,93 @@ export function RoomGeometrySection({
     perimeter: number;
     ambientCount: number;
 }) {
+    const bounds = polygonBounds(room.vertices);
     const handleCorridorTypeChange = (value: string) => {
-        const corridorType = CORRIDOR_TYPE_OPTIONS.find((option) => option.value === value)?.value;
+        const corridorType = CORRIDOR_TYPE_OPTIONS.find(
+            (option) => option.value === value,
+        )?.value;
         if (!corridorType) return;
-        onUpdate({ corridorConfig: { ...(room.corridorConfig ?? {}), type: corridorType } });
+        onUpdate({
+            corridorConfig: {
+                ...(room.corridorConfig ?? {}),
+                type: corridorType,
+            },
+        });
     };
 
     return (
         <SectionWrapper
             icon={<Square size={12} className="text-blue-400" />}
-            label={isCorridorAmbient ? 'Pasadizo' : room.roomType === 'ambient' ? 'Ambiente' : 'Recinto'}
+            label={
+                isCorridorAmbient
+                    ? 'Pasadizo'
+                    : room.roomType === 'ambient'
+                      ? 'Ambiente'
+                      : 'Recinto'
+            }
         >
-            <TextField label="Nombre" value={room.name} onChange={(value) => onUpdate({ name: value })} />
+            <TextField
+                label="Nombre"
+                value={room.name}
+                onChange={(value) => onUpdate({ name: value })}
+            />
             {/* Orden solicitado: área → longitud (perímetro) → alto,
                 lo primero que se necesita al revisar un ambiente. */}
             <PropField label="Área" value={`${area.toFixed(4)} m²`} />
             <PropField label="Perímetro" value={`${perimeter.toFixed(4)} m`} />
+            <EditField
+                label="Ancho (m)"
+                value={Number(bounds.width.toFixed(3))}
+                min={0.1}
+                max={1000}
+                step={0.1}
+                onChange={(width) =>
+                    onUpdate({
+                        vertices: resizePolygonBounds(
+                            room.vertices,
+                            width,
+                            bounds.height,
+                        ),
+                    })
+                }
+            />
+            <EditField
+                label="Largo (m)"
+                value={Number(bounds.height.toFixed(3))}
+                min={0.1}
+                max={1000}
+                step={0.1}
+                onChange={(height) =>
+                    onUpdate({
+                        vertices: resizePolygonBounds(
+                            room.vertices,
+                            bounds.width,
+                            height,
+                        ),
+                    })
+                }
+            />
+            <p className="rounded bg-cyan-50 px-2 py-1.5 text-[10px] leading-relaxed text-cyan-800 dark:bg-cyan-950/30 dark:text-cyan-300">
+                Para formas libres, selecciona el ambiente y arrastra los puntos
+                verdes. Usa los cuadrados celestes para agregar vértices.
+            </p>
+            <button
+                type="button"
+                onClick={() =>
+                    onUpdate({
+                        vertices: rectangleFromPolygonBounds(room.vertices),
+                    })
+                }
+                className="w-full rounded border border-amber-400/50 bg-amber-50 px-2 py-1.5 text-[10px] font-medium text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-900/40"
+            >
+                Convertir a rectángulo editable
+            </button>
             {inheritedHeight !== null ? (
-                <PropField label="Alto techo (m) — heredado del recinto" value={`${inheritedHeight.toFixed(2)} m`} mono={false} />
+                <PropField
+                    label="Alto techo (m) — heredado del recinto"
+                    value={`${inheritedHeight.toFixed(2)} m`}
+                    mono={false}
+                />
             ) : (
                 <EditField
                     label={isCorridorAmbient ? 'Alto techo (m)' : 'Alto (m)'}
@@ -69,7 +149,11 @@ export function RoomGeometrySection({
                 />
             )}
             {isCorridorAmbient && parentRoom && parentRoom.id !== room.id && (
-                <PropField label="Recinto" value={parentRoom.name} mono={false} />
+                <PropField
+                    label="Recinto"
+                    value={parentRoom.name}
+                    mono={false}
+                />
             )}
             {isCorridorAmbient && (
                 <>
@@ -79,7 +163,8 @@ export function RoomGeometrySection({
                         options={CORRIDOR_TYPE_OPTIONS}
                         onChange={handleCorridorTypeChange}
                     />
-                    {(room.corridorConfig?.type === 'concrete_railings' || room.corridorConfig?.type === 'metal_railings') && (
+                    {(room.corridorConfig?.type === 'concrete_railings' ||
+                        room.corridorConfig?.type === 'metal_railings') && (
                         <EditField
                             label="Alto baranda (m)"
                             value={room.corridorConfig?.railingHeight ?? 1.05}
@@ -87,7 +172,12 @@ export function RoomGeometrySection({
                             max={1.5}
                             step={0.05}
                             onChange={(value) =>
-                                onUpdate({ corridorConfig: { ...(room.corridorConfig ?? {}), railingHeight: value } })
+                                onUpdate({
+                                    corridorConfig: {
+                                        ...(room.corridorConfig ?? {}),
+                                        railingHeight: value,
+                                    },
+                                })
                             }
                         />
                     )}
@@ -99,13 +189,23 @@ export function RoomGeometrySection({
                             max={20}
                             step={0.5}
                             onChange={(value) =>
-                                onUpdate({ corridorConfig: { ...(room.corridorConfig ?? {}), rampSlope: value } })
+                                onUpdate({
+                                    corridorConfig: {
+                                        ...(room.corridorConfig ?? {}),
+                                        rampSlope: value,
+                                    },
+                                })
                             }
                         />
                     )}
-                    {(room.corridorConfig?.type === 'ramp' || room.corridorConfig?.type === 'roof_floor') && (
+                    {(room.corridorConfig?.type === 'ramp' ||
+                        room.corridorConfig?.type === 'roof_floor') && (
                         <SelectField
-                            label={room.corridorConfig?.type === 'ramp' ? 'Dirección sube' : 'Dirección flujo'}
+                            label={
+                                room.corridorConfig?.type === 'ramp'
+                                    ? 'Dirección sube'
+                                    : 'Dirección flujo'
+                            }
                             value={room.corridorConfig?.direction ?? 'north'}
                             options={[
                                 { value: 'north', label: 'Norte ↑' },
@@ -117,7 +217,8 @@ export function RoomGeometrySection({
                                 onUpdate({
                                     corridorConfig: {
                                         ...(room.corridorConfig ?? {}),
-                                        direction: value as 'north' | 'south' | 'east' | 'west',
+                                        direction: value as
+                                            'north' | 'south' | 'east' | 'west',
                                     },
                                 })
                             }
@@ -131,16 +232,25 @@ export function RoomGeometrySection({
                             max={1.5}
                             step={0.05}
                             onChange={(value) =>
-                                onUpdate({ corridorConfig: { ...(room.corridorConfig ?? {}), railingHeight: value } })
+                                onUpdate({
+                                    corridorConfig: {
+                                        ...(room.corridorConfig ?? {}),
+                                        railingHeight: value,
+                                    },
+                                })
                             }
                         />
                     )}
                 </>
             )}
             <PropField label="Vértices" value={`${room.vertices.length}`} />
-            {isRecinto && <PropField label="Ambientes" value={`${ambientCount}`} />}
+            {isRecinto && (
+                <PropField label="Ambientes" value={`${ambientCount}`} />
+            )}
 
-            {room.roomType === 'stair' && <StairConfigPanel room={room} onUpdate={onUpdate} />}
+            {room.roomType === 'stair' && (
+                <StairConfigPanel room={room} onUpdate={onUpdate} />
+            )}
         </SectionWrapper>
     );
 }

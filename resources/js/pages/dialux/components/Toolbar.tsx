@@ -58,8 +58,12 @@ import {
 } from '@/pages/dialux/hooks/fixtureGridSymmetry';
 import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
 import { useWasmEngine } from '@/pages/dialux/hooks/useWasmEngine';
-import { parseIfcFileForImport, type IfcImportPreview } from '@/pages/dialux/hooks/ifcImport/ifcImportPipeline';
+import {
+    parseIfcFileForImport,
+    type IfcImportPreview,
+} from '@/pages/dialux/hooks/ifcImport/ifcImportPipeline';
 import { getEffectiveScale } from './canvas/canvasUtils';
+import { CatalogPanel } from './CatalogPanel';
 import { IfcImportDialog, type IfcImportSelection } from './IfcImportDialog';
 import { ImportLuminairesModal } from './ImportLuminairesModal';
 import { FloatingPanelPortal } from './toolbar/FloatingPanelPortal';
@@ -112,7 +116,8 @@ export const Toolbar: React.FC = () => {
     const activeScene = store.activeScene();
 
     /** Aviso de simetria entre modulos adyacentes (ver fixtureGridSymmetry.ts) -- borrador de UI puro, no persiste nada. */
-    const [symmetryWarning, setSymmetryWarning] = useState<SymmetryCheckResult | null>(null);
+    const [symmetryWarning, setSymmetryWarning] =
+        useState<SymmetryCheckResult | null>(null);
 
     /**
      * Confirma el area de proyeccion recien dibujada (herramienta Luminarias,
@@ -143,12 +148,18 @@ export const Toolbar: React.FC = () => {
             store.setTool('select');
 
             const freshScene = store.activeScene();
-            const newGroupId = freshScene?.fixtures.find((f) => newIds.includes(f.id))?.gridGroupId;
+            const newGroupId = freshScene?.fixtures.find((f) =>
+                newIds.includes(f.id),
+            )?.gridGroupId;
             if (freshScene && newGroupId) {
-                setSymmetryWarning(checkGroupSymmetry(freshScene.fixtures, roomId, newGroupId));
+                setSymmetryWarning(
+                    checkGroupSymmetry(freshScene.fixtures, roomId, newGroupId),
+                );
             }
         } else {
-            alert('No se pudo generar la grilla. El área proyectada puede ser muy pequeña.');
+            alert(
+                'No se pudo generar la grilla. El área proyectada puede ser muy pequeña.',
+            );
         }
     }, [store]);
 
@@ -168,11 +179,17 @@ export const Toolbar: React.FC = () => {
             store.beginHistoryGesture();
             for (const correction of suggestion.corrections) {
                 const groupFixtures = sortFixturesRowMajor(
-                    scene.fixtures.filter((f) => f.gridGroupId === correction.groupId),
+                    scene.fixtures.filter(
+                        (f) => f.gridGroupId === correction.groupId,
+                    ),
                 );
                 if (groupFixtures.length === 0) continue;
-                const areaVertices = computeFixtureGroupAreaVertices(groupFixtures);
-                const mountingHeight = groupFixtures[0].z ?? groupFixtures[0].mountingHeight ?? 2.7;
+                const areaVertices =
+                    computeFixtureGroupAreaVertices(groupFixtures);
+                const mountingHeight =
+                    groupFixtures[0].z ??
+                    groupFixtures[0].mountingHeight ??
+                    2.7;
                 const positions = calculateObstacleAwareFixtureGridPositions(
                     areaVertices,
                     scene.structuralObstacles ?? [],
@@ -183,20 +200,35 @@ export const Toolbar: React.FC = () => {
                 const targetCount = correction.rows * correction.columns;
                 if (positions.length !== targetCount) continue;
 
-                const shared = { gridRows: correction.rows, gridColumns: correction.columns };
+                const shared = {
+                    gridRows: correction.rows,
+                    gridColumns: correction.columns,
+                };
                 if (targetCount <= groupFixtures.length) {
                     const keep = groupFixtures.slice(0, targetCount);
                     const remove = groupFixtures.slice(targetCount);
                     keep.forEach((f, i) =>
-                        store.updateFixture(f.id, { x: positions[i].x, y: positions[i].y, ...shared }),
+                        store.updateFixture(f.id, {
+                            x: positions[i].x,
+                            y: positions[i].y,
+                            ...shared,
+                        }),
                     );
                     remove.forEach((f) => store.removeObject(f.id));
                 } else {
                     groupFixtures.forEach((f, i) =>
-                        store.updateFixture(f.id, { x: positions[i].x, y: positions[i].y, ...shared }),
+                        store.updateFixture(f.id, {
+                            x: positions[i].x,
+                            y: positions[i].y,
+                            ...shared,
+                        }),
                     );
-                    const { id: _templateId, ...templateRest } = groupFixtures[0];
-                    const baseName = templateRest.name.replace(/\s*\[\d+\]\s*$/, '');
+                    const { id: _templateId, ...templateRest } =
+                        groupFixtures[0];
+                    const baseName = templateRest.name.replace(
+                        /\s*\[\d+\]\s*$/,
+                        '',
+                    );
                     for (let i = groupFixtures.length; i < targetCount; i++) {
                         store.addFixture({
                             ...templateRest,
@@ -355,46 +387,68 @@ export const Toolbar: React.FC = () => {
      * parsea completo (`parseIfcFileForImport`) y se muestra en
      * `IfcImportDialog` ANTES de crear nada — nunca se importa a ciegas.
      */
-    const handleIfcFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (ifcFileInputRef.current) ifcFileInputRef.current.value = '';
-        if (!file) return;
+    const handleIfcFileUpload = useCallback(
+        async (e: React.ChangeEvent<HTMLInputElement>) => {
+            const file = e.target.files?.[0];
+            if (ifcFileInputRef.current) ifcFileInputRef.current.value = '';
+            if (!file) return;
 
-        setIfcImportError(null);
-        setIsIfcParsing(true);
-        try {
-            const buffer = new Uint8Array(await file.arrayBuffer());
-            const preview = await parseIfcFileForImport(buffer);
-            setIfcPreview(preview);
-            setIsIfcDialogOpen(true);
-        } catch (error) {
-            console.error('No se pudo parsear el archivo IFC.', error);
-            setIfcImportError(error instanceof Error ? error.message : 'No se pudo leer el archivo IFC.');
-        } finally {
-            setIsIfcParsing(false);
-        }
-    }, []);
+            setIfcImportError(null);
+            setIsIfcParsing(true);
+            try {
+                const buffer = new Uint8Array(await file.arrayBuffer());
+                const preview = await parseIfcFileForImport(buffer);
+                setIfcPreview(preview);
+                setIsIfcDialogOpen(true);
+            } catch (error) {
+                console.error('No se pudo parsear el archivo IFC.', error);
+                setIfcImportError(
+                    error instanceof Error
+                        ? error.message
+                        : 'No se pudo leer el archivo IFC.',
+                );
+            } finally {
+                setIsIfcParsing(false);
+            }
+        },
+        [],
+    );
 
     const handleIfcImportApply = useCallback(
         (selection: IfcImportSelection) => {
             if (!ifcPreview) return;
 
-            const existingIndices = store.project?.scenes.map((s) => s.floorIndex) ?? [0];
+            const existingIndices = store.project?.scenes.map(
+                (s) => s.floorIndex,
+            ) ?? [0];
             let nextFloorIndex = Math.max(0, ...existingIndices) + 1;
 
             for (const storey of ifcPreview.storeys) {
-                const selectedSpaceIds = selection.storeys.get(storey.expressId);
+                const selectedSpaceIds = selection.storeys.get(
+                    storey.expressId,
+                );
                 if (!selectedSpaceIds || selectedSpaceIds.size === 0) continue;
 
                 const spacesToImport = storey.spaces.filter(
-                    (space) => selectedSpaceIds.has(space.expressId) && space.footprint,
+                    (space) =>
+                        selectedSpaceIds.has(space.expressId) &&
+                        space.footprint,
                 );
                 if (spacesToImport.length === 0) continue;
 
-                const floorHeight = Math.max(...spacesToImport.map((s) => s.footprint!.height));
-                const floorId = store.addFloor(storey.name ?? `Nivel IFC ${storey.expressId}`, nextFloorIndex, floorHeight);
+                const floorHeight = Math.max(
+                    ...spacesToImport.map((s) => s.footprint!.height),
+                );
+                const floorId = store.addFloor(
+                    storey.name ?? `Nivel IFC ${storey.expressId}`,
+                    nextFloorIndex,
+                    floorHeight,
+                );
                 nextFloorIndex += 1;
-                if (storey.globalId) store.updateFloor(floorId, { ifcGlobalId: storey.globalId });
+                if (storey.globalId)
+                    store.updateFloor(floorId, {
+                        ifcGlobalId: storey.globalId,
+                    });
                 store.setActiveScene(floorId);
 
                 for (const space of spacesToImport) {
@@ -486,7 +540,9 @@ export const Toolbar: React.FC = () => {
                 ref: refs.emergencia,
                 icon: <AlertTriangle size={15} />,
                 label: 'Emerg.',
-                hasActive: ['evacuation-route', 'antipanic-area'].includes(store.ui.activeTool),
+                hasActive: ['evacuation-route', 'antipanic-area'].includes(
+                    store.ui.activeTool,
+                ),
                 accentColor: 'text-amber-600 dark:text-amber-400',
             },
             {
@@ -560,7 +616,9 @@ export const Toolbar: React.FC = () => {
                 icon: <Eye size={15} />,
                 label: 'Vista',
                 hasActive: showGrid || showIsolux,
-                accentColor: showIsolux ? 'text-amber-500 dark:text-yellow-400' : undefined,
+                accentColor: showIsolux
+                    ? 'text-amber-500 dark:text-yellow-400'
+                    : undefined,
             },
         ],
         [activeTool, hasCadDoc, projectName.length, refs, showGrid, showIsolux],
@@ -610,10 +668,10 @@ export const Toolbar: React.FC = () => {
             {/* ── Sidebar rail ── */}
             <aside
                 id="dialux-toolbar"
-                className="relative z-40 flex w-12 shrink-0 flex-col items-center gap-0.5 overflow-x-visible overflow-y-auto border-r border-slate-200 dark:border-gray-800/70 bg-slate-50 dark:bg-[#12141e] py-2 md:w-14"
+                className="relative z-40 flex w-12 shrink-0 flex-col items-center gap-0.5 overflow-x-visible overflow-y-auto border-r border-slate-200 bg-slate-50 py-2 md:w-14 dark:border-gray-800/70 dark:bg-[#12141e]"
             >
                 {/* ── Quick-access native tools ── */}
-                <span className="mt-1 mb-0.5 px-1 text-[8px] font-bold tracking-[0.2em] text-slate-400 dark:text-gray-500 uppercase">
+                <span className="mt-1 mb-0.5 px-1 text-[8px] font-bold tracking-[0.2em] text-slate-400 uppercase dark:text-gray-500">
                     Rápido
                 </span>
                 <div className="flex w-full flex-col items-center gap-0.5 px-1.5">
@@ -650,7 +708,7 @@ export const Toolbar: React.FC = () => {
                 <Sep />
 
                 {/* ── Configuración ── */}
-                <span className="mb-0.5 px-1 text-[8px] font-bold tracking-[0.2em] text-slate-400 dark:text-gray-500 uppercase">
+                <span className="mb-0.5 px-1 text-[8px] font-bold tracking-[0.2em] text-slate-400 uppercase dark:text-gray-500">
                     Config
                 </span>
                 <div className="flex w-full flex-col items-center gap-1.5 px-1.5">
@@ -947,7 +1005,9 @@ export const Toolbar: React.FC = () => {
                         scaleConfirmed={scaleConfirmed}
                         onNewDoc={() => engine.newDocument?.()}
                         onImportClick={() => fileInputRef.current?.click()}
-                        onImportIfcClick={() => ifcFileInputRef.current?.click()}
+                        onImportIfcClick={() =>
+                            ifcFileInputRef.current?.click()
+                        }
                         isIfcParsing={isIfcParsing}
                         ifcImportError={ifcImportError}
                         onApplyScale={applyScaleConfig}
@@ -988,7 +1048,7 @@ export const Toolbar: React.FC = () => {
                 }}
             >
                 <DialogContent
-                    className="border-gray-300 dark:border-gray-800 bg-white dark:bg-[#161820] text-gray-100 sm:max-w-md"
+                    className="border-gray-300 bg-white text-gray-100 sm:max-w-md dark:border-gray-800 dark:bg-[#161820]"
                     onPointerDownOutside={(e) => {
                         if (detectedScale && !scaleConfirmed)
                             e.preventDefault();
@@ -1002,7 +1062,7 @@ export const Toolbar: React.FC = () => {
                         <DialogTitle className="flex items-center gap-2 text-lg font-bold text-cyan-400">
                             <Upload size={20} /> Importar Plano CAD
                         </DialogTitle>
-                        <DialogDescription className="text-gray-600 dark:text-gray-600 dark:text-gray-400">
+                        <DialogDescription className="text-gray-600 dark:text-gray-400 dark:text-gray-600">
                             Configura la escala y unidades para{' '}
                             <span className="font-mono text-cyan-200">
                                 {pendingFile?.name}
@@ -1048,9 +1108,7 @@ export const Toolbar: React.FC = () => {
                                 value={scaleConfig?.unit || 'm'}
                                 onChange={async (e) => {
                                     const unit = e.target.value as
-                                        | 'mm'
-                                        | 'cm'
-                                        | 'm';
+                                        'mm' | 'cm' | 'm';
                                     const map = {
                                         mm: {
                                             factor: 0.001,
@@ -1074,7 +1132,7 @@ export const Toolbar: React.FC = () => {
                                         ),
                                     );
                                 }}
-                                className="w-full rounded border border-gray-300 dark:border-gray-700 bg-gray-200 dark:bg-gray-900 px-3 py-2 text-sm text-gray-800 dark:text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-cyan-500/50"
+                                className="w-full rounded border border-gray-300 bg-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-cyan-500/50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:text-gray-800"
                             >
                                 <option value="mm">Milímetros (mm)</option>
                                 <option value="cm">Centímetros (cm)</option>
@@ -1082,8 +1140,8 @@ export const Toolbar: React.FC = () => {
                             </select>
                         </div>
 
-                        <div className="rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-200 dark:bg-gray-800/30 p-4">
-                            <h4 className="mb-1 text-xs font-bold tracking-wider text-gray-600 dark:text-gray-600 dark:text-gray-400 uppercase">
+                        <div className="rounded-lg border border-gray-300 bg-gray-200 p-4 dark:border-gray-700 dark:bg-gray-800/30">
+                            <h4 className="mb-1 text-xs font-bold tracking-wider text-gray-600 uppercase dark:text-gray-400 dark:text-gray-600">
                                 Calibración manual
                             </h4>
                             <p className="mb-3 text-[11px] text-gray-500 dark:text-gray-500">
@@ -1093,7 +1151,7 @@ export const Toolbar: React.FC = () => {
                             <Button
                                 variant="secondary"
                                 size="sm"
-                                className="gap-2 bg-gray-300 dark:bg-gray-700 hover:bg-gray-600"
+                                className="gap-2 bg-gray-300 hover:bg-gray-600 dark:bg-gray-700"
                                 onClick={() => {
                                     setScaleConfirmed(true);
                                     store.setTool('calibrate');
@@ -1122,6 +1180,122 @@ export const Toolbar: React.FC = () => {
             </Dialog>
 
             {/* ── Import Luminaires Modal ── */}
+            <Dialog
+                open={Boolean(store.ui.pendingFixtureGridArea)}
+                onOpenChange={(open) => {
+                    if (!open) handleCancelFixtureGridArea();
+                }}
+            >
+                <DialogContent className="max-h-[88vh] max-w-3xl overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>
+                            Configurar proyección de luminarias
+                        </DialogTitle>
+                        <DialogDescription>
+                            El área dibujada tiene{' '}
+                            {store.ui.pendingFixtureGridArea?.length ?? 0}{' '}
+                            vértices. Elige la luminaria y define la
+                            distribución antes de insertarla.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid gap-4 md:grid-cols-[180px_1fr]">
+                        <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/60">
+                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">
+                                Distribución
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                                <label className="grid gap-1 text-xs text-slate-600 dark:text-slate-300">
+                                    <span>Filas</span>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={20}
+                                        value={store.ui.fixtureGridRows}
+                                        onChange={(event) =>
+                                            store.setFixtureGridRows(
+                                                Number(event.target.value),
+                                            )
+                                        }
+                                        className="h-9 rounded-md border border-slate-300 bg-white px-2 text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                                    />
+                                </label>
+                                <label className="grid gap-1 text-xs text-slate-600 dark:text-slate-300">
+                                    <span>Columnas</span>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={20}
+                                        value={store.ui.fixtureGridCols}
+                                        onChange={(event) =>
+                                            store.setFixtureGridCols(
+                                                Number(event.target.value),
+                                            )
+                                        }
+                                        className="h-9 rounded-md border border-slate-300 bg-white px-2 text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                                    />
+                                </label>
+                            </div>
+                            <div className="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-center dark:border-cyan-900 dark:bg-cyan-950/30">
+                                <span className="block text-lg font-bold text-cyan-700 dark:text-cyan-300">
+                                    {store.ui.fixtureGridRows}×
+                                    {store.ui.fixtureGridCols}
+                                </span>
+                                <span className="text-[10px] text-cyan-700/80 dark:text-cyan-400">
+                                    {store.ui.fixtureGridRows *
+                                        store.ui.fixtureGridCols}{' '}
+                                    luminarias
+                                </span>
+                            </div>
+                            <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                                Modelo seleccionado:{' '}
+                                <strong className="text-slate-700 dark:text-slate-200">
+                                    {store.ui.fixtureTemplate.name ??
+                                        'Luminaria'}
+                                </strong>
+                            </p>
+                        </div>
+
+                        <div className="min-h-0 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                            <CatalogPanel
+                                filterCategory="luminaires"
+                                variant="compact-grid"
+                                fixtureItemsPerPage={15}
+                                onSelect={() => store.setTool('fixture-grid')}
+                            />
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setIsImportLuminairesModalOpen(true)
+                                }
+                                className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-700/50 dark:bg-amber-950/20 dark:text-amber-300 dark:hover:bg-amber-900/30"
+                            >
+                                <Upload size={13} />
+                                Importar o crear luminaria
+                            </button>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={handleCancelFixtureGridArea}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            className="bg-cyan-600 text-white hover:bg-cyan-500"
+                            onClick={handleConfirmFixtureGridArea}
+                        >
+                            Insertar{' '}
+                            {store.ui.fixtureGridRows *
+                                store.ui.fixtureGridCols}{' '}
+                            luminarias
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <ImportLuminairesModal
                 open={isImportLuminairesModalOpen}
                 onOpenChange={setIsImportLuminairesModalOpen}
@@ -1129,40 +1303,67 @@ export const Toolbar: React.FC = () => {
 
             {/* ── Asesor de simetría entre módulos de luminarias adyacentes ── */}
             {symmetryWarning && (
-                <Dialog open onOpenChange={(open) => !open && setSymmetryWarning(null)}>
+                <Dialog
+                    open
+                    onOpenChange={(open) => !open && setSymmetryWarning(null)}
+                >
                     <DialogContent className="max-w-md">
                         <DialogHeader>
                             <DialogTitle>Simetría entre módulos</DialogTitle>
                             <DialogDescription>
-                                {symmetryWarning.sequence.length} módulos adyacentes con formas distintas:{' '}
-                                {symmetryWarning.sequence.map((m) => `${m.columns}×${m.rows}`).join(' — ')}. Esto
-                                rompe la simetría visual y lumínica del conjunto.
+                                {symmetryWarning.sequence.length} módulos
+                                adyacentes con formas distintas:{' '}
+                                {symmetryWarning.sequence
+                                    .map((m) => `${m.columns}×${m.rows}`)
+                                    .join(' — ')}
+                                . Esto rompe la simetría visual y lumínica del
+                                conjunto.
                             </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-2">
                             <button
                                 type="button"
-                                onClick={() => handleApplySymmetryCorrection(symmetryWarning.mirror)}
+                                onClick={() =>
+                                    handleApplySymmetryCorrection(
+                                        symmetryWarning.mirror,
+                                    )
+                                }
                                 className="flex w-full items-center justify-between gap-2 rounded border border-cyan-500/40 bg-cyan-950/20 px-3 py-2 text-left text-[11px] text-cyan-200 transition-colors hover:bg-cyan-900/30"
                             >
                                 <span>
-                                    <span className="block font-semibold">Simetría espejo (recomendada)</span>
-                                    <span className="block text-[10px] text-cyan-400">{symmetryWarning.mirror.label}</span>
+                                    <span className="block font-semibold">
+                                        Simetría espejo (recomendada)
+                                    </span>
+                                    <span className="block text-[10px] text-cyan-400">
+                                        {symmetryWarning.mirror.label}
+                                    </span>
                                 </span>
                             </button>
                             <button
                                 type="button"
-                                onClick={() => handleApplySymmetryCorrection(symmetryWarning.uniform)}
+                                onClick={() =>
+                                    handleApplySymmetryCorrection(
+                                        symmetryWarning.uniform,
+                                    )
+                                }
                                 className="flex w-full items-center justify-between gap-2 rounded border border-gray-500/40 bg-gray-800/30 px-3 py-2 text-left text-[11px] text-gray-200 transition-colors hover:bg-gray-700/40"
                             >
                                 <span>
-                                    <span className="block font-semibold">Uniformidad absoluta</span>
-                                    <span className="block text-[10px] text-gray-400">{symmetryWarning.uniform.label}</span>
+                                    <span className="block font-semibold">
+                                        Uniformidad absoluta
+                                    </span>
+                                    <span className="block text-[10px] text-gray-400">
+                                        {symmetryWarning.uniform.label}
+                                    </span>
                                 </span>
                             </button>
                             {symmetryWarning.suggestProgression && (
                                 <p className="rounded border border-gray-700/40 bg-gray-900/30 px-3 py-2 text-[10px] leading-snug text-gray-500">
-                                    También podrías usar una progresión escalonada (chico → grande → chico) ajustando cada módulo a mano desde su panel "Organización" — no tiene una única solución correcta, así que no se aplica con un clic.
+                                    También podrías usar una progresión
+                                    escalonada (chico → grande → chico)
+                                    ajustando cada módulo a mano desde su panel
+                                    "Organización" — no tiene una única solución
+                                    correcta, así que no se aplica con un clic.
                                 </p>
                             )}
                         </div>

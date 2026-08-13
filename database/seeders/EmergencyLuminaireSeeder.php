@@ -38,6 +38,82 @@ class EmergencyLuminaireSeeder extends Seeder
 
     public function run(): void
     {
+        echo "\nIniciando importacion de luminarias de emergencia con fotometria oficial...\n";
+        echo $this->forceUpdate ? "MODO: Fuerza actualizacion (deploy)\n" : "MODO: Solo importar faltantes\n\n";
+
+        $this->importOrUpdate(
+            articleNumber: '4099854230714',
+            fileName: 'LEDVANCE-4099854230714.ldt',
+            overrides: [
+                'name' => 'EM EXIT E 0.7W 30M 3H EM/AC AT',
+                'manufacturer' => 'LEDVANCE',
+                'catalog_number' => '4099854230714',
+                'article_number' => '4099854230714',
+                'fixture_type' => 'surface',
+                'total_lumens' => 20,
+                'power_watts' => 0.7,
+                'cct' => 5700,
+                'is_global' => true,
+                'metadata' => [
+                    'emergency_type' => 'exit-sign',
+                    'recommended_for' => ['evacuation-route'],
+                    'emergency_duration_hours' => 3,
+                    'viewing_distance_m' => 30,
+                    'photometry_source' => 'manufacturer',
+                    'source_url' => 'https://www.ledvance.com/en/product-datasheet/365519/283846',
+                ],
+            ],
+        );
+
+        $this->importOrUpdate(
+            articleNumber: '4099854230677',
+            fileName: 'LEDVANCE-4099854230677.ldt',
+            overrides: [
+                'name' => 'EM BULKHEAD E 1.3W 3H EM/AC AT',
+                'manufacturer' => 'LEDVANCE',
+                'catalog_number' => '4099854230677',
+                'article_number' => '4099854230677',
+                'fixture_type' => 'surface',
+                'total_lumens' => 200,
+                'power_watts' => 1.3,
+                'cct' => 5700,
+                'is_global' => true,
+                'metadata' => [
+                    'emergency_type' => 'antipanic-area',
+                    'min_iluminance_rne' => 0.5,
+                    'min_iluminance_en' => 0.5,
+                    'uniformity_requirement' => 0.4,
+                    'beam_angle_type' => 'broad',
+                    'recommended_for' => ['evacuation-route', 'antipanic-area'],
+                    'emergency_duration_hours' => 3,
+                    'ip_rating' => 'IP65',
+                    'photometry_source' => 'manufacturer',
+                    'source_url' => 'https://www.ledvance.com/en/product-datasheet/365513/283840',
+                ],
+            ],
+        );
+
+        $this->updateEmergencyMetadata(
+            articleNumber: 'RC18820',
+            updates: [
+                'metadata' => [
+                    'emergency_type' => 'antipanic-area',
+                    'min_iluminance_rne' => 0.5,
+                    'min_iluminance_en' => 1.0,
+                    'uniformity_requirement' => 0.4,
+                    'beam_angle_type' => 'broad',
+                    'recommended_for' => ['evacuation-route', 'antipanic-area'],
+                ],
+            ],
+        );
+    }
+
+    /**
+     * Definiciones historicas conservadas temporalmente como referencia.
+     * No se ejecutan porque no corresponden a articulos comerciales verificables.
+     */
+    private function runLegacy(): void
+    {
         echo "\n🔄 Iniciando importación de luminarias de EMERGENCIA...\n";
         echo $this->forceUpdate ? "⚡ MODO: Fuerza actualización (deploy)\n" : "📦 MODO: Solo importar faltantes\n\n";
 
