@@ -63,7 +63,11 @@ class RealPhotometryLuminaireSeeder extends Seeder
             overrides: [
                 'manufacturer' => 'Dialight',
                 'article_number' => 'RHU-4AN2-Exxx-xxN',
-                'fixture_type' => 'industrial',
+                // 'industrial' no es un valor válido de fixture_type (enum de
+                // solo 8 valores en la migración) — un reflector de pasillo
+                // industrial va montado en superficie, no hay categoría más
+                // específica en el enum.
+                'fixture_type' => 'surface',
                 'fixture_shape' => 'rectangular',
                 'dimensions' => ['length' => 0.7448, 'width' => 0.4318, 'height' => 0.15],
                 'is_global' => true,
@@ -76,7 +80,9 @@ class RealPhotometryLuminaireSeeder extends Seeder
             overrides: [
                 'manufacturer' => 'Zumtobel',
                 'article_number' => '42184911',
-                'fixture_type' => 'linear',
+                // 'linear' no es un valor válido de fixture_type — 'strip' es
+                // el equivalente real dentro del enum de 8 valores.
+                'fixture_type' => 'strip',
                 'fixture_shape' => 'rectangular',
                 'dimensions' => ['length' => 1.498, 'width' => 0.06, 'height' => 0.085],
                 'is_global' => true,
@@ -96,7 +102,10 @@ class RealPhotometryLuminaireSeeder extends Seeder
             overrides: [
                 'manufacturer' => 'Philips',
                 'article_number' => 'BGP530',
-                'fixture_type' => 'street',
+                // 'street' no es un valor válido de fixture_type — un
+                // luminario de poste/área no encaja en ninguna de las 8
+                // categorías específicas del enum.
+                'fixture_type' => 'other',
                 'fixture_shape' => 'square',
                 'dimensions' => ['length' => 0.54, 'width' => 0.54, 'height' => 0.10],
                 'is_global' => true,
@@ -121,7 +130,9 @@ class RealPhotometryLuminaireSeeder extends Seeder
             overrides: [
                 'manufacturer' => 'Thorlux Lighting',
                 'article_number' => 'RC18820',
-                'fixture_type' => 'linear',
+                // 'linear' no es un valor válido de fixture_type — 'strip' es
+                // el equivalente real dentro del enum de 8 valores.
+                'fixture_type' => 'strip',
                 'fixture_shape' => 'rectangular',
                 'dimensions' => ['length' => 1.195, 'width' => 0.142, 'height' => 0.055],
                 'is_global' => true,
