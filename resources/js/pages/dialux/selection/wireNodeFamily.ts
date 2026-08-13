@@ -1,6 +1,7 @@
 import type { HitKind } from './hitTest';
 
 export type WireFamily = 'lighting' | 'outlets';
+export type WireRouteType = 'floor' | 'wall_ceiling';
 
 const PANEL_DEVICE_TYPES = new Set([
     'main_panel',
@@ -16,6 +17,10 @@ export function isPanelWireNode(electricalDeviceType?: string): boolean {
 
 export function wireFamilyFromShortcut(altKey: boolean): WireFamily {
     return altKey ? 'outlets' : 'lighting';
+}
+
+export function wireRouteFromShortcut(altKey: boolean): WireRouteType {
+    return altKey ? 'floor' : 'wall_ceiling';
 }
 
 export function acceptsWireNode(

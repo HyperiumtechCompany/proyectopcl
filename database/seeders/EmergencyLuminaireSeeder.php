@@ -50,6 +50,8 @@ class EmergencyLuminaireSeeder extends Seeder
                 'catalog_number' => '4099854230714',
                 'article_number' => '4099854230714',
                 'fixture_type' => 'surface',
+                'fixture_shape' => 'rectangular',
+                'dimensions' => ['length' => 0.313, 'width' => 0.212, 'height' => 0.042],
                 'total_lumens' => 20,
                 'power_watts' => 0.7,
                 'cct' => 5700,
@@ -74,6 +76,8 @@ class EmergencyLuminaireSeeder extends Seeder
                 'catalog_number' => '4099854230677',
                 'article_number' => '4099854230677',
                 'fixture_type' => 'surface',
+                'fixture_shape' => 'rectangular',
+                'dimensions' => ['length' => 0.355, 'width' => 0.115, 'height' => 0.064],
                 'total_lumens' => 200,
                 'power_watts' => 1.3,
                 'cct' => 5700,
@@ -337,6 +341,14 @@ class EmergencyLuminaireSeeder extends Seeder
                 $existing->restore();
                 echo "♻️  Restaurada: {$existing->name} (ya existía)\n";
             }
+
+            // La geometría forma parte del catálogo técnico y debe poder
+            // corregirse sin reemplazar la fotometría existente.
+            $existing->forceFill([
+                'fixture_type' => $overrides['fixture_type'] ?? $existing->fixture_type,
+                'fixture_shape' => $overrides['fixture_shape'] ?? $existing->fixture_shape,
+                'dimensions' => $overrides['dimensions'] ?? $existing->dimensions,
+            ])->save();
 
             return;
         }

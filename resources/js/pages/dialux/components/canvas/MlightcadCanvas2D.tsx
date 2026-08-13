@@ -117,6 +117,7 @@ import {
 import {
     acceptsWireNode,
     wireFamilyFromShortcut,
+    wireRouteFromShortcut,
 } from '@/pages/dialux/selection/wireNodeFamily';
 
 // ─── Componente ───────────────────────────────────────────────────────────────
@@ -451,7 +452,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     waypoints: [],
                 });
             },
-            onConnectWire: (sourceId, targetId, waypoints) => {
+            onConnectWire: (sourceId, targetId, waypoints, routeType) => {
                 // If it already exists, remove it (toggle connection)
                 const existingWire = scene?.conductors?.find(
                     (c) =>
@@ -519,7 +520,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         targetId,
                         wireCount: defaultWireCount,
                         wireLabel: defaultWireLabel,
-                        routeType: 'wall_ceiling',
+                        routeType: routeType ?? 'wall_ceiling',
                         tubeSize: 20,
                         conductorType: 'THW-90',
                         sectionMm2: connectsOutlet ? 4 : 2.5,
@@ -1759,6 +1760,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                             y: event.clientY - rect.top,
                         };
                         const family = wireFamilyFromShortcut(event.altKey);
+                        const routeType = wireRouteFromShortcut(event.altKey);
                         const candidates = [
                             ...(scene?.fixtures ?? []).map((item) => ({
                                 id: item.id,
@@ -1815,7 +1817,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         event.stopPropagation();
                         store.setSelectedId(node.id);
                         store.setTool('wire');
-                        beginWireFromNode(node.id, node.type, family);
+                        beginWireFromNode(node.id, node.type, family, routeType);
                     }}
                 >
                     <CanvasSvgDefs />

@@ -145,6 +145,7 @@ interface InteractionOptions {
         sourceId: string,
         targetId: string,
         waypoints?: { x: number; y: number }[],
+        routeType?: Conductor['routeType'],
     ) => void;
     /** Reconecta un extremo de un cable ya existente a otro nodo (arrastrar handle) */
     onReconnectWireEndpoint?: (
@@ -183,6 +184,7 @@ interface DrawState {
     measureAreaVertices: CanvasPoint[];
     wireStartNode: { type: 'switch' | 'fixture' | 'device'; id: string } | null;
     wireFamily: WireFamily | null;
+    wireRouteType: Conductor['routeType'];
     /** Puntos intermedios acumulados mientras se traza un cable (clics en vacío entre nodos). */
     wireWaypoints: CanvasPoint[];
     isDragging: boolean;
@@ -295,6 +297,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         measureAreaVertices: [],
         wireStartNode: null,
         wireFamily: null,
+        wireRouteType: 'wall_ceiling',
         wireWaypoints: [],
         isDragging: false,
         dragStartScene: null,
@@ -973,6 +976,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                             s.wireWaypoints.length
                                 ? s.wireWaypoints
                                 : undefined,
+                            s.wireRouteType,
                         );
                     }
                     s.wireStartNode = { type: winner.kind, id: winner.id };
@@ -1865,10 +1869,12 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             id: string,
             type: 'switch' | 'fixture' | 'device',
             family: DrawState['wireFamily'] = null,
+            routeType: Conductor['routeType'] = 'wall_ceiling',
         ) => {
             stateRef.current.wireStartNode = { id, type };
             stateRef.current.wireWaypoints = [];
             stateRef.current.wireFamily = family;
+            stateRef.current.wireRouteType = routeType;
         },
         [],
     );

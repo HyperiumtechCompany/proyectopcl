@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { acceptsWireNode, wireFamilyFromShortcut } from './wireNodeFamily';
+import {
+    acceptsWireNode,
+    wireFamilyFromShortcut,
+    wireRouteFromShortcut,
+} from './wireNodeFamily';
 
 describe('atajos de familia de cableado', () => {
     it('usa alumbrado con clic derecho y tomacorrientes con Alt+clic derecho', () => {
         expect(wireFamilyFromShortcut(false)).toBe('lighting');
         expect(wireFamilyFromShortcut(true)).toBe('outlets');
+        expect(wireRouteFromShortcut(false)).toBe('wall_ceiling');
+        expect(wireRouteFromShortcut(true)).toBe('floor');
     });
 
     it('solo permite luminarias e interruptores en una red de alumbrado', () => {

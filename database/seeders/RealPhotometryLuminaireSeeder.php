@@ -31,6 +31,9 @@ class RealPhotometryLuminaireSeeder extends Seeder
             overrides: [
                 'manufacturer' => 'Thorlux Lighting',
                 'article_number' => 'TEG18046',
+                'fixture_type' => 'surface',
+                'fixture_shape' => 'round',
+                'dimensions' => ['radius' => 0.0615, 'height' => 0.12],
                 'is_global' => true,
             ],
         );
@@ -47,6 +50,9 @@ class RealPhotometryLuminaireSeeder extends Seeder
             overrides: [
                 'manufacturer' => 'LEDVANCE',
                 'article_number' => '4099854082863',
+                'fixture_type' => 'panel',
+                'fixture_shape' => 'square',
+                'dimensions' => ['length' => 0.595, 'width' => 0.595, 'height' => 0.034],
                 'is_global' => true,
             ],
         );
@@ -57,6 +63,9 @@ class RealPhotometryLuminaireSeeder extends Seeder
             overrides: [
                 'manufacturer' => 'Dialight',
                 'article_number' => 'RHU-4AN2-Exxx-xxN',
+                'fixture_type' => 'industrial',
+                'fixture_shape' => 'rectangular',
+                'dimensions' => ['length' => 0.7448, 'width' => 0.4318, 'height' => 0.15],
                 'is_global' => true,
             ],
         );
@@ -67,6 +76,9 @@ class RealPhotometryLuminaireSeeder extends Seeder
             overrides: [
                 'manufacturer' => 'Zumtobel',
                 'article_number' => '42184911',
+                'fixture_type' => 'linear',
+                'fixture_shape' => 'rectangular',
+                'dimensions' => ['length' => 1.498, 'width' => 0.06, 'height' => 0.085],
                 'is_global' => true,
             ],
         );
@@ -84,6 +96,9 @@ class RealPhotometryLuminaireSeeder extends Seeder
             overrides: [
                 'manufacturer' => 'Philips',
                 'article_number' => 'BGP530',
+                'fixture_type' => 'street',
+                'fixture_shape' => 'square',
+                'dimensions' => ['length' => 0.54, 'width' => 0.54, 'height' => 0.10],
                 'is_global' => true,
             ],
         );
@@ -106,6 +121,9 @@ class RealPhotometryLuminaireSeeder extends Seeder
             overrides: [
                 'manufacturer' => 'Thorlux Lighting',
                 'article_number' => 'RC18820',
+                'fixture_type' => 'linear',
+                'fixture_shape' => 'rectangular',
+                'dimensions' => ['length' => 1.195, 'width' => 0.142, 'height' => 0.055],
                 'is_global' => true,
             ],
         );

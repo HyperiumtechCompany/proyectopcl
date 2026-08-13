@@ -245,7 +245,8 @@ export const OverlayWires = memo(function OverlayWires({
                             stroke={wireColor}
                             strokeWidth={wireWidth}
                             strokeLinecap="round"
-                            strokeDasharray={isFloorRoute ? '7,5' : undefined}
+                            strokeDasharray={isFloorRoute ? '2,6' : undefined}
+                            strokeLinejoin="round"
                             opacity={0.95}
                             markerEnd={i === nodes.length - 2 ? `url(#${markerId})` : undefined}
                             style={{ pointerEvents: 'none' }}
@@ -274,7 +275,8 @@ export const OverlayWires = memo(function OverlayWires({
                                 stroke={WIRE_SELECTED}
                                 strokeWidth={8}
                                 strokeOpacity={0.25}
-                                strokeDasharray={isFloorRoute ? '7,5' : undefined}
+                                strokeDasharray={isFloorRoute ? '2,6' : undefined}
+                                strokeLinecap="round"
                                 style={{ pointerEvents: 'none' }}
                             />
                         ))}
