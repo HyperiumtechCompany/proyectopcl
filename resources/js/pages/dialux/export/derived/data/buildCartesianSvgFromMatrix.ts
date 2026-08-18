@@ -30,10 +30,17 @@ const PLANE_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#9333ea'];
 
 export function buildCartesianSvgFromMatrix(web: CartesianMatrixInput | null | undefined, title: string): string | null {
     const angles = web?.gamma_angles;
-    const planes = web?.candela;
-    if (!Array.isArray(angles) || !Array.isArray(planes) || planes.length === 0 || angles.length === 0) {
+    const rawPlanes = web?.candela;
+    if (!Array.isArray(angles) || !Array.isArray(rawPlanes) || rawPlanes.length === 0 || angles.length === 0) {
         return null;
     }
+
+    // Ronda 21m: cd/1000 lm, mismo convenio que `buildPolarSvgFromMatrix.ts`
+    // — ver su doc-comment para el porqué (antes mostraba cd absoluta al
+    // flujo del producto, distinto de lo que muestra DIALux evo/el LDT
+    // Editor, aunque la matriz almacenada fuera idéntica).
+    const klmScale = web?.reference_lumens && web.reference_lumens > 0 ? 1000 / web.reference_lumens : 1;
+    const planes = rawPlanes.map((plane) => plane.map((v) => v * klmScale));
 
     const maxAngle = Math.max(...angles, 1);
     const maxCandela = Math.max(0, ...planes.flat());
@@ -75,7 +82,7 @@ export function buildCartesianSvgFromMatrix(web: CartesianMatrixInput | null | u
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH * 1.4}" height="${HEIGHT * 1.4}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
     <rect width="${WIDTH}" height="${HEIGHT}" fill="#ffffff"/>
     <text x="10" y="16" font-family="Arial, sans-serif" font-size="11" fill="#0f172a" font-weight="700">Diagrama cartesiano</text>
-    <text x="10" y="${HEIGHT - 6}" font-family="Arial, sans-serif" font-size="7" fill="#64748b">${safeTitle} — γ (°) vs. cd${fluxSuffix}</text>
+    <text x="10" y="${HEIGHT - 6}" font-family="Arial, sans-serif" font-size="7" fill="#64748b">${safeTitle} — γ (°) vs. cd/klm${fluxSuffix}</text>
     ${gridLines.join('\n    ')}
     <path d="M ${MARGIN_LEFT} ${MARGIN_TOP} L ${MARGIN_LEFT} ${HEIGHT - MARGIN_BOTTOM} L ${WIDTH - MARGIN_RIGHT} ${HEIGHT - MARGIN_BOTTOM}" stroke="#94a3b8" stroke-width="1"/>
     ${planePaths.join('\n    ')}

@@ -61,14 +61,30 @@ export function buildPolarSvgFromMatrix(web: PolarMatrixInput | null | undefined
     const angles = web?.gamma_angles;
     const candela = web?.candela;
     const primaryIndex = findClosestCPlane(web?.c_angles, 0, new Set()) ?? 0;
-    const plane = candela?.[primaryIndex];
-    if (!Array.isArray(angles) || !Array.isArray(plane) || plane.length === 0) {
+    const rawPlane = candela?.[primaryIndex];
+    if (!Array.isArray(angles) || !Array.isArray(rawPlane) || rawPlane.length === 0) {
         return null;
     }
 
+    // Ronda 21m: candela expresada en cd/1000 lm (mismo convenio que
+    // `IntensityTable.tsx` y el LDT Editor de DIALux, "Dimension unit: cd /
+    // 1000 lm"), no cd absoluta — antes el usuario comparaba este gráfico
+    // (candela absoluta al flujo actual del producto) contra una captura de
+    // DIALux evo (siempre cd/klm) y los números impresos no coincidían,
+    // aunque la matriz almacenada fuera idéntica byte a byte (confirmado con
+    // el lector LDT independiente del usuario). La FORMA de la curva es
+    // matemáticamente invariante a este cambio (es un radio relativo,
+    // `valor/máximo`, el mismo factor de escala se cancela) — este cambio
+    // solo corrige las etiquetas numéricas impresas, no afecta ningún
+    // cálculo real (el motor de iluminancia usa `photometricWeb.candela`
+    // directamente, nunca este SVG de previsualización).
+    const klmScale = web?.reference_lumens && web.reference_lumens > 0 ? 1000 / web.reference_lumens : 1;
+    const plane = rawPlane.map((v) => v * klmScale);
+
     const secondaryIndex = findClosestCPlane(web?.c_angles, 90, new Set([primaryIndex]), 30);
-    const secondaryPlane = secondaryIndex !== null ? candela?.[secondaryIndex] : undefined;
-    const hasSecondPlane = Array.isArray(secondaryPlane) && secondaryPlane.length > 0;
+    const rawSecondaryPlane = secondaryIndex !== null ? candela?.[secondaryIndex] : undefined;
+    const hasSecondPlane = Array.isArray(rawSecondaryPlane) && rawSecondaryPlane.length > 0;
+    const secondaryPlane = hasSecondPlane ? rawSecondaryPlane!.map((v) => v * klmScale) : undefined;
 
     const maxCandela = Math.max(0, ...plane, ...(hasSecondPlane ? secondaryPlane! : []));
     if (maxCandela <= 0) {
@@ -99,7 +115,7 @@ export function buildPolarSvgFromMatrix(web: PolarMatrixInput | null | undefined
     const primaryCurvePath = buildCurvePath(plane);
 
     const safeTitle = escapeXml(title);
-    const safeMax = Math.round(maxCandela).toLocaleString('en-US');
+    const safeMax = maxCandela.toLocaleString('en-US', { maximumFractionDigits: 1 });
     const fluxSuffix =
         typeof web?.reference_lumens === 'number' && web.reference_lumens > 0
             ? ` · Φ ${Math.round(web.reference_lumens).toLocaleString('en-US')} lm`
@@ -163,6 +179,6 @@ export function buildPolarSvgFromMatrix(web: PolarMatrixInput | null | undefined
     </g>
     <text x="18" y="22" font-family="Arial, sans-serif" font-size="11" fill="#0f172a" font-weight="700">CDL polar</text>
     <text x="18" y="38" font-family="Arial, sans-serif" font-size="8" fill="#64748b">${safeTitle}</text>
-    <text x="18" y="246" font-family="Arial, sans-serif" font-size="8" fill="#64748b">Imax ${safeMax} cd${fluxSuffix}</text>
+    <text x="18" y="246" font-family="Arial, sans-serif" font-size="8" fill="#64748b">Imax ${safeMax} cd/klm${fluxSuffix}</text>
 </svg>`;
 }
