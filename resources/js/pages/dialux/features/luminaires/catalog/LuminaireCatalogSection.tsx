@@ -179,7 +179,10 @@ export function LuminaireCatalogSection({ isCompactFixtureGrid, ...hookOptions }
                                 ) : (
                                     <Upload size={14} className="text-emerald-500 dark:text-emerald-400" />
                                 )}
-                                <span className="line-clamp-2 max-w-full text-[9px] leading-tight">{product.name}</span>
+                                <span className="line-clamp-2 max-w-full text-[9px] leading-tight" title={product.manufacturer ? `${product.manufacturer} - ${product.name}` : product.name}>
+                                    {product.manufacturer && <span className="block text-[7px] font-bold text-emerald-600/80 dark:text-emerald-400/80">{product.manufacturer.toUpperCase()}</span>}
+                                    {product.name}
+                                </span>
                                 <span className="text-[8px] leading-none text-slate-400 dark:text-gray-500">
                                     {product.total_lumens ?? '-'}lm
                                     {product.power_watts ? ` · ${product.power_watts}W` : ''}
@@ -206,7 +209,10 @@ export function LuminaireCatalogSection({ isCompactFixtureGrid, ...hookOptions }
                                 <span className={`shrink-0 ${isActive ? 'text-amber-500 dark:text-amber-400' : 'text-slate-400 dark:text-gray-500 group-hover:text-slate-600 dark:group-hover:text-gray-400'}`}>
                                     {item.icon}
                                 </span>
-                                <span className="line-clamp-2 max-w-full text-[9px] leading-tight">{item.label}</span>
+                                <span className="line-clamp-2 max-w-full text-[9px] leading-tight" title={`${item.brand} - ${item.label}`}>
+                                    <span className="block text-[7px] font-bold text-amber-600/80 dark:text-amber-400/80">{item.brand.toUpperCase()}</span>
+                                    {item.label}
+                                </span>
                                 <span className="text-[8px] leading-none text-slate-400 dark:text-gray-500">
                                     {item.lumens}lm
                                     {item.power ? ` · ${item.power}W` : ''}
@@ -252,9 +258,10 @@ export function LuminaireCatalogSection({ isCompactFixtureGrid, ...hookOptions }
                                     )}
                                 </span>
                                 <div className="min-w-0 flex-1">
+                                    <p className="truncate text-[9px] font-bold text-emerald-600/80 dark:text-emerald-400/80 uppercase">{product.manufacturer ?? 'Importado'}</p>
                                     <p className="truncate text-xs leading-snug font-semibold">{product.name}</p>
                                     <p className="mt-1 truncate text-xs leading-snug text-slate-500 dark:text-slate-400">
-                                        {product.manufacturer ?? 'Importado'} · {product.total_lumens ?? '-'}lm
+                                        {product.total_lumens ?? '-'}lm
                                         {effLmW ? ` · ${effLmW}lm/W` : ''}
                                         {product.cct ? ` · ${product.cct}` : ''}
                                         {product.source_format ? ` · ${product.source_format.toUpperCase()}` : ''}
@@ -372,9 +379,10 @@ export function LuminaireCatalogSection({ isCompactFixtureGrid, ...hookOptions }
                                     {item.icon}
                                 </span>
                                 <div className="min-w-0 flex-1">
+                                    <p className="truncate text-[9px] font-bold text-amber-600/80 dark:text-amber-400/80 uppercase">{item.brand}</p>
                                     <p className="truncate text-xs leading-snug font-semibold">{item.label}</p>
                                     <p className="mt-1 truncate text-xs leading-snug text-slate-500 dark:text-slate-400">
-                                        {item.brand} · {item.lumens}lm
+                                        {item.lumens}lm
                                         {effLmW ? ` · ${effLmW}lm/W` : ''}
                                         {item.cct ? ` · ${item.cct}` : ''}
                                     </p>
