@@ -1616,11 +1616,18 @@ class ProductImportService
         }
 
         $angles = array_map('floatval', $gammaAngles);
-        $plane = array_map('floatval', $candela[$primaryIndex]);
+        $referenceLumens = (float) ($web['reference_lumens'] ?? 0);
+        // Ronda 21m: cd/1000 lm (mismo convenio que la tabla de intensidades
+        // y DIALux evo, "Dimension unit: cd / 1000 lm"), no cd absoluta al
+        // flujo actual del producto — ver el puerto TS (`buildPolarSvgFromMatrix.ts`)
+        // para el hallazgo real que motivó el cambio. La forma de la curva
+        // no cambia (radio relativo, unit-invariante); solo el número impreso.
+        $klmScale = $referenceLumens > 0 ? 1000.0 / $referenceLumens : 1.0;
+        $plane = array_map(static fn ($v) => (float) $v * $klmScale, $candela[$primaryIndex]);
 
         $secondaryIndex = $this->findClosestCPlane($cAngles, 90.0, [$primaryIndex], 30.0);
         $secondaryPlane = $secondaryIndex !== null && is_array($candela[$secondaryIndex] ?? null)
-            ? array_map('floatval', $candela[$secondaryIndex])
+            ? array_map(static fn ($v) => (float) $v * $klmScale, $candela[$secondaryIndex])
             : null;
         $hasSecondPlane = ! empty($secondaryPlane);
 
@@ -1640,8 +1647,7 @@ class ProductImportService
         $primaryColor = $secondaryCurvePath ? '#dc2626' : '#2563eb';
 
         $safeTitle = htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $safeMax = number_format($maxCandela, 0, '.', ',');
-        $referenceLumens = (float) ($web['reference_lumens'] ?? 0);
+        $safeMax = number_format($maxCandela, 1, '.', ',');
         $fluxSuffix = $referenceLumens > 0
             ? ' · Φ '.number_format($referenceLumens, 0, '.', ',').' lm'
             : '';
@@ -1719,7 +1725,7 @@ class ProductImportService
     </g>
     <text x="18" y="22" font-family="Arial, sans-serif" font-size="11" fill="#0f172a" font-weight="700">CDL polar</text>
     <text x="18" y="38" font-family="Arial, sans-serif" font-size="8" fill="#64748b">{$safeTitle}</text>
-    <text x="18" y="246" font-family="Arial, sans-serif" font-size="8" fill="#64748b">Imax {$safeMax} cd{$fluxSuffix}</text>
+    <text x="18" y="246" font-family="Arial, sans-serif" font-size="8" fill="#64748b">Imax {$safeMax} cd/klm{$fluxSuffix}</text>
 </svg>
 SVG;
     }
