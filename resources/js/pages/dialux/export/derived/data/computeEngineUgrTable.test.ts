@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Fixture } from '@/pages/dialux/hooks/types';
-import { computeEngineUgrTable } from './computeEngineUgrTable';
+import { computeEngineUgrTable, computeEngineUgrTables } from './computeEngineUgrTable';
 
 function manufacturerWeb(): NonNullable<Fixture['photometricWeb']> {
     return {
@@ -76,6 +76,43 @@ describe('Fase 15 — computeEngineUgrTable (Parte B)', () => {
         expect(result.available).toBe(true);
         if (result.available) {
             expect(result.table.provenance).not.toBe('manufacturer');
+        }
+    });
+});
+
+describe('Ronda 21b — computeEngineUgrTables (grilla de reflectancia, modal de previsualización)', () => {
+    it('mismas validaciones de disponibilidad que la versión de una sola tabla', () => {
+        expect(computeEngineUgrTables({ photometricWeb: undefined }).available).toBe(false);
+        expect(computeEngineUgrTables({ photometricWeb: { ...manufacturerWeb(), provenance: 'synthetic' } }).available).toBe(false);
+    });
+
+    it('produce 5 tablas (una por combinación de reflectancia habitual), cada una con 6 salas y el mismo SHR', () => {
+        const result = computeEngineUgrTables({ photometricWeb: manufacturerWeb() });
+        expect(result.available).toBe(true);
+        if (!result.available) return;
+
+        expect(result.tables).toHaveLength(5);
+        for (const table of result.tables) {
+            expect(table.shr).toBe(0.25);
+            expect(table.entries).toHaveLength(6);
+            expect(table.reflectances.floor).toBe(20); // piso siempre 20% en todas las combinaciones
+        }
+    });
+
+    it('cada tabla declara una combinación de reflectancia distinta (no las 5 repiten el mismo valor)', () => {
+        const result = computeEngineUgrTables({ photometricWeb: manufacturerWeb() });
+        expect(result.available).toBe(true);
+        if (!result.available) return;
+
+        const combos = result.tables.map((t) => `${t.reflectances.ceiling}/${t.reflectances.wall}/${t.reflectances.floor}`);
+        expect(new Set(combos).size).toBe(5);
+    });
+
+    it('la tabla singular sigue devolviendo exactamente 70/50/20 (el PDF de producción no debe verse afectado por esta ronda)', () => {
+        const single = computeEngineUgrTable({ photometricWeb: manufacturerWeb() });
+        expect(single.available).toBe(true);
+        if (single.available) {
+            expect(single.table.reflectances).toEqual({ ceiling: 70, wall: 50, floor: 20 });
         }
     });
 });

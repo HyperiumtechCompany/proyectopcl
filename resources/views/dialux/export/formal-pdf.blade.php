@@ -523,14 +523,18 @@
                 ($detail['totalPowerWatts'] ?? null) !== null
                     ? ((float) $detail['totalPowerWatts'] * $dailyOperatingHours * 365) / 1000
                     : null;
-            // Replica numéricamente el lux normativo y cambia únicamente la
-            // unidad de la referencia anual a kWh/a.
-            $consumptionLimit = ($detail['targetLux'] ?? null) !== null
-                ? (float) $detail['targetLux']
-                : null;
-            $consumptionConforms = $consumption !== null
-                && $consumptionLimit !== null
-                && $consumption <= $consumptionLimit;
+            // Ronda 21h: este renglón ANTES fabricaba un "límite" de consumo
+            // copiando literalmente el lux normativo del ambiente (`targetLux`,
+            // ej. 500) y relabeleándolo como kWh/a — sin ninguna base
+            // normativa real. Producía un "Conforme"/"No conforme" sin
+            // sentido (hallazgo real: un ambiente con 946 kWh/a marcado "No
+            // conforme" contra "máx. 500 kWh/a", donde 500 solo era el lux
+            // exigido). Ningún proyecto de este sistema tiene hoy una fuente
+            // normativa citable para un límite de consumo anual por ambiente
+            // (es un concepto tipo LENI/EN 15193-1, ajeno al RNE EM.010
+            // peruano) — hasta que se cite una norma real y aplicable, el
+            // consumo se muestra como dato informativo, "No regulado", nunca
+            // "conforme"/"no conforme".
 
             // Estado real por métrica (RequirementEvaluation), no un check decorativo fijo.
             $evaluationsByMetric = collect($detail['requirementEvaluations'] ?? [])
@@ -658,17 +662,27 @@
                     <td class="result-number">' .
                 $formatNumber($consumption, 0, ' kWh/a') .
                 '</td>
-                    <td class="result-number">' .
-                ($consumptionLimit !== null ? 'm&aacute;x. ' . $formatNumber($consumptionLimit, 0, ' kWh/a') : '-') .
-                '</td>
+                    <td class="result-number">-</td>
                     <td class="result-check">' .
-                ($consumption !== null && $consumptionLimit !== null
-                    ? '<span class="verification-status status-' . ($consumptionConforms ? 'pass' : 'fail') . '">' . ($consumptionConforms ? 'Conforme' : 'No conforme') . '</span>'
-                    : '<span class="verification-status status-not-evaluated">No evaluado</span>') .
+                '<span class="verification-status status-not-regulated">No regulado</span>' .
                 '</td>
                     <td></td>
-                </tr>
-                <tr>
+                </tr>' .
+                (($detail['leni'] ?? null) !== null
+                    ? '<tr>
+                    <td></td>
+                    <td>LENI (' . htmlspecialchars((string) ($detail['leni']['buildingTypeLabel'] ?? ''), ENT_QUOTES) . ')</td>
+                    <td class="result-number">' .
+                        $formatNumber($detail['leni']['leniKwhPerM2Year'] ?? null, 1, ' kWh/(m&sup2;&middot;a)') .
+                        '</td>
+                    <td class="result-number">-</td>
+                    <td class="result-check">' .
+                        '<span class="verification-status status-not-regulated">Calculado (3)</span>' .
+                        '</td>
+                    <td></td>
+                </tr>'
+                    : '') .
+                '<tr>
                     <td rowspan="2"><strong>&Aacute;rea</strong></td>
                     <td>Potencia espec&iacute;fica de conexi&oacute;n</td>
                     <td class="result-number">' .
@@ -696,7 +710,14 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                 rtrim(rtrim(number_format($dailyOperatingHours, 1, '.', ''), '0'), '.') .
                 ' h/d&iacute;a (promedio simple P&times;horas&times;365 &mdash; no reproduce la evaluaci&oacute;n
             energ&eacute;tica horaria de DIALux evo, que considera autonom&iacute;a de luz diurna, orientaci&oacute;n
-            real y atenuaci&oacute;n por escena).
+            real y atenuaci&oacute;n por escena).' .
+                (($detail['leni'] ?? null) !== null
+                    ? '<br>(3) LENI = m&eacute;todo simplificado EN 15193-1, con horas/factores de referencia
+            <strong>pendientes de verificaci&oacute;n normativa</strong> (no una cita confirmada de la norma) y
+            energ&iacute;a par&aacute;sita (standby de controles) no modelada &mdash; puede subestimar el consumo
+            real. Nunca representa una declaraci&oacute;n de "conforme a EN 15193".'
+                    : '') .
+                '
         </div>' . $renderAmbientProvenance($detail);
         };
 
@@ -1020,6 +1041,7 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                             );
                             $technicalRows = $lum['reportData']['technical_table'] ?? null;
                             $ugrTableComputed = $lum['reportData']['ugrTableComputed'] ?? null;
+                            $ugrTablesComputed = $lum['reportData']['ugrTablesComputed'] ?? null;
                         @endphp
                         <div class="product-sheet-card">
                             @if ($lum)
@@ -1095,34 +1117,72 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                                         <div class="polar-diagram-container">
                                             {!! $renderAsset(is_array($polarDiagramAsset) ? $polarDiagramAsset : null, 84, 86, true) !!}
                                         </div>
-                                        <div class="detail-block-title" style="margin-bottom:2mm;">Evaluación del
-                                            deslumbramiento según UGR</div>
-                                        @if (is_array($ugrTableComputed) && !empty($ugrTableComputed['entries']))
-                                            <table class="product-table" style="font-size:8px;">
-                                                <tr>
-                                                    <th>Sala de referencia</th>
-                                                    <th>UGR transversal</th>
-                                                    <th>UGR longitudinal</th>
-                                                </tr>
-                                                @foreach ($ugrTableComputed['entries'] as $ugrRow)
-                                                    <tr>
-                                                        <td>{{ $ugrRow['roomLabel'] ?? '-' }}</td>
-                                                        <td>{{ $formatNumber($ugrRow['ugrCrosswise'] ?? null, 1) }}</td>
-                                                        <td>{{ $formatNumber($ugrRow['ugrEndwise'] ?? null, 1) }}</td>
-                                                    </tr>
-                                                @endforeach
-                                            </table>
-                                            {{-- Fase 15: nunca se presenta como dato de fabricante — el disclaimer
-                                                 de procedencia va siempre visible junto a la tabla. --}}
-                                            <p style="font-size:7px;color:#64748b;margin-top:1mm;">
-                                                {{ $ugrTableComputed['disclaimer'] ?? '' }}
-                                            </p>
-                                        @else
-                                            <div class="placeholder-box">Información UGR no disponible</div>
-                                        @endif
                                     </div>
                                 </div>
                                 <div class="clear"></div>
+
+                                {{-- Ronda 21c: grilla UGR de ancho completo, no la columna de 50%
+                                     (11 columnas densas — sala + 5 combinaciones de reflectancia ×
+                                     2 orientaciones — no caben legibles en la mitad de una página A4). --}}
+                                <div class="detail-block-title" style="margin-top:2mm;margin-bottom:2mm;">
+                                    Evaluación del deslumbramiento según UGR
+                                </div>
+                                @if (is_array($ugrTablesComputed) && count($ugrTablesComputed) > 0 && !empty($ugrTablesComputed[0]['entries']))
+                                    <table class="product-table" style="font-size:7px;width:100%;">
+                                        <tr>
+                                            <th rowspan="2" style="vertical-align:bottom;">Sala de referencia</th>
+                                            @foreach ($ugrTablesComputed as $ugrTable)
+                                                <th colspan="2" style="text-align:center;">
+                                                    {{ $ugrTable['reflectances']['ceiling'] ?? '-' }}/{{ $ugrTable['reflectances']['wall'] ?? '-' }}/{{ $ugrTable['reflectances']['floor'] ?? '-' }}
+                                                </th>
+                                            @endforeach
+                                        </tr>
+                                        <tr>
+                                            @foreach ($ugrTablesComputed as $ugrTable)
+                                                <th>⊥</th>
+                                                <th>∥</th>
+                                            @endforeach
+                                        </tr>
+                                        @foreach ($ugrTablesComputed[0]['entries'] as $roomIndex => $firstRow)
+                                            <tr>
+                                                <td>{{ $firstRow['roomLabel'] ?? '-' }}</td>
+                                                @foreach ($ugrTablesComputed as $ugrTable)
+                                                    @php $ugrRow = $ugrTable['entries'][$roomIndex] ?? null; @endphp
+                                                    <td>{{ $formatNumber($ugrRow['ugrCrosswise'] ?? null, 1) }}</td>
+                                                    <td>{{ $formatNumber($ugrRow['ugrEndwise'] ?? null, 1) }}</td>
+                                                @endforeach
+                                            </tr>
+                                        @endforeach
+                                    </table>
+                                    {{-- Fase 15/21c: nunca se presenta como dato de fabricante — el
+                                         disclaimer de procedencia va siempre visible junto a la tabla. --}}
+                                    <p style="font-size:6.5px;color:#64748b;margin-top:1mm;">
+                                        {{ $ugrTablesComputed[0]['disclaimer'] ?? '' }}
+                                        Combinaciones de reflectancia habituales (techo/pared/piso) — no una
+                                        transcripción letra por letra del grid del texto CIE 117 pagado.
+                                        ⊥ = transversal (perpendicular al eje de la luminaria) · ∥ = longitudinal (a lo largo del eje).
+                                    </p>
+                                @elseif (is_array($ugrTableComputed) && !empty($ugrTableComputed['entries']))
+                                    <table class="product-table" style="font-size:8px;">
+                                        <tr>
+                                            <th>Sala de referencia</th>
+                                            <th>UGR transversal</th>
+                                            <th>UGR longitudinal</th>
+                                        </tr>
+                                        @foreach ($ugrTableComputed['entries'] as $ugrRow)
+                                            <tr>
+                                                <td>{{ $ugrRow['roomLabel'] ?? '-' }}</td>
+                                                <td>{{ $formatNumber($ugrRow['ugrCrosswise'] ?? null, 1) }}</td>
+                                                <td>{{ $formatNumber($ugrRow['ugrEndwise'] ?? null, 1) }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </table>
+                                    <p style="font-size:7px;color:#64748b;margin-top:1mm;">
+                                        {{ $ugrTableComputed['disclaimer'] ?? '' }}
+                                    </p>
+                                @else
+                                    <div class="placeholder-box">Información UGR no disponible</div>
+                                @endif
                             @else
                                 <p>No se encontró la luminaria.</p>
                             @endif

@@ -68,6 +68,8 @@ function toast(msg: string, type: 'success' | 'error' | 'info' = 'info') {
 function getIconForPartida(partida: string): string {
     const num = parseInt(partida?.split('.')?.[0] ?? '0', 10);
     const icons: Record<number, string> = {
+
+
         1: '🏗️', 2: '🏛️', 3: '⚡', 4: '🔧',
         5: '📡', 6: '🔥', 7: '⚡', 8: '🏊',
     };
@@ -229,6 +231,15 @@ export default function DelphinView({
     const [acuRefetchVersion, setAcuRefetchVersion] = useState(0);
     const [compatOpen, setCompatOpen] = useState(false);
     const [scrollToRowId, setScrollToRowId] = useState<number | null>(null);
+
+    useEffect(() => {
+        const handleInsumoUpdated = () => {
+            setAcuRefetchVersion(v => v + 1);
+            router.reload({ only: ['initialRows', 'initialTasks'] });
+        };
+        window.addEventListener('insumoUpdated', handleInsumoUpdated);
+        return () => window.removeEventListener('insumoUpdated', handleInsumoUpdated);
+    }, []);
 
 
     // ── Column visibility + description expand ────────────────────────────────

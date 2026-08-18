@@ -35,8 +35,6 @@ export interface ShapeVariationFixture {
     reflectance: { ceiling: number; wall: number; floor: number };
     room: Room;
     fixtures: Fixture[];
-    /** Grilla de sensores para el oráculo Radiance — densidad similar a `radianceOracle.test.ts` (~1 sensor cada 0.3-0.4 m). */
-    grid: { columns: number; rows: number };
     /** Qué variable(s) de las tres (forma/tamaño/reflectancia) cambia respecto a los fixtures base de `fixtures.ts`. */
     variesFrom_sshhVsBano: string;
 }
@@ -115,7 +113,6 @@ function buildLongCorridorFixture(): ShapeVariationFixture {
         reflectance: { ceiling: 0.7, wall: 0.5, floor: 0.2 },
         room,
         fixtures,
-        grid: { columns: 3, rows: 9 },
         variesFrom_sshhVsBano: 'forma (aspecto 5:1 vs. 2.3:1), mismo tamaño de orden de magnitud',
     };
 }
@@ -145,7 +142,6 @@ function buildLargeSquareFixture(): ShapeVariationFixture {
         reflectance: { ceiling: 0.7, wall: 0.5, floor: 0.2 },
         room,
         fixtures,
-        grid: { columns: 6, rows: 6 },
         variesFrom_sshhVsBano: 'tamaño (16 m² vs. ~2 m²), misma relación de aspecto 1:1 que "caseta-vs-guarderias"',
     };
 }
@@ -175,7 +171,6 @@ function buildSmallDarkSquareFixture(): ShapeVariationFixture {
         reflectance: { ceiling: 0.5, wall: 0.3, floor: 0.1 },
         room,
         fixtures,
-        grid: { columns: 4, rows: 4 },
         variesFrom_sshhVsBano: 'reflectancia (50/30/10 vs. 70/50/20) y techo bajo (2.6 m), tamaño similar a "sshh-vs-bano"',
     };
 }

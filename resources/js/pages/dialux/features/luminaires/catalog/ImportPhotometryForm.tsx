@@ -1,27 +1,54 @@
 import { Upload } from 'lucide-react';
 import { useState } from 'react';
-import { extractErrorMessage, importPhotometryFile, type ImportedLuminaireProduct } from './catalogApi';
+import {
+    extractErrorMessage,
+    importPhotometryFile,
+    previewPhotometryFile,
+    type ImportedLuminaireProduct,
+    type PreviewedLuminaireProduct,
+} from './catalogApi';
+import { PhotometricPreviewModal, type PhotometricPreviewOverrides } from './PhotometricPreviewModal';
 
 /**
  * Formulario de importación IES/LDT/GLDF, extraído de `components/CatalogPanel.tsx`
  * (Fase 2) sin cambiar comportamiento — mismo endpoint, misma validación, mismo JSX.
+ *
+ * Ronda 21 (`planes/plan_ldt_ies_lector_editor.md`): el submit YA NO guarda
+ * directo — primero llama `previewPhotometryFile` (parsea sin persistir) y
+ * abre `PhotometricPreviewModal` con todo lo que el parser extrajo (marca,
+ * forma, dimensiones, CDL polar, tabla UGR); el guardado real solo ocurre
+ * cuando el usuario confirma desde el modal, con los campos que haya editado.
+ *
+ * Ronda 21f: este formulario de subida quedó reducido a SOLO seleccionar el
+ * archivo — nombre, marca, imagen de producto y logo de marca se piden y
+ * editan dentro de `PhotometricPreviewModal` (antes vivían acá, duplicados
+ * con los mismos campos del modal, y el usuario reportó que las imágenes no
+ * se guardaban al crear por esa duplicación de estado). Es el modal el que
+ * envía todo al confirmar — un solo lugar donde se captura la ficha completa.
  */
 
 interface ImportPhotometryFormProps {
     isLoadingProducts: boolean;
     onImported: (product: ImportedLuminaireProduct) => void;
+    /** Precarga nombre/marca al "subir" una luminaria del catálogo estático (`fixtureCatalog`) a un producto real con LDT/IES (Ronda 21e, request C). */
+    initialName?: string;
+    initialManufacturer?: string;
 }
 
-export function ImportPhotometryForm({ isLoadingProducts, onImported }: ImportPhotometryFormProps) {
+export function ImportPhotometryForm({ isLoadingProducts, onImported, initialName = '', initialManufacturer = '' }: ImportPhotometryFormProps) {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [productName, setProductName] = useState('');
-    const [manufacturerName, setManufacturerName] = useState('');
-    const [productImage, setProductImage] = useState<File | null>(null);
-    const [brandLogo, setBrandLogo] = useState<File | null>(null);
+    // Solo alimentan la llamada de previsualización (para que, al "subir un
+    // archivo real" desde un ítem del catálogo estático, el modal abra ya
+    // con ese nombre/marca) — no hay campos visibles para esto en este
+    // formulario, se editan en el modal si hace falta cambiarlos.
+    const [productName] = useState(initialName);
+    const [manufacturerName] = useState(initialManufacturer);
     const [isUploading, setIsUploading] = useState(false);
+    const [isConfirming, setIsConfirming] = useState(false);
     const [importError, setImportError] = useState<string | null>(null);
     const [importMessage, setImportMessage] = useState<string | null>(null);
     const [importWarnings, setImportWarnings] = useState<string[]>([]);
+    const [preview, setPreview] = useState<{ product: PreviewedLuminaireProduct; warnings: string[] } | null>(null);
 
     const submitProductImport = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -39,25 +66,49 @@ export function ImportPhotometryForm({ isLoadingProducts, onImported }: ImportPh
         formData.append('normative_standard', 'universal');
         if (productName.trim()) formData.append('name', productName.trim());
         if (manufacturerName.trim()) formData.append('manufacturer', manufacturerName.trim());
-        if (productImage) formData.append('product_image', productImage);
-        if (brandLogo) formData.append('brand_logo', brandLogo);
 
         setIsUploading(true);
 
         try {
+            const { product, warnings } = await previewPhotometryFile(formData);
+            setPreview({ product, warnings: warnings ?? [] });
+        } catch (error) {
+            setImportError(extractErrorMessage(error, 'No se pudo leer el archivo fotométrico.'));
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const confirmImport = async (overrides: PhotometricPreviewOverrides) => {
+        if (!selectedFile) return;
+
+        setIsConfirming(true);
+        setImportError(null);
+
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('normative_standard', 'universal');
+        if (overrides.name.trim()) formData.append('name', overrides.name.trim());
+        if (overrides.manufacturer.trim()) formData.append('manufacturer', overrides.manufacturer.trim());
+        if (overrides.total_lumens.trim()) formData.append('total_lumens', overrides.total_lumens.trim());
+        if (overrides.power_watts.trim()) formData.append('power_watts', overrides.power_watts.trim());
+        if (overrides.cct.trim()) formData.append('cct', overrides.cct.trim());
+        if (overrides.cri_ra.trim()) formData.append('cri_ra', overrides.cri_ra.trim());
+        if (overrides.lamp_type.trim()) formData.append('lamp_type', overrides.lamp_type.trim());
+        if (overrides.productImage) formData.append('product_image', overrides.productImage);
+        if (overrides.brandLogo) formData.append('brand_logo', overrides.brandLogo);
+
+        try {
             const { product, message, warnings } = await importPhotometryFile(formData);
             onImported(product);
+            setPreview(null);
             setSelectedFile(null);
-            setProductName('');
-            setManufacturerName('');
-            setProductImage(null);
-            setBrandLogo(null);
             setImportMessage(message ?? 'Producto importado correctamente.');
             setImportWarnings(warnings ?? []);
         } catch (error) {
             setImportError(extractErrorMessage(error, 'No se pudo importar el producto.'));
         } finally {
-            setIsUploading(false);
+            setIsConfirming(false);
         }
     };
 
@@ -84,49 +135,16 @@ export function ImportPhotometryForm({ isLoadingProducts, onImported }: ImportPh
                     }}
                 />
             </label>
-            <div className="mt-1.5 grid grid-cols-1 gap-1">
-                <input
-                    type="text"
-                    value={productName}
-                    onChange={(event) => setProductName(event.target.value)}
-                    placeholder="Nombre del producto (opcional)"
-                    className="rounded border border-gray-300 dark:border-gray-700/70 bg-gray-300 dark:bg-gray-950/40 px-2 py-1 text-[9px] text-gray-800 dark:text-gray-800 dark:text-gray-200 placeholder:text-gray-600 dark:text-gray-600 focus:border-amber-600 focus:outline-none"
-                />
-                <input
-                    type="text"
-                    value={manufacturerName}
-                    onChange={(event) => setManufacturerName(event.target.value)}
-                    placeholder="Marca / fabricante (opcional)"
-                    className="rounded border border-gray-300 dark:border-gray-700/70 bg-gray-300 dark:bg-gray-950/40 px-2 py-1 text-[9px] text-gray-800 dark:text-gray-800 dark:text-gray-200 placeholder:text-gray-600 dark:text-gray-600 focus:border-amber-600 focus:outline-none"
-                />
-            </div>
-            <div className="mt-1.5 grid grid-cols-2 gap-1">
-                <label className="flex cursor-pointer items-center justify-center gap-1 rounded border border-gray-300 dark:border-gray-700/70 bg-gray-300 dark:bg-gray-950/40 px-2 py-1 text-[8px] text-gray-600 dark:text-gray-600 dark:text-gray-400 hover:border-amber-700/50 hover:text-amber-100">
-                    <span className="truncate">{productImage ? productImage.name : 'Imagen producto'}</span>
-                    <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(event) => setProductImage(event.target.files?.[0] ?? null)}
-                    />
-                </label>
-                <label className="flex cursor-pointer items-center justify-center gap-1 rounded border border-gray-300 dark:border-gray-700/70 bg-gray-300 dark:bg-gray-950/40 px-2 py-1 text-[8px] text-gray-600 dark:text-gray-600 dark:text-gray-400 hover:border-amber-700/50 hover:text-amber-100">
-                    <span className="truncate">{brandLogo ? brandLogo.name : 'Logo marca'}</span>
-                    <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(event) => setBrandLogo(event.target.files?.[0] ?? null)}
-                    />
-                </label>
-            </div>
+            <p className="mt-1.5 text-[8px] leading-tight text-slate-500 dark:text-slate-500">
+                Nombre, marca, imágenes, tipo de lámpara, curva polar y tabla UGR se revisan y editan en el siguiente paso, antes de guardar.
+            </p>
             <button
                 type="submit"
                 className="mt-1.5 flex w-full items-center justify-center gap-1 rounded bg-amber-700/70 py-1 text-[9px] text-amber-50 transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={!selectedFile || isUploading}
             >
                 <Upload size={9} />
-                {isUploading ? 'Importando...' : 'Subir y registrar producto'}
+                {isUploading ? 'Leyendo archivo...' : 'Leer y previsualizar'}
             </button>
             {importError && <p className="mt-1 text-[8px] leading-tight text-red-300">{importError}</p>}
             {importMessage && <p className="mt-1 text-[8px] leading-tight text-emerald-300">{importMessage}</p>}
@@ -138,6 +156,19 @@ export function ImportPhotometryForm({ isLoadingProducts, onImported }: ImportPh
                         </li>
                     ))}
                 </ul>
+            )}
+            {preview && (
+                <PhotometricPreviewModal
+                    open
+                    mode="create"
+                    onOpenChange={(open) => {
+                        if (!open) setPreview(null);
+                    }}
+                    preview={preview.product}
+                    warnings={preview.warnings}
+                    isConfirming={isConfirming}
+                    onConfirm={confirmImport}
+                />
             )}
         </form>
     );

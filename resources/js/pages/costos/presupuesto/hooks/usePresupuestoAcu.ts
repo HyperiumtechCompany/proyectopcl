@@ -286,10 +286,11 @@ export function usePresupuestoAcu({
         setAcuLoading(true);
         setAcuError(null);
 
-        axios.get(`/costos/proyectos/${projectId}/presupuesto/acus/data`, {
+        axios.get(`/costos/proyectos/${projectId}/presupuesto/acus/data?_t=${Date.now()}`, {
             headers: {
                 Accept: 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
+                'Cache-Control': 'no-cache',
             },
             signal: controller.signal,
         })

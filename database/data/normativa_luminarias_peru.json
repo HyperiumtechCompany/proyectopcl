@@ -6,27 +6,104 @@
         "1.1": {
           "nombre": "Zona privada",
           "areas": [
-            { "area": "Dormitorio", "Em_lux": 50, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null },
-            { "area": "Baño", "Em_lux": 100, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null },
-            { "area": "Baño (zona de espejo)", "Em_lux": 500, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null },
-            { "area": "Cocina", "Em_lux": 300, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null },
-            { "area": "Sala, Sala de estar", "Em_lux": 100, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null },
-            { "area": "Comedor", "Em_lux": 100, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null },
-            { "area": "Estudios, almacenes, depósitos, walking closet, cuartos de trabajo doméstico (planchado, lavandería y similares)", "Em_lux": 500, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null },
-            { "area": "Patios, zonas abiertas", "Em_lux": 20, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null },
-            { "area": "Estacionamientos bajo techo", "Em_lux": 50, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null }
+            {
+              "area": "Dormitorio",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            },
+            {
+              "area": "Baño",
+              "Em_lux": 100,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            },
+            {
+              "area": "Baño (zona de espejo)",
+              "Em_lux": 500,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            },
+            {
+              "area": "Cocina",
+              "Em_lux": 300,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            },
+            {
+              "area": "Sala, Sala de estar",
+              "Em_lux": 100,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            },
+            {
+              "area": "Comedor",
+              "Em_lux": 100,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            },
+            {
+              "area": "Estudios, almacenes, depósitos, walking closet, cuartos de trabajo doméstico (planchado, lavandería y similares)",
+              "Em_lux": 500,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            },
+            {
+              "area": "Patios, zonas abiertas",
+              "Em_lux": 20,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            },
+            {
+              "area": "Estacionamientos bajo techo",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            }
           ]
         },
         "1.2": {
           "nombre": "Zonas comunes (aplicable a zonas comunes de cualquier tipo de edificación)",
           "areas": [
-            { "area": "Vestíbulos de entrada", "Em_lux": 100, "UGRL": 22, "Uo": null, "Ra": 60, "requisitos": null },
-            { "area": "Salas de estar (pública)", "Em_lux": 200, "UGRL": 22, "Uo": null, "Ra": 80, "requisitos": null },
+            {
+              "area": "Vestíbulos de entrada",
+              "Em_lux": 100,
+              "UGRL": 22,
+              "Uo": null,
+              "Ra": 60,
+              "requisitos": null
+            },
+            {
+              "area": "Salas de estar (pública)",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": null,
+              "Ra": 80,
+              "requisitos": null
+            },
             {
               "area": "Áreas de circulación y pasillos",
               "Em_lux": 100,
               "UGRL": 28,
-              "Uo": 0.40,
+              "Uo": 0.4,
               "Ra": 40,
               "requisitos": [
                 "Iluminancia al nivel del suelo",
@@ -36,9 +113,34 @@
                 "Debe evitarse el deslumbramiento de conductor y peatones"
               ]
             },
-            { "area": "Escaleras, escaleras mecánicas y transportadores (de personas)", "Em_lux": 150, "UGRL": 25, "Uo": 0.40, "Ra": 40, "requisitos": "Requiere contraste mejorado sobre los escalones" },
-            { "area": "Ascensores, montacargas", "Em_lux": 100, "UGRL": 25, "Uo": 0.40, "Ra": 40, "requisitos": "El nivel de iluminación en frente del montacargas debe ser al menos Em = 200 lx" },
-            { "area": "Rampas/andenes/patios de carga", "Em_lux": 150, "UGRL": 25, "Uo": 0.40, "Ra": 40, "requisitos": null }
+            {
+              "area": "Escaleras, escaleras mecánicas y transportadores (de personas)",
+              "Em_lux": 150,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos": [
+                "Requiere contraste mejorado sobre los escalones"
+              ]
+            },
+            {
+              "area": "Ascensores, montacargas",
+              "Em_lux": 100,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos": [
+                "El nivel de iluminación en frente del montacargas debe ser al menos Em = 200 lx"
+              ]
+            },
+            {
+              "area": "Rampas/andenes/patios de carga",
+              "Em_lux": 150,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos": null
+            }
           ]
         }
       }
@@ -46,34 +148,249 @@
     "2": {
       "categoria": "EDUCACIÓN",
       "areas": [
-        { "area": "Sala de juegos", "Em_lux": 300, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": "Debe evitarse altas luminancias en las direcciones de visión desde abajo mediante la utilización de coberturas difusas" },
-        { "area": "Guarderías", "Em_lux": 300, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": "Debe evitarse altas luminancias en las direcciones de visión desde abajo mediante la utilización de coberturas difusas" },
-        { "area": "Sala de manualidades", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-        { "area": "Aulas de profesores", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": "La iluminación debe ser controlable" },
-        { "area": "Aulas para clases nocturnas y de educación de adultos", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": "La iluminación debe ser controlable" },
-        { "area": "Salas de lectura", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": "La iluminación debe ser controlable para colocar varias A/V necesarias" },
-        { "area": "Zona de pizarra", "Em_lux": 500, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": "Deben evitarse las reflexiones especulares. El presentador/profesor debe iluminarse con la iluminancia vertical adecuada" },
-        { "area": "Mesa de demostraciones", "Em_lux": 500, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": "En salas de lectura 750 lx" },
-        { "area": "Locales de artes y oficios", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-        { "area": "Locales de artes (en escuelas de arte)", "Em_lux": 750, "UGRL": 19, "Uo": 0.70, "Ra": 90, "requisitos": "5000 K ≤ TCP < 6500 K" },
-        { "area": "Salas de dibujo técnico", "Em_lux": 750, "UGRL": 16, "Uo": 0.70, "Ra": 80, "requisitos": null },
-        { "area": "Locales de prácticas y laboratorios", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-        { "area": "Aulas de manualidades", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-        { "area": "Taller de enseñanza", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-        { "area": "Locales de prácticas de música", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-        { "area": "Locales de prácticas de computación", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-        { "area": "Laboratorio de idiomas", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-        { "area": "Locales y talleres de preparación", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-        { "area": "Vestíbulo de entrada", "Em_lux": 200, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": null },
-        { "area": "Áreas de circulación, pasillos", "Em_lux": 100, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-        { "area": "Escaleras", "Em_lux": 150, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-        { "area": "Locales comunes de estudiantes y salas de reuniones", "Em_lux": 200, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": null },
-        { "area": "Locales de maestros", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-        { "area": "Biblioteca: estanterías", "Em_lux": 200, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-        { "area": "Biblioteca: áreas de lectura", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-        { "area": "Almacenes de material de profesores", "Em_lux": 100, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-        { "area": "Salas deportivas, gimnasios y piscinas", "Em_lux": 300, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": "En caso de no existir norma internacional véase la Norma EN 12193 para las condiciones de entrenamiento" },
-        { "area": "Cocina", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null }
+        {
+          "area": "Sala de juegos",
+          "Em_lux": 300,
+          "UGRL": 22,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos": [
+            "Debe evitarse altas luminancias en las direcciones de visión desde abajo mediante la utilización de coberturas difusas"
+          ]
+        },
+        {
+          "area": "Guarderías",
+          "Em_lux": 300,
+          "UGRL": 22,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos": [
+            "Debe evitarse altas luminancias en las direcciones de visión desde abajo mediante la utilización de coberturas difusas"
+          ]
+        },
+        {
+          "area": "Sala de manualidades",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Aulas de profesores",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": [
+            "La iluminación debe ser controlable"
+          ]
+        },
+        {
+          "area": "Aulas para clases nocturnas y de educación de adultos",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": [
+            "La iluminación debe ser controlable"
+          ]
+        },
+        {
+          "area": "Salas de lectura",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": [
+            "La iluminación debe ser controlable para colocar varias A/V necesarias"
+          ]
+        },
+        {
+          "area": "Zona de pizarra",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.7,
+          "Ra": 80,
+          "requisitos": [
+            "Deben evitarse las reflexiones especulares",
+            "El presentador/profesor debe iluminarse con la iluminancia vertical adecuada"
+          ]
+        },
+        {
+          "area": "Mesa de demostraciones",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.7,
+          "Ra": 80,
+          "requisitos": [
+            "En salas de lectura 750 lx"
+          ]
+        },
+        {
+          "area": "Locales de artes y oficios",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Locales de artes (en escuelas de arte)",
+          "Em_lux": 750,
+          "UGRL": 19,
+          "Uo": 0.7,
+          "Ra": 90,
+          "requisitos": [
+            "5 000 K ≤ TCP < 6 500 K"
+          ]
+        },
+        {
+          "area": "Salas de dibujo técnico",
+          "Em_lux": 750,
+          "UGRL": 16,
+          "Uo": 0.7,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Locales de prácticas y laboratorios",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Aulas de manualidades",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Taller de enseñanza",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Locales de prácticas de música",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Locales de prácticas de computación",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Laboratorio de idiomas",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Locales y talleres de preparación",
+          "Em_lux": 500,
+          "UGRL": 22,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Vestíbulo de entrada",
+          "Em_lux": 200,
+          "UGRL": 22,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Áreas de circulación, pasillos",
+          "Em_lux": 100,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Escaleras",
+          "Em_lux": 150,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Locales comunes de estudiantes y salas de reuniones",
+          "Em_lux": 200,
+          "UGRL": 22,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Locales de maestros",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Biblioteca: estanterías",
+          "Em_lux": 200,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Biblioteca: áreas de lectura",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Almacenes de material de profesores",
+          "Em_lux": 100,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Salas deportivas, gimnasios y piscinas",
+          "Em_lux": 300,
+          "UGRL": 22,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": [
+            "En caso de no existir norma internacional véase la Norma EN 12193 para las condiciones de entrenamiento"
+          ]
+        },
+        {
+          "area": "Cocina",
+          "Em_lux": 500,
+          "UGRL": 22,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        }
       ]
     },
     "3": {
@@ -82,114 +399,400 @@
         "3.1": {
           "nombre": "Salas de uso general",
           "areas": [
-            { "area": "Salas de espera", "Em_lux": 200, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": "Deben impedirse luminancias demasiado elevadas en el campo de visión de los pacientes" },
-            { "area": "Corredores: durante el día", "Em_lux": 100, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": "Iluminancia a nivel del suelo" },
-            { "area": "Corredores: durante la noche", "Em_lux": 50, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": "Iluminancia a nivel del suelo" },
-            { "area": "Ambientes para curaciones", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Salas para consulta médica", "Em_lux": 500, "UGRL": 16, "Uo": 0.60, "Ra": 90, "requisitos": "TCP 4000 K como mínimo" },
-            { "area": "Ascensores para personas y visitantes", "Em_lux": 100, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": "Iluminancia a nivel del suelo" },
-            { "area": "Ascensores de servicio y montacargas", "Em_lux": 200, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": "Iluminancia a nivel del suelo" }
+            {
+              "area": "Salas de espera",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": [
+                "Deben impedirse luminancias demasiado elevadas en el campo de visión de los pacientes"
+              ]
+            },
+            {
+              "area": "Corredores: durante el día",
+              "Em_lux": 100,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": [
+                "Iluminancia a nivel del suelo"
+              ]
+            },
+            {
+              "area": "Corredores: durante la noche",
+              "Em_lux": 50,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": [
+                "Iluminancia a nivel del suelo"
+              ]
+            },
+            {
+              "area": "Ambientes para curaciones",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Salas para consulta médica",
+              "Em_lux": 500,
+              "UGRL": 16,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos": [
+                "Tcp 4 000 k, como mínimo"
+              ]
+            },
+            {
+              "area": "Ascensores para personas y visitantes",
+              "Em_lux": 100,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": [
+                "Iluminancia a nivel del suelo"
+              ]
+            },
+            {
+              "area": "Ascensores de servicio y montacargas",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": [
+                "Iluminancia a nivel del suelo"
+              ]
+            }
           ]
         },
         "3.2": {
           "nombre": "Salas de personal",
           "areas": [
-            { "area": "Oficina del personal", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null }
+            {
+              "area": "Oficina del personal",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "3.3": {
           "nombre": "Salas de guardia, salas de maternidad",
           "areas": [
-            { "area": "Iluminación general", "Em_lux": 100, "UGRL": 19, "Uo": 0.40, "Ra": 80, "requisitos": "Iluminancia a nivel del suelo" },
-            { "area": "Iluminación para la lectura", "Em_lux": 300, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Exámenes generales", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Exámenes específicos y tratamiento de maternidad", "Em_lux": 1000, "UGRL": 19, "Uo": 0.70, "Ra": 90, "requisitos": null },
-            { "area": "Iluminación nocturna, iluminación de observación", "Em_lux": 5, "UGRL": null, "Uo": null, "Ra": 80, "requisitos": null },
-            { "area": "Baños y tocadores para pacientes", "Em_lux": 200, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": null }
+            {
+              "area": "Iluminación general",
+              "Em_lux": 100,
+              "UGRL": 19,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": [
+                "Iluminancia a nivel del suelo"
+              ]
+            },
+            {
+              "area": "Iluminación para la lectura",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Exámenes generales",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Exámenes específicos y tratamiento de maternidad",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": null
+            },
+            {
+              "area": "Iluminación nocturna, iluminación de observación",
+              "Em_lux": 5,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Baños y tocadores para pacientes",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "3.4": {
           "nombre": "Salas de exámenes generales",
           "areas": [
-            { "area": "Alumbrado general (Salas de examen)", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 5000 K" },
-            { "area": "Examen y tratamiento", "Em_lux": 1000, "UGRL": 19, "Uo": 0.70, "Ra": 90, "requisitos": null }
+            {
+              "area": "Alumbrado general (Salas de examen)",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 5 000 K"
+              ]
+            },
+            {
+              "area": "Examen y tratamiento",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": null
+            }
           ]
         },
         "3.5": {
           "nombre": "Salas de examen ocular",
           "areas": [
-            { "area": "Alumbrado general", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 5000 K" },
-            { "area": "Exámenes ocular", "Em_lux": 1000, "UGRL": null, "Uo": null, "Ra": 90, "requisitos": null },
-            { "area": "Prueba de lectura y visión cromática con diagrama de visión", "Em_lux": 500, "UGRL": 16, "Uo": 0.70, "Ra": 90, "requisitos": null }
+            {
+              "area": "Alumbrado general",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 5 000 K"
+              ]
+            },
+            {
+              "area": "Exámenes ocular",
+              "Em_lux": 1000,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": 90,
+              "requisitos": null
+            },
+            {
+              "area": "Prueba de lectura y visión cromática con diagrama de visión",
+              "Em_lux": 500,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": null
+            }
           ]
         },
         "3.6": {
           "nombre": "Salas de examen auditivo",
           "areas": [
-            { "area": "Alumbrado general", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Examen auditivo", "Em_lux": 1000, "UGRL": null, "Uo": null, "Ra": 90, "requisitos": null }
+            {
+              "area": "Alumbrado general",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Examen auditivo",
+              "Em_lux": 1000,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": 90,
+              "requisitos": null
+            }
           ]
         },
         "3.7": {
           "nombre": "Salas de escáner",
           "areas": [
-            { "area": "Alumbrado general", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Escáners con aumentadores de imágenes y sistemas de TV", "Em_lux": 50, "UGRL": 19, "Uo": null, "Ra": 80, "requisitos": null }
+            {
+              "area": "Alumbrado general",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Escáners con aumentadores de imágenes y sistemas de TV",
+              "Em_lux": 50,
+              "UGRL": 19,
+              "Uo": null,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "3.8": {
           "nombre": "Salas de parto",
           "areas": [
-            { "area": "Alumbrado general", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 90, "requisitos": null },
-            { "area": "Examen y tratamiento", "Em_lux": 1000, "UGRL": 19, "Uo": 0.70, "Ra": 90, "requisitos": null },
-            { "area": "Salas de diálisis", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Salas de dermatología", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 90, "requisitos": null },
-            { "area": "Salas de endoscopías", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Salas de enyesar", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Baños de médicos", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Masaje y radioterapia", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null }
+            {
+              "area": "Alumbrado general",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos": null
+            },
+            {
+              "area": "Examen y tratamiento",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": null
+            }
           ]
         },
         "3.9": {
           "nombre": "Áreas de operación",
           "areas": [
-            { "area": "Salas pre-operatorias y de recuperación", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 90, "requisitos": null },
-            { "area": "Sala de operaciones", "Em_lux": 1000, "UGRL": 19, "Uo": 0.60, "Ra": 90, "requisitos": null },
-            { "area": "Quirófano", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "requisitos": "Em: 10000 lx a 100000 lx" }
+            {
+              "area": "Salas pre-operatorias y de recuperación",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos": null
+            },
+            {
+              "area": "Sala de operaciones",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos": null
+            },
+            {
+              "area": "Quirófano",
+              "Em_lux": null,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": [
+                "Em : 10 000 lx a 100 000 lx"
+              ]
+            }
           ]
         },
         "3.10": {
           "nombre": "Unidad de cuidados intensivos",
           "areas": [
-            { "area": "Iluminación general", "Em_lux": 100, "UGRL": 19, "Uo": 0.60, "Ra": 90, "requisitos": "Iluminancia a nivel del suelo" },
-            { "area": "Exámenes sencillos", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 90, "requisitos": "Iluminancia a nivel del suelo" },
-            { "area": "Exámenes y tratamiento", "Em_lux": 1000, "UGRL": 19, "Uo": 0.70, "Ra": 90, "requisitos": "Iluminancia a nivel del suelo" },
-            { "area": "Vigilancia nocturna", "Em_lux": 20, "UGRL": 19, "Uo": null, "Ra": 90, "requisitos": null },
-            { "area": "Dentistas: Iluminación general", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 90, "requisitos": "La iluminación debe estar libre de deslumbramiento para el paciente" },
-            { "area": "Dentistas: En el paciente", "Em_lux": 1000, "UGRL": null, "Uo": 0.70, "Ra": 90, "requisitos": null },
-            { "area": "Dentistas: Quirófano", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "requisitos": "En la Norma EN ISO 9680 se dan requisitos específicos" },
-            { "area": "Dentistas: Maquinado de diente blanco", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "requisitos": "En la Norma EN ISO 9680 se dan requisitos específicos" }
+            {
+              "area": "Iluminación general",
+              "Em_lux": 100,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos": [
+                "Iluminancia a nivel del suelo"
+              ]
+            },
+            {
+              "area": "Exámenes sencillos",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos": [
+                "Iluminancia a nivel del suelo"
+              ]
+            },
+            {
+              "area": "Exámenes y tratamiento",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "Iluminancia a nivel del suelo"
+              ]
+            },
+            {
+              "area": "Vigilancia nocturna",
+              "Em_lux": 20,
+              "UGRL": 19,
+              "Uo": null,
+              "Ra": 90,
+              "requisitos": null
+            }
           ]
         },
         "3.11": {
           "nombre": "Laboratorios y farmacias",
           "areas": [
-            { "area": "Alumbrado general", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Inspección de colores", "Em_lux": 1000, "UGRL": 19, "Uo": 0.70, "Ra": 90, "requisitos": "6000 K ≤ TCP ≤ 6500 K" }
+            {
+              "area": "Alumbrado general",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Inspección de colores",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "6 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            }
           ]
         },
         "3.12": {
           "nombre": "Salas de descontaminación",
           "areas": [
-            { "area": "Salas de esterilización", "Em_lux": 300, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Salas de desinfección", "Em_lux": 300, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null }
+            {
+              "area": "Salas de esterilización",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Salas de desinfección",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "3.13": {
           "nombre": "Sala de autopsias y depósitos mortuorios",
           "areas": [
-            { "area": "Alumbrado general", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 90, "requisitos": null },
-            { "area": "Mesa de autopsias y mesa de disección", "Em_lux": 5000, "UGRL": null, "Uo": null, "Ra": 90, "requisitos": "Pueden requerirse valores mayores de 5000 lx" }
+            {
+              "area": "Alumbrado general",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos": null
+            },
+            {
+              "area": "Mesa de autopsias y mesa de disección",
+              "Em_lux": 5000,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": 90,
+              "requisitos": [
+                "Pueden requerirse valores mayores de 5 000 lx"
+              ]
+            }
           ]
         }
       }
@@ -200,222 +803,1129 @@
         "4.1": {
           "nombre": "Agricultura",
           "areas": [
-            { "area": "Carga y operación de mercancías y equipos y maquinaria de manipulación de mercancías", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Edificación para ganadería", "Em_lux": 50, "UGRL": null, "Uo": 0.40, "Ra": 40, "requisitos": null },
-            { "area": "Sala de veterinaria, establos para parir", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Preparación de alimentos, lechería, lavado de utensilios", "Em_lux": 200, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Panaderías: Preparación y horneado", "Em_lux": 300, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Panaderías: Terminado, escarchado, decoración", "Em_lux": 500, "UGRL": 22, "Uo": 0.70, "Ra": 80, "requisitos": null }
+            {
+              "area": "Carga y operación de mercancías y equipos y maquinaria de manipulación de mercancías",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Edificación para ganadería",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos": null
+            },
+            {
+              "area": "Sala de veterinaria, establos para parir",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Preparación de alimentos, lechería, lavado de utensilios",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "4.2": {
           "nombre": "Cemento, artículos de cemento, concreto, ladrillos",
           "areas": [
-            { "area": "Secado", "Em_lux": 50, "UGRL": 28, "Uo": 0.40, "Ra": 20, "requisitos": "Se deben reconocer los colores de seguridad" },
-            { "area": "Preparación de materiales, trabajo en hornos y mezcladores", "Em_lux": 200, "UGRL": 28, "Uo": 0.40, "Ra": 40, "requisitos": null },
-            { "area": "Trabajo en máquinas en general", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Encofrado", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null }
+            {
+              "area": "Secado",
+              "Em_lux": 50,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos": [
+                "Se deben reconocer los colores de seguridad"
+              ]
+            },
+            {
+              "area": "Preparación de materiales, trabajo en hornos y mezcladores",
+              "Em_lux": 200,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos": null
+            },
+            {
+              "area": "Trabajo en máquinas en general",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Encofrado",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "4.3": {
           "nombre": "Cerámicas, tejas, vidrio, artículos de vidrio",
           "areas": [
-            { "area": "Secado", "Em_lux": 50, "UGRL": 28, "Uo": 0.40, "Ra": 20, "requisitos": null },
-            { "area": "Preparación, trabajo en máquinas en general", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Esmaltado, laminado, prensado, conformación de partes sencillas, escarchado, soplado del vidrio", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Trituración, estampado, pulido del vidrio, conformación de partes precisas, fabricación de instrumentos de vidrio", "Em_lux": 750, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Trabajo de precisión, por ejemplo, triturado decorativo, pintura a mano", "Em_lux": 750, "UGRL": 16, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Trabajo de precisión, por ejemplo, triturado decorativo, pintura a mano (alta calidad)", "Em_lux": 1000, "UGRL": 16, "Uo": 0.70, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 6500 K" },
-            { "area": "Fabricación de piedras preciosas sintéticas", "Em_lux": 1500, "UGRL": 16, "Uo": 0.70, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 6500 K" }
+            {
+              "area": "Secado",
+              "Em_lux": 50,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos": null
+            },
+            {
+              "area": "Preparación, trabajo en máquinas en general",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Esmaltado, laminado, prensado, conformación de partes sencillas, escarchado, soplado del vidrio",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Trituración, estampado, pulido del vidrio, conformación de partes precisas, fabricación de instrumentos de vidrio",
+              "Em_lux": 750,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Trabajo de precisión, por ejemplo, triturado decorativo, pintura a mano",
+              "Em_lux": 750,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Trabajo de precisión, por ejemplo, triturado decorativo, pintura a mano",
+              "Em_lux": 1000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            },
+            {
+              "area": "Fabricación de piedras preciosas sintéticas",
+              "Em_lux": 1500,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            }
           ]
         },
         "4.4": {
           "nombre": "Industria química, de plásticos y de caucho",
           "areas": [
-            { "area": "Instalaciones de procesamiento operadas a distancia", "Em_lux": 50, "UGRL": null, "Uo": 0.40, "Ra": 20, "requisitos": "Se deben reconocer los colores de seguridad" },
-            { "area": "Instalaciones de procesamiento con intervención manual limitada", "Em_lux": 150, "UGRL": 28, "Uo": 0.40, "Ra": 40, "requisitos": null },
-            { "area": "Puestos de trabajo atendidos constantemente en instalaciones de procesamiento", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Locales de mediciones precisas, laboratorios", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Producción farmacéutica", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Producción de neumáticos", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Inspección de colores", "Em_lux": 1000, "UGRL": 16, "Uo": 0.70, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 6500 K" },
-            { "area": "Corte, acabado, inspección", "Em_lux": 750, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": null }
+            {
+              "area": "Instalaciones de procesamiento operadas a distancia",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos": [
+                "Se deben reconocer los colores de seguridad"
+              ]
+            },
+            {
+              "area": "Instalaciones de procesamiento con intervención manual limitada",
+              "Em_lux": 150,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos": null
+            },
+            {
+              "area": "Puestos de trabajo atendidos constantemente en instalaciones de procesamiento",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Locales de mediciones precisas, laboratorios",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Producción farmacéutica",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Producción de neumáticos",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Inspección de colores",
+              "Em_lux": 1000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            },
+            {
+              "area": "Corte, acabado, inspección",
+              "Em_lux": 750,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "4.5": {
           "nombre": "Industria eléctrica",
           "areas": [
-            { "area": "Fabricación de cable e hilos", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Bobinado: Bobinas grandes", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Bobinado: Bobinas de tamaño mediano", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Bobinado: Bobinas pequeñas", "Em_lux": 750, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Impregnación de devanados", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Galvanización", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Trabajo de montaje: obra gruesa (ej. transformadores grandes)", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Trabajo de montaje: mediano (ej. centros generales de distribución)", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Trabajo de montaje: fino (ej. teléfonos)", "Em_lux": 750, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Trabajo de montaje: de precisión (ej. equipos de mediciones)", "Em_lux": 1000, "UGRL": 16, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Talleres de electrónica, ensayos, ajustes", "Em_lux": 1500, "UGRL": 16, "Uo": 0.70, "Ra": 80, "requisitos": null }
+            {
+              "area": "Fabricación de cable e hilos",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Impregnación de devanados",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Galvanización",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Talleres de electrónica, ensayos, ajustes",
+              "Em_lux": 1500,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "4.6": {
           "nombre": "Productos alimenticios e industria de alimentos de lujo",
           "areas": [
-            { "area": "Puestos y zonas de trabajo en cervecerías, piso de germinación de malta, lavado, llenado de barriles, limpieza, cernido, peladura, cocinado en fábricas de conservas y chocolates, secado y curado de tabaco, toneles de fermentación", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Clasificación y lavado de productos, molienda, mezclado y envase", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Puestos y zonas de trabajo en mataderos, carnicerías, lecherías, pisos de filtros, refinerías de azúcar", "Em_lux": 500, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Corte y clasificación de frutas y vegetales", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Fabricación de alimentos finos, cocinas, fabricación de tabacos y cigarrillos", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Inspección de envases (vidrio) y botellas, control de productos, adorno, decoración", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Laboratorios", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Inspección de colores", "Em_lux": 1000, "UGRL": 16, "Uo": 0.70, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 6500 K" }
+            {
+              "area": "Puestos y zonas de trabajo en cervecerías, piso de germinación de malta, lavado, llenado de barriles, limpieza, cernido (cribado), peladura, cocinado en fábricas de conservas y chocolates, puestos y zonas de trabajo en fábricas de azúcar, secado y curado de tabaco en hoja, toneles (bodegas) de fermentación",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Clasificación y lavado de productos, molienda (molturación), mezclado y envase",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Puestos y zonas de trabajo en mataderos, carnicerías, lecherías, pisos de filtros, refinerías de azúcar",
+              "Em_lux": 500,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Corte y clasificación de frutas y vegetales",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Fabricación de alimentos finos, cocinas, fabricación de tabacos y cigarrillos",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Inspección de envases (vidrio) y botellas, control de productos, adorno, decoración",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Laboratorios",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Inspección de colores",
+              "Em_lux": 1000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            }
           ]
         },
         "4.7": {
           "nombre": "Fabricación de piezas de metal (fundiciones, colada de metales y similares)",
           "areas": [
-            { "area": "Túneles soterrados, sótanos, etc.", "Em_lux": 50, "UGRL": null, "Uo": 0.40, "Ra": 20, "requisitos": "Se deben reconocer los colores de seguridad" },
-            { "area": "Preparación de arena", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Local de desarenado", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Puestos de trabajo en cubilote y mezclador", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Patio de fundición", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Áreas de desmoldeo", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Máquina moldeadora", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Moldeo manual y de machos", "Em_lux": 300, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Fundición en coquillas", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null }
+            {
+              "area": "Túneles soterrados sótanos, etc.",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos": [
+                "Se deben reconocer los colores de seguridad"
+              ]
+            },
+            {
+              "area": "Preparación de arena",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Local de desarenado",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Puestos de trabajo en cubilote y mezclador",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Patio de fundición",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Áreas de desmoldeo",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Máquina moldeadora",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Moldeo manual y de machos",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Fundición en coquillas",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "4.8": {
           "nombre": "Fundiciones y colada de metales",
           "areas": [
-            { "area": "Salas de trabajo con iluminación suplementaria sobre cada máquina", "Em_lux": 150, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null },
-            { "area": "Trabajo prolongado con requerimiento moderado sobre la visión", "Em_lux": 300, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null },
-            { "area": "Trabajo mecánico con cierta discriminación de detalles", "Em_lux": 300, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null },
-            { "area": "Trabajo mecánico que exige discriminación de detalles finos", "Em_lux": 500, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null },
-            { "area": "Trabajo prolongado con discriminación de detalles finos", "Em_lux": 1500, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null },
-            { "area": "Salas y paneles de control", "Em_lux": 500, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null },
-            { "area": "Revisión prolija de artículos, corte y trazado", "Em_lux": 1000, "UGRL": null, "Uo": null, "Ra": null, "requisitos": null },
-            { "area": "Túneles, galerías subterráneas", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "requisitos": "En los primeros 80 metros de la bocamina se deben instalar fluorescentes de 36W espaciados, por lo menos cada 5 metros" }
+            {
+              "area": "Salas de trabajo con iluminación suplementaria sobre cada máquina",
+              "Em_lux": 150,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            },
+            {
+              "area": "Trabajo prolongado con requerimiento moderado sobre la visión",
+              "Em_lux": 300,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            },
+            {
+              "area": "Trabajo mecánico con cierta discriminación de detalles",
+              "Em_lux": 300,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            },
+            {
+              "area": "Trabajo mecánico que exige discriminación de detalles finos",
+              "Em_lux": 500,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            },
+            {
+              "area": "Trabajo prolongado con discriminación de detalles finos",
+              "Em_lux": 1500,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            },
+            {
+              "area": "Salas y paneles de control",
+              "Em_lux": 500,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            },
+            {
+              "area": "Revisión prolija de artículos, corte y trazado",
+              "Em_lux": 1000,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": null
+            },
+            {
+              "area": "Túneles, galerías subterráneas",
+              "Em_lux": null,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": [
+                "En los primeros ochenta (80) metros de la bocamina se deben instalar fluorescentes de 36W espaciados, por lo menos cada cinco (05) metros"
+              ]
+            }
           ]
         },
         "4.9": {
           "nombre": "Cuero y artículos de cuero",
           "areas": [
-            { "area": "Trabajo en cubas, toneles, fosos", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 40, "requisitos": null },
-            { "area": "Descarnado, raspado, frotado (pulido), tambor de limpieza de pieles", "Em_lux": 300, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Trabajo de talabartería, fabricación de calzado, punteadora, cosido, pulido, conformado, corte, punzonado", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Clasificación", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 6500 K" },
-            { "area": "Teñido del cuero (a máquina)", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Control de la calidad", "Em_lux": 1000, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Inspección del color", "Em_lux": 1000, "UGRL": 16, "Uo": 0.70, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 6500 K" },
-            { "area": "Elaboración de calzado", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Elaboración de guantes", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null }
+            {
+              "area": "Trabajo en cubas, toneles, fosos",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos": null
+            },
+            {
+              "area": "Descarnado, raspado, frotado (pulido), tambor de limpieza de pieles",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Trabajo de talabartería, fabricación de calzado, punteadora, cosido, pulido, conformado, corte, punzonado",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Clasificación",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            },
+            {
+              "area": "Teñido del cuero (a máquina)",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Control de la calidad",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Inspección del color",
+              "Em_lux": 1000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            },
+            {
+              "area": "Elaboración de calzado",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Elaboración de guantes",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "4.10": {
           "nombre": "Trabajo y tratamiento de metales",
           "areas": [
-            { "area": "Forjado con estampa abierta", "Em_lux": 200, "UGRL": 25, "Uo": 0.60, "Ra": 60, "requisitos": null },
-            { "area": "Forjado por estampación (en caliente), soldadura, extrusión en frío", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 60, "requisitos": null },
-            { "area": "Maquinado grueso y medio: tolerancias > 0,1 mm", "Em_lux": 300, "UGRL": 22, "Uo": 0.60, "Ra": 60, "requisitos": null },
-            { "area": "Maquinado de precisión: rectificado: tolerancias < 0,1 mm", "Em_lux": 500, "UGRL": 19, "Uo": 0.70, "Ra": 60, "requisitos": null },
-            { "area": "Marcado (trazado); inspección", "Em_lux": 750, "UGRL": 19, "Uo": 0.70, "Ra": 60, "requisitos": null },
-            { "area": "Plantillas de dibujo de alambres y tuberías", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 60, "requisitos": null },
-            { "area": "Maquinado de planchas > 5 mm", "Em_lux": 200, "UGRL": 25, "Uo": 0.60, "Ra": 60, "requisitos": null },
-            { "area": "Labrado (metalisterías) de chapas < 5 mm", "Em_lux": 300, "UGRL": 22, "Uo": 0.60, "Ra": 60, "requisitos": null },
-            { "area": "Elaboración de herramientas: fabricación de equipos de corte", "Em_lux": 750, "UGRL": 19, "Uo": 0.70, "Ra": 60, "requisitos": null },
-            { "area": "Montaje: grueso", "Em_lux": 200, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Montaje: medio", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Montaje: fino", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Montaje: de precisión", "Em_lux": 750, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Galvanización", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Preparación y pintura de las superficies", "Em_lux": 750, "UGRL": 25, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Elaboración de herramientas, plantillas y taladradores; mecánica de precisión, micromecánica", "Em_lux": 1000, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": null }
+            {
+              "area": "Forjado con estampa abierta",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos": null
+            },
+            {
+              "area": "Forjado por estampación (en caliente), soldadura, extrusión en frío",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos": null
+            },
+            {
+              "area": "Maquinado grueso y medio: tolerancias > 0,1 mm",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos": null
+            },
+            {
+              "area": "Maquinado de precisión: rectificado: tolerancias < 0,1 mm",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 60,
+              "requisitos": null
+            },
+            {
+              "area": "Marcado (trazado); inspección",
+              "Em_lux": 750,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 60,
+              "requisitos": null
+            },
+            {
+              "area": "Plantillas de dibujo de alambres y tuberías",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos": null
+            },
+            {
+              "area": "Maquinado de planchas > 5 mm",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos": null
+            },
+            {
+              "area": "Labrado (metalisterías) de chapas < 5 mm",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos": null
+            },
+            {
+              "area": "Elaboración de herramientas: fabricación de equipos de corte",
+              "Em_lux": 750,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 60,
+              "requisitos": null
+            },
+            {
+              "area": "Galvanización",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Preparación y pintura de las superficies",
+              "Em_lux": 750,
+              "UGRL": 25,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Elaboración de herramientas, plantillas y taladradores; mecánica de precisión, micromecánica",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "4.11": {
           "nombre": "Papel y artículos de papel",
           "areas": [
-            { "area": "Molinos de pulpa, muelas verticales", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Fabricación y procesamiento del papel, maquinaria papelera y de corrugación, fabricación de cartones y cartulinas", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Trabajo normal de encuadernación de libros (doblado, clasificación, encolado, corte, estampado en relieve, cosido)", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 60, "requisitos": null }
+            {
+              "area": "Molinos de pulpa, muelas verticales",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Fabricación y procesamiento del papel, maquinaria papelera y de corrugación, fabricación de cartones y cartulinas",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Trabajo normal de encuadernación de libros, por ejemplo, doblado, clasificación, encolado, corte, estampado en relieve, cosido",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos": null
+            }
           ]
         },
         "4.12": {
           "nombre": "Centrales de energía eléctrica",
           "areas": [
-            { "area": "Planta de suministro de combustible", "Em_lux": 50, "UGRL": null, "Uo": 0.40, "Ra": 20, "requisitos": "Los colores de seguridad son reconocibles" },
-            { "area": "Casa de calderas", "Em_lux": 100, "UGRL": 28, "Uo": 0.40, "Ra": 40, "requisitos": null },
-            { "area": "Salas de máquinas", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Locales auxiliares (cuartos de bombas, condensadores, paneles eléctricos, etc.)", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 60, "requisitos": null },
-            { "area": "Cuartos de control", "Em_lux": 500, "UGRL": 16, "Uo": 0.70, "Ra": 80, "requisitos": "Los paneles de control están a menudo en vertical. Puede requerirse regulación de flujo luminoso" }
+            {
+              "area": "Planta de suministro de combustible",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos": [
+                "Los colores de seguridad son reconocibles"
+              ]
+            },
+            {
+              "area": "Casa de calderas",
+              "Em_lux": 100,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos": null
+            },
+            {
+              "area": "Salas de máquinas",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Locales auxiliares, por ejemplo, cuartos de bombas, cuartos de condensadores, cuartos de paneles eléctricos, etc.",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 60,
+              "requisitos": null
+            },
+            {
+              "area": "Cuartos de control",
+              "Em_lux": 500,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": [
+                "Los paneles de control están a menudo en vertical",
+                "Puede requerirse regulación de flujo luminoso"
+              ]
+            }
           ]
         },
         "4.13": {
           "nombre": "Imprentas",
           "areas": [
-            { "area": "Corte, dorado, estampado, grabado en bloque, trabajo en sillares y platinas, imprentas, elaboración de matrices (moldes)", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Clasificación del papel e impresión a mano", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Linotipia, retoque, litografía", "Em_lux": 1000, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Inspección de colores en impresión multicolor", "Em_lux": 1500, "UGRL": 16, "Uo": 0.70, "Ra": 90, "requisitos": "5000 K ≤ TCP ≤ 6500 K" },
-            { "area": "Grabado en acero y cobre", "Em_lux": 2000, "UGRL": 16, "Uo": 0.70, "Ra": 80, "requisitos": null }
+            {
+              "area": "Corte, dorado, estampado, grabado en bloque, trabajo en sillares y platinas, imprentas, elaboración de matrices (moldes)",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Clasificación del papel e impresión a mano",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Linotipia, retoque, litografía",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Inspección de colores en impresión multicolor",
+              "Em_lux": 1500,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "5 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            },
+            {
+              "area": "Grabado en acero y cobre",
+              "Em_lux": 2000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "4.14": {
           "nombre": "Laminación, instalaciones siderúrgicas",
           "areas": [
-            { "area": "Plantas de producción sin intervención manual", "Em_lux": 50, "UGRL": null, "Uo": 0.40, "Ra": 20, "requisitos": "Se deben reconocer los colores de seguridad" },
-            { "area": "Plantas de producción con operación manual ocasionalmente", "Em_lux": 150, "UGRL": 28, "Uo": 0.40, "Ra": 40, "requisitos": null },
-            { "area": "Plantas de producción con operación manual continuamente", "Em_lux": 200, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Almacén de palanquilla", "Em_lux": 50, "UGRL": 28, "Uo": 0.40, "Ra": 20, "requisitos": "Los colores de seguridad deben ser reconocibles" },
-            { "area": "Hornos", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 20, "requisitos": "Los colores de seguridad deben ser reconocibles" },
-            { "area": "Tren de laminación, bobinador, línea de cizallamiento", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 40, "requisitos": null },
-            { "area": "Plataformas de control, paneles de control", "Em_lux": 300, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Ensayo, medición e inspección", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Túneles soterrados (tamaño humano), cintas transportadoras, sótanos, etc.", "Em_lux": 50, "UGRL": 28, "Uo": 0.40, "Ra": 20, "requisitos": "Los colores de seguridad deben ser reconocibles" }
+            {
+              "area": "Plantas de producción sin intervención manual",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos": [
+                "Se deben reconocer los colores de seguridad"
+              ]
+            },
+            {
+              "area": "Plantas de producción con operación manual ocasionalmente",
+              "Em_lux": 150,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos": null
+            },
+            {
+              "area": "Plantas de producción con operación manual continuamente",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Almacén de palanquilla",
+              "Em_lux": 50,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos": [
+                "Los colores de seguridad deben ser reconocibles"
+              ]
+            },
+            {
+              "area": "Hornos",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos": [
+                "Los colores de seguridad deben ser reconocibles"
+              ]
+            },
+            {
+              "area": "Tren de laminación, bobinador, línea de cizallamiento",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 40,
+              "requisitos": null
+            },
+            {
+              "area": "Plataformas de control, paneles de control",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Ensayo, medición e inspección",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Túneles soterrados (tamaño humano), cintas transportadoras, sótanos, etc.",
+              "Em_lux": 50,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos": [
+                "Los colores de seguridad deben ser reconocibles"
+              ]
+            }
           ]
         },
         "4.15": {
           "nombre": "Industria textil",
           "areas": [
-            { "area": "Lugares de trabajo y zonas en baños, apertura de pacas", "Em_lux": 200, "UGRL": 25, "Uo": 0.60, "Ra": 60, "requisitos": null },
-            { "area": "Cardado, lavado, planchado, dibujo, peinado, apresto, tejeduría, prehilado, hiladura de yute y cáñamo", "Em_lux": 300, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Hilado, plegado, devanado, urdidura, tejeduría, trenzado, de punto tejido", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": "Prevenir los efectos estroboscópicos" },
-            { "area": "Urdimbre, tejido, trenzado, tricotado", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": "Prevenir los efectos estroboscópicos" },
-            { "area": "Costura, tejidos finos de punto, dar puntadas", "Em_lux": 750, "UGRL": 22, "Uo": 0.70, "Ra": 90, "requisitos": null },
-            { "area": "Diseño manual, dibujo de patrones", "Em_lux": 750, "UGRL": 22, "Uo": 0.70, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 6500 K" },
-            { "area": "Acabado, teñido", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Cuarto de secado", "Em_lux": 100, "UGRL": 28, "Uo": 0.40, "Ra": 60, "requisitos": null },
-            { "area": "Impresión automática en géneros", "Em_lux": 500, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Despinzado, batanado, galonado", "Em_lux": 1000, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Inspección de colores, control de tejidos", "Em_lux": 1000, "UGRL": 16, "Uo": 0.70, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 6500 K" },
-            { "area": "Zurcido invisible", "Em_lux": 1500, "UGRL": 19, "Uo": 0.70, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 6500 K" },
-            { "area": "Fabricación de sombreros", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null }
+            {
+              "area": "Lugares de trabajo y zonas en baños, apertura de pacas",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos": null
+            },
+            {
+              "area": "Cardado, lavado, planchado, dibujo, peinado, apresto, tejeduría, prehilado, hiladura de yute y cáñamo",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Hilado, plegado, devanado, urdidura, tejeduría, trenzado, de punto tejido",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": [
+                "Prevenir los efectos estroboscópicos"
+              ]
+            },
+            {
+              "area": "Urdimbre, tejido, trenzado, tricotado",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": [
+                "Prevenir los efectos estroboscópicos"
+              ]
+            },
+            {
+              "area": "Costura, tejidos finos de punto, dar puntadas",
+              "Em_lux": 750,
+              "UGRL": 22,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": null
+            },
+            {
+              "area": "Diseño manual, dibujo de patrones",
+              "Em_lux": 750,
+              "UGRL": 22,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            },
+            {
+              "area": "Acabado, teñido",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Cuarto de secado",
+              "Em_lux": 100,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 60,
+              "requisitos": null
+            },
+            {
+              "area": "Impresión automática en géneros",
+              "Em_lux": 500,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Despinzado, batanado, galonado",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Inspección de colores, control de tejidos",
+              "Em_lux": 1000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            },
+            {
+              "area": "Zurcido invisible",
+              "Em_lux": 1500,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            },
+            {
+              "area": "Fabricación de sombreros",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "4.16": {
           "nombre": "Fabricación de vehículos",
           "areas": [
-            { "area": "Carrocería y ensamblaje", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Pintura, cámara de pintar (con pistola), cámara de pulir", "Em_lux": 750, "UGRL": 22, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Pintura: retoque, inspección", "Em_lux": 1000, "UGRL": 16, "Uo": 0.70, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 6500 K" },
-            { "area": "Tapicería (vestidura) manual", "Em_lux": 1000, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Inspección final", "Em_lux": 1000, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Servicios generales de vehículos, reparación y ensayos", "Em_lux": 300, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": "Se debe considerar iluminación local" }
+            {
+              "area": "Carrocería y ensamblaje",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Pintura, cámara de pintar (con pistola), cámara de pulir",
+              "Em_lux": 750,
+              "UGRL": 22,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Pintura: retoque, inspección",
+              "Em_lux": 1000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            },
+            {
+              "area": "Tapicería (vestidura) manual",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Inspección final",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Servicios generales de vehículos, reparación y ensayos",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": [
+                "Se debe considerar iluminación local"
+              ]
+            }
           ]
         },
         "4.17": {
           "nombre": "Industria maderera y su tratamiento",
           "areas": [
-            { "area": "Procesamiento automático (ej. fabricación de madera contrachapada seca)", "Em_lux": 50, "UGRL": 28, "Uo": 0.40, "Ra": 40, "requisitos": null },
-            { "area": "Fosos de vapor", "Em_lux": 150, "UGRL": 28, "Uo": 0.40, "Ra": 40, "requisitos": null },
-            { "area": "Bastidor de sierra", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 60, "requisitos": "Prevenir efectos estroboscópicos" },
-            { "area": "Trabajo en banco de ebanista, encolado, montaje", "Em_lux": 300, "UGRL": 25, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Pulido, pintado, ebanistería de fantasía", "Em_lux": 750, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Trabajo en máquinas de carpintería (torneado, ranurado, cepillado, corte, aserrado)", "Em_lux": 500, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": "Prevenir efectos estroboscópicos" },
-            { "area": "Selección de maderas en chapas, mosaicos de madera, trabajo de incrustación", "Em_lux": 750, "UGRL": 22, "Uo": 0.70, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 6500 K" },
-            { "area": "Marquetería, incrustación en madera", "Em_lux": 750, "UGRL": 22, "Uo": 0.70, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 6500 K" },
-            { "area": "Control de calidad, inspección", "Em_lux": 1000, "UGRL": 19, "Uo": 0.70, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 6500 K" }
+            {
+              "area": "Procesamiento automático, por ejemplo, fabricación de madera contrachapada seca",
+              "Em_lux": 50,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos": null
+            },
+            {
+              "area": "Fosos de vapor",
+              "Em_lux": 150,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos": null
+            },
+            {
+              "area": "Bastidor de sierra",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos": [
+                "Prevenir efectos estroboscópicos"
+              ]
+            },
+            {
+              "area": "Trabajo en banco de ebanista, encolado, montaje",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Pulido, pintado, ebanistería de fantasía",
+              "Em_lux": 750,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Trabajo en máquinas de carpintería, por ejemplo, torneado, ranurado, cepillado, ranurado, corte, aserrado, vertedero",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": [
+                "Prevenir efectos estroboscópicos"
+              ]
+            },
+            {
+              "area": "Selección de maderas en chapas, mosaicos de madera, trabajo de incrustación",
+              "Em_lux": 750,
+              "UGRL": 22,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            },
+            {
+              "area": "Marquetería, incrustación en madera",
+              "Em_lux": 750,
+              "UGRL": 22,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            },
+            {
+              "area": "Control de calidad, inspección",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            }
           ]
         }
       }
@@ -426,70 +1936,289 @@
         "5.1": {
           "nombre": "Tiendas",
           "areas": [
-            { "area": "Área de ventas", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Área de (cajas) contadoras", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Mostrador (mesa) de envolver", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null }
+            {
+              "area": "Área de ventas",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Área de (cajas) contadoras",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Mostrador (mesa) de envolver",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "5.2": {
           "nombre": "Áreas comunes",
           "areas": [
-            { "area": "Vestíbulo de entrada", "Em_lux": 100, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": "UGR sólo si es aplicable" },
-            { "area": "Guardarropas", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Salones", "Em_lux": 200, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Oficinas de taquillas", "Em_lux": 300, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null }
+            {
+              "area": "Vestíbulo de entrada",
+              "Em_lux": 100,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": [
+                "UGR sólo si es aplicable"
+              ]
+            },
+            {
+              "area": "Guardarropas",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Salones",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Oficinas de taquillas",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "5.3": {
           "nombre": "Restaurantes y hoteles",
           "areas": [
-            { "area": "Carpeta de recepción/cajero, mesa de conserje", "Em_lux": 300, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Cocina", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": "Debe haber una zona de transición entre cocina y restaurante" },
-            { "area": "Restaurante, comedor, salón multiuso", "Em_lux": null, "UGRL": null, "Uo": 0.60, "Ra": 80, "requisitos": "El alumbrado debe diseñarse para crear la atmósfera apropiada" },
-            { "area": "Restaurante de autoservicio", "Em_lux": 200, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Buffet (comidas frías)", "Em_lux": 300, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Salas de conferencias", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": "El alumbrado debe ser controlable" },
-            { "area": "Corredores (pasillos)", "Em_lux": 100, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": "Durante la noche son aceptables niveles inferiores" },
-            { "area": "Cantinas, tabernas", "Em_lux": 200, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": null }
+            {
+              "area": "Carpeta de recepción/cajero, mesa de conserje",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Cocina",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": [
+                "Debe haber una zona de transición entre cocina y restaurante"
+              ]
+            },
+            {
+              "area": "Restaurante, comedor, salón multiuso",
+              "Em_lux": null,
+              "UGRL": null,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": [
+                "El alumbrado debe diseñarse para crear la atmósfera apropiada"
+              ]
+            },
+            {
+              "area": "Restaurante de autoservicio",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Buffet (comidas frías)",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Salas de conferencias",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": [
+                "El alumbrado debe ser controlable"
+              ]
+            },
+            {
+              "area": "Corredores (pasillos)",
+              "Em_lux": 100,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": [
+                "Durante la noche son aceptables niveles inferiores"
+              ]
+            },
+            {
+              "area": "Cantinas, tabernas",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "5.4": {
           "nombre": "Teatros, salas de conciertos, salas de cines",
           "areas": [
-            { "area": "Teatros y salas de concierto", "Em_lux": 300, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Salas multipropósito", "Em_lux": 200, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": "Iluminación a nivel del suelo" },
-            { "area": "Locales de ejercicios, vestidores", "Em_lux": 200, "UGRL": 22, "Uo": 0.50, "Ra": 80, "requisitos": "La iluminación de espejos para maquillaje debe estar libre de deslumbramientos" },
-            { "area": "Museos (general)", "Em_lux": 300, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": "Iluminación a nivel del suelo" }
+            {
+              "area": "Teatros y salas de concierto",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Salas multipropósito",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Locales de ejercicios, vestidores",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.5,
+              "Ra": 80,
+              "requisitos": [
+                "La iluminación de espejos para maquillaje debe estar libre de deslumbramientos. El deslumbramiento perturbador debería evitarse en los espejos para maquillaje"
+              ]
+            },
+            {
+              "area": "Museos (general)",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": [
+                "Iluminación a nivel del suelo"
+              ]
+            }
           ]
         },
         "5.5": {
           "nombre": "Ferias, pabellones de exposiciones",
           "areas": [
-            { "area": "Alumbrado general", "Em_lux": 300, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": null }
+            {
+              "area": "Alumbrado general",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "5.6": {
           "nombre": "Peluquerías",
           "areas": [
-            { "area": "Trabajo de peluquería", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 90, "requisitos": null }
+            {
+              "area": "Trabajo de peluquería",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos": null
+            }
           ]
         },
         "5.7": {
           "nombre": "Fabricación de joyas y relojes",
           "areas": [
-            { "area": "Trabajo con piedras preciosas", "Em_lux": 1500, "UGRL": 16, "Uo": 0.70, "Ra": 90, "requisitos": "4000 K ≤ TCP ≤ 6500 K" },
-            { "area": "Manufactura de joyas", "Em_lux": 1000, "UGRL": 16, "Uo": 0.70, "Ra": 90, "requisitos": null },
-            { "area": "Fabricación (manual) de relojes", "Em_lux": 1500, "UGRL": 16, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Fabricación (automática) de relojes", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null }
+            {
+              "area": "Trabajo con piedras preciosas",
+              "Em_lux": 1500,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": [
+                "4 000 K ≤ TCP ≤ 6 500 K"
+              ]
+            },
+            {
+              "area": "Manufactura de joyas",
+              "Em_lux": 1000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos": null
+            },
+            {
+              "area": "Fabricación (manual) de relojes",
+              "Em_lux": 1500,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Fabricación (automática) de relojes",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "5.8": {
           "nombre": "Lavanderías y limpieza en seco",
           "areas": [
-            { "area": "Entrada de la ropa, marcado y clasificación", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Lavado (normal) y en seco", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Planchado, calandria (prensado)", "Em_lux": 300, "UGRL": 25, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Inspección y arreglos", "Em_lux": 750, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": null }
+            {
+              "area": "Entrada de la ropa, marcado y clasificación",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Lavado (normal) y en seco",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Planchado, calandria (prensado)",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Inspección y arreglos",
+              "Em_lux": 750,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         }
       }
@@ -497,11 +2226,46 @@
     "6": {
       "categoria": "OFICINAS",
       "areas": [
-        { "area": "Archivo, copia, circulación, etc.", "Em_lux": 300, "UGRL": 19, "Uo": 0.40, "Ra": 80, "requisitos": null },
-        { "area": "Escritura, mecanografía, lectura, procesamiento de datos", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-        { "area": "Estación de trabajo CAD", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-        { "area": "Salas de conferencias y reuniones", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-        { "area": "Archivos", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": null }
+        {
+          "area": "Archivo, copia, circulación, etc.",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Escritura, mecanografía, lectura, procesamiento de datos",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Estación de trabajo CAD",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Salas de conferencias y reuniones",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Archivos",
+          "Em_lux": 200,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos": null
+        }
       ]
     },
     "7": {
@@ -510,23 +2274,77 @@
         "7.1": {
           "nombre": "Museos",
           "areas": [
-            { "area": "Obras exhibidas insensibles a la luz", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "requisitos": "La iluminación se debe determinar por los requisitos de presentación" },
-            { "area": "Obras exhibidas sensibles a la luz", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "requisitos": "La iluminación se debe determinar por los requisitos de presentación. Es imprescindible la protección contra la radiación dañina" }
+            {
+              "area": "Obras exhibidas insensibles a la luz",
+              "Em_lux": null,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": [
+                "La iluminación se debe determinar por los requisitos de presentación"
+              ]
+            },
+            {
+              "area": "Obras exhibidas sensibles a la luz",
+              "Em_lux": null,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos": [
+                "La iluminación se debe determinar por los requisitos de presentación",
+                "Es imprescindible la protección contra la radiación dañina"
+              ]
+            }
           ]
         },
         "7.2": {
           "nombre": "Bibliotecas",
           "areas": [
-            { "area": "Estanterías (de libros)", "Em_lux": 200, "UGRL": 19, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Áreas de lectura", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Mostradores", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null }
+            {
+              "area": "Estanterías (de libros)",
+              "Em_lux": 200,
+              "UGRL": 19,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Áreas de lectura",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Mostradores",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "7.3": {
           "nombre": "Templos",
           "areas": [
-            { "area": "Nave de iglesia", "Em_lux": 100, "UGRL": 25, "Uo": null, "Ra": 80, "requisitos": null },
-            { "area": "Asientos, altar, púlpito", "Em_lux": 300, "UGRL": 22, "Uo": null, "Ra": 80, "requisitos": null }
+            {
+              "area": "Nave de iglesia",
+              "Em_lux": 100,
+              "UGRL": 25,
+              "Uo": null,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Asientos, altar, púlpito",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": null,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         }
       }
@@ -534,8 +2352,24 @@
     "8": {
       "categoria": "RECREACIÓN Y DEPORTES",
       "areas": [
-        { "area": "Salas para ejercicios físicos", "Em_lux": 300, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": null },
-        { "area": "Vestuarios, salas de lavado, cuartos de baño, servicios", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": "En cada baño individual si está completamente cerrado" }
+        {
+          "area": "Salas para ejercicios físicos",
+          "Em_lux": 300,
+          "UGRL": 22,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos": null
+        },
+        {
+          "area": "Vestuarios, salas de lavado, cuartos de baño, servicios",
+          "Em_lux": 200,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos": [
+            "En cada baño individual si está completamente cerrado."
+          ]
+        }
       ]
     },
     "9": {
@@ -544,31 +2378,187 @@
         "9.1": {
           "nombre": "Aeropuertos",
           "areas": [
-            { "area": "Salones de llegadas y partidas, áreas de recogida de equipaje", "Em_lux": 200, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Áreas de conexión, escaladores (mecánicos), cintas transportadoras", "Em_lux": 150, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Mostradores de información, carpeta de chequear", "Em_lux": 500, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": null },
-            { "area": "Aduana y control de pasaportes", "Em_lux": 500, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": "Tiene que proporcionarse reconocimiento facial" },
-            { "area": "Áreas de espera", "Em_lux": 200, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Depósitos de equipajes", "Em_lux": 200, "UGRL": 25, "Uo": 0.40, "Ra": 60, "requisitos": null },
-            { "area": "Áreas de chequeo de seguridad", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Torre de control de tráfico", "Em_lux": 500, "UGRL": 16, "Uo": 0.60, "Ra": 80, "requisitos": "La iluminación debe ser regulable. Se debe evitar el deslumbramiento de luz diurna. Deben evitarse reflejos en ventanas, especialmente de noche" },
-            { "area": "Hangares de pruebas y reparaciones", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Área de prueba de máquinas", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null },
-            { "area": "Áreas de medición en hangares", "Em_lux": 500, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": null }
+            {
+              "area": "Salones de llegadas y partidas, áreas de recogida de equipaje",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Áreas de conexión, escaladores (mecánicos), cintas transportadoras",
+              "Em_lux": 150,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Mostradores de información, carpeta de chequear",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Aduana y control de pasaportes",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos": [
+                "Tiene que proporcionarse reconocimiento facial"
+              ]
+            },
+            {
+              "area": "Áreas de espera",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Depósitos de equipajes",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 60,
+              "requisitos": null
+            },
+            {
+              "area": "Áreas de chequeo de seguridad",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Torre de control de tráfico",
+              "Em_lux": 500,
+              "UGRL": 16,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": [
+                "1. La iluminación debe ser regulable",
+                "2. Se debe evitar el deslumbramiento de luz diurna",
+                "4. Deben evitarse reflejos en ventanas, especialmente de noche"
+              ]
+            },
+            {
+              "area": "Hangares de pruebas y reparaciones",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Área de prueba de máquinas",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Áreas de medición en hangares",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            }
           ]
         },
         "9.2": {
           "nombre": "Terrapuertos",
           "areas": [
-            { "area": "Andenes completamente cubiertos", "Em_lux": 100, "UGRL": null, "Uo": null, "Ra": 40, "requisitos": "Prestar especial atención al borde de la plataforma. Evitar el deslumbramiento para conductores de vehículos. Iluminancia a nivel del suelo" },
-            { "area": "Pasos subterráneos de pasajeros", "Em_lux": 50, "UGRL": 28, "Uo": 0.50, "Ra": 40, "requisitos": "Iluminancia a nivel del suelo" },
-            { "area": "Sala de taquillas y vestíbulo", "Em_lux": 200, "UGRL": 28, "Uo": 0.50, "Ra": 40, "requisitos": null },
-            { "area": "Oficinas de billetes, de equipaje y de contadores", "Em_lux": 300, "UGRL": 19, "Uo": 0.50, "Ra": 80, "requisitos": null },
-            { "area": "Salas de espera", "Em_lux": 200, "UGRL": 22, "Uo": 0.50, "Ra": 80, "requisitos": null },
-            { "area": "Vestíbulos de entrada, vestíbulos de estación", "Em_lux": 200, "UGRL": null, "Uo": 0.40, "Ra": 80, "requisitos": null },
-            { "area": "Salas de contadores y máquinas", "Em_lux": 200, "UGRL": 28, "Uo": 0.40, "Ra": 60, "requisitos": "Los colores de seguridad deben ser reconocibles" },
-            { "area": "Túneles de acceso", "Em_lux": 50, "UGRL": null, "Uo": 0.40, "Ra": 20, "requisitos": "Iluminancia a nivel del suelo" },
-            { "area": "Naves de mantenimiento y servicio", "Em_lux": 300, "UGRL": 22, "Uo": 0.40, "Ra": 60, "requisitos": null }
+            {
+              "area": "Andenes completamente cubiertos",
+              "Em_lux": 100,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": 40,
+              "requisitos": [
+                "1. Prestar especial atención al borde de la plataforma",
+                "2. Evitar el deslumbramiento para conductores de vehículos",
+                "3. Iluminancia a nivel del suelo"
+              ]
+            },
+            {
+              "area": "Pasos subterráneos de pasajeros",
+              "Em_lux": 50,
+              "UGRL": 28,
+              "Uo": 0.5,
+              "Ra": 40,
+              "requisitos": [
+                "Iluminancia a nivel del suelo"
+              ]
+            },
+            {
+              "area": "Sala de taquillas y vestíbulo",
+              "Em_lux": 200,
+              "UGRL": 28,
+              "Uo": 0.5,
+              "Ra": 40,
+              "requisitos": null
+            },
+            {
+              "area": "Oficinas de billetes, de equipaje y de contadores",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.5,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Salas de espera",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.5,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Vestíbulos de entrada, vestíbulos de estación",
+              "Em_lux": 200,
+              "UGRL": null,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos": null
+            },
+            {
+              "area": "Salas de contadores y máquinas",
+              "Em_lux": 200,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 60,
+              "requisitos": [
+                "Los colores de seguridad deben ser reconocibles"
+              ]
+            },
+            {
+              "area": "Túneles de acceso",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos": [
+                "Iluminancia a nivel del suelo"
+              ]
+            },
+            {
+              "area": "Naves de mantenimiento y servicio",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 60,
+              "requisitos": null
+            }
           ]
         }
       }
@@ -576,11 +2566,62 @@
     "10": {
       "categoria": "ESTACIONAMIENTOS",
       "areas": [
-        { "area": "Rampas entrada / salida (durante el día)", "Em_lux": 300, "UGRL": 25, "Uo": 0.40, "Ra": 40, "requisitos": "Iluminancias a nivel del suelo. Se deben reconocer los colores de seguridad" },
-        { "area": "Rampas entrada / salida (durante la noche)", "Em_lux": 75, "UGRL": 25, "Uo": 0.40, "Ra": 40, "requisitos": "Iluminancias a nivel del suelo. Se deben reconocer los colores de seguridad" },
-        { "area": "Calles interiores", "Em_lux": 75, "UGRL": 25, "Uo": 0.40, "Ra": 40, "requisitos": "Iluminancias a nivel del suelo. Se deben reconocer los colores de seguridad" },
-        { "area": "Áreas de parqueo", "Em_lux": 75, "UGRL": null, "Uo": 0.40, "Ra": 40, "requisitos": "Iluminancias a nivel del suelo. Se deben reconocer los colores de seguridad. Una elevada iluminancia vertical aumenta el reconocimiento de las caras de las personas y, por ello, la sensación de seguridad" },
-        { "area": "Caja", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": "Deben evitarse los reflejos en las ventanas. Debe prevenirse el deslumbramiento desde el exterior" }
+        {
+          "area": "Rampas entrada / salida (durante el día)",
+          "Em_lux": 300,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 40,
+          "requisitos": [
+            "1. Iluminancias a nivel del suelo",
+            "2. Se deben reconocer los colores de seguridad"
+          ]
+        },
+        {
+          "area": "Rampas entrada / salida (durante la noche)",
+          "Em_lux": 75,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 40,
+          "requisitos": [
+            "1. Iluminancias a nivel del suelo",
+            "2. Se deben reconocer los colores de seguridad"
+          ]
+        },
+        {
+          "area": "Calles interiores",
+          "Em_lux": 75,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 40,
+          "requisitos": [
+            "1. Iluminancias a nivel del suelo",
+            "2. Se deben reconocer los colores de seguridad"
+          ]
+        },
+        {
+          "area": "Áreas de parqueo",
+          "Em_lux": 75,
+          "UGRL": null,
+          "Uo": 0.4,
+          "Ra": 40,
+          "requisitos": [
+            "1. Iluminancias a nivel del suelo",
+            "2. Se deben reconocer los colores de seguridad",
+            "3. Una elevada iluminancia vertical aumenta el reconocimiento de las caras de las personas y, por ello, la sensación de seguridad"
+          ]
+        },
+        {
+          "area": "Caja",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos": [
+            "1. Deben evitarse los reflejos en las ventanas",
+            "2. Debe prevenirse el deslumbramiento desde el exterior"
+          ]
+        }
       ]
     }
   }

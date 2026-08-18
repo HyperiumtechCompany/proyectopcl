@@ -36,6 +36,8 @@ export function productToFixtureFields(product: ImportedLuminaireProduct): Parti
             brand_logo_url: product.brand_logo_url ?? null,
         },
         dimensions: product.dimensions ?? undefined,
+        luminousOpening: product.luminous_opening ?? null,
+        metadata: product.metadata ?? null,
         name: product.name,
     };
 }

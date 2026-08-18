@@ -1260,6 +1260,9 @@ class PresupuestoController extends Controller
                 'unidad' => $unidad,
                 'cantidad' => $colQ,
                 'parcial' => $parcial,
+                // INEI indicator code from column A (e.g. "47", "02") —
+                // used later by resolveOrCreateInsumo to find diccionario entry.
+                'cod_insumo' => $colA !== '' ? $colA : null,
             ];
 
             switch ($currentSection) {
@@ -1407,6 +1410,116 @@ class PresupuestoController extends Controller
         return '';
     }
 
+    /**
+     * Busca un insumo existente en el catálogo por descripción + tipo, o lo crea
+     * si no existe. Devuelve el registro del insumo encontrado/creado, o null si la
+     * descripción está vacía.
+     *
+     * Este método es idempotente: si el mismo insumo se importa múltiples veces,
+     * solo se crea una vez (búsqueda case-insensitive por UPPER(TRIM(descripcion)) + tipo).
+     * No modifica ni elimina ningún insumo ya existente.
+     *
+     * @param  array  $row  Array con al menos 'descripcion', 'unidad', 'cod_insumo'
+     *                      y 'precio_unitario'|'precio_hora'.
+     * @param  string  $tipo  'mano_de_obra'|'materiales'|'equipos'|'subcontratos'|'subpartidas'
+     */
+    private function resolveOrCreateInsumo(array $row, string $tipo): ?object
+    {
+        $descripcion = trim($row['descripcion'] ?? '');
+        if ($descripcion === '') {
+            return null;
+        }
+
+        $connection = DB::connection('costos_tenant');
+
+        // ── 1. Buscar por descripción normalizada + tipo ─────────────────────
+        $existing = $connection->table('insumo_productos')
+            ->whereRaw('UPPER(TRIM(descripcion)) = ?', [strtoupper($descripcion)])
+            ->where('tipo', $tipo)
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        // ── 2. Resolver diccionario_id desde cod_insumo (código INEI) ────────
+        $diccionarioId = null;
+        $diccionarioCodigo = '';
+        $codInsumo = trim($row['cod_insumo'] ?? '');
+        if ($codInsumo !== '') {
+            $dic = $connection->table('diccionario')
+                ->where('codigo', $codInsumo)
+                ->first();
+            if ($dic) {
+                $diccionarioId = $dic->id;
+                $diccionarioCodigo = $dic->codigo;
+            }
+        }
+
+        // ── 3. Resolver unidad_id desde abreviatura ───────────────────────────
+        $unidadId = null;
+        $unidadAbrev = trim($row['unidad'] ?? '');
+        if ($unidadAbrev !== '' && $unidadAbrev !== 'und') {
+            $unidad = $connection->table('unidad')
+                ->where('abreviatura_unidad', $unidadAbrev)
+                ->orWhere('descripcion_singular', $unidadAbrev)
+                ->orWhere('descripcion', $unidadAbrev)
+                ->first();
+            if ($unidad) {
+                $unidadId = $unidad->id;
+            }
+        }
+        // Buscar 'und' como fallback cuando no se encontró
+        if ($unidadId === null && $unidadAbrev !== '') {
+            $unidad = $connection->table('unidad')
+                ->where('abreviatura_unidad', 'und')
+                ->first();
+            if ($unidad) {
+                $unidadId = $unidad->id;
+            }
+        }
+
+        // ── 4. Generar codigo_producto ────────────────────────────────────────
+        $tipoProv = '001';
+        $prefix = $diccionarioCodigo.$tipoProv;
+        $lastM = $connection->table('insumo_productos')
+            ->where('codigo_producto', 'like', $prefix.'%')
+            ->orderBy('codigo_producto', 'desc')
+            ->first();
+        $nextSeq = 1;
+        if ($lastM) {
+            $lastSeq = substr((string) $lastM->codigo_producto, strlen($prefix));
+            if (is_numeric($lastSeq)) {
+                $nextSeq = intval($lastSeq) + 1;
+            }
+        }
+        $codigoProducto = $prefix.str_pad($nextSeq, 4, '0', STR_PAD_LEFT);
+
+        // ── 5. Precio: tomar precio_unitario o precio_hora según tipo ─────────
+        $precio = (float) ($row['precio_unitario'] ?? $row['precio_hora'] ?? 0);
+
+        // ── 6. Crear el insumo ────────────────────────────────────────────────
+        $now = now();
+        $id = $connection->table('insumo_productos')->insertGetId([
+            'descripcion' => $descripcion,
+            'tipo' => $tipo,
+            'codigo_producto' => $codigoProducto,
+            'diccionario_id' => $diccionarioId,
+            'unidad_id' => $unidadId,
+            'tipo_proveedor' => $tipoProv,
+            'costo_unitario' => $precio,
+            'costo_unitario_lista' => $precio,
+            'costo_flete' => 0,
+            'especificaciones' => null,
+            'fecha_lista' => null,
+            'estado' => true,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        return $connection->table('insumo_productos')->where('id', $id)->first();
+    }
+
     private function syncAcuComponentsFromImport(int $acuId, array $acu): void
     {
         DB::connection('costos_tenant')->table('acu_mano_de_obra')->where('acu_id', $acuId)->delete();
@@ -1418,10 +1531,12 @@ class PresupuestoController extends Controller
         $costoManoObra = $acu['costo_mano_obra'] ?? 0;
 
         foreach ($acu['mano_de_obra'] as $index => $row) {
+            $insumo = $this->resolveOrCreateInsumo($row, 'mano_de_obra');
             DB::connection('costos_tenant')->table('acu_mano_de_obra')->insert([
                 'acu_id' => $acuId,
-                'insumo_id' => null,
+                'insumo_id' => $insumo?->id,
                 'cod_insumo' => $row['cod_insumo'] ?? null,
+                'codigo_producto' => $insumo?->codigo_producto,
                 'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'] ?? '',
                 'unidad' => $row['unidad'] ?? 'hh',
@@ -1436,10 +1551,12 @@ class PresupuestoController extends Controller
         }
 
         foreach ($acu['materiales'] as $index => $row) {
+            $insumo = $this->resolveOrCreateInsumo($row, 'materiales');
             DB::connection('costos_tenant')->table('acu_materiales')->insert([
                 'acu_id' => $acuId,
-                'insumo_id' => null,
+                'insumo_id' => $insumo?->id,
                 'cod_insumo' => $row['cod_insumo'] ?? null,
+                'codigo_producto' => $insumo?->codigo_producto,
                 'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'] ?? '',
                 'unidad' => $row['unidad'] ?? 'und',
@@ -1456,11 +1573,15 @@ class PresupuestoController extends Controller
         foreach ($acu['equipos'] as $index => $row) {
             $isHerramientas = stripos($row['descripcion'] ?? '', 'HERRAMIENTA') !== false;
             $precioHora = $isHerramientas ? $costoManoObra : ($row['precio_hora'] ?? $row['precio_unitario'] ?? 0);
-
+            $insumo = $this->resolveOrCreateInsumo(
+                array_merge($row, ['precio_hora' => $precioHora]),
+                'equipos',
+            );
             DB::connection('costos_tenant')->table('acu_equipos')->insert([
                 'acu_id' => $acuId,
-                'insumo_id' => null,
+                'insumo_id' => $insumo?->id,
                 'cod_insumo' => $row['cod_insumo'] ?? null,
+                'codigo_producto' => $insumo?->codigo_producto,
                 'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'] ?? '',
                 'unidad' => $row['unidad'] ?? 'hm',
@@ -1475,10 +1596,12 @@ class PresupuestoController extends Controller
         }
 
         foreach ($acu['subcontratos'] ?? [] as $index => $row) {
+            $insumo = $this->resolveOrCreateInsumo($row, 'subcontratos');
             DB::connection('costos_tenant')->table('acu_subcontratos')->insert([
                 'acu_id' => $acuId,
-                'insumo_id' => null,
+                'insumo_id' => $insumo?->id,
                 'cod_insumo' => $row['cod_insumo'] ?? null,
+                'codigo_producto' => $insumo?->codigo_producto,
                 'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'] ?? '',
                 'unidad' => $row['unidad'] ?? 'glb',
@@ -1492,10 +1615,12 @@ class PresupuestoController extends Controller
         }
 
         foreach ($acu['subpartidas'] ?? [] as $index => $row) {
+            $insumo = $this->resolveOrCreateInsumo($row, 'subpartidas');
             DB::connection('costos_tenant')->table('acu_subpartidas')->insert([
                 'acu_id' => $acuId,
-                'insumo_id' => null,
+                'insumo_id' => $insumo?->id,
                 'cod_insumo' => $row['cod_insumo'] ?? null,
+                'codigo_producto' => $insumo?->codigo_producto,
                 'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'] ?? '',
                 'unidad' => $row['unidad'] ?? 'und',

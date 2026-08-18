@@ -630,6 +630,19 @@ export interface Fixture {
                 ugrEndwise: number | null;
             }>;
         } | null;
+        /** Grilla de 5 combinaciones de reflectancia habituales (Ronda 21c) — sección de ancho completo del PDF, no la columna de 50% que usa `ugrTableComputed`. */
+        ugrTablesComputed?: Array<{
+            provenance: 'manufacturer' | 'engine-calculated';
+            method: string;
+            disclaimer: string;
+            shr: number;
+            reflectances: { ceiling: number; wall: number; floor: number };
+            entries: Array<{
+                roomLabel: string;
+                ugrCrosswise: number | null;
+                ugrEndwise: number | null;
+            }>;
+        }> | null;
     } | null;
     reportAssets?: {
         polar_svg?: string | null;
@@ -638,6 +651,37 @@ export interface Fixture {
     } | null;
     ugrTable?: number[][] | null;
     ugrDiagramValue?: string | null;
+    /**
+     * Área luminosa real del fabricante (EULUMDAT líneas 16-21) — DISTINTA
+     * de `dimensions` (envolvente física de la luminaria completa, incluye
+     * marco/carcasa). Ronda 21j: existía en `LuminaireProduct` desde la
+     * Ronda 21 pero se perdía al colocar el producto en el plano
+     * (`productToFixtureFields` no la copiaba) — el ingeniero eléctrico no
+     * podía verla para una luminaria ya insertada, solo en el modal de
+     * importación/edición del catálogo.
+     */
+    luminousOpening?: {
+        length: number;
+        width: number;
+        height_c0: number;
+        height_c90: number;
+        height_c180: number;
+        height_c270: number;
+    } | null;
+    /** Metadatos EULUMDAT/IES que hoy solo llena `dialux-photometry`/`parseLdt()` (Ronda 21/21j) — mismo hallazgo de arriba: se perdían al insertar la luminaria en el plano. */
+    metadata?: {
+        parser?: 'rust' | string;
+        format_version?: string;
+        num_lamps?: number | null;
+        lamp_type?: string;
+        /** Ityp EULUMDAT: 1=punto rotacionalmente simétrico, 2=lineal, 3=no puntual no rotacionalmente simétrico. Solo LDT. */
+        luminaire_type?: number | null;
+        downward_flux_fraction_pct?: number | null;
+        light_output_ratio_pct?: number | null;
+        conversion_factor?: number | null;
+        tilt_deg?: number | null;
+        direct_ratios?: number[];
+    } | null;
     /** Matriz fotométrica real (IES/LDT) para cálculo punto-por-punto. Si falta, se usa un modelo Lambertiano aproximado. */
     photometricWeb?: {
         c_angles: number[];
@@ -657,7 +701,7 @@ export interface Fixture {
         provenance?: 'manufacturer' | 'manual-curve' | 'synthetic';
         /** Código de simetría EULUMDAT (0-4) cuando el origen es un LDT. No se expande la matriz según este código todavía (Fase 3, fuera de alcance). */
         symmetry?: number;
-        /** Tabla de tilt de un IES con TILT=INCLUDE. Registrada para trazabilidad; el multiplicador por ángulo aún no se aplica al cálculo. */
+        /** Tabla de tilt de un IES con TILT=INCLUDE. Se aplica en `photometricInterpolation.ts::candela()` solo cuando `lamp_to_luminaire_geometry===3` y el usuario declaró `Fixture.installationTiltDeg`; para geometría 1/2 el archivo no declara la orientación física real, así que nunca se aplica. */
         tilt?: {
             lamp_to_luminaire_geometry: number;
             angles: number[];
@@ -690,6 +734,22 @@ export interface Fixture {
     emergencyFlux?: number | null;
     /** Rotación en planta, grados sentido horario (0-360). Default 0. */
     rotation?: number;
+    /**
+     * Ángulo de inclinación de instalación (grados desde el eje de diseño),
+     * SOLO relevante cuando `photometricWeb.tilt.lamp_to_luminaire_geometry
+     * === 3` (lámpara orientable/apuntable, ej. proyector HID). El archivo
+     * IES declara la tabla ángulo→multiplicador pero NUNCA la orientación
+     * física real de instalación (LM-63 no la contempla) — por eso este
+     * dato lo declara el usuario al ubicar la luminaria, igual que ya hace
+     * con `rotation`. Sin este campo, `candela()` usa multiplicador 1
+     * (sin corrección) en vez de asumir un ángulo no declarado. Para
+     * `lamp_to_luminaire_geometry` 1/2 (lámpara fija, no apuntable) este
+     * campo no se usa: el archivo tampoco declara si la lámpara está
+     * "base arriba" o "base abajo", así que no hay causa física verificable
+     * para aplicar un multiplicador — ver `ProductImportService.php` warning
+     * "IES: TILT=INCLUDE detectado".
+     */
+    installationTiltDeg?: number | null;
 }
 
 /** Interruptor de luz */
@@ -1134,11 +1194,14 @@ export interface RoomLightingCalculation {
     name: string;
 
     // Entrada: Datos del recinto
-    area: number; // mÃ‚Â², calculada del polÃƒÂ­gono
+    area: number; // m², calculada del polígono
     scaledUnit: 'mm' | 'cm' | 'm'; // unidad de medida escalada
     normaLux: number; // 200, 300, o 500 lux (EN 12464-1)
+    normaRa?: number | null; // Requisito mínimo de CRI
+    fixtureRa?: number | null; // CRI de la luminaria seleccionada
+    meetsRa?: boolean; // Alerta de validación
 
-    // Paso 1: CÃƒÂ¡lculo de lÃƒÂºmenes requeridos
+    // Paso 1: Cálculo de lúmenes requeridos
     lumensRequired: number; // ((area * normaLux) / 0.8) / 0.99
 
     // Entrada: Tipo de luminaria seleccionada
@@ -1286,6 +1349,28 @@ export interface ProjectSiteSettings {
     timezone?: string;
     obtrusiveLightStandard?: string;
     environmentalZone?: 'E0' | 'E1' | 'E2' | 'E3' | 'E4';
+    /**
+     * Motor LENI (EN 15193-1:2017, método simplificado — cierre del
+     * hallazgo bloqueante de `dialux-calc-reviewer`: "motor LENI/EN 15193
+     * no existe"). Ninguno de estos campos afecta `dailyOperatingHours` de
+     * arriba (que sigue alimentando el bloque "Consumo (kWh/a)" simple,
+     * etiquetado "No regulado"). Solo cuando `buildingType` está definido
+     * el PDF calcula LENI real (`hooks/leniCalculation.ts`) en vez del
+     * promedio simple — ver `hooks/leniData.ts` para el catálogo de horas
+     * y factores, TODOS marcados `pending-confirmation` hasta que un
+     * especialista verifique la tabla EN 15193-1 real (mismo mecanismo que
+     * `.claude/skills/normativa-dialux/`).
+     */
+    leni?: {
+        buildingType?: string;
+        /** t_D: horas anuales con ocupación diurna. Si `undefined`, se usa el default del catálogo para `buildingType`. */
+        annualOperatingHoursDay?: number;
+        /** t_N: horas anuales con ocupación nocturna. Si `undefined`, se usa el default del catálogo para `buildingType`. */
+        annualOperatingHoursNight?: number;
+        occupancyControlType?: 'manual' | 'auto-presence' | 'auto-presence-off';
+        daylightControlType?: 'none' | 'photocell-on-off' | 'photocell-dimming';
+        constantIlluminanceControl?: boolean;
+    };
 }
 
 export interface Project {

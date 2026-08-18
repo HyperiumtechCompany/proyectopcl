@@ -81,12 +81,13 @@ function buildLShapeFixture(): PolygonShapeFixture {
         reflectance: { ceiling: 0.7, wall: 0.5, floor: 0.2 },
         fixtures: [buildSingleFixture(id, fx, fy, height)],
         // 0.5 m = GRID_SPACING, el espaciado por defecto del motor de
-        // producción (`lightingEngineCore.ts`) — usar otro valor aquí
-        // compara el oráculo contra un conjunto de puntos de muestreo
-        // DISTINTO al que el motor realmente usa, lo cual con una sola
-        // luminaria concentrada (caída de luz pronunciada cerca de la
-        // fuente) puede producir diferencias de 10-15% que no son un error
-        // de geometría/física sino de dónde se mide. Ver Ronda 14 en el plan.
+        // producción (`lightingEngineCore.ts`). Desde la Ronda 21,
+        // `generatePolygonSensorGrid` reproduce el ESQUEMA de anclaje exacto
+        // de `buildGrid()` (no solo el valor nominal de `spacing`) — ver
+        // `generateSensorGrid.ts` para el detalle de por qué esa distinción
+        // (y no el número de espaciado, ya investigado y descartado en la
+        // Ronda 19) era la causa real de la divergencia de montaje en formas
+        // no rectangulares.
         spacing: 0.5,
         variesFrom_rectangular: 'forma no convexa (L), 6 lados en vez de 4',
     };
@@ -120,12 +121,13 @@ function buildChamferedPentagonFixture(): PolygonShapeFixture {
         reflectance: { ceiling: 0.7, wall: 0.5, floor: 0.2 },
         fixtures: [buildSingleFixture(id, fx, fy, height)],
         // 0.5 m = GRID_SPACING, el espaciado por defecto del motor de
-        // producción (`lightingEngineCore.ts`) — usar otro valor aquí
-        // compara el oráculo contra un conjunto de puntos de muestreo
-        // DISTINTO al que el motor realmente usa, lo cual con una sola
-        // luminaria concentrada (caída de luz pronunciada cerca de la
-        // fuente) puede producir diferencias de 10-15% que no son un error
-        // de geometría/física sino de dónde se mide. Ver Ronda 14 en el plan.
+        // producción (`lightingEngineCore.ts`). Desde la Ronda 21,
+        // `generatePolygonSensorGrid` reproduce el ESQUEMA de anclaje exacto
+        // de `buildGrid()` (no solo el valor nominal de `spacing`) — ver
+        // `generateSensorGrid.ts` para el detalle de por qué esa distinción
+        // (y no el número de espaciado, ya investigado y descartado en la
+        // Ronda 19) era la causa real de la divergencia de montaje en formas
+        // no rectangulares.
         spacing: 0.5,
         variesFrom_rectangular: 'forma convexa de 5 lados (una esquina achaflanada), no 4',
     };
@@ -157,12 +159,13 @@ function buildTrapezoidFixture(): PolygonShapeFixture {
         reflectance: { ceiling: 0.7, wall: 0.5, floor: 0.2 },
         fixtures: [buildSingleFixture(id, fx, fy, height)],
         // 0.5 m = GRID_SPACING, el espaciado por defecto del motor de
-        // producción (`lightingEngineCore.ts`) — usar otro valor aquí
-        // compara el oráculo contra un conjunto de puntos de muestreo
-        // DISTINTO al que el motor realmente usa, lo cual con una sola
-        // luminaria concentrada (caída de luz pronunciada cerca de la
-        // fuente) puede producir diferencias de 10-15% que no son un error
-        // de geometría/física sino de dónde se mide. Ver Ronda 14 en el plan.
+        // producción (`lightingEngineCore.ts`). Desde la Ronda 21,
+        // `generatePolygonSensorGrid` reproduce el ESQUEMA de anclaje exacto
+        // de `buildGrid()` (no solo el valor nominal de `spacing`) — ver
+        // `generateSensorGrid.ts` para el detalle de por qué esa distinción
+        // (y no el número de espaciado, ya investigado y descartado en la
+        // Ronda 19) era la causa real de la divergencia de montaje en formas
+        // no rectangulares.
         spacing: 0.5,
         variesFrom_rectangular: 'cuadrilátero no rectangular (paredes no paralelas/perpendiculares)',
     };

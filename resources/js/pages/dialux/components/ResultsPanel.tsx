@@ -392,7 +392,11 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                 <th className="w-16 px-2 py-3">E avg</th>
                                 <th className="w-16 px-2 py-3">E min</th>
                                 <th className="w-16 px-2 py-3">E max</th>
-                                <th className="w-16 px-2 py-3">Uo</th>
+                                <th
+                                    className="w-16 px-2 py-3"
+                                    title="Uniformidad calculada del grid real (Emin/Eavg del motor de cálculo)">
+                                    Uo
+                                </th>
                                 <th className="w-16 px-2 py-3">UGR</th>
                                 <th className="w-48 px-3 py-3">Estado</th>
                             </tr>
@@ -438,7 +442,13 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                                         <p className="leading-snug font-semibold text-slate-900 dark:text-white">
                                                             {row.roomName}
                                                         </p>
-                                                        <p className="mt-0.5 leading-snug text-slate-500">
+                                                        <p
+                                                            className="mt-0.5 leading-snug text-slate-500"
+                                                            title={
+                                                                row.sourceRoomName || row.normativeLabel
+                                                                    ? undefined
+                                                                    : 'Estimación previa al cálculo (heurística por cantidad de luminarias), no el resultado real del motor — ver columna Uo'
+                                                            }>
                                                             {row.sourceRoomName
                                                                 ? `${row.levelName} · Recinto: ${row.sourceRoomName}`
                                                                 : row.normativeLabel ??
@@ -488,7 +498,9 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                             <td className="px-2 py-3 font-mono tabular-nums">
                                                 {row.maxLux.toFixed(0)}
                                             </td>
-                                            <td className="px-2 py-3 font-mono tabular-nums">
+                                            <td
+                                                className="px-2 py-3 font-mono tabular-nums"
+                                                title="Uniformidad calculada del grid real (Emin/Eavg del motor de cálculo)">
                                                 {row.uniformity.toFixed(3)}
                                             </td>
                                             <td className="px-2 py-3 font-mono tabular-nums">

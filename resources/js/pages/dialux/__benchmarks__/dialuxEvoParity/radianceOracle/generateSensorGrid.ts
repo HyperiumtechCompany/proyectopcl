@@ -2,9 +2,24 @@
  * Grilla de sensores horizontales (mirando hacia +Z) para `rtrace -I`, sobre
  * el plano útil de un ambiente rectangular — excluye la zona marginal
  * declarada en todo el contorno, igual criterio que
- * `export/document/ambientDossier.ts` usa para el plano útil real (aunque
- * aquí, al ser rectangular, la exclusión es simplemente un margen fijo por
- * lado, no la aproximación de polígono general que usa esa función).
+ * `export/document/ambientDossier.ts` usa para el plano útil real.
+ *
+ * Ronda 21 (`planes/plan_cierre_brecha_paridad_dialux_evo.md` §-21):
+ * un rectángulo es solo un polígono de 4 vértices — esta función ahora es
+ * un envoltorio delgado sobre `generatePolygonSensorGrid()` en vez de tener
+ * su PROPIO esquema de grilla independiente. La versión anterior recibía
+ * `columns`/`rows` EXPLÍCITOS elegidos a mano por cada fixture ("densidad
+ * ~1 sensor cada 0.3-0.4 m", ver `shapeVariationFixtures.ts`), endpoint-
+ * inclusive entre `marginalZone` y `width - marginalZone` — un esquema que
+ * NUNCA coincidía con la grilla real que arma el motor de producción
+ * (`hooks/lightingEngineCore.ts::buildGrid`, celdas `floor(width/spacing)`
+ * centradas). Para "sshh-vs-bano" (2.209x0.950 m) esto significaba que el
+ * oráculo medía sobre una grilla de 7x3=21 puntos cubriendo casi todo el
+ * ambiente, mientras el motor real promedia solo 4 puntos en una única
+ * fila central (`floor(0.95/0.5)=1` fila) — dos resultados sobre conjuntos
+ * de sensores completamente distintos, comparados entre sí como si fueran
+ * la misma medición. Unificar en un solo generador (el poligonal) elimina
+ * la posibilidad de que ambos esquemas vuelvan a divergir en el futuro.
  */
 
 import { distanceToPolygonEdge, pointInPolygon } from '@/pages/dialux/geometry/polygonGeometry';
@@ -19,8 +34,8 @@ export interface SensorGridOptions {
     marginalZone: number;
     /** Pequeño desplazamiento vertical sobre el plano de trabajo para evitar que el sensor coincida exactamente con una superficie (piso). Default 0.01 m. */
     verticalOffset?: number;
-    columns: number;
-    rows: number;
+    /** Espaciado objetivo entre sensores, en metros — igual convención que `PolygonSensorGridOptions.spacing` / `GRID_SPACING` de producción (0.5 m por defecto en el motor real). */
+    spacing: number;
 }
 
 export interface SensorPoint {
@@ -33,25 +48,14 @@ export interface SensorPoint {
 }
 
 export function generateSensorGrid(options: SensorGridOptions): SensorPoint[] {
-    const { width, depth, workingPlaneHeight, marginalZone, columns, rows } = options;
-    const verticalOffset = options.verticalOffset ?? 0.01;
-    const usableWidth = width - 2 * marginalZone;
-    const usableDepth = depth - 2 * marginalZone;
-    if (usableWidth <= 0 || usableDepth <= 0) {
-        throw new Error(
-            `generateSensorGrid: zona marginal (${marginalZone} m) deja un área útil no positiva para un ambiente de ${width}x${depth} m.`,
-        );
-    }
-
-    const points: SensorPoint[] = [];
-    for (let row = 0; row < rows; row++) {
-        const y = marginalZone + (rows === 1 ? usableDepth / 2 : (usableDepth * row) / (rows - 1));
-        for (let col = 0; col < columns; col++) {
-            const x = marginalZone + (columns === 1 ? usableWidth / 2 : (usableWidth * col) / (columns - 1));
-            points.push({ x, y, z: workingPlaneHeight + verticalOffset, dx: 0, dy: 0, dz: 1 });
-        }
-    }
-    return points;
+    const { width, depth, workingPlaneHeight, marginalZone, spacing, verticalOffset } = options;
+    const vertices: Vertex[] = [
+        { x: 0, y: 0 },
+        { x: width, y: 0 },
+        { x: width, y: depth },
+        { x: 0, y: depth },
+    ];
+    return generatePolygonSensorGrid({ vertices, workingPlaneHeight, marginalZone, spacing, verticalOffset });
 }
 
 /** Formato de entrada de `rtrace`: una línea "x y z dx dy dz" por punto. */
@@ -62,23 +66,35 @@ export function formatSensorGridForRtrace(points: SensorPoint[]): string {
 /**
  * Generalización de `generateSensorGrid()` a un piso de forma ARBITRARIA
  * (mismo motivo que `generatePolygonRoomScene()` en `generateRoomScene.ts`
- * — terrenos reales no siempre son rectangulares). En vez de reinventar la
- * exclusión de zona marginal (que para un rectángulo es solo un margen fijo
- * por lado), reutiliza el MISMO criterio que ya usa el motor de producción
- * para ambientes poligonales (`marginalZoneFilter.ts::filterPointsOutsideMarginalZone`,
- * vía `pointInPolygon`/`distanceToPolygonEdge` de `geometry/polygonGeometry.ts`):
- * un punto es válido solo si cae DENTRO del polígono y a una distancia ≥
- * `marginalZone` de cualquier borde. Se arma una grilla regular sobre el
- * rectángulo envolvente (bounding box) al espaciado declarado y se
- * descartan los puntos que no cumplan ese criterio — así el oráculo mide
- * exactamente sobre el mismo "plano útil" que el motor real usaría para
- * este ambiente, no una aproximación aparte.
+ * — terrenos reales no siempre son rectangulares).
+ *
+ * Ronda 21 (`planes/plan_cierre_brecha_paridad_dialux_evo.md` §-21):
+ * este generador reproduce el esquema de anclaje EXACTO de
+ * `hooks/lightingEngineCore.ts::buildGrid` — celdas de tamaño
+ * `bbox / floor(bbox / spacing)`, sensor en el CENTRO de cada celda
+ * (`min + (i + 0.5) * cell`) — y no un anclaje distinto propio. La
+ * exclusión de zona marginal reutiliza el mismo criterio que
+ * `marginalZoneFilter.ts::filterPointsOutsideMarginalZone` (punto activo
+ * dentro del polígono Y a distancia ≥ `marginalZone` de cualquier borde).
+ *
+ * La versión anterior anclaba la grilla en la ESQUINA del bounding box
+ * (`columns = floor(bbox/spacing) + 1`, punto en `min + col*spacing`) — un
+ * esquema DISTINTO al de producción, aunque el valor nominal de `spacing`
+ * fuera el mismo (0.5 m = `GRID_SPACING`). Para una sola luminaria
+ * concentrada, esto hacía que el oráculo y el motor promediaran sobre
+ * conjuntos de puntos de muestreo distintos — en formas no rectangulares
+ * (L, pentágono achaflanado, trapezoide) esto bastó para producir 13-26%
+ * de divergencia de "montaje" sin ningún error real de geometría/física
+ * (Ronda 14/19: alinear el NÚMERO de espaciado no lo arregló, porque el
+ * espaciado nominal ya coincidía — el esquema de anclaje era la causa real,
+ * nunca antes comparado). Ver `generatePolygonSensorGrid.test.ts` para la
+ * prueba de paridad exacta contra `buildGrid()`.
  */
 export interface PolygonSensorGridOptions {
     vertices: Vertex[];
     workingPlaneHeight: number;
     marginalZone: number;
-    /** Espaciado objetivo entre sensores, en metros (grilla regular sobre el bounding box, luego filtrada al polígono). */
+    /** Espaciado objetivo entre sensores, en metros (celdas floor(bbox/spacing), igual que `buildGrid`). */
     spacing: number;
     verticalOffset?: number;
 }
@@ -99,15 +115,19 @@ export function generatePolygonSensorGrid(options: PolygonSensorGridOptions): Se
     const maxX = Math.max(...xs);
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
+    const width = maxX - minX;
+    const length = maxY - minY;
 
-    const columns = Math.max(1, Math.floor((maxX - minX) / spacing) + 1);
-    const rows = Math.max(1, Math.floor((maxY - minY) / spacing) + 1);
+    const cols = Math.max(1, Math.floor(width / spacing));
+    const rows = Math.max(1, Math.floor(length / spacing));
+    const cellW = width / cols;
+    const cellH = length / rows;
 
     const points: SensorPoint[] = [];
     for (let row = 0; row < rows; row++) {
-        const y = rows === 1 ? (minY + maxY) / 2 : minY + (spacing * row);
-        for (let col = 0; col < columns; col++) {
-            const x = columns === 1 ? (minX + maxX) / 2 : minX + (spacing * col);
+        const y = minY + (row + 0.5) * cellH;
+        for (let col = 0; col < cols; col++) {
+            const x = minX + (col + 0.5) * cellW;
             const point = { x, y };
             if (pointInPolygon(point, vertices) && distanceToPolygonEdge(point, vertices) >= marginalZone) {
                 points.push({ x, y, z: workingPlaneHeight + verticalOffset, dx: 0, dy: 0, dz: 1 });

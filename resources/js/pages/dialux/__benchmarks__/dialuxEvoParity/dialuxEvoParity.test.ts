@@ -37,20 +37,36 @@ import { buildAllDialuxEvoParityFixtures, type DialuxEvoParityFixture } from './
  *
  * ACTUALIZACIÓN (2026-08-09): se consiguió el .ldt REAL de TEG18046 (ver
  * `realPhotometry.ts`) y `sshh-vs-bano` ya lo usa. Con fotometría real, su
- * error bajó de 71.5% a **38.9%** — confirma la hipótesis (la fotometría
- * faltante era el factor dominante) y deja un residual mucho más chico,
- * ahora en el rango donde SÍ tiene sentido sospechar de la Causa B
- * (first-bounce vs. DIALux evo) y de la reconstrucción aproximada de
- * geometría/malla de este fixture, no de "no hay dato fotométrico en
- * absoluto". `caseta-vs-guarderias` (GF19140) sigue sin fotometría real —
- * no se consiguió su .ldt/.ies (ver el intento documentado en
- * `realPhotometry.ts`) — así que su 46.7% sigue siendo dominado por la
- * misma causa que antes. Este benchmark TODAVÍA no puede acotar un error de
- * precisión creíble hasta conseguir también el archivo real de GF19140 —
- * ver plan §5.1. La cota floja que sí se afirma
- * (`MAX_PLAUSIBLE_RELATIVE_ERROR`) solo existe para atrapar una regresión
- * grosera (ej. un error de unidades, NaN, o un resultado 10x fuera de rango
- * por accidente) — NO para certificar precisión fotométrica.
+ * error bajó de 71.5% a 38.9% — confirma la hipótesis (la fotometría
+ * faltante era el factor dominante).
+ *
+ * ACTUALIZACIÓN (2026-08-18): el usuario entregó su catálogo real de
+ * luminarias usadas en proyectos reales; `caseta-vs-guarderias` ahora
+ * también usa fotometría real de fábrica (`GF19140_SUBSTITUTE_PHOTOMETRIC_WEB`,
+ * ver procedencia completa en `realPhotometry.ts` — es un sustituto real,
+ * no la Thorlux GF19140 exacta, que sigue sin conseguirse). Con AMBOS
+ * fixtures en fotometría real, y usando la config de producción real
+ * (`buildProductionCalculationConfig`, `interreflection: 'auto-by-shape'`),
+ * los errores medidos hoy son:
+ *
+ *   - `sshh-vs-bano` (aspecto 2.33:1 → auto-by-shape elige first-bounce):
+ *     **16.7%** (antes 38.9%). El modo `iterative` (informativo, no es el
+ *     default) da **5.2%** para este mismo caso — mejor que first-bounce,
+ *     lo opuesto de lo que predecía la investigación histórica de
+ *     `productionCalculationConfig.ts` (basada en un SS.HH DISTINTO,
+ *     proyecto "Módulo 22", con datos LDT distintos). No se cambió el
+ *     default de producción por esto — un caso nuevo no es evidencia
+ *     suficiente para revisar el umbral 2.0:1 ya elegido (mismo criterio
+ *     "no sobreajustar a un solo caso" del plan) — pero queda registrado
+ *     como evidencia a favor de revisar el umbral con más casos reales.
+ *   - `caseta-vs-guarderias` (aspecto ~1.05:1 → auto-by-shape elige
+ *     iterative): **1.3%** (antes 46.7%, y antes de eso etiquetado "no
+ *     comparable" por falta de fotometría real). Dentro del objetivo de
+ *     ±5% del usuario.
+ *
+ * `MAX_PLAUSIBLE_RELATIVE_ERROR` (cota floja, no de precisión) se mantiene
+ * en 0.85 sin cambios — solo existe para atrapar una regresión grosera (ej.
+ * un error de unidades, NaN, o un resultado 10x fuera de rango).
  */
 
 const MAX_PLAUSIBLE_RELATIVE_ERROR = 0.85;
@@ -117,12 +133,22 @@ describe.each(buildAllDialuxEvoParityFixtures())(
             const errorDirectOnly = relativeError(directOnlyAvg, fixture.reference.avgLux);
             const errorWithReflectance = relativeError(withReflectanceAvg, fixture.reference.avgLux);
 
+            // Fase D del cierre de brechas (`dialux-calc-reviewer`): sin
+            // fotometría real, el % de error de este fixture no mide
+            // precisión del motor — mide la aproximación Lambertiana contra
+            // un perfil real más concentrado (ver doc-comment de arriba).
+            // Reportarlo sin esta etiqueta se lee como una cifra de
+            // precisión del motor, que no es lo que es.
+            const comparabilityTag = fixture.hasRealPhotometry
+                ? ''
+                : ' · NO COMPARABLE (sin fotometría real — ver caveats)';
+
             // eslint-disable-next-line no-console
             console.log(
                 `[dialux-evo-parity] ${fixture.id}: referencia=${fixture.reference.avgLux} lx · ` +
                     `directo=${directOnlyAvg.toFixed(1)} lx (error ${(errorDirectOnly * 100).toFixed(1)}%) · ` +
                     `con reflectancia=${withReflectanceAvg.toFixed(1)} lx (error ${(errorWithReflectance * 100).toFixed(1)}%) · ` +
-                    `fuente=${fixture.referenceSource}`,
+                    `fuente=${fixture.referenceSource}${comparabilityTag}`,
             );
 
             // Afirmación robusta (Causa A): reflectancia declarada acerca el

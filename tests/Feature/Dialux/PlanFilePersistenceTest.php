@@ -175,6 +175,47 @@ it('impide que otro usuario suba o descargue el plano', function () {
         ->assertForbidden();
 });
 
+it('advierte al subir un DWG R2010+ porque LibreDWG puede omitir geometría en silencio (Ronda 21g)', function () {
+    $user = User::factory()->create();
+    $project = dialuxProjectWithFloor($user);
+    // "AC1032" = cabecera real de un DWG R2018 (AutoCAD 2018+) — confirmado
+    // contra un archivo real que renderizaba incompleto (sin muros/hatch/texto)
+    // en el visor. LibreDWG documenta que puede omitir objetos avanzados de
+    // R2010+ sin lanzar error, por eso la detección es solo por versión, no
+    // por resultado de parseo.
+    $file = UploadedFile::fake()->createWithContent('r2018.dwg', 'AC1032'.str_repeat("\0", 40));
+
+    $this->actingAs($user)
+        ->post(route('dialux.plans.store', [$project, 'floor-1']), ['plan' => $file], ['Accept' => 'application/json'])
+        ->assertSuccessful()
+        ->assertJsonPath('warning', fn ($warning) => is_string($warning) && str_contains($warning, 'R2018'));
+});
+
+it('no advierte al subir un DWG anterior a R2010', function () {
+    $user = User::factory()->create();
+    $project = dialuxProjectWithFloor($user);
+    // "AC1015" = R2000 — fuera del rango de riesgo documentado por LibreDWG.
+    $file = UploadedFile::fake()->createWithContent('r2000.dwg', 'AC1015'.str_repeat("\0", 40));
+
+    $this->actingAs($user)
+        ->post(route('dialux.plans.store', [$project, 'floor-1']), ['plan' => $file], ['Accept' => 'application/json'])
+        ->assertSuccessful()
+        ->assertJsonPath('warning', null);
+});
+
+it('no advierte al subir un DXF aunque declare una versión reciente', function () {
+    $user = User::factory()->create();
+    $project = dialuxProjectWithFloor($user);
+    // DXF nunca pasa por LibreDWG (usa el converter nativo de data-model) —
+    // la advertencia debe ser exclusiva de la extensión .dwg.
+    $file = UploadedFile::fake()->createWithContent('plano.dxf', "0\nSECTION\n0\nEOF");
+
+    $this->actingAs($user)
+        ->post(route('dialux.plans.store', [$project, 'floor-1']), ['plan' => $file], ['Accept' => 'application/json'])
+        ->assertSuccessful()
+        ->assertJsonPath('warning', null);
+});
+
 it('rechaza extensiones que no sean CAD', function () {
     $user = User::factory()->create();
     $project = dialuxProjectWithFloor($user);

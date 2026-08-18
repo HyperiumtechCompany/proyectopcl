@@ -22,6 +22,18 @@ class ImportProductRequest extends FormRequest
             'normative_standard' => ['nullable', 'in:en_12464,ies_na,universal'],
             'fixture_type' => ['nullable', 'in:recessed,pendant,surface,spot,strip,panel,tube,other'],
             'fixture_shape' => ['nullable', 'in:round,square,rectangular,cylindrical'],
+            // Correcciones del usuario en el modal de previsualización
+            // (Ronda 21, `plan_ldt_ies_lector_editor.md`) — un archivo real
+            // puede declarar un flujo/potencia distinto al de la ficha
+            // técnica del fabricante (ver Ronda 3/8 del plan de paridad,
+            // `reference_lumens`); estos overrides NO tocan la curva de
+            // candela en sí, solo la magnitud reportada — el mismo mecanismo
+            // `candelaScale` que ya usa `ProductImportService`.
+            'total_lumens' => ['nullable', 'numeric', 'min:0'],
+            'power_watts' => ['nullable', 'numeric', 'min:0'],
+            'cct' => ['nullable', 'string', 'max:20'],
+            'cri_ra' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'lamp_type' => ['nullable', 'string', 'max:255'],
         ];
     }
 

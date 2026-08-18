@@ -20,10 +20,12 @@ import type { Fixture, LightingResult, Room } from './useEditorStore';
  * (Fase 8, radiosidad Gauss-Seidel) son OPCIONALES vía los parámetros
  * `obstacles`/`surfaceReflectances`/`iterativeConfig` de
  * `calculateLightingResult` — con sus defaults (`[]`/`null`/`null`) el
- * resultado es idéntico al motor original. Ningún camino de exportación/UI
- * activa estos parámetros todavía (ver pendientes en
- * `planes/fase8_progreso_dialux.md`) — solo `domain/calculation/runDirectPreviewEngine.ts`
- * los cablea hoy, vía `CalculationConfig`.
+ * resultado es idéntico al motor original.
+ * `domain/calculation/runDirectPreviewEngine.ts` es quien los cablea, vía
+ * `CalculationConfig` — y desde `buildProductionCalculationConfig()`
+ * (cierre de brechas `dialux-calc-reviewer`), que es el que usan el botón
+ * "Calcular" y el export, los tres SÍ están activos por defecto en
+ * producción (`occlusion: true`, `interreflection: 'auto-by-shape'`).
  * No incrementar sin actualizar los goldens en `hooks/__fixtures__/`.
  */
 export const LIGHTING_ENGINE_VERSION = 'direct-preview-v1';

@@ -20,6 +20,7 @@ import {
     Wrench,
 } from 'lucide-react';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import Swal from 'sweetalert2';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -313,12 +314,26 @@ export const Toolbar: React.FC = () => {
                             store.activeSceneId,
                             file,
                         );
-                        await uploadDialuxPlanFile(
+                        const { warning } = await uploadDialuxPlanFile(
                             projectId,
                             store.activeSceneId,
                             file,
                         );
                         markDialuxPlanSyncOk(store.activeSceneId);
+                        // El backend detecta DWG R2010+ (código AC1024 o
+                        // superior): LibreDWG, el decoder que usa el visor CAD,
+                        // documenta que puede omitir en silencio objetos
+                        // avanzados de esas versiones (muros, hatch, texto),
+                        // aunque el archivo abra "bien" y sin error visible.
+                        if (warning) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Plano importado con advertencia',
+                                text: warning,
+                                confirmButtonColor: '#0d9488',
+                                confirmButtonText: 'Entendido',
+                            });
+                        }
                     } catch (error) {
                         console.warn(
                             'No se pudo sincronizar el plano DIAlux.',

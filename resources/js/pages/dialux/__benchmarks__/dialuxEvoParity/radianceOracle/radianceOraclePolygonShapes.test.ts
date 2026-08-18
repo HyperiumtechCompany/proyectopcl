@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildProductionCalculationConfig } from '@/pages/dialux/domain/calculation/productionCalculationConfig';
 import { runProjectLightingCalculation } from '@/pages/dialux/domain/calculation/runProjectLightingCalculation';
+import { resolveMeshSpacing } from '@/pages/dialux/hooks/adaptiveGridSpacing';
+import { GRID_SPACING } from '@/pages/dialux/hooks/lightingEngineCore';
+import { getRoomUsefulPlaneHeight } from '@/pages/dialux/hooks/roomLighting';
 import type { Project, Room, Scene } from '@/pages/dialux/hooks/types';
 import { buildAllPolygonShapeFixtures, type PolygonShapeFixture } from './polygonShapeFixtures';
 import { runRadianceOracleForPolygon } from './runRadianceOracle';
@@ -69,6 +72,24 @@ function relativeError(computed: number, reference: number): number {
     return Math.abs(computed - reference) / reference;
 }
 
+/**
+ * Ronda 21b: espaciado/zona marginal REALES (adaptativos) — igual criterio
+ * que `radianceOracle.test.ts`/`radianceOracleShapeVariation.test.ts`. El
+ * `spacing`/`marginalZone` declarados en `PolygonShapeFixture` (0.5 m /
+ * 0.15 m) siguen usándose para las pruebas de geometría pura sin Radiance
+ * (`generatePolygonSensorGridParity.test.ts`), pero NO son lo que
+ * `buildProductionCalculationConfig()` usa en la práctica bajo
+ * `meshPolicy.adaptive: true`.
+ */
+function resolveRealMesh(fixture: PolygonShapeFixture, room: Room): { spacingM: number; marginalZone: number } {
+    const usefulPlaneHeight = getRoomUsefulPlaneHeight(room);
+    const { spacingM, marginalZoneOverride } = resolveMeshSpacing(room, fixture.fixtures, usefulPlaneHeight, [], {
+        gridSpacingM: GRID_SPACING,
+        adaptive: true,
+    });
+    return { spacingM, marginalZone: marginalZoneOverride ?? fixture.marginalZone };
+}
+
 describe.skipIf(!hasRadiance)('Oráculo Radiance — ambientes de forma NO rectangular (§-14)', () => {
     it.each(buildAllPolygonShapeFixtures())(
         '$id ($label): first-bounce vs. iterative vs. Radiance (informativo)',
@@ -79,12 +100,14 @@ describe.skipIf(!hasRadiance)('Oráculo Radiance — ambientes de forma NO recta
                 computeEngineAvgLux(fixture, 'iterative'),
             ]);
 
+            const project = buildProjectForFixture(fixture);
+            const realMesh = resolveRealMesh(fixture, project.scenes[0]!.rooms[0]!);
             const oracle = await runRadianceOracleForPolygon({
                 room: {
                     vertices: fixture.vertices,
                     height: fixture.height,
                     workingPlaneHeight: fixture.workingPlaneHeight,
-                    marginalZone: fixture.marginalZone,
+                    marginalZone: realMesh.marginalZone,
                     reflectance: fixture.reflectance,
                 },
                 fixtures: fixture.fixtures.map((f) => ({
@@ -94,7 +117,7 @@ describe.skipIf(!hasRadiance)('Oráculo Radiance — ambientes de forma NO recta
                     articleNumber: f.articleNumber ?? 'desconocido',
                     provenanceNote: `oráculo Radiance — forma no rectangular, ${fixture.variesFrom_rectangular}`,
                 })),
-                spacing: fixture.spacing,
+                spacing: realMesh.spacingM,
                 timeoutMs: ORACLE_TIMEOUT_MS,
             });
 

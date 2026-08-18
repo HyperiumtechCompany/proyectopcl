@@ -19,6 +19,7 @@
         "laravel/wayfinder": "^0.1.14",
         "setasign/fpdf": "^1.9",
         "setasign/fpdi": "^2.6",
+        "spatie/laravel-backup": "^10.3",
         "spatie/laravel-permission": "*"
     },
     "require-dev": {

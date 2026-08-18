@@ -76,6 +76,7 @@ import {
     PanelToolBtn,
     SectionBand,
 } from '../primitives';
+import { LeniSection } from './LeniSection';
 
 const fieldInputClass =
     'w-full rounded border border-slate-200 dark:border-gray-700/60 bg-white dark:bg-gray-900/70 px-2 py-1.5 text-[11px] text-slate-800 dark:text-gray-200 placeholder-slate-400 dark:placeholder-gray-600 transition-colors outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30';
@@ -237,6 +238,8 @@ function TerrenoSections() {
                     todavía.
                 </p>
             </PanelCard>
+
+            <LeniSection site={site} update={update} />
         </>
     );
 }

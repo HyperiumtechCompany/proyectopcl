@@ -894,6 +894,7 @@ class CostoDatabaseService
                             ->where('id', $row->id)
                             ->update([
                                 $priceField => $prec,
+                                'descripcion' => $insumo->descripcion,
                                 'parcial' => $parcial,
                                 'updated_at' => now(),
                             ]);

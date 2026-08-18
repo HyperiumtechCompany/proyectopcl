@@ -10,6 +10,31 @@ import * as productRoutes from '@/routes/dialux/products';
  * comportamiento de red.
  */
 
+export interface LuminousOpening {
+    length: number;
+    width: number;
+    height_c0: number;
+    height_c90: number;
+    height_c180: number;
+    height_c270: number;
+}
+
+/** Campos que hoy solo llenan `dialux-photometry`/`parseLdt()` (Ronda 21, plan_ldt_ies_lector_editor.md) — antes se descartaban en silencio. */
+export interface PhotometricMetadata {
+    parser?: 'rust' | string;
+    format_version?: string;
+    num_lamps?: number | null;
+    lamp_type?: string;
+    /** Ityp EULUMDAT: 1=punto rotacionalmente simétrico, 2=lineal, 3=no puntual no rotacionalmente simétrico. Solo LDT. */
+    luminaire_type?: number | null;
+    downward_flux_fraction_pct?: number | null;
+    light_output_ratio_pct?: number | null;
+    conversion_factor?: number | null;
+    tilt_deg?: number | null;
+    /** DR1-DR10 — factores de reducción de flujo directo, para tablas de coeficiente de utilización futuras. */
+    direct_ratios?: number[];
+}
+
 export interface ImportedLuminaireProduct {
     id: number;
     name: string;
@@ -21,9 +46,12 @@ export interface ImportedLuminaireProduct {
     cct: string | null;
     cri_ra?: number | null;
     beam_angle_50?: number | null;
+    beam_angle_10?: number | null;
+    max_candela?: number | null;
     fixture_type: string | null;
     fixture_shape: string | null;
     efficiency: number | null;
+    distribution_type?: string | null;
     product_image_url?: string | null;
     brand_logo_url?: string | null;
     /** true si el propio usuario la compartió (is_global en backend) — visible para todos */
@@ -38,6 +66,9 @@ export interface ImportedLuminaireProduct {
         polar_svg?: string | null;
     } | null;
     dimensions?: { length: number; width: number; height: number; radius?: number } | null;
+    luminous_opening?: LuminousOpening | null;
+    metadata?: PhotometricMetadata | null;
+    photometric_web?: PhotometricWeb | null;
 }
 
 export type PhotometricWeb = NonNullable<Fixture['photometricWeb']>;
@@ -111,6 +142,35 @@ export async function fetchPhotometricWeb(productId: number): Promise<Photometri
         productRoutes.show({ productId }).url,
     );
     return response.data.product.photometric_web ?? null;
+}
+
+/** Igual que `fetchPhotometricWeb`, pero devuelve el producto completo (dimensiones, metadata, photometric_web) — usado por el modal de edición (Ronda 21d) para decidir qué editor mostrar y precargar todos sus campos. */
+export async function fetchFullProduct(productId: number): Promise<ImportedLuminaireProduct & { photometric_web?: PhotometricWeb | null }> {
+    const response = await axios.get<{ product: ImportedLuminaireProduct & { photometric_web?: PhotometricWeb | null } }>(
+        productRoutes.show({ productId }).url,
+    );
+    return response.data.product;
+}
+
+/** Igual forma que `ImportedLuminaireProduct`, pero SIN persistir — `id` siempre `null` (mismo criterio que `LuminaireProduct::make()` sin guardar en el backend). */
+export type PreviewedLuminaireProduct = Omit<ImportedLuminaireProduct, 'id'> & { id: null };
+
+/**
+ * Parsea un archivo fotométrico SIN guardarlo en el catálogo — alimenta el
+ * modal de previsualización/edición (Ronda 21, `plan_ldt_ies_lector_editor.md`).
+ * Mismo parser/validaciones que `importPhotometryFile`, pero no crea fila en
+ * `luminaire_products`; el archivo real se vuelve a enviar en
+ * `importPhotometryFile` cuando el usuario confirma desde el modal.
+ */
+export async function previewPhotometryFile(
+    formData: FormData,
+): Promise<{ product: PreviewedLuminaireProduct; warnings?: string[] }> {
+    const response = await axios.post<{ product: PreviewedLuminaireProduct; warnings?: string[] }>(
+        productRoutes.preview.url(),
+        formData,
+        jsonRequestConfig,
+    );
+    return response.data;
 }
 
 export async function importPhotometryFile(

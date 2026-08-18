@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { candela, candelaFromPhotometricWeb } from './photometricInterpolation';
+import { candela, candelaFromPhotometricWeb, tiltMultiplier } from './photometricInterpolation';
 import type { Fixture } from './types';
 
 /**
@@ -76,6 +76,58 @@ describe('candela — fotometría importada editable', () => {
         };
 
         expect(candela(fixture, 0)).toBeCloseTo(3000 / Math.PI, 6);
+    });
+});
+
+describe('tiltMultiplier — LM-63 TILT=INCLUDE (Fase auditoría dialux-calc-reviewer)', () => {
+    function buildFixtureWithTilt(
+        geometry: number,
+        installationTiltDeg?: number | null,
+    ): Fixture {
+        return {
+            ...buildFixtureWithoutPhotometricWeb(),
+            installationTiltDeg,
+            photometricWeb: {
+                c_angles: [0],
+                gamma_angles: [0, 90],
+                candela: [[1000, 0]],
+                provenance: 'manufacturer',
+                tilt: {
+                    lamp_to_luminaire_geometry: geometry,
+                    angles: [0, 45, 90],
+                    multipliers: [1, 0.8, 0.6],
+                },
+            },
+        };
+    }
+
+    it('geometría 1/2 (lámpara fija): siempre 1, sin importar installationTiltDeg — el archivo no declara orientación física', () => {
+        expect(tiltMultiplier(buildFixtureWithTilt(1, 45))).toBe(1);
+        expect(tiltMultiplier(buildFixtureWithTilt(2, 90))).toBe(1);
+    });
+
+    it('geometría 3 (orientable) sin installationTiltDeg declarado por el usuario: 1 (sin corrección, nunca asume un ángulo)', () => {
+        expect(tiltMultiplier(buildFixtureWithTilt(3, undefined))).toBe(1);
+        expect(tiltMultiplier(buildFixtureWithTilt(3, null))).toBe(1);
+    });
+
+    it('geometría 3 con installationTiltDeg declarado: interpola la tabla real', () => {
+        expect(tiltMultiplier(buildFixtureWithTilt(3, 45))).toBeCloseTo(0.8, 6);
+        expect(tiltMultiplier(buildFixtureWithTilt(3, 22.5))).toBeCloseTo(0.9, 6);
+    });
+
+    it('sin tabla de tilt en absoluto: siempre 1', () => {
+        expect(tiltMultiplier(buildFixtureWithoutPhotometricWeb())).toBe(1);
+    });
+
+    it('candela() aplica el multiplicador de tilt solo cuando corresponde (geometría 3 + ángulo declarado)', () => {
+        const fixed = buildFixtureWithTilt(1, 45);
+        const aimableWithAngle = buildFixtureWithTilt(3, 45);
+        const aimableWithoutAngle = buildFixtureWithTilt(3, undefined);
+
+        expect(candela(fixed, 0)).toBeCloseTo(1000, 6);
+        expect(candela(aimableWithoutAngle, 0)).toBeCloseTo(1000, 6);
+        expect(candela(aimableWithAngle, 0)).toBeCloseTo(800, 6);
     });
 });
 

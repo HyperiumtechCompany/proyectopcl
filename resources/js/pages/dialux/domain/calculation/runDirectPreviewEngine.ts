@@ -5,6 +5,7 @@ import { calculateLightingResult, LIGHTING_ENGINE_VERSION } from '@/pages/dialux
 import { getRoomUsefulPlaneHeight } from '@/pages/dialux/hooks/roomLighting';
 import type { Fixture } from '@/pages/dialux/hooks/types';
 import { hashCalculationSnapshot } from './hashSnapshot';
+import { AUTO_INTERREFLECTION_ASPECT_THRESHOLD, resolveAutoInterreflectionMode } from './interreflectionModeHeuristic';
 import {
     groupObstaclesByLevel,
     resolveSurfaceReflectances,
@@ -128,7 +129,8 @@ export async function runDirectPreviewEngine(
     // 7 — se advierte para que no parezca un resultado iterativo real cuando
     // en la práctica solo corrió un rebote (plan §20: "no ocultar fallbacks
     // sintéticos").
-    const iterativeButSingleBounce = config.interreflection === 'iterative' && config.maxBounces <= 1;
+    const iterativeButSingleBounce =
+        (config.interreflection === 'iterative' || config.interreflection === 'auto-by-shape') && config.maxBounces <= 1;
     if (iterativeButSingleBounce) {
         warnings.push({
             code: 'interreflection-maxBounces-too-low',
@@ -148,6 +150,13 @@ export async function runDirectPreviewEngine(
         }
 
         const room = toEngineRoom(object);
+        // Ronda 21i: `'auto-by-shape'` decide first-bounce/iterative POR
+        // AMBIENTE según su relación de aspecto (`interreflectionModeHeuristic.ts`)
+        // — para cualquier otro valor de `config.interreflection`, el modo
+        // resuelto es literalmente ese mismo valor, sin cambio de
+        // comportamiento (mismo patrón no disruptivo de siempre).
+        const autoDecision = config.interreflection === 'auto-by-shape' ? resolveAutoInterreflectionMode(room) : null;
+        const resolvedInterreflectionMode = autoDecision?.mode ?? config.interreflection;
         const scene = resolveSceneForLevel(scenesByLevel, object.levelId, sceneSelectionByLevel?.[object.levelId], warnings);
         const luminaireStateById = new Map((scene?.luminaireStates ?? []).map((state) => [state.luminaireId, state]));
 
@@ -221,43 +230,56 @@ export async function runDirectPreviewEngine(
         }
 
         let surfaceReflectances: { ceiling: number; wall: number; floor: number } | null = null;
-        if (config.interreflection === 'first-bounce' || config.interreflection === 'iterative') {
+        if (resolvedInterreflectionMode === 'first-bounce' || resolvedInterreflectionMode === 'iterative') {
             const material = object.materialId ? materialsById.get(object.materialId) : undefined;
             surfaceReflectances = resolveSurfaceReflectances(material);
             if (!surfaceReflectances) {
                 warnings.push({
                     code: 'object-without-material-reflectance',
-                    message: `"${object.name}" no tiene reflectancias de superficie definidas — no se calcula ${config.interreflection === 'iterative' ? 'interreflexión' : 'primera reflexión'} para este ambiente.`,
+                    message: `"${object.name}" no tiene reflectancias de superficie definidas — no se calcula ${resolvedInterreflectionMode === 'iterative' ? 'interreflexión' : 'primera reflexión'} para este ambiente.`,
                     objectId: object.id,
                 });
-            } else if (material) {
-                // Auditoría `dialux-calc-reviewer`: `resolveMaterialId()`
-                // (`buildCalculationSnapshot.ts`) crea un material en cuanto
-                // el usuario asigna reflectancia a UNA superficie —
-                // `RoomSurfaceMaterialsSection.tsx` permite asignar
-                // techo/pared/piso de forma independiente, cada uno con su
-                // propio "Sin asignar" (`null`). `resolveSurfaceReflectances`
-                // (`runDirectPreviewEngineAdapters.ts`) convierte cada `null`
-                // individual en `0` (negro absoluto) para poder calcular —
-                // sin este warning, un usuario que solo asignó reflectancia
-                // de techo obtenía pared/piso en 0% en silencio, sin que
-                // nada en el PDF o la UI lo indicara.
-                const missingSurfaces: string[] = [];
-                if (material.ceilingReflectance == null) missingSurfaces.push('techo');
-                if (material.wallReflectance == null) missingSurfaces.push('pared');
-                if (material.floorReflectance == null) missingSurfaces.push('piso');
-                if (missingSurfaces.length > 0) {
+            } else {
+                if (autoDecision) {
+                    // Transparencia (plan de paridad §"no ocultar el método"):
+                    // el modo elegido por la heurística cambia el resultado
+                    // numérico, así que el PDF/panel deben poder mostrar
+                    // POR QUÉ este ambiente usó uno u otro.
                     warnings.push({
-                        code: 'object-with-partial-material-reflectance',
-                        message: `"${object.name}" tiene reflectancia definida solo para algunas superficies — ${missingSurfaces.join('/')} se asume(n) 0% (negro) para calcular ${config.interreflection === 'iterative' ? 'interreflexión' : 'primera reflexión'}, no un valor por defecto razonable. Asignar reflectancia real a esas superficies para un cálculo más representativo.`,
+                        code: 'interreflection-mode-auto-selected',
+                        message: `"${object.name}": interreflexión automática por forma → ${autoDecision.mode === 'iterative' ? 'iterativa (radiosidad convergida)' : 'primera reflexión'} (relación de aspecto ${autoDecision.aspectRatio.toFixed(2)}:1, umbral ${AUTO_INTERREFLECTION_ASPECT_THRESHOLD}:1 — heurística basada en evidencia limitada, ver interreflectionModeHeuristic.ts).`,
                         objectId: object.id,
                     });
+                }
+                if (material) {
+                    // Auditoría `dialux-calc-reviewer`: `resolveMaterialId()`
+                    // (`buildCalculationSnapshot.ts`) crea un material en cuanto
+                    // el usuario asigna reflectancia a UNA superficie —
+                    // `RoomSurfaceMaterialsSection.tsx` permite asignar
+                    // techo/pared/piso de forma independiente, cada uno con su
+                    // propio "Sin asignar" (`null`). `resolveSurfaceReflectances`
+                    // (`runDirectPreviewEngineAdapters.ts`) convierte cada `null`
+                    // individual en `0` (negro absoluto) para poder calcular —
+                    // sin este warning, un usuario que solo asignó reflectancia
+                    // de techo obtenía pared/piso en 0% en silencio, sin que
+                    // nada en el PDF o la UI lo indicara.
+                    const missingSurfaces: string[] = [];
+                    if (material.ceilingReflectance == null) missingSurfaces.push('techo');
+                    if (material.wallReflectance == null) missingSurfaces.push('pared');
+                    if (material.floorReflectance == null) missingSurfaces.push('piso');
+                    if (missingSurfaces.length > 0) {
+                        warnings.push({
+                            code: 'object-with-partial-material-reflectance',
+                            message: `"${object.name}" tiene reflectancia definida solo para algunas superficies — ${missingSurfaces.join('/')} se asume(n) 0% (negro) para calcular ${resolvedInterreflectionMode === 'iterative' ? 'interreflexión' : 'primera reflexión'}, no un valor por defecto razonable. Asignar reflectancia real a esas superficies para un cálculo más representativo.`,
+                            objectId: object.id,
+                        });
+                    }
                 }
             }
         }
 
         const iterativeConfig =
-            config.interreflection === 'iterative' && surfaceReflectances
+            resolvedInterreflectionMode === 'iterative' && surfaceReflectances
                 ? { maxBounces: config.maxBounces, convergenceTolerance: config.convergenceTolerance }
                 : null;
 

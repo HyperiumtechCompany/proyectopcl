@@ -138,6 +138,45 @@ class RealPhotometryLuminaireSeeder extends Seeder
                 'is_global' => true,
             ],
         );
+
+        // Ronda 21 (`planes/plan_cierre_brecha_paridad_dialux_evo.md`): 2
+        // luminarias nuevas para ampliar categorías que el catálogo real
+        // todavía no cubría — industrial (high bay) y emergencia (señal de
+        // salida real, no un downlight normal con `emergencyFlux` marcado a
+        // mano). Mismo origen legítimo (luminaires.dialux.com) que el resto
+        // de este seeder.
+        $this->importIfMissing(
+            articleNumber: 'ZU210-9',
+            fileName: 'EMOS-ZU210-9.ldt',
+            overrides: [
+                'manufacturer' => 'EMOS',
+                'article_number' => 'ZU210-9',
+                'fixture_type' => 'pendant',
+                'fixture_shape' => 'round',
+                'dimensions' => ['radius' => 0.16, 'height' => 0.196],
+                'is_global' => true,
+            ],
+        );
+
+        // Señal de salida LED real (Thorlux Lexi) — primera luminaria del
+        // catálogo con fotometría real orientada específicamente a
+        // señalización de emergencia (ISO 7010), no un downlight genérico
+        // reutilizado. No resuelve por sí sola la brecha de "señal de
+        // evacuación como entidad de cálculo" documentada en
+        // `informe_brechas_evaluaciones_calculos_dialux.md` §4.2 — aporta el
+        // dato fotométrico real que esa entidad, cuando exista, necesitará.
+        $this->importIfMissing(
+            articleNumber: 'WLX1746X',
+            fileName: 'Thorlux-WLX1746X-Lexi.ldt',
+            overrides: [
+                'manufacturer' => 'Thorlux Lighting',
+                'article_number' => 'WLX1746X',
+                'fixture_type' => 'panel',
+                'fixture_shape' => 'rectangular',
+                'dimensions' => ['length' => 0.300, 'width' => 0.184, 'height' => 0.037],
+                'is_global' => true,
+            ],
+        );
     }
 
     /**

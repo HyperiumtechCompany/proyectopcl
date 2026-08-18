@@ -1,4 +1,5 @@
 import { polygonAreaM2 } from '@/pages/dialux/geometry/polygonGeometry';
+import { calculateLeni } from '@/pages/dialux/hooks/leniCalculation';
 import {
     DEFAULT_MAINTENANCE_FACTOR,
     DEFAULT_REFLECTANCE_CEILING,
@@ -218,6 +219,18 @@ export function buildAmbientDetails(
                 // que este campo existiera, ver plan §-17).
                 dailyOperatingHours:
                     snapshot.project.siteSettings?.dailyOperatingHours ?? 8,
+                // Fase B del cierre de brechas (`dialux-calc-reviewer`,
+                // hallazgo bloqueante "motor LENI/EN 15193 no existe"):
+                // `calculateLeni` devuelve `null` sin `leni.buildingType`
+                // definido — en ese caso el bloque "Consumo (kWh/a)" simple
+                // de arriba sigue siendo lo único que se muestra.
+                leni: snapshot.project.siteSettings?.leni?.buildingType
+                    ? calculateLeni({
+                          installedPowerWatts: totalPower ?? 0,
+                          usefulAreaM2: usefulArea,
+                          leni: snapshot.project.siteSettings.leni,
+                      })
+                    : null,
                 usefulPlaneHeight: Number(
                     ambient.metrics.usefulPlaneHeight.toFixed(3),
                 ),

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildProductionCalculationConfig } from '@/pages/dialux/domain/calculation/productionCalculationConfig';
 import { runProjectLightingCalculation } from '@/pages/dialux/domain/calculation/runProjectLightingCalculation';
+import { resolveMeshSpacing } from '@/pages/dialux/hooks/adaptiveGridSpacing';
+import { GRID_SPACING } from '@/pages/dialux/hooks/lightingEngineCore';
+import { getRoomUsefulPlaneHeight } from '@/pages/dialux/hooks/roomLighting';
 import type { Project, Room, Scene } from '@/pages/dialux/hooks/types';
 import { buildCasetaVsGuarderiasFixture, buildSsHhVsBanoFixture, type DialuxEvoParityFixture } from '../fixtures';
 import { runRadianceOracle } from './runRadianceOracle';
@@ -29,8 +32,28 @@ interface FixtureRadianceConfig {
     fixture: DialuxEvoParityFixture;
     width: number;
     depth: number;
-    grid: { columns: number; rows: number };
-    /** Ronda 6: resultado de referencia ya registrado (crudo, sin factor de mantenimiento), para detectar una regresión grande sin tener que re-verificar convergencia cada vez. */
+    /**
+     * Espaciado de sensores, en metros. Ronda 21b: NO es un valor fijo — se
+     * deriva con `resolveMeshSpacing()`, la MISMA función que
+     * `buildProductionCalculationConfig()` usa en producción
+     * (`meshPolicy.adaptive: true`, ver `hooks/adaptiveGridSpacing.ts`).
+     * Asumir `GRID_SPACING` (0.5 m) fijo — como hacía la primera versión de
+     * esta ronda — subestimaba drásticamente cuánto refina la malla real
+     * para un recinto con un solo foco concentrado (ej. "caseta-vs-
+     * guarderias": 0.5 asumido vs. 0.382 real; "large-square": 0.5 asumido
+     * vs. 0.1 real, el piso mínimo).
+     */
+    spacing: number;
+    /**
+     * Zona marginal real, en metros. Bajo `meshPolicy.adaptive`, producción
+     * NUNCA usa `room.marginalZone` tal cual — la SOBRESCRIBE con
+     * `spacingM / 2` (`resolveMeshSpacing`, salvo recintos tipo pasillo,
+     * donde es 0). Usar el valor declarado del fixture aquí sería, de nuevo,
+     * comparar el oráculo contra un conjunto de sensores que el motor real
+     * nunca usó.
+     */
+    marginalZone: number;
+    /** Ronda 21b: resultado de referencia re-medido con espaciado/zona marginal REALES (adaptativos) — reemplaza el valor de la Ronda 6 (160.5/170.9) y el de la Ronda 21a (espaciado fijo 0.5), ninguno de los dos coincidía con lo que el motor de producción realmente usa. */
     knownFullReflectionLux: number;
 }
 
@@ -40,12 +63,24 @@ function bboxSize(room: Room): { width: number; depth: number } {
     return { width: Math.max(...xs) - Math.min(...xs), depth: Math.max(...ys) - Math.min(...ys) };
 }
 
+/** Misma resolución que usaría `runDirectPreviewEngine.ts` para este recinto — sin obstáculos (ningún fixture de este benchmark los declara). */
+function resolveRealMesh(room: Room, fixture: DialuxEvoParityFixture): { spacingM: number; marginalZone: number } {
+    const usefulPlaneHeight = getRoomUsefulPlaneHeight(room);
+    const { spacingM, marginalZoneOverride } = resolveMeshSpacing(room, fixture.fixtures, usefulPlaneHeight, [], {
+        gridSpacingM: GRID_SPACING,
+        adaptive: true,
+    });
+    return { spacingM, marginalZone: marginalZoneOverride ?? room.marginalZone ?? 0.1 };
+}
+
 function fixtureConfigs(): FixtureRadianceConfig[] {
     const sshh = buildSsHhVsBanoFixture();
     const caseta = buildCasetaVsGuarderiasFixture();
+    const sshhMesh = resolveRealMesh(sshh.room, sshh);
+    const casetaMesh = resolveRealMesh(caseta.room, caseta);
     return [
-        { fixture: sshh, ...bboxSize(sshh.room), grid: { columns: 7, rows: 3 }, knownFullReflectionLux: 160.5 },
-        { fixture: caseta, ...bboxSize(caseta.room), grid: { columns: 5, rows: 5 }, knownFullReflectionLux: 170.9 },
+        { fixture: sshh, ...bboxSize(sshh.room), spacing: sshhMesh.spacingM, marginalZone: sshhMesh.marginalZone, knownFullReflectionLux: 164.0 },
+        { fixture: caseta, ...bboxSize(caseta.room), spacing: casetaMesh.spacingM, marginalZone: casetaMesh.marginalZone, knownFullReflectionLux: 163.9 },
     ];
 }
 
@@ -89,7 +124,7 @@ describe.skipIf(!hasRadiance)('Oráculo de validación Radiance (requiere RADIAN
                     depth: config.depth,
                     height: config.fixture.room.height,
                     workingPlaneHeight: config.fixture.room.usefulPlaneHeight ?? 0,
-                    marginalZone: config.fixture.room.marginalZone ?? 0.1,
+                    marginalZone: config.marginalZone,
                     reflectance: config.fixture.reflectance,
                 },
                 fixtures: config.fixture.fixtures.map((fixture) => ({
@@ -99,7 +134,7 @@ describe.skipIf(!hasRadiance)('Oráculo de validación Radiance (requiere RADIAN
                     articleNumber: fixture.articleNumber ?? 'desconocido',
                     provenanceNote: `oráculo Radiance — ${config.fixture.referenceSource}`,
                 })),
-                grid: config.grid,
+                spacing: config.spacing,
             });
 
             const directRelativeError = Math.abs(oracle.directLux - engineDirect) / engineDirect;
@@ -113,9 +148,12 @@ describe.skipIf(!hasRadiance)('Oráculo de validación Radiance (requiere RADIAN
             );
 
             // Cota generosa (10%): valida que el montaje de la escena (IES,
-            // posición, malla) esté razonablemente bien armado, no que ambos
-            // motores usen exactamente la misma malla — ver Ronda 6
-            // (1.9%/4.7% medidos en la validación original).
+            // posición) esté razonablemente bien armado. Desde la Ronda 21
+            // el oráculo SÍ usa exactamente la misma malla que el motor real
+            // (`generateSensorGrid` delega en `generatePolygonSensorGrid`,
+            // que replica `buildGrid()`), así que el residual esperado aquí
+            // es menor que en la validación original de la Ronda 6
+            // (1.9%/4.7%, medida con una malla distinta a la de producción).
             expect(directRelativeError).toBeLessThan(0.1);
 
             // Cota MUY generosa (25%): solo para detectar una regresión

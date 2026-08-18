@@ -57,7 +57,8 @@ export interface RadianceOracleFixturePlacement {
 export interface RadianceOracleOptions {
     room: RadianceOracleRoom;
     fixtures: RadianceOracleFixturePlacement[];
-    grid: { columns: number; rows: number };
+    /** Espaciado objetivo entre sensores, en metros — misma convención que `GRID_SPACING` de producción (ver Ronda 21 en `generateSensorGrid.ts`). */
+    spacing: number;
     /** Rebotes ambientales para el cálculo con reflexión (`rtrace -ab`). Default 8. */
     ambientBounces?: number;
     /** Timeout por invocación de binario, en ms. Default 360000 (6 min) — la corrida con reflexión completa (`-ab 8`) es la más lenta y su duración varía con la carga de la máquina; medido entre 100s y 180s+ en pruebas reales. */
@@ -233,8 +234,7 @@ export async function runRadianceOracle(options: RadianceOracleOptions): Promise
         depth: options.room.depth,
         workingPlaneHeight: options.room.workingPlaneHeight,
         marginalZone: options.room.marginalZone,
-        columns: options.grid.columns,
-        rows: options.grid.rows,
+        spacing: options.spacing,
     });
 
     return runRadianceOracleCore(

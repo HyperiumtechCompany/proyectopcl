@@ -12,6 +12,7 @@ import { suggestFixtureGridSize } from '@/pages/dialux/hooks/fixtureGrid';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import type { Fixture } from '@/pages/dialux/hooks/useEditorStore';
 import { CatalogPanel } from '../CatalogPanel';
+import { FixtureFactoryDataSection } from './FixtureFactoryDataSection';
 import { EditField, PropField, SectionWrapper, SelectField, TextField } from './PropertyFields';
 
 export const FixtureProps: React.FC<{
@@ -206,6 +207,27 @@ export const FixtureProps: React.FC<{
                 step={5}
                 onChange={(value) => onUpdate({ rotation: ((value % 360) + 360) % 360 })}
             />
+            {fixture.photometricWeb?.tilt?.lamp_to_luminaire_geometry === 3 && (
+                <>
+                    <EditField
+                        label="Ángulo de instalación TILT (°)"
+                        value={
+                            fixture.installationTiltDeg ??
+                            fixture.photometricWeb.tilt.angles[0] ??
+                            0
+                        }
+                        min={fixture.photometricWeb.tilt.angles[0] ?? 0}
+                        max={fixture.photometricWeb.tilt.angles[fixture.photometricWeb.tilt.angles.length - 1] ?? 90}
+                        step={1}
+                        onChange={(value) => onUpdate({ installationTiltDeg: value })}
+                    />
+                    <p className="-mt-1 text-[9px] leading-snug text-slate-400 dark:text-gray-500">
+                        {fixture.installationTiltDeg === undefined || fixture.installationTiltDeg === null
+                            ? 'Sin definir: no se aplica ningún multiplicador de tilt (factor 1). El valor mostrado es solo referencia.'
+                            : 'Multiplicador de tilt aplicado al cálculo según la tabla del archivo IES.'}
+                    </p>
+                </>
+            )}
             <SelectField
                 label="Tipo"
                 value={fixture.fixtureType ?? 'recessed'}
@@ -302,6 +324,7 @@ export const FixtureProps: React.FC<{
                     );
                 })()}
             </div>
+            {!multiple && <FixtureFactoryDataSection fixture={fixture} />}
             <div className="flex items-center justify-between border-b border-gray-300 dark:border-gray-800/40 pb-1.5">
                 <span className="text-[10px] text-gray-500 dark:text-gray-500">Color luz</span>
                 <input

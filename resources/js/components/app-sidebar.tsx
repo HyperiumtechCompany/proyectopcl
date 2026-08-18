@@ -5,6 +5,7 @@ import {
     Boxes,
     Building2,
     CloudCogIcon,
+    DatabaseBackup,
     Droplet,
     Inbox,
     LayoutGrid,
@@ -67,6 +68,11 @@ export function AppSidebar() {
                       title: 'Solicitudes',
                       href: '/solicitudes' as const,
                       icon: Inbox,
+                  },
+                  {
+                      title: 'Copias de Seguridad',
+                      href: '/backups' as const,
+                      icon: DatabaseBackup,
                   },
               ]
             : []),

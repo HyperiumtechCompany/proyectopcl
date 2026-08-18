@@ -1443,10 +1443,15 @@ test('formal dialux blade Consumo uses siteSettings.dailyOperatingHours when the
 
     // Consumo = 40 W * 4 h/dia * 365 / 1000 = 58.4 kWh/a (NO el resultado con el default de 8h, que sería 116.8).
     $view->assertSee('58 kWh/a', false);
-    $view->assertSee('m&aacute;x. 500 kWh/a', false);
-    $view->assertSee('Conforme', false);
-    $view->assertDontSee('117 kWh/a');
     $view->assertSee('jornada referencial de 4 h', false);
+    $view->assertDontSee('117 kWh/a');
+    // Ronda 21h: sin una fuente normativa real de límite de consumo anual,
+    // el renglón es informativo — nunca "Conforme"/"No conforme" (antes
+    // copiaba el lux exigido, 500, y lo mostraba como "máx. 500 kWh/a").
+    // Se busca el badge renderizado exacto, no la palabra suelta: el CSS
+    // exportado inline trae un comentario que también dice "Conforme".
+    $view->assertDontSee('m&aacute;x. 500 kWh/a', false);
+    $view->assertDontSee('status-pass">Conforme', false);
 });
 
 test('formal dialux blade Consumo defaults to 8h/dia when the ambient does not declare dailyOperatingHours', function () {
@@ -1523,6 +1528,168 @@ test('formal dialux blade Consumo defaults to 8h/dia when the ambient does not d
     // Consumo = 40 W * 8 h/dia * 365 / 1000 = 116.8 kWh/a.
     $view->assertSee('117 kWh/a', false);
     $view->assertSee('jornada referencial de 8 h', false);
+});
+
+test('formal dialux blade renders the LENI row when the ambient has a leni result, without any "conforme" language', function () {
+    $view = $this->view('dialux.export.formal-pdf', [
+        'document' => [
+            'title' => 'Proyecto Demo · Reporte DIAlux',
+            'subtitle' => 'Planta Baja',
+            'generatedAt' => '2026-04-21T10:00:00Z',
+            'header' => ['title' => 'Proyecto Demo', 'subtitle' => 'Planta Baja'],
+            'footer' => ['left' => 'DIAlux Web', 'right' => '2026-04-21'],
+            'metadata' => [],
+            'luminaires' => [],
+            'luminaireTotals' => ['totalLumens' => 0, 'totalPowerWatts' => 0, 'overallEfficiency' => 0],
+            'ambientDetails' => [],
+        ],
+        'pages' => [
+            [
+                'id' => 'page-ambient-results-room-1::ambient-1',
+                'kind' => 'ambient-results',
+                'sectionId' => 'ambient-results:room-1::ambient-1',
+                'pageNumber' => 1,
+                'title' => 'Resultados',
+                'subtitle' => 'OFICINA',
+                'assets' => [],
+                'notes' => [],
+                'roomId' => 'room-1',
+                'ambientDetail' => [
+                    'ambientId' => 'room-1::ambient-1',
+                    'roomId' => 'room-1',
+                    'roomName' => 'Modulo XIV',
+                    'ambientName' => 'OFICINA',
+                    'activity' => null,
+                    'area' => 25,
+                    'targetLux' => 500,
+                    'avgLux' => 510,
+                    'minLux' => 400,
+                    'maxLux' => 600,
+                    'uniformity' => 0.7,
+                    'g2' => 0.5,
+                    'uniformityTarget' => 0.4,
+                    'ugr' => 18,
+                    'ugrLimit' => 22,
+                    'usefulPlaneHeight' => 0.8,
+                    'marginalZone' => 0.2,
+                    'calculationIndex' => 'WP1',
+                    'fixtureCount' => 6,
+                    'totalPowerWatts' => 500,
+                    'dailyOperatingHours' => 8,
+                    'lumensRequired' => 15625,
+                    'fixtureLumens' => 4000,
+                    'exactQuantity' => 3.91,
+                    'roundedQuantity' => 6,
+                    'coverage' => 'Optimal',
+                    'complianceLabel' => 'Cumple',
+                    'planAssetId' => null,
+                    'isoluxAssetId' => null,
+                    'luminaires' => [],
+                    'fixturePositions' => [],
+                    // Mismo resultado que produciría calculateLeni() para
+                    // P_n=500W, A=25m², buildingType='office', sin overrides:
+                    // W_L=(500×1×[(2250×1×1)+(250×1)])/1000=1250 kWh/año,
+                    // LENI=1250/25=50 kWh/(m²·año).
+                    'leni' => [
+                        'lightingEnergyKwhYear' => 1250,
+                        'parasiticEnergyKwhYear' => 0,
+                        'parasiticEnergyModeled' => false,
+                        'leniKwhPerM2Year' => 50,
+                        'buildingTypeLabel' => 'Oficina',
+                        'occupancyControlType' => 'manual',
+                        'daylightControlType' => 'none',
+                        'constantIlluminanceControl' => false,
+                        'annualHoursDay' => 2250,
+                        'annualHoursNight' => 250,
+                        'factorOccupancy' => 1,
+                        'factorDaylight' => 1,
+                        'factorConstantIlluminance' => 1,
+                    ],
+                ],
+            ],
+        ],
+        'coverAsset' => null,
+        'tocPages' => [],
+        'contentPages' => [],
+        'tocChunks' => [],
+    ]);
+
+    $view->assertSee('LENI (Oficina)', false);
+    $view->assertSee('50.0 kWh/(m&sup2;&middot;a)', false);
+    $view->assertSee('pendientes de verificaci&oacute;n normativa', false);
+    // Nunca debe leerse como una declaración de conformidad normativa: la
+    // fila LENI usa el badge "Calculado (3)", nunca "Conforme"/"Cumple".
+    $view->assertDontSee('status-pass">Conforme', false);
+});
+
+test('formal dialux blade omits the LENI row when the ambient has no leni result (no buildingType configured)', function () {
+    $view = $this->view('dialux.export.formal-pdf', [
+        'document' => [
+            'title' => 'Proyecto Demo · Reporte DIAlux',
+            'subtitle' => 'Planta Baja',
+            'generatedAt' => '2026-04-21T10:00:00Z',
+            'header' => ['title' => 'Proyecto Demo', 'subtitle' => 'Planta Baja'],
+            'footer' => ['left' => 'DIAlux Web', 'right' => '2026-04-21'],
+            'metadata' => [],
+            'luminaires' => [],
+            'luminaireTotals' => ['totalLumens' => 0, 'totalPowerWatts' => 0, 'overallEfficiency' => 0],
+            'ambientDetails' => [],
+        ],
+        'pages' => [
+            [
+                'id' => 'page-ambient-results-room-1::ambient-1',
+                'kind' => 'ambient-results',
+                'sectionId' => 'ambient-results:room-1::ambient-1',
+                'pageNumber' => 1,
+                'title' => 'Resultados',
+                'subtitle' => 'GUARDIANIA',
+                'assets' => [],
+                'notes' => [],
+                'roomId' => 'room-1',
+                'ambientDetail' => [
+                    'ambientId' => 'room-1::ambient-1',
+                    'roomId' => 'room-1',
+                    'roomName' => 'Modulo XIV',
+                    'ambientName' => 'GUARDIANIA',
+                    'activity' => null,
+                    'area' => 3.28,
+                    'targetLux' => 500,
+                    'avgLux' => 540.25,
+                    'minLux' => 332.1,
+                    'maxLux' => 688.9,
+                    'uniformity' => 0.615,
+                    'g2' => 0.482,
+                    'uniformityTarget' => 0.4,
+                    'ugr' => 18.2,
+                    'ugrLimit' => 22,
+                    'usefulPlaneHeight' => 0.8,
+                    'marginalZone' => 0.2,
+                    'calculationIndex' => 'WP1',
+                    'fixtureCount' => 1,
+                    'totalPowerWatts' => 40,
+                    'dailyOperatingHours' => 8,
+                    'lumensRequired' => 2072.9,
+                    'fixtureLumens' => 4000,
+                    'exactQuantity' => 0.52,
+                    'roundedQuantity' => 1,
+                    'coverage' => 'Optimal',
+                    'complianceLabel' => 'Cumple',
+                    'planAssetId' => null,
+                    'isoluxAssetId' => null,
+                    'luminaires' => [],
+                    'fixturePositions' => [],
+                    'leni' => null,
+                ],
+            ],
+        ],
+        'coverAsset' => null,
+        'tocPages' => [],
+        'contentPages' => [],
+        'tocChunks' => [],
+    ]);
+
+    $view->assertDontSee('LENI (', false);
+    $view->assertDontSee('pendientes de verificaci&oacute;n normativa', false);
 });
 
 test('formal dialux blade renders engine version, calculation date and warnings for an ambient (Fase 13)', function () {
@@ -2351,6 +2518,81 @@ test('formal dialux blade renders the engine-calculated UGR reference table with
 
     $view->assertSee('4×4 m (2H×2H)');
     $view->assertSee('24×16 m (12H×8H)');
+    $view->assertSee('NO es una reproducción certificada');
+    $view->assertDontSee('Información UGR no disponible');
+});
+
+test('formal dialux blade renders the full 5-reflectance UGR grid in a full-width section, not the narrow single-combo table (Ronda 21c)', function () {
+    $view = $this->view('dialux.export.formal-pdf', [
+        'document' => [
+            'title' => 'Proyecto Demo · Reporte DIAlux',
+            'subtitle' => 'Planta Baja',
+            'generatedAt' => '2026-08-17T10:00:00Z',
+            'header' => ['title' => 'Proyecto Demo', 'subtitle' => 'Planta Baja'],
+            'footer' => ['left' => 'DIAlux Web', 'right' => '2026-08-17'],
+            'metadata' => [],
+            'luminaires' => [
+                [
+                    'id' => 'fixture-3',
+                    'name' => 'Downlight con fotometria real',
+                    'model' => 'recessed',
+                    'brand' => 'Regiolux',
+                    'articleNumber' => 'DALL-21W',
+                    'lumens' => 2014,
+                    'powerWatts' => 21,
+                    'efficiency' => 95.9,
+                    'quantity' => 1,
+                    'reportData' => [
+                        'ugrTablesComputed' => array_map(
+                            fn (array $reflectances) => [
+                                'provenance' => 'engine-calculated',
+                                'method' => 'Motor propio (evaluateUGR, Fase 9) sobre salas de referencia normalizadas',
+                                'disclaimer' => 'Cálculo propio con el motor de esta plataforma — NO es una reproducción certificada de la tabla CIE 117 publicada por el fabricante.',
+                                'shr' => 0.25,
+                                'reflectances' => $reflectances,
+                                'entries' => [
+                                    ['roomLabel' => '4×4 m (2H×2H)', 'ugrCrosswise' => 19.4, 'ugrEndwise' => 18.1],
+                                ],
+                            ],
+                            [
+                                ['ceiling' => 70, 'wall' => 50, 'floor' => 20],
+                                ['ceiling' => 70, 'wall' => 30, 'floor' => 20],
+                                ['ceiling' => 50, 'wall' => 50, 'floor' => 20],
+                                ['ceiling' => 50, 'wall' => 30, 'floor' => 20],
+                                ['ceiling' => 30, 'wall' => 30, 'floor' => 20],
+                            ],
+                        ),
+                    ],
+                ],
+            ],
+        ],
+        'pages' => [
+            [
+                'id' => 'page-product-sheet-fixture-3',
+                'kind' => 'product-sheet',
+                'sectionId' => 'product-sheet:fixture-3',
+                'pageNumber' => 1,
+                'title' => 'Ficha de producto: Downlight con fotometria real',
+                'subtitle' => 'recessed',
+                'assetIds' => [],
+                'assets' => [],
+                'notes' => [],
+                'ambientDetail' => null,
+            ],
+        ],
+        'coverAsset' => null,
+        'tocPages' => [],
+        'contentPages' => [],
+        'tocChunks' => [],
+    ]);
+
+    $view->assertSee('4×4 m (2H×2H)');
+    // Las 5 combinaciones de reflectancia deben aparecer como encabezados de columna.
+    $view->assertSee('70/50/20');
+    $view->assertSee('70/30/20');
+    $view->assertSee('50/50/20');
+    $view->assertSee('50/30/20');
+    $view->assertSee('30/30/20');
     $view->assertSee('NO es una reproducción certificada');
     $view->assertDontSee('Información UGR no disponible');
 });

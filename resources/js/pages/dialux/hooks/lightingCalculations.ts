@@ -123,12 +123,19 @@ export function createRoomLightingCalculation(
     fixtureLumens: number,
     scaledUnit: 'mm' | 'cm' | 'm' = 'm',
     recommendedQuantity?: number,
+    normaRa?: number | null,
+    fixtureRa?: number | null,
 ): RoomLightingCalculation {
     const lumensRequired = calculateLumensRequired(areaM2, normaLux);
     const exactQuantity = calculateExactQuantity(lumensRequired, fixtureLumens);
     const roundedQuantity = calculateRoundedQuantity(exactQuantity);
     const uniformity = estimateUniformity(roundedQuantity);
     const coverage = determineCoverage(exactQuantity, roundedQuantity);
+
+    let meetsRa: boolean | undefined = undefined;
+    if (normaRa != null && fixtureRa != null) {
+        meetsRa = fixtureRa >= normaRa;
+    }
 
     return {
         id: `calc-${roomId}-${Date.now()}`,
@@ -137,6 +144,9 @@ export function createRoomLightingCalculation(
         area: areaM2,
         scaledUnit,
         normaLux,
+        normaRa,
+        fixtureRa,
+        meetsRa,
         lumensRequired: parseFloat(lumensRequired.toFixed(0)),
         fixtureType,
         fixtureLumens,
@@ -182,6 +192,12 @@ export function validateCalculationInputs(
  * Formatea un resultado de cálculo para presentación profesional
  */
 export function formatCalculationResult(calc: RoomLightingCalculation): string {
+    const raText = calc.meetsRa === true 
+        ? `✅ CUMPLE (Req: ${calc.normaRa}, Lum: ${calc.fixtureRa})` 
+        : calc.meetsRa === false 
+        ? `❌ NO CUMPLE - ALERTA (Req: ${calc.normaRa}, Lum: ${calc.fixtureRa})`
+        : 'N/A';
+
     return `
 ═══════════════════════════════════════════
 📊 CÁLCULO DE ILUMINACIÓN: ${calc.name.toUpperCase()}
@@ -206,6 +222,7 @@ export function formatCalculationResult(calc: RoomLightingCalculation): string {
 👤 DECISIÓN DEL USUARIO:
   • Cantidad Recomendada: ${calc.recommendedQuantity} luminarias
   • Uniformidad Estimada: ${(calc.uniformityEstimate! * 100).toFixed(1)}%
+  • Validación Color (Ra): ${raText}
 
 ═══════════════════════════════════════════
 `;

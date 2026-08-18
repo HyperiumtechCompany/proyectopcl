@@ -1016,11 +1016,22 @@ export function deriveAmbientSpaces(
 }
 
 export function deriveSceneAmbientSpaces(scene: Scene): DerivedAmbientSpace[] {
+    // Mismo criterio que buildWallDefinedAmbientSpaces (línea ~709) y
+    // deriveAmbientSpaces (línea ~856): una ruta de evacuación/área
+    // antipánico se trata como espacio único contenible, igual que un
+    // pasadizo — si no se excluye aquí también, queda en `regularRooms` y
+    // pierde la lógica de fusión/contención bajo su sala padre.
     const regularRooms = scene.rooms.filter(
-        (room) => room.roomType !== 'corridor',
+        (room) =>
+            room.roomType !== 'corridor' &&
+            room.roomType !== 'evacuation-route' &&
+            room.roomType !== 'antipanic-area',
     );
     const corridorRooms = scene.rooms.filter(
-        (room) => room.roomType === 'corridor',
+        (room) =>
+            room.roomType === 'corridor' ||
+            room.roomType === 'evacuation-route' ||
+            room.roomType === 'antipanic-area',
     );
     const containedCorridorIds = new Set<string>();
     const ambients: DerivedAmbientSpace[] = [];

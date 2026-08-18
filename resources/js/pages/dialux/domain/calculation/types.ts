@@ -169,7 +169,12 @@ export interface CalculationConfig {
     mode: 'preview' | 'standard' | 'high';
     directLight: boolean;
     occlusion: boolean;
-    interreflection: 'none' | 'first-bounce' | 'iterative';
+    /**
+     * `'auto-by-shape'` (Ronda 21i): elige `first-bounce`/`iterative` POR
+     * AMBIENTE según su relación de aspecto — ver
+     * `interreflectionModeHeuristic.ts` para la evidencia y el umbral.
+     */
+    interreflection: 'none' | 'first-bounce' | 'iterative' | 'auto-by-shape';
     maxBounces: number;
     convergenceTolerance: number;
     meshPolicy: {

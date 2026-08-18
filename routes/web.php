@@ -76,6 +76,7 @@ Route::middleware(['auth', 'verified'])->prefix('dialux')->name('dialux.')->grou
     Route::prefix('products')->name('products.')->group(function () {
         Route::get('/', [DialuxProductController::class, 'index'])->name('index');
         Route::post('/import', [DialuxProductController::class, 'import'])->name('import');
+        Route::post('/preview', [DialuxProductController::class, 'preview'])->name('preview');
         Route::post('/manual', [DialuxProductController::class, 'storeManual'])->name('store-manual');
         Route::get('/{productId}', [DialuxProductController::class, 'show'])->name('show');
         Route::patch('/{productId}', [DialuxProductController::class, 'update'])->name('update');
@@ -158,13 +159,19 @@ Route::middleware(['auth', 'verified'])->prefix('dialux-v2')->name('dialux-v2.')
     });
 });
 
-// ─── Gestión de Personal / Usuarios ───────────────────────────────────────────
+// ─── Gestión de Personal / Usuarios / Backups ───────────────────────────────────────────
 Route::middleware(['auth', 'verified', 'role:root|gerencia|administracion'])->group(function () {
     Route::resource('users', UserController::class);
     Route::resource('organizations', OrganizationController::class);
     Route::get('/solicitudes', [PlanRequestController::class, 'index'])->name('plan-requests.index');
     Route::post('/solicitudes/{planRequest}/approve', [PlanRequestController::class, 'approve'])->name('plan-requests.approve');
     Route::post('/solicitudes/{planRequest}/reject', [PlanRequestController::class, 'reject'])->name('plan-requests.reject');
+
+    // Backups
+    Route::get('/backups', [\App\Http\Controllers\BackupController::class, 'index'])->name('backups.index');
+    Route::post('/backups', [\App\Http\Controllers\BackupController::class, 'store'])->name('backups.store');
+    Route::get('/backups/{file}', [\App\Http\Controllers\BackupController::class, 'download'])->name('backups.download');
+    Route::delete('/backups/{file}', [\App\Http\Controllers\BackupController::class, 'destroy'])->name('backups.destroy');
 });
 
 // ─── Caída de Tensión ──────────────────────────────────────────────────────────
@@ -404,6 +411,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/presupuesto/insumos/unidades', [InsumoProductoController::class, 'unidades'])->name('proyectos.presupuesto.insumos.unidades');
             Route::post('/presupuesto/insumos', [InsumoProductoController::class, 'store'])->name('proyectos.presupuesto.insumos.store');
             Route::post('/presupuesto/insumos/replace-project-insumo', [InsumoProductoController::class, 'replaceProjectInsumo'])->name('proyectos.presupuesto.insumos.replace');
+            Route::post('/presupuesto/insumos/update-unlinked', [InsumoProductoController::class, 'updateUnlinkedInsumo'])->name('proyectos.presupuesto.insumos.update-unlinked');
             Route::post('/presupuesto/insumos/seed', [InsumoProductoController::class, 'seedCatalog'])->name('proyectos.presupuesto.insumos.seed');
             Route::put('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'update'])->name('proyectos.presupuesto.insumos.update');
             Route::delete('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'destroy'])->name('proyectos.presupuesto.insumos.destroy');

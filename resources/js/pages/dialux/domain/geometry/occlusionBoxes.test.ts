@@ -15,6 +15,64 @@ function buildWall(overrides: Partial<Wall> = {}): Wall {
     };
 }
 
+describe('buildWallOcclusionBoxes — BUG conocido con muros de contorno cerrado (Ronda 21l, sin corregir)', () => {
+    /**
+     * Reproducción mínima de un muro REAL (proyecto "Vinchos", editor
+     * DIALux): cuando un muro tiene una jamba/receso de puerta, el editor
+     * guarda `wall.vertices` como el CONTORNO CERRADO completo del muro
+     * (ya con el grosor incluido, primer punto == último punto), no como
+     * una polilínea de centro de 2 puntos como asumen los demás tests de
+     * este archivo. `buildLinearOcclusionBoxes` no distingue los dos casos:
+     * trata cada par consecutivo de vértices del contorno como un segmento
+     * de centro y lo vuelve a extruir por `thickness` — duplicando el
+     * grosor y generando muchas más cajas de las que un muro de 4 m
+     * realmente tiene.
+     *
+     * Verificado contra el proyecto real: con `occlusion: true` activo, el
+     * promedio de un ambiente con este tipo de muro cayó ~19% (478.7 vs
+     * 590.5 lx) y el mínimo empeoró (149.9 vs 183.9 lx) — lo opuesto de "más
+     * preciso". Por eso `productionCalculationConfig.ts` revirtió
+     * `occlusion` a `false` el mismo día que se activó.
+     *
+     * Este test documenta el comportamiento ACTUAL (siete cajas para un
+     * único muro rectangular con una jamba, no una) — cuando se corrija
+     * `buildLinearOcclusionBoxes` para reconocer un contorno cerrado y
+     * tratarlo como una única extrusión (o el editor deje de guardar
+     * contornos cerrados en `wall.vertices`), este test debe actualizarse
+     * para reflejar el comportamiento correcto, no seguir fijando el bug.
+     */
+    it('un muro con contorno cerrado (jamba de puerta) genera múltiples cajas superpuestas en vez de una sola', () => {
+        // Rectángulo cerrado de 4m x 0.13m con una jamba de 0.3m de receso
+        // en un extremo (simplificación de la forma real de Vinchos).
+        const closedOutlineWall: Wall = {
+            id: 'wall-real-outline',
+            vertices: [
+                { x: 0, y: 0 },
+                { x: 0, y: 0.13 },
+                { x: 0.3, y: 0.13 },
+                { x: 0.3, y: 0.3 },
+                { x: 0.3, y: 0.13 },
+                { x: 4, y: 0.13 },
+                { x: 4, y: 0 },
+                { x: 0, y: 0 },
+            ],
+            thickness: 0.13,
+            height: 3,
+        };
+
+        const boxes = buildWallOcclusionBoxes([closedOutlineWall], [], []);
+
+        // Comportamiento CORRECTO esperado (documentado, no lo que hace hoy):
+        // una sola caja de piso a techo, longitud ~4m, grosor 0.13m — igual
+        // que `buildWall()` de arriba con 2 vértices.
+        // Comportamiento ACTUAL (el bug): una caja por cada segmento del
+        // contorno (7 segmentos válidos, el segmento degenerado 0.3→0.13→0.3
+        // de longitud ~0 se descarta por `MIN_BOX_LENGTH`).
+        expect(boxes.length).toBeGreaterThan(1);
+        expect(boxes.length).not.toBe(1);
+    });
+});
+
 describe('buildWallOcclusionBoxes', () => {
     it('genera una única caja de piso a techo para un muro sin aberturas', () => {
         const boxes = buildWallOcclusionBoxes([buildWall()], [], []);

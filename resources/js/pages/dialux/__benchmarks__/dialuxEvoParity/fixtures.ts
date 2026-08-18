@@ -1,5 +1,5 @@
 import type { Fixture, Room } from '@/pages/dialux/hooks/types';
-import { TEG18046_PHOTOMETRIC_WEB } from './realPhotometry';
+import { GF19140_SUBSTITUTE_PHOTOMETRIC_WEB, TEG18046_PHOTOMETRIC_WEB } from './realPhotometry';
 
 /**
  * Fixtures de benchmark de paridad contra DIALux evo real —
@@ -17,27 +17,20 @@ import { TEG18046_PHOTOMETRIC_WEB } from './realPhotometry';
  * ACTUALIZACIÓN (2026-08-09): se consiguió el archivo .ldt REAL de fábrica
  * para TEG18046 (descargado del DIALux Luminaire Finder público, misma
  * referencia de artículo — ver procedencia completa en `realPhotometry.ts`)
- * y `sshh-vs-bano` ya lo usa. **GF19140 sigue sin fotometría real** — se
- * intentó descargarla y no se consiguió (ver el "NO se pudo obtener" en
- * `realPhotometry.ts`), así que `caseta-vs-guarderias` sigue cayendo al
- * modelo Lambertiano `I(γ) = (lumens·efficiency/π)·cos(γ)` en
- * `hooks/photometricInterpolation.ts::candela()`.
+ * y `sshh-vs-bano` ya lo usa.
  *
- * LIMITACIÓN DECLARADA que sigue vigente para `caseta-vs-guarderias`: la
- * aproximación Lambertiana es MALA para GF19140 ("Corridor Lens", una
- * óptica marcadamente asimétrica entre los planos C0-C180 y C90-C270, con
- * pico real ~600-800 cd/klm contra ~318 cd/klm de un Lambertiano ideal a
- * igual flujo — leído de `MODULO I_Informe.pdf` p.7, eje "cd/klm"). El
- * motor subestima el directo sistemáticamente para esa luminaria mientras
- * no se importe su .ldt/.ies real — no una curva "a ojo" digitalizada del
- * gráfico (que introduciría una precisión falsa sin ser realmente más
- * confiable). Este fixture en particular NO se usa para afirmar un
- * porcentaje de error objetivo — se usa para (a) bloquear una regresión de
- * la Causa A (reflectancia no asignada → cero interreflexión) y (b) dejar
- * un número de referencia trazable de cuánto se acerca/aleja el resultado
- * con la aproximación actual, para detectar una regresión grande (ej. un
- * error de unidades) — ver el test correspondiente para el detalle de qué
- * SÍ se afirma con confianza y qué no.
+ * ACTUALIZACIÓN (2026-08-18): `caseta-vs-guarderias` ya NO usa la
+ * aproximación Lambertiana. El usuario entregó su catálogo real de
+ * luminarias usadas en proyectos reales ("según plano") — entre ellas, un
+ * archivo `.ldt` real de mismo flujo/potencia que GF19140 (26 W/2580 lm),
+ * de un fabricante distinto (LTS, no Thorlux) que el usuario confirmó como
+ * la luminaria REALMENTE especificada para este tipo de ambiente. No es la
+ * referencia Thorlux GF19140 exacta (que sigue sin conseguirse — ver
+ * `realPhotometry.ts`), así que sigue habiendo una divergencia de fabricante
+ * frente al PDF de referencia — pero es fotometría real de fábrica, no una
+ * aproximación matemática, y es la que corresponde a los proyectos reales
+ * del usuario. Ver `GF19140_SUBSTITUTE_PHOTOMETRIC_WEB` en
+ * `realPhotometry.ts` para la procedencia completa.
  */
 
 export interface DialuxEvoParityFixture {
@@ -191,6 +184,10 @@ export function buildCasetaVsGuarderiasFixture(): DialuxEvoParityFixture {
             articleNumber: 'GF19140',
             lightColor: '#ffffff',
             roomId: 'benchmark-caseta-guarderias::ambient-1',
+            // Fotometría REAL de fábrica de un sustituto confirmado por el
+            // usuario (LTS, mismo flujo/potencia) — ya NO es la aproximación
+            // Lambertiana. Ver doc-comment del módulo y `realPhotometry.ts`.
+            photometricWeb: GF19140_SUBSTITUTE_PHOTOMETRIC_WEB,
         },
     ];
 
@@ -203,11 +200,10 @@ export function buildCasetaVsGuarderiasFixture(): DialuxEvoParityFixture {
         reference: { avgLux: 203, minLux: 162, maxLux: 231, uniformity: 0.8 },
         reflectance: { ceiling: 0.7, wall: 0.5, floor: 0.2 },
         caveats: [
-            'Sin archivo IES/LDT real de GF19140 — su óptica "Corridor Lens" es marcadamente asimétrica (ver CDL polar, ficha p.7) y su pico real (~600-800 cd/klm) es 2-2.5x más concentrado que un Lambertiano ideal; la aproximación usada aquí no reproduce esa asimetría ni ese pico.',
-            'Zona marginal fijada a la de DIALux evo (0.350 m); Pozuzo reporta 0.194 m para el mismo ambiente sin explicación conocida (plan §2.5).',
-            'Medido empíricamente (ver `dialuxEvoParity.test.ts`): el error con esta luminaria resultó MENOR que en "sshh-vs-bano" (~47% vs. ~72%) cuando ambos usaban Lambertiano, pese a que su concentración relativa es menor (2-2.5x vs. 2.8x) — no asumir una relación lineal simple entre "cuán Lambertiano no es" un pico y el error final; otros factores (geometría del recinto, posición relativa) también pesan.',
+            'Fotometría real de un SUSTITUTO (LTS, 26W/2580lm), no de la Thorlux GF19140 exacta del PDF de referencia — la Thorlux sigue sin conseguirse. El sustituto lo confirmó el usuario como la luminaria realmente usada en sus proyectos reales para este tipo de ambiente, no una elección arbitraria de esta sesión.',
+            'Zona marginal fijada a la de DIALux evo (0.350 m); Pozuzo reporta 0.194 m para el mismo ambiente — confirmado en `plan_cierre_brecha_paridad_dialux_evo.md` §-21j que es un dato viejo del proyecto real, no un bug de fórmula (la fórmula fresca da 0.348 m, casi idéntico a evo).',
         ],
-        hasRealPhotometry: false,
+        hasRealPhotometry: true,
     };
 }
 

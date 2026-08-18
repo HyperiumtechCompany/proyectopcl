@@ -305,11 +305,13 @@ function StepAmbientSummary({
                 : null;
 
             if (result && normLeaf) {
+                const standard = room.normativeStandard ?? 'en_12464';
+                const meta = NORMATIVE_STANDARDS_META[standard] ?? undefined;
                 const roomFixtures = (scene?.fixtures ?? []).filter(
                     (fixture) => fixture.roomId === room.id,
                 );
                 return computeOverallStatus(
-                    evaluateCompliance(room, result, normLeaf, undefined, roomFixtures),
+                    evaluateCompliance(room, result, normLeaf, meta, roomFixtures),
                 );
             }
             return 'needs_review' as ComplianceStatus;

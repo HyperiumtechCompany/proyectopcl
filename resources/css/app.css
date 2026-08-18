@@ -293,3 +293,7 @@
         transform: translateX(0);
     }
 }
+
+/* Fix SweetAlert2 z-index for modals */
+.swal2-container { z-index: 99999 !important; }
+

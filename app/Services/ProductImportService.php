@@ -106,7 +106,80 @@ class ProductImportService
     }
 
     /**
-     * Importa un archivo fotométrico y persiste el producto.
+     * Reemplaza el archivo fotométrico de un producto YA EXISTENTE — Ronda
+     * 21e: hallazgo real del usuario ("hay algunas luminarias que no tienen
+     * el .ldt correcto... eso es lo que hace fallar el cálculo para mis
+     * clientes"). Distinto de `repairStoredProduct()` (que re-parsea el
+     * MISMO archivo ya guardado, para recuperar campos que un parser viejo
+     * no extraía) — este método recibe un archivo NUEVO y reemplaza tanto el
+     * archivo en storage como toda la fotometría derivada de él.
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array{product: LuminaireProduct, warnings: string[]}
+     */
+    public function replacePhotometricFile(LuminaireProduct $product, UploadedFile $file, ?int $userId, array $overrides = []): array
+    {
+        $warnings = [];
+        $extension = strtolower($file->getClientOriginalExtension());
+        if (! in_array($extension, ['ies', 'ldt', 'gldf'], true)) {
+            throw new \RuntimeException("Formato \".{$extension}\" no soportado para reemplazar la fotometría — usa .ies, .ldt o .gldf.");
+        }
+
+        $storagePath = $this->storeFile($file, $userId);
+        $content = file_get_contents($file->getRealPath());
+        $parsed = $this->parseWithRust($storagePath, $extension, $warnings) ?? match ($extension) {
+            'ies' => $this->parseIes($content, $warnings),
+            'ldt' => $this->parseLdt($content, $warnings),
+            'gldf' => $this->parseGldf($content, $warnings),
+        };
+
+        $web = $parsed['photometric_web'] ?? null;
+        if (! is_array($web) || empty($web['candela'])) {
+            throw new \RuntimeException('El archivo nuevo no produjo una matriz fotométrica válida — no se reemplazó la fotometría existente.');
+        }
+        $web['schema_version'] = 2;
+
+        $parsedName = is_string($parsed['name'] ?? null) ? trim($parsed['name']) : null;
+
+        // Mismo caso especial que `import()`: `lamp_type` vive en `metadata`,
+        // no puede pasar por el `array_merge` genérico de overrides sin
+        // pisar el resto de `metadata` que el parser nuevo acaba de armar.
+        $lampTypeOverride = is_string($overrides['lamp_type'] ?? null) ? trim($overrides['lamp_type']) : null;
+        unset($overrides['lamp_type']);
+
+        $data = array_merge($parsed, array_filter($overrides, fn ($v) => $v !== null));
+        $data['source_format'] = $extension;
+        $data['source_file_path'] = $storagePath;
+        $data['source_file_name'] = $file->getClientOriginalName();
+        $data['metadata'] = array_merge(
+            is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
+            $parsedName !== null && $parsedName !== '' ? ['source_internal_name' => $parsedName] : [],
+            $lampTypeOverride !== null && $lampTypeOverride !== '' ? ['lamp_type' => $lampTypeOverride] : [],
+        );
+        // Se regeneran desde la matriz nueva — conservar los del archivo
+        // anterior dejaría el CDL polar y la tabla técnica del PDF apuntando
+        // a la fotometría que se está reemplazando.
+        $data['report_data'] = null;
+        $data['report_assets'] = null;
+        $data = $this->withReportPayload($data, $warnings);
+
+        $product->update($data);
+        $product->refresh();
+
+        return ['product' => $product, 'warnings' => $warnings];
+    }
+
+    /**
+     * Importa un archivo fotométrico. Con `$persist = true` (default) guarda
+     * el producto en el catálogo, igual que siempre. Con `$persist = false`
+     * (modal de previsualización antes de guardar) corre exactamente el
+     * mismo parseo/validación/armado de reporte y devuelve un modelo SIN
+     * persistir — mismo patrón ya usado por `repairStoredProduct()`. El
+     * archivo original SÍ se guarda en storage en ambos casos (Rust necesita
+     * una ruta real para parsear) — si el usuario cancela el modal, ese
+     * archivo queda huérfano, aceptable frente a la alternativa de manejar
+     * un archivo temporal con limpieza propia para un flujo que de todas
+     * formas reintenta con el archivo real al confirmar.
      *
      * @return array{product: LuminaireProduct, warnings: string[]}
      */
@@ -114,6 +187,7 @@ class ProductImportService
         UploadedFile $file,
         ?int $userId,
         array $overrides = [],
+        bool $persist = true,
     ): array {
         $warnings = [];
         $extension = strtolower($file->getClientOriginalExtension());
@@ -154,8 +228,17 @@ class ProductImportService
             $warnings[] = "El nombre indicado (\"{$overrideName}\") no coincide con el nombre interno del archivo fotométrico (\"{$parsedName}\"). Verifica que se subió el archivo correcto para este producto — podría tratarse de otra variante con distinto flujo/potencia.";
         }
 
-        // Aplicar overrides del usuario
+        // Aplicar overrides del usuario. `lamp_type` es un caso especial: no
+        // es una columna propia, vive dentro de `metadata` — si se deja que
+        // `array_merge` lo trate como cualquier otro override, pisaría TODO
+        // `metadata` ya armado por el parser (parser/format_version/
+        // luminaire_type/DFF%/etc.) en vez de solo corregir ese campo.
+        $lampTypeOverride = is_string($overrides['lamp_type'] ?? null) ? trim($overrides['lamp_type']) : null;
+        unset($overrides['lamp_type']);
         $data = array_merge($parsed, array_filter($overrides, fn ($v) => $v !== null));
+        if ($lampTypeOverride !== null && $lampTypeOverride !== '') {
+            $data['metadata'] = array_merge(is_array($data['metadata'] ?? null) ? $data['metadata'] : [], ['lamp_type' => $lampTypeOverride]);
+        }
 
         // Duplicado de catálogo: si ya existe un producto con el mismo
         // `catalog_number`, importar este segundo no es un error (puede ser
@@ -197,8 +280,9 @@ class ProductImportService
         }
         $data = $this->withReportPayload($data, $warnings);
 
-        // Crear producto
-        $product = LuminaireProduct::query()->create($data);
+        $product = $persist
+            ? LuminaireProduct::query()->create($data)
+            : LuminaireProduct::make($data);
 
         return ['product' => $product, 'warnings' => $warnings];
     }
@@ -569,14 +653,17 @@ class ProductImportService
                         'angles' => $tiltAngles,
                         'multipliers' => $tiltMultipliers,
                     ];
-                    // La tabla se registra para trazabilidad, pero el multiplicador
-                    // por-ángulo de operación aún no se aplica a la matriz de
-                    // candela (requiere conocer el ángulo de operación real de la
-                    // lámpara, que no se declara en el archivo) — solo se aplica
-                    // el multiplicador global de la línea de configuración, igual
-                    // que en TILT=NONE. No reportar esto sería fingir una
-                    // corrección que no ocurre.
-                    $warnings[] = 'IES: TILT=INCLUDE detectado — tabla de tilt registrada en metadata, pero el multiplicador por ángulo aún no se aplica a la matriz de candela (fuera de alcance de esta fase).';
+                    // La tabla se registra para trazabilidad. El multiplicador
+                    // por-ángulo (`photometricInterpolation.ts::tiltMultiplier`)
+                    // solo se aplica cuando geometría=3 (lámpara orientable) Y el
+                    // usuario declaró el ángulo real de instalación en el editor
+                    // (`Fixture.installationTiltDeg`) — el archivo IES nunca
+                    // declara esa orientación física, así que sin ese dato del
+                    // usuario el multiplicador se mantiene en 1 (sin corrección),
+                    // igual que en TILT=NONE. Para geometría 1/2 (lámpara fija) no
+                    // hay causa física verificable para elegir un ángulo, así que
+                    // nunca se aplica.
+                    $warnings[] = 'IES: TILT=INCLUDE detectado — tabla de tilt registrada en metadata. Para geometría 3 (orientable), declare el ángulo de instalación en el editor para que se aplique al cálculo; para geometría 1/2 (fija) el archivo no declara la orientación física y no se aplica.';
                 } else {
                     $warnings[] = 'IES: TILT=INCLUDE declarado pero la tabla de ángulos/multiplicadores está incompleta o inconsistente con N.';
                 }
@@ -710,6 +797,15 @@ class ProductImportService
      */
     private function parseLdt(string $content, array &$warnings): array
     {
+        // Algunos archivos LDT reales (ej. exportados por herramientas que
+        // guardan UTF-8 "con BOM") empiezan con el marcador de orden de
+        // bytes EF BB BF — `trim()` no lo quita (no es un carácter de espacio
+        // para PHP), así que sin esto quedaba pegado al inicio de
+        // `company_name` (ej. "\u{FEFF}EMOS" en vez de "EMOS").
+        if (str_starts_with($content, "\xEF\xBB\xBF")) {
+            $content = substr($content, 3);
+        }
+
         // Normalizar separadores decimales europeos
         $content = str_replace(',', '.', $content);
         $lines = explode("\n", str_replace("\r", '', $content));
@@ -721,6 +817,11 @@ class ProductImportService
         $get = fn (int $i) => trim($lines[$i] ?? '');
 
         $companyName = $get(0);
+        // Ityp (línea 2 / índice 1) — 1=punto rotacionalmente simétrico,
+        // 2=lineal, 3=no puntual no rotacionalmente simétrico. Es la "forma"
+        // de la luminaria (no confundir con `$symmetry`/Isym, la simetría
+        // angular de la web fotométrica).
+        $luminaireType = (int) $get(1);
         $symmetry = (int) $get(2);
         $numC = max(1, (int) $get(3));
         $dc = (float) $get(4);
@@ -729,8 +830,46 @@ class ProductImportService
         $luminaireName = $get(8);
         $luminaireNumber = $get(9);
 
-        [$lumL, $lumW, $lumH] = $this->parseTriplet($get(12));
-        $downwardFlux = (float) $get(14);
+        // Líneas 13-25 (índices 12-24), especificación EULUMDAT oficial
+        // verificada contra DIALux (evo.support-en.dial.de) y AGI32
+        // (docs.agi32.com), y contra archivos reales de EMOS/LEDVANCE/
+        // Thorlux: CADA valor va en su PROPIA línea — nunca 3 valores en una
+        // sola línea separados por espacio (ese formato es de IES, no de
+        // EULUMDAT; `parseTriplet()` es para IES, no para esto).
+        // EULUMDAT declara estas 9 dimensiones en MILÍMETROS — el motor de
+        // cálculo (`luminousArea()`, `hooks/directIlluminance.ts`) espera
+        // METROS (multiplica `length * width` directo para el área en m²,
+        // sin ninguna conversión propia). Sin dividir entre 1000 aquí,
+        // cualquier producto importado vía este parser de respaldo (sin un
+        // override manual de `dimensions`, que hoy siempre gana) habría
+        // guardado un área luminosa ~1 000 000 veces más grande de lo real,
+        // rompiendo en silencio cualquier cálculo de UGR que dependiera de
+        // ella para un import futuro sin override.
+        $lumL = (float) $get(12) / 1000;
+        $lumW = (float) $get(13) / 1000;
+        $lumH = (float) $get(14) / 1000;
+        $areaL = (float) $get(15) / 1000;
+        $areaW = (float) $get(16) / 1000;
+        $areaHeightC0 = (float) $get(17) / 1000;
+        $areaHeightC90 = (float) $get(18) / 1000;
+        $areaHeightC180 = (float) $get(19) / 1000;
+        $areaHeightC270 = (float) $get(20) / 1000;
+        // DFF% (fracción de flujo hacia abajo) vive en la línea 22 EULUMDAT
+        // (índice 21) — la línea 15 (índice 14) que leía antes es en
+        // realidad la altura de la luminaria (ya capturada arriba en
+        // `$lumH`), no el DFF%.
+        $downwardFlux = (float) $get(21);
+        $lightOutputRatio = (float) $get(22);
+        $conversionFactor = (float) $get(23);
+        $tiltDeg = (float) $get(24);
+
+        // Línea 26 (índice 25): número de SETS de lámparas declarados —
+        // casi siempre 1. Este parser solo usa los datos del primer set
+        // (mismo alcance que el binario Rust); para archivos con más de un
+        // set sí se avanza el cursor lo suficiente para no corromper la
+        // búsqueda de ángulos/candela que viene después, aunque no se sume
+        // el flujo de los sets adicionales.
+        $numLampSets = max(1, (int) $get(25));
 
         // EULUMDAT: número de lámparas del primer set vive en la línea 27
         // (1-indexada), no en la 28 (esa es el tipo de lámpara, un texto).
@@ -755,12 +894,17 @@ class ProductImportService
         $cctStr = $get($cursor++);
         $criRa = (float) $get($cursor++);
         $watts = (float) $get($cursor++);
+        // Sets adicionales (raro): cada uno son 6 líneas más (num_lamps,
+        // tipo, lumens, cct, cri, watts) que no se leen individualmente pero
+        // sí hay que saltar para que el cursor llegue al lugar correcto para
+        // DR1-10 y los ángulos.
+        $cursor += ($numLampSets - 1) * 6;
 
         $cctK = is_numeric($cctStr) ? (float) $cctStr : null;
         $criRa = $criRa > 0 ? $criRa : null;
 
         $tokens = $this->collectNumericTokens($lines, $cursor);
-        [$cAngles, $gAngles, $remaining] = $this->extractLdtAnglesAndCandelaTokens($tokens, $numC, $dc, $numG, $dg);
+        [$cAngles, $gAngles, $remaining, $directRatios] = $this->extractLdtAnglesAndCandelaTokens($tokens, $numC, $dc, $numG, $dg);
 
         // Matriz de candelas [c][g] en cd/klm
         $candela = [];
@@ -856,9 +1000,26 @@ class ProductImportService
             'beam_angle_10' => round($beam10, 1),
             'max_candela' => round($maxCandela, 1),
             'dimensions' => ['length' => $lumL, 'width' => $lumW, 'height' => $lumH],
+            'luminous_opening' => [
+                'length' => $areaL,
+                'width' => $areaW,
+                'height_c0' => $areaHeightC0,
+                'height_c90' => $areaHeightC90,
+                'height_c180' => $areaHeightC180,
+                'height_c270' => $areaHeightC270,
+            ],
             'photometric_summary' => $photometricSummary,
             'photometric_web' => (strlen($webJson) < 512_000) ? $webData : null,
-            'metadata' => ['lamp_type' => $lampType, 'downward_flux_fraction' => $downwardFlux],
+            'metadata' => [
+                'num_lamps' => $numLamps,
+                'lamp_type' => $lampType,
+                'luminaire_type' => $luminaireType,
+                'downward_flux_fraction_pct' => $downwardFlux,
+                'light_output_ratio_pct' => $lightOutputRatio,
+                'conversion_factor' => $conversionFactor,
+                'tilt_deg' => $tiltDeg,
+                'direct_ratios' => $directRatios,
+            ],
         ];
     }
 
@@ -1340,20 +1501,22 @@ class ProductImportService
         $gAngles = $dg > 0.0 ? array_map(fn ($i) => $i * $dg, range(0, $numG - 1)) : [];
 
         // Entre la cabecera de lámpara y los ángulos EULUMDAT existen diez
-        // factores de reducción. Hay que localizar ambas listas aunque dC sea
-        // cero (caso habitual de una luminaria rotacional con un solo plano C).
-        // Antes se tomaba el primer factor como ángulo C y toda la matriz de
-        // intensidades quedaba desplazada.
+        // factores de reducción (DR1-DR10). Hay que localizar ambas listas
+        // aunque dC sea cero (caso habitual de una luminaria rotacional con
+        // un solo plano C). Antes se tomaba el primer factor como ángulo C y
+        // toda la matriz de intensidades quedaba desplazada. Todo lo que
+        // quede ANTES del offset encontrado son los DR1-10 (o menos, si el
+        // archivo los omite) — se devuelven en vez de descartarse en silencio.
         $limit = max(0, min(32, count($tokens) - $numC - $numG));
         for ($offset = 0; $offset <= $limit; $offset++) {
             $candidateC = array_slice($tokens, $offset, $numC);
             $candidateG = array_slice($tokens, $offset + $numC, $numG);
             if ($this->isExpectedAngleList($candidateC, $numC, $dc) && $this->isExpectedAngleList($candidateG, $numG, $dg)) {
-                return [$candidateC, $candidateG, array_slice($tokens, $offset + $numC + $numG)];
+                return [$candidateC, $candidateG, array_slice($tokens, $offset + $numC + $numG), array_slice($tokens, 0, $offset)];
             }
         }
 
-        return [$cAngles, $gAngles, $tokens];
+        return [$cAngles, $gAngles, $tokens, []];
     }
 
     /**
@@ -1375,25 +1538,50 @@ class ProductImportService
     }
 
     /**
-     * @param  array<string, mixed>  $web
+     * Encuentra, entre los planos C realmente almacenados, el más cercano a
+     * `$targetDeg` o a su opuesto (`$targetDeg + 180`) — un solo plano
+     * mirado y reflejado ya dibuja el corte completo "C/C+180" (misma
+     * convención que DIALux: un archivo con simetría rotacional (Isym=1, un
+     * solo plano C) produce curvas C0/C180 y C90/C270 idénticas superpuestas).
+     *
+     * @param  float[]  $cAngles
+     * @param  int[]  $exclude
      */
-    private function buildPolarSvg(array $web, string $title): ?string
+    private function findClosestCPlane(array $cAngles, float $targetDeg, array $exclude, float $maxDeltaDeg = INF): ?int
     {
-        $gammaAngles = $web['gamma_angles'] ?? null;
-        $candela = $web['candela'] ?? null;
-        if (! is_array($gammaAngles) || ! is_array($candela) || empty($candela[0]) || ! is_array($candela[0])) {
-            return null;
+        $bestIndex = null;
+        $bestDelta = INF;
+        foreach ($cAngles as $index => $c) {
+            if (in_array($index, $exclude, true)) {
+                continue;
+            }
+            $normalized = fmod(fmod($c, 360.0) + 360.0, 360.0);
+            $deltaToTarget = min(abs($normalized - $targetDeg), 360.0 - abs($normalized - $targetDeg));
+            $opposite = fmod($targetDeg + 180.0, 360.0);
+            $deltaToOpposite = min(abs($normalized - $opposite), 360.0 - abs($normalized - $opposite));
+            $delta = min($deltaToTarget, $deltaToOpposite);
+            if ($delta < $bestDelta) {
+                $bestDelta = $delta;
+                $bestIndex = $index;
+            }
         }
 
-        $plane = array_map('floatval', $candela[0]);
-        $angles = array_map('floatval', $gammaAngles);
-        $maxCandela = max(0.0, ...$plane);
-        if ($maxCandela <= 0.0) {
-            return null;
-        }
+        // Sin tolerancia, un archivo con solo C0/C180 (sin C90) elegiría el
+        // plano C180 "de sobra" como si fuera C90/C270 — mal etiquetado,
+        // porque en realidad pertenece al mismo eje que el plano primario.
+        // Se exige que el candidato esté razonablemente cerca de 90°/270°
+        // antes de aceptarlo.
+        return $bestDelta <= $maxDeltaDeg ? $bestIndex : null;
+    }
 
+    /**
+     * @param  float[]  $angles
+     * @param  float[]  $values
+     */
+    private function buildPolarCurvePath(array $angles, array $values, float $maxCandela): string
+    {
         $points = [];
-        foreach ($plane as $index => $candelaValue) {
+        foreach ($values as $index => $candelaValue) {
             $angle = deg2rad($angles[$index] ?? $index);
             $radius = 120.0 * ($candelaValue / $maxCandela);
             $x = 160.0 + sin($angle) * $radius;
@@ -1402,17 +1590,61 @@ class ProductImportService
         }
 
         $mirrored = [];
-        for ($index = count($plane) - 1; $index >= 0; $index--) {
+        for ($index = count($values) - 1; $index >= 0; $index--) {
             $angle = deg2rad(-($angles[$index] ?? $index));
-            $radius = 120.0 * ($plane[$index] / $maxCandela);
+            $radius = 120.0 * ($values[$index] / $maxCandela);
             $x = 160.0 + sin($angle) * $radius;
             $y = 160.0 + cos($angle) * $radius;
             $mirrored[] = round($x, 2).','.round($y, 2);
         }
 
-        $curvePath = 'M '.implode(' L ', array_merge($points, $mirrored));
+        return 'M '.implode(' L ', array_merge($points, $mirrored));
+    }
+
+    /**
+     * @param  array<string, mixed>  $web
+     */
+    private function buildPolarSvg(array $web, string $title): ?string
+    {
+        $gammaAngles = $web['gamma_angles'] ?? null;
+        $candela = $web['candela'] ?? null;
+        $cAngles = array_map('floatval', is_array($web['c_angles'] ?? null) ? $web['c_angles'] : []);
+        $primaryIndex = $this->findClosestCPlane($cAngles, 0.0, []) ?? 0;
+
+        if (! is_array($gammaAngles) || ! is_array($candela) || empty($candela[$primaryIndex]) || ! is_array($candela[$primaryIndex])) {
+            return null;
+        }
+
+        $angles = array_map('floatval', $gammaAngles);
+        $plane = array_map('floatval', $candela[$primaryIndex]);
+
+        $secondaryIndex = $this->findClosestCPlane($cAngles, 90.0, [$primaryIndex], 30.0);
+        $secondaryPlane = $secondaryIndex !== null && is_array($candela[$secondaryIndex] ?? null)
+            ? array_map('floatval', $candela[$secondaryIndex])
+            : null;
+        $hasSecondPlane = ! empty($secondaryPlane);
+
+        $maxCandela = max(0.0, ...$plane, ...($hasSecondPlane ? $secondaryPlane : []));
+        if ($maxCandela <= 0.0) {
+            return null;
+        }
+
+        // C0/C180 se dibuja primero (rojo, como en el lector LDT de DIALux) y
+        // C90/C270 encima (azul) — en una luminaria rotacionalmente simétrica
+        // ambas curvas coinciden exactamente y solo se ve la azul, igual que
+        // en DIALux, en vez de mostrar solo un plano y descartar el resto en
+        // silencio. Con un solo plano disponible, la curva sigue siendo azul
+        // (sin cambio de color respecto al comportamiento previo).
+        $primaryCurvePath = $this->buildPolarCurvePath($angles, $plane, $maxCandela);
+        $secondaryCurvePath = $hasSecondPlane ? $this->buildPolarCurvePath($angles, $secondaryPlane, $maxCandela) : null;
+        $primaryColor = $secondaryCurvePath ? '#dc2626' : '#2563eb';
+
         $safeTitle = htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeMax = number_format($maxCandela, 0, '.', ',');
+        $referenceLumens = (float) ($web['reference_lumens'] ?? 0);
+        $fluxSuffix = $referenceLumens > 0
+            ? ' · Φ '.number_format($referenceLumens, 0, '.', ',').' lm'
+            : '';
 
         // Todo el dibujo son `<path>` — nunca `<circle>`/`<line>`/`<polyline>`.
         // dompdf (motor que rasteriza este SVG a PDF) solo tiene probado
@@ -1433,9 +1665,45 @@ class ProductImportService
         $circle120 = $circlePath(120);
         $gridAttrs = 'stroke="#d7dde6" stroke-width="0.7" fill="none"';
 
+        $ringLabels = '';
+        foreach ([40, 80, 120] as $r) {
+            $value = number_format(round($maxCandela * ($r / 120)), 0, '.', ',');
+            $y = 160 + $r + 3;
+            $ringLabels .= "<text x=\"156\" y=\"{$y}\" font-family=\"Arial, sans-serif\" font-size=\"7\" fill=\"#94a3b8\" text-anchor=\"end\">{$value}</text>\n        ";
+        }
+
+        $angleLabels = '';
+        foreach ([0, 30, 60, 90] as $deg) {
+            $rad = deg2rad($deg);
+            $labelRadius = 131;
+            $x = round(160 + sin($rad) * $labelRadius, 2);
+            $y = round(160 + cos($rad) * $labelRadius, 2);
+            if ($deg === 0) {
+                $yText = $y + 5;
+                $angleLabels .= "<text x=\"{$x}\" y=\"{$yText}\" font-family=\"Arial, sans-serif\" font-size=\"7\" fill=\"#94a3b8\" text-anchor=\"middle\">0°</text>\n        ";
+
+                continue;
+            }
+            $mirroredX = round(160 - sin($rad) * $labelRadius, 2);
+            $yText = $y + 2;
+            $angleLabels .= "<text x=\"{$x}\" y=\"{$yText}\" font-family=\"Arial, sans-serif\" font-size=\"7\" fill=\"#94a3b8\" text-anchor=\"middle\">{$deg}°</text>\n        ";
+            $angleLabels .= "<text x=\"{$mirroredX}\" y=\"{$yText}\" font-family=\"Arial, sans-serif\" font-size=\"7\" fill=\"#94a3b8\" text-anchor=\"middle\">{$deg}°</text>\n        ";
+        }
+
+        $legend = $secondaryCurvePath !== null
+            ? '<path d="M 220 12 L 232 12" stroke="#dc2626" stroke-width="2"/>'
+                .'<text x="235" y="14" font-family="Arial, sans-serif" font-size="7" fill="#64748b">C0/C180</text>'
+                .'<path d="M 275 12 L 287 12" stroke="#2563eb" stroke-width="2"/>'
+                .'<text x="290" y="14" font-family="Arial, sans-serif" font-size="7" fill="#64748b">C90/C270</text>'
+            : '';
+        $secondaryPathEl = $secondaryCurvePath !== null
+            ? "<path d=\"{$secondaryCurvePath}\" stroke=\"#2563eb\" stroke-width=\"2.2\" fill=\"none\"/>"
+            : '';
+
         return <<<SVG
 <svg xmlns="http://www.w3.org/2000/svg" width="640" height="520" viewBox="0 0 320 260">
     <rect width="320" height="260" fill="#ffffff"/>
+    {$legend}
     <g transform="translate(0 -30)">
         <path d="{$circle40}" {$gridAttrs}/>
         <path d="{$circle80}" {$gridAttrs}/>
@@ -1444,11 +1712,14 @@ class ProductImportService
         <path d="M 160 40 L 160 280" {$gridAttrs}/>
         <path d="M 75 75 L 245 245" {$gridAttrs}/>
         <path d="M 245 75 L 75 245" {$gridAttrs}/>
-        <path d="{$curvePath}" stroke="#2563eb" stroke-width="2.2" fill="none"/>
+        <path d="{$primaryCurvePath}" stroke="{$primaryColor}" stroke-width="2.2" fill="none"/>
+        {$secondaryPathEl}
+        {$ringLabels}
+        {$angleLabels}
     </g>
     <text x="18" y="22" font-family="Arial, sans-serif" font-size="11" fill="#0f172a" font-weight="700">CDL polar</text>
     <text x="18" y="38" font-family="Arial, sans-serif" font-size="8" fill="#64748b">{$safeTitle}</text>
-    <text x="18" y="246" font-family="Arial, sans-serif" font-size="8" fill="#64748b">Imax {$safeMax} cd</text>
+    <text x="18" y="246" font-family="Arial, sans-serif" font-size="8" fill="#64748b">Imax {$safeMax} cd{$fluxSuffix}</text>
 </svg>
 SVG;
     }

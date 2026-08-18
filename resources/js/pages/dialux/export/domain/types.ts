@@ -1,6 +1,7 @@
 import type { SceneComparisonEntry } from '@/pages/dialux/domain/calculation/compareLightingScenes';
 import type { EmergencyRequirementEvaluation } from '@/pages/dialux/domain/calculation/emergencyCompliance';
 import type { CalculationWarning } from '@/pages/dialux/domain/calculation/types';
+import type { LeniResult } from '@/pages/dialux/hooks/leniCalculation';
 import type {
     Canopy,
     Door,
@@ -346,6 +347,8 @@ export interface DialuxLuminaireListItem {
         technical_table?: Array<{ label: string; value: string }>;
         warnings?: string[];
         ugrTableComputed?: ProductUgrTable | null;
+        /** Grilla de 5 combinaciones de reflectancia habituales (Ronda 21c) — se renderiza en una sección de ancho completo del PDF, no en la columna de 50% que usa `ugrTableComputed`. */
+        ugrTablesComputed?: ProductUgrTable[] | null;
     } | null;
     reportAssets?: {
         polar_svg?: string | null;
@@ -441,6 +444,13 @@ export interface DialuxAmbientDetail {
     maintenanceFactor: number;
     /** Horas de operación diarias asumidas para "Consumo (kWh/a)" — ver `ProjectSiteSettings.dailyOperatingHours`. Default 8. */
     dailyOperatingHours: number;
+    /**
+     * Resultado LENI (EN 15193-1, método simplificado) — `null` cuando
+     * `ProjectSiteSettings.leni.buildingType` no está definido, en cuyo
+     * caso el PDF sigue mostrando el bloque "Consumo (kWh/a)" simple de
+     * arriba, etiquetado "No regulado". Ver `hooks/leniCalculation.ts`.
+     */
+    leni: LeniResult | null;
     usefulPlaneHeight: number;
     marginalZone: number;
     calculationIndex: string;

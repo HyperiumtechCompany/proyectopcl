@@ -1,5 +1,251 @@
 # Plan de cierre de brecha de paridad con DIALux evo (benchmark Pozuzo vs. MÓDULO I)
 
+## -21l. Ronda 21l — se revirtió `occlusion: true` (activado en la Ronda anterior, el mismo día): bug real de geometría con muros de contorno cerrado, medido en un proyecto real
+
+El usuario probó el sistema contra un proyecto real ("Vinchos", id=1 en `dialux_projects`) con 2 "Aulas" comparadas contra un PDF de DIALux evo real (capturas de pantalla): DIALux evo reporta Ē=544/567 lx, Emin=276/302 lx, Emax=711/741 lx, Uo=0.51/0.53; el sistema propio (con `occlusion: true`, activado en la Ronda 21k del mismo día) reportó Ē=478.7/482.7, Emin=149.9/133.0, Emax=694.9/717.3, Uo=0.313/0.275 — **peor** en Emin y Uo que antes de activar oclusión, no mejor.
+
+### Diagnóstico (reproducido con los datos reales del proyecto, no una hipótesis)
+
+Se exportó la escena real de "Vinchos" (`DialuxProject::find(1)->data['scenes'][0]`) y se corrió `runProjectLightingCalculation` directamente con `occlusion: true` vs. `false`:
+
+| | Ē avg | Emin | Emax | Uo |
+|---|---:|---:|---:|---:|
+| `occlusion: false` (revertido a esto) | 590.5 / 604.2 | 183.9 / 181.4 | 787.5 / 816.4 | 0.311 / 0.300 |
+| `occlusion: true` (lo que se había activado) | 478.7 / 482.7 | 149.9 / 133.0 | 694.9 / 717.3 | 0.313 / 0.275 |
+| DIALux evo (referencia real) | 544 / 567 | 276 / 302 | 711 / 741 | 0.51 / 0.53 |
+
+`occlusion: false` es más cercano a la referencia en las 4 métricas — `occlusion: true` empeora Ē, Emin y Uo. **Causa raíz encontrada, no solo síntoma**: el ambiente tiene 2 muros interiores reales, dibujados con jambas de puerta. El editor guarda `wall.vertices` para este tipo de muro como el CONTORNO CERRADO completo (24+ vértices, primer punto == último punto, ya con el grosor incluido) — no como una polilínea de centro de 2 puntos. `buildLinearOcclusionBoxes()` (`domain/geometry/occlusionBoxes.ts`) no distingue los dos casos: trata cada par consecutivo de vértices del contorno como un segmento de centro y lo extruye por `thickness` OTRA VEZ, generando muchas cajas de obstrucción superpuestas mucho más grandes que el muro real de 0.13 m. Reproducido con un caso mínimo en `occlusionBoxes.test.ts` (7 cajas para 1 muro rectangular con 1 jamba, en vez de 1).
+
+No es una geometría rara — es como el editor genera cualquier muro con una puerta empotrada, así que este bug afecta potencialmente a la mayoría de proyectos reales con muros interiores, no solo a este caso.
+
+### Acción tomada
+
+`buildProductionCalculationConfig` volvió a `occlusion: false` (mismo día que se activó). `productionCalculationConfig.test.ts` y el nuevo test en `occlusionBoxes.test.ts` quedan como guardianes: si alguien reactiva el flag sin corregir `buildLinearOcclusionBoxes()` primero, el test de geometría documenta exactamente por qué no debe hacerse todavía.
+
+### Pendiente (Fase 6 del plan maestro, no resuelto en esta ronda)
+
+Corregir `buildLinearOcclusionBoxes()` para reconocer un contorno cerrado (primer vértice == último) y tratarlo como una única extrusión de piso a techo con la forma real del muro, en vez de una polilínea de centro — o normalizar `wall.vertices` a un formato único (polilínea de centro siempre) en el punto donde el editor genera muros con jambas, antes de que llegue a `buildCalculationSnapshot.ts`. Cualquiera de las dos correcciones requiere entender primero cómo y dónde el editor genera esos 24+ vértices para muros con receso de puerta — no investigado en esta ronda (fuera del alcance de "revertir el default inseguro hoy mismo").
+
+## -21k. Ronda 21k — el usuario entregó su catálogo real de luminarias; con AMBOS fixtures en fotometría real, el error cae de 38.9%/46.7% a 16.7%/1.3%
+
+A pedido explícito del usuario ("ya tengo los datos reales usados"), se recibieron 5 archivos `.ldt` reales (carpeta `Catalogo_Luminarias/LUMINARIAS PARA DIALUX/`, luminarias efectivamente especificadas en proyectos reales "según plano"). Verificado uno por uno contra el catálogo real de la aplicación (`luminaire_products`, MySQL, no un mock):
+
+| Archivo | Producto | Ya en catálogo? |
+|---|---|---|
+| `1. LEDVANCE 36W-4320lm/9649.ldt` | LEDVANCE PL VAL 600 36W/4000K UGR19 | No — importado hoy, id=59 |
+| `2. 54W-6000lm/GRDR 126L96 OPTPA C84.ldt` | Dextra GRADUATE RECESSED LED | Sí, id=57 (`provenance: manufacturer`) |
+| `3. 26w-2580lm/60739.ldt` | LTS FLIQ 400.3040.01_FLIQZ 400.24 | Parcial — id=9 ya existía pero de un `.ldt` DISTINTO (`108192.ldt`, 3411.1 lm); este archivo (`60739.ldt`, 2580 lm) se importó como registro nuevo, id=60. **Discrepancia sin resolver, reportada al usuario**: dos variantes de la misma familia de producto en catálogo, no se tocó ninguna. |
+| `4. 14w-1508lm/47988.ldt` | Thorlux TEG18046 | Sí, id=13 (ya era la fuente de `TEG18046_PHOTOMETRIC_WEB`) |
+| `5. L. REIOLUX 21W-2014lm/18900.ldt` | Regiolux relo-RDES-O 190 LED | Sí, id=58 (`provenance: manufacturer`) |
+
+Los 2 imports nuevos se hicieron con `ProductImportService::import()` real (vía tinker, no un parser paralelo) y se verificaron persistidos en BD: `provenance: 'manufacturer'`, matriz de candela no vacía (id=59: 7 planos C × 181 gamma; id=60: 1 plano × 73 gamma, pico 1639.5 cd → 635.5 cd/klm, coincide con el rango 600-800 cd/klm que `fixtures.ts` ya estimaba para GF19140 antes de tener el archivo real).
+
+**El hallazgo importante**: id=60 (26 W/2580 lm) es el mismo flujo/potencia que GF19140, el fixture `caseta-vs-guarderias` que llevaba meses "sin fotometría real, etiquetado no comparable". Se copió su `photometric_web` (byte a byte desde la BD, mismo método que `TEG18046_PHOTOMETRIC_WEB`) a un nuevo `GF19140_SUBSTITUTE_PHOTOMETRIC_WEB` en `realPhotometry.ts`, y se conectó al fixture. **No es la Thorlux GF19140 exacta** (fabricante distinto, LTS) — sigue sin conseguirse esa referencia puntual — pero es fotometría real de fábrica, y es la luminaria que el usuario confirmó como la realmente usada en sus proyectos reales para este tipo de ambiente.
+
+### Resultado — `dialuxEvoParity.test.ts`, config de producción real (`auto-by-shape`)
+
+| Fixture | Antes (sin fotometría real / GF19140 Lambertiano) | Ahora (ambos con fotometría real) |
+|---|---:|---:|
+| sshh-vs-bano | 38.9% | **16.7%** (first-bounce, auto-elegido por aspecto 2.33:1) |
+| caseta-vs-guarderias | 46.7% (no comparable) | **1.3%** (iterative, auto-elegido por aspecto 1.05:1) — dentro del objetivo ±5% del usuario |
+
+Dato adicional registrado, sin cambiar el default de producción: para `sshh-vs-bano`, el modo `iterative` (no el que auto-by-shape elige para este aspecto) da **5.2%**, mejor que el first-bounce elegido (16.7%) — contrario a lo que predecía la investigación histórica de `productionCalculationConfig.ts`, basada en un SS.HH de OTRO proyecto ("Módulo 22") con datos LDT distintos. Un caso nuevo no es evidencia suficiente para tocar el umbral 2.0:1 ya elegido (misma regla de "no sobreajustar a un solo caso" de este plan) — pero es la segunda vez que aparece esta señal, vale la pena revisar el umbral cuando haya un tercer caso real.
+
+**Verificado**: `npx vitest run` sobre `dialuxEvoParity.test.ts` (6/6), `npm run types` limpio. Ningún archivo de producción (motor de cálculo) se tocó — solo el catálogo de datos de benchmark (`fixtures.ts`, `realPhotometry.ts`) y el catálogo real de productos (2 filas nuevas en `luminaire_products`).
+
+### Pendiente para el usuario
+
+Confirmar cuál de los dos productos "FLIQ 400.3040.01" (id=9, 3411.1 lm, `108192.ldt` — importado 2026-08-06; id=60, 2580 lm, `60739.ldt` — importado hoy) corresponde a qué proyecto real. No se resolvió por criterio propio de esta sesión: podrían ser dos variantes de catálogo legítimas para proyectos distintos.
+
+## -21j. Ronda 21j — investigación acotada de la Causa B / zona marginal (Fase C del cierre de brechas de `dialux-calc-reviewer`): un hallazgo real de datos, una hipótesis de código descartada, una divergencia de fórmula confirmada pero sin causa verificable
+
+A pedido explícito del usuario ("investigar más a fondo la zona marginal / first-bounce vs DIALux evo", tras la auditoría de `dialux-calc-reviewer`/`dialux-normativa-auditor`), se retomó §2.2 y §2.5 de este plan con tres líneas de trabajo acotadas. Regla del plan respetada en las tres: **ningún ajuste de coeficiente para que un caso cuadre** — solo causas físicas/de implementación verificables o, en su ausencia, el hallazgo se registra como descartado.
+
+### 1. Revisión línea por línea de `iterativeRadiosity.ts` — sin bug encontrado
+
+Se revisó la matriz de factores de forma (`computePatchFormFactorMatrix`), la normalización por fila (`Σ_j F(i→j) ≤ 1`), el criterio de convergencia (residual relativo MÁXIMO, no un agregado) y el barrido Gauss-Seidel. Los tres ya tienen justificación física correcta y verificación de reciprocidad en test (`área_i·F(i→j) == área_j·F(j→i)`, `iterativeRadiosity.test.ts`). **No se encontró ningún bug de implementación en el solver en sí** — el solver converge exactamente a lo que predice la teoría de cavidad zonal clásica para el sistema que se le da (confirmado antes, §2.2: 293.8/150.1≈1.96 ≈ 1/(1-ρ̄) para ρ̄≈0.49).
+
+### 2. Hipótesis "piso/techo también necesitan subdivisión, igual que las paredes" — probada, DESCARTADA con evidencia
+
+`wallVerticalSegments` (§ ya documentado en `roomPatches.ts`) subdivide paredes cuando son más altas que la dimensión horizontal del recinto. Por simetría directa se probó la hipótesis análoga para piso/techo: subdividir en grilla cuando son más anchos que la ALTURA del recinto (`horizontalSurfaceGridSegments`, implementado y luego revertido en esta sesión).
+
+**Resultado real, no el esperado**: la hipótesis es geométricamente al revés de lo que hace falta. Un recinto de proporciones enteramente normales (4×4 m, altura 3 m — el propio fixture de test de `roomPatches.test.ts`) tiene extensión horizontal (4 m) MAYOR que su altura (3 m), así que el umbral "ancho > altura" se dispara para casi CUALQUIER recinto típico (la mayoría de recintos son más anchos que altos), no solo para geometrías patológicas — a diferencia de "pared más alta que el recinto es ancho", que sí es un caso raro. Verificado ejecutando la suite existente: 4 de 9 tests de `roomPatches.test.ts` fallaron inmediatamente con geometría de recinto ordinaria. Peor aún: para el caso real que motivó la investigación (SS.HH, 2.209×0.950 m, altura 4.67 m) la extensión horizontal (0.95-2.2 m) es MENOR que la altura (4.67 m) — el umbral propuesto ni siquiera se activa para el caso que se quería corregir. **Hipótesis descartada, cambio revertido (`git checkout`), no llegó a producción.**
+
+### 3. Zona marginal (§2.5) — la "anomalía" era un dato viejo del proyecto real, NO un bug de fórmula; pero aparece una divergencia real y distinta en recintos angostos
+
+Se recalculó `getRoomMarginalZone` (`roomLighting.ts`, fórmula EN 12464-1:2021 `p = 0.2 × 5^log10(d)`) para las dimensiones reales de los dos casos, SIN el override `room.marginalZone` que ya trae el proyecto guardado:
+
+| Caso | Fórmula aplicada fresca | DIALux evo declara | Diferencia |
+|---|---:|---:|---:|
+| Guarderías/Caseta de control (2.1×2.21 m, ratio 1.05 → usa dimensión mayor) | **0.348 m** | 0.350 m | 0.6% — prácticamente idéntico |
+| Baño/SS.HH (2.209×0.950 m, ratio 2.33 → usa dimensión menor) | **0.193 m** | 0.125 m | 54% — divergencia real |
+
+**Conclusión sobre Guarderías**: la "anomalía" que §2.5 dejó sin explicar (proyecto real declarando 0.194 m contra los 0.350 m de evo) **NO es un bug de la fórmula actual** — la fórmula, aplicada fresca, da 0.348 m, que coincide con evo casi exactamente. El 0.194 m que el proyecto Pozuzo real tiene guardado es un valor `room.marginalZone` viejo (guardado antes de que esta fórmula existiera, o de una corrida con datos distintos) que el código respeta como override explícito (`getRoomMarginalZone` primero mira `room.marginalZone`, luego calcula). Es exactamente la misma clase de problema que la Causa A (§2.1): un dato desactualizado del proyecto, no algo que un cambio de código deba resolver — acción para el usuario: reabrir el ambiente "Guarderías" y limpiar/recalcular su `marginalZone` si quiere que deje de usar el valor guardado.
+
+**Conclusión sobre Baño/SS.HH**: aquí SÍ hay una divergencia real de 54% entre la fórmula EN 12464-1 tal como está implementada (rama "usa dimensión menor" para ratio≥2, dando 0.193 m) y lo que DIALux evo declaró (0.125 m) para la misma geometría. Se intentó (sin éxito, sin forzar) encontrar qué combinación de dimensión/fórmula produce 0.125 m exactamente a partir de los datos disponibles (área, dimensión mayor, dimensión menor, ninguna combinación simple de `p=0.2×5^log10(d)` con esas tres entradas da 0.125 m) — **sin acceso al texto completo de la tabla EN 12464-1:2021 (Anexo C) no se puede confirmar si DIALux evo usa una rama distinta de la misma fórmula, una tabla discreta en vez de la fórmula continua, u otro criterio para razones de aspecto ≥2**. Registrado como divergencia real, sin causa verificable todavía — no se ajustó ningún coeficiente para que 0.193 se convierta en 0.125.
+
+### Qué NO cambió en esta ronda
+
+Ningún archivo de producción quedó modificado por esta investigación (la única prueba de código, `roomPatches.ts`, fue revertida). El default `interreflection: 'auto-by-shape'` de la Ronda 21i sigue siendo el comportamiento de producción — no se encontró evidencia que justifique cambiarlo.
+
+### Próximo paso, si se retoma
+
+Conseguir el texto real del Anexo C de EN 12464-1:2021 (o un caso adicional con ratio de aspecto ≥2 y zona marginal declarada por DIALux evo) antes de tocar `getRoomMarginalZone` de nuevo — con un solo caso (SS.HH) no hay evidencia suficiente para distinguir "DIALux evo usa una fórmula distinta para ratio≥2" de "este caso puntual tiene alguna particularidad no capturada aquí".
+
+## -21i. Cambio DELIBERADO del default de producción: `interreflection: 'auto-by-shape'` (a pedido explícito del usuario)
+
+Reporte real del usuario: un ambiente de 43.8 m² con las mismas propiedades/luminaria en ambos sistemas daba Ē=502 lx en este motor vs. 544 lx en DIALux evo (+8.4% de diferencia, fuera de su tolerancia de ±5%), y por separado la fila "Valores de consumo" del PDF marcaba "946 kWh/a → No conforme" contra un "máx. 500 kWh/a" fabricado (ver hallazgo #2 abajo).
+
+### Hallazgo #1 (bug real, corregido): el "límite" de consumo era el lux normativo relabeleado
+
+`formal-pdf.blade.php::$renderAmbientResultsTable` calculaba `$consumptionLimit = (float) $detail['targetLux']` — copiaba literalmente el lux exigido del ambiente (ej. 500) y lo mostraba como si fuera un límite de consumo anual en kWh/a, con un "Conforme"/"No conforme" resultante sin ninguna base normativa (Perú/RNE EM.010 no tiene un límite de consumo anual por ambiente — es un concepto tipo LENI/EN 15193-1). Corregido: el renglón ahora es informativo, "No regulado", nunca un veredicto fabricado. 2 tests nuevos + 1 actualizado en `FormalExportTest.php`.
+
+### Hallazgo #2 (no es un bug, es la aproximación `first-bounce` ya documentada en este plan)
+
+El gap de 502→544 lx es del tamaño exacto que este mismo plan ya caracterizó como típico de `first-bounce` (~5-12%, ver §1/§3 y `productionCalculationConfig.ts`). Verificado numéricamente: para un ambiente ~44 m² con reflectancia 70/50/20, pasar de `first-bounce` a radiosidad convergida sube el promedio un 21.6% — de sobra para explicar el 8.4% observado.
+
+**Decisión previa de este plan** (múltiples rondas, ver `productionCalculationConfig.ts`): no cambiar el default sin más evidencia, porque no hay un modo ganador universal — depende de la forma del ambiente (elongado favorece `first-bounce`, compacto/cuadrado favorece `iterative`; un caso real, "SS.HH" de Módulo 22, sobreestimó +43% con `iterative` forzado).
+
+**El usuario, informado explícitamente de ese riesgo (incluyendo el caso +43%), pidió automatizar la selección por forma de todos modos**: con la variedad real de tipos de ambiente/proyecto del sistema, un override manual ambiente por ambiente no es viable ("no voy a saber todo como para agregar valores concisos"). Se implementó `interreflection: 'auto-by-shape'` (`interreflectionModeHeuristic.ts`): decide `first-bounce`/`iterative` POR AMBIENTE según la relación de aspecto de su bounding box, umbral 2.0:1 (elegido en el medio del hueco documentado: 1.5:1 favorece `iterative`, 2.3:1 favorece `first-bounce`).
+
+**Validación contra el proyecto real "Módulo 22"** (`modulo22ProjectFixture.ts`, el mismo de `modulo22GoldenCase.test.ts`):
+
+| Ambiente | Aspecto | Modo elegido | evo | first-bounce (antes) | auto-by-shape (ahora) |
+|---|---|---|---|---|---|
+| SS.HH | 2.40:1 | first-bounce (sin cambio) | 206 lx | 201.5 lx (−2.2%) | 201.5 lx (−2.2%) |
+| Ventanilla de atención | 4.33:1 | first-bounce (sin cambio) | 100 lx | 86.4 lx (−13.6%) | 86.4 lx (−13.6%) |
+| Caseta de Control | 1.12:1 | iterative (nuevo) | 203 lx | 173.2 lx (−14.7%) | 226.2 lx (+11.4%) |
+
+El umbral evita exactamente el caso +43% documentado (SS.HH cae del lado correcto) y mejora el error absoluto del único ambiente compacto de la muestra (14.7%→11.4%). Sigue siendo una heurística sobre evidencia limitada (el propio plan lo marca como "hipótesis, no regla"), no una garantía universal — cada ambiente que la use ahora emite un warning (`interreflection-mode-auto-selected`) con su relación de aspecto exacta, visible en el PDF/panel, para que el modo elegido nunca sea un cambio de método silencioso.
+
+**Efecto colateral esperado y corregido**: el UGR usa `Eind/π` como luminancia de fondo cuando hay interreflexión activa — los 4 ambientes compactos de `ugrBenchmark.test.ts` (large-square, l-shape, chamfered-pentagon, trapezoid) pasaron a `iterative` y su UGR bajó ~13-15%; los valores congelados de regresión se actualizaron con el comentario explicando el cambio deliberado (`long-corridor`, elongado, no cambió).
+
+**Verificado**: `npx tsc --noEmit` limpio, suite completa de `domain/calculation` (16 archivos/90 tests) y `export`+`__benchmarks__` (57 archivos) sin regresiones tras actualizar `ugrBenchmark.test.ts`, `php artisan test tests/Feature/Dialux` con los mismos 5 fallos preexistentes de siempre (no relacionados). Los 25 fallos de `panelCircuitCalculations.test.ts`/`wireLengthCalculations.test.ts` (módulo eléctrico, archivos no tocados en esta ronda) y el de `fileSizeBudget.test.ts` son preexistentes, confirmados no relacionados por `git status` (archivos fuera del diff de esta ronda).
+
+## -21d. Cierre de la segunda problemática: 2 luminarias reales nuevas + 2 bugs reales encontrados en el parser LDT
+
+Continuando el cierre acotado de esta ronda ("buscar luminarias NUEVAS, no reintentar GF19140"), se descargaron 2 archivos LDT reales de `luminaires.dialux.com` (mismo origen legítimo que el resto del catálogo) para cubrir categorías que el catálogo real todavía no tenía:
+
+- **EMOS ZU210-9** — "LED Industrial High Bay Light PROFI PLUS 100W" (16999.6 lm, 100 W, 4000K) — primer high bay industrial real del catálogo.
+- **Thorlux Lighting WLX1746X "Lexi"** — señal de salida LED real (ISO 7010), 110 lm, 1.7 W — primera fotometría real orientada específicamente a señalización de emergencia (no un downlight reutilizado con `emergencyFlux` marcado a mano).
+
+Ambos importados con `ProductImportService::import()` real (no a mano) y agregados a `RealPhotometryLuminaireSeeder.php` (ids 55/56).
+
+### 2 bugs reales encontrados al importar (no en el motor de cálculo)
+
+1. **BOM UTF-8 sin limpiar** — el archivo de EMOS empieza con el marcador de orden de bytes UTF-8 (`EF BB BF`); ni `trim()` (PHP) ni `str::trim()` (Rust) lo consideran espacio, así que quedaba pegado al campo `manufacturer` ("\u{FEFF}EMOS" en vez de "EMOS"). Corregido en AMBOS parsers (`app/Services/ProductImportService.php::parseLdt()` y `dialux-photometry/src/main.rs::parse_ldt()`, el binario Rust real que producción usa cuando está compilado) — 1 test de regresión por lenguaje.
+2. **Dimensiones físicas de la luminaria mal parseadas en el fallback PHP** — EULUMDAT declara largo/ancho/alto en TRES líneas consecutivas (13/14/15, confirmado contra archivos reales de EMOS/LEDVANCE), pero `parseLdt()` usaba `parseTriplet()` (pensado para IES, una sola línea con varios campos separados por espacio) sobre una sola línea — capturaba el largo real y dejaba ancho/alto en **0 en silencio**. Solo afecta al parser PHP de respaldo (cuando el binario Rust no está compilado/disponible — Rust no parsea `dimensions` en absoluto todavía, cae al fallback ya documentado de `luminousArea()` de 0.1 m², un caso distinto y ya conocido). Corregido leyendo las 3 líneas por separado; 1 test de regresión (por reflexión, ya que el binario Rust real intercepta el import público antes de llegar a este parser en cualquier máquina donde esté compilado).
+
+**Verificado**: 6/6 tests Rust (`cargo test`), suite PHP completa sin regresiones (258 pasan vs. 256 antes de esta ronda — la diferencia son los 2 tests nuevos; los mismos 30 fallos preexistentes y no relacionados —auth/sesión/plan-request/IES— persisten idénticos con y sin estos cambios, confirmado con `git stash` antes/después), `npx tsc --noEmit` limpio, Pint sin cambios pendientes. Catálogo real: 17 productos, 10 con fotometría real de fabricante (antes 8, sin contar GF19140 que sigue siendo la aproximación Lambertiana declarada).
+
+## -21. Ronda 21 — causa real de la divergencia del oráculo en formas no rectangulares encontrada y corregida: la grilla del oráculo NUNCA coincidía con la del motor real
+
+A pedido explícito del usuario ("vamos en resolver con oráculo Radiance, el punto 3... para empezar a testear y subir al 95%"), se retomó el hallazgo sin cerrar de la Ronda 19 (formas no rectangulares con 13-26% de error de "montaje" contra Radiance, peor que el 2-7% de los rectángulos, sin causa identificada).
+
+### Causa raíz confirmada con lectura de código, no supuesta
+
+`generatePolygonSensorGrid()` (`radianceOracle/generateSensorGrid.ts`) anclaba su grilla en la ESQUINA del bounding box (`columns = floor(bbox/spacing) + 1`, sensor en `min + col*spacing`) mientras el motor real (`hooks/lightingEngineCore.ts::buildGrid`) usa celdas `floor(bbox/spacing)` con el sensor en el CENTRO de cada celda (`min + (i+0.5)*cell`). Son dos esquemas de muestreo DISTINTOS aunque el valor nominal de `spacing` coincidiera (0.5 m en ambos) — exactamente por qué la Ronda 19 (que solo probó cambiar el NÚMERO de espaciado, 0.3→0.5) no solo no arregló el error sino que lo empeoró: alinear el espaciado nominal no alinea el punto de anclaje.
+
+Con una sola luminaria concentrada por ambiente (el diseño deliberado de estos fixtures, para aislar geometría de fotometría), el punto exacto donde cae — o no — un sensor cerca del nadir de la luminaria pesa mucho en el promedio (ley del inverso del cuadrado). Confirmado con cálculo manual: para la L (fixture en x=1,y=1), el oráculo viejo tenía un sensor EXACTAMENTE en (1.0, 1.0) — casi debajo de la luminaria — mientras el motor real nunca muestrea ese punto (su grilla cae en 0.25/0.75/1.25/1.75/2.25/2.75).
+
+**Segundo hallazgo, más severo, en el mismo archivo**: `generateSensorGrid()` (la versión rectangular, usada por los 2 fixtures ORIGINALES del plan — `sshh-vs-bano` y `caseta-vs-guarderias`, los que sustentan el número "83.3%/94.8% de similitud" citado en toda la investigación) no derivaba su grilla de ningún `spacing` en absoluto — recibía `columns`/`rows` fijos, elegidos a mano por quien escribió cada fixture ("densidad ~1 sensor cada 0.3-0.4 m"). Para `sshh-vs-bano` (2.209×0.950 m) esto significaba **21 sensores** (7×3, esquema "endpoint-inclusive" entre los bordes de zona marginal) contra los **4 sensores** que el motor real realmente promedia (`floor(2.209/0.5)=4` columnas × `floor(0.95/0.5)=1` fila — una sola fila central). El oráculo y el motor nunca midieron sobre el mismo conjunto de puntos en ninguno de los 5 fixtures rectangulares existentes.
+
+**Importante — qué NO se ve afectado por este hallazgo**: los números "83.3%/94.8% de similitud vs. DIALux evo" (Ronda 8) comparan `engine.avg_lux` directamente contra el valor impreso en el PDF real de DIALux evo — no pasan por el oráculo Radiance en absoluto. Ese resultado sigue siendo válido. Lo que SÍ estaba comprometido es la comparación **motor vs. Radiance** (6.5%/18.0% de error, Ronda 6) y, con ella, toda la investigación de la Causa B (`first-bounce` vs. `iterative`, Rondas 6/13/14) — construida enteramente sobre esa comparación.
+
+### Corrección aplicada
+
+- `generatePolygonSensorGrid()`: reescrita para replicar el esquema EXACTO de `buildGrid()` (celdas centradas, no ancladas en la esquina).
+- `generateSensorGrid()` (rectangular): ahora es un envoltorio delgado sobre `generatePolygonSensorGrid()` (un rectángulo es un polígono de 4 vértices) — ya no tiene su propio esquema de grilla independiente, elimina la posibilidad de que ambos vuelvan a divergir. Su firma cambió de `{columns, rows}` a `{spacing}`, igual convención que la versión poligonal.
+- `runRadianceOracle()`/`RadianceOracleOptions`: `grid: {columns, rows}` → `spacing: number`.
+- Actualizados los 5 fixtures rectangulares (`fixtures.ts` vía `radianceOracle.test.ts::fixtureConfigs()`, `shapeVariationFixtures.ts` ×3) para declarar `spacing: 0.5` (= `GRID_SPACING` de producción) en vez de un `{columns, rows}` elegido a mano.
+- **Nuevo test de paridad que corre SIN Radiance** (`generatePolygonSensorGridParity.test.ts`): compara posición por posición la grilla del oráculo contra `buildGrid()` + el filtro de zona marginal real, para los 3 fixtures no rectangulares y un rectángulo de control — guardia permanente contra que esto vuelva a divergir en silencio.
+
+### Resultado — formas no rectangulares, re-medidas con Radiance real tras el fix
+
+| Ambiente | Montaje (directo motor vs. Radiance) — ANTES | Montaje — DESPUÉS del fix | first-bounce (error vs. Radiance) | iterative (error vs. Radiance) | Gana |
+|---|---:|---:|---:|---:|---|
+| l-shape (7.2 m², no convexa) | 13.8% / 23.2% (Ronda 19) | **2.4%** | 132.8 lx (20.9%) | 157.7 lx (**6.0%**) | iterative |
+| chamfered-pentagon (8.7 m²) | 13.4% / 26.1% (Ronda 19) | **2.5%** | 122.3 lx (21.0%) | 145.6 lx (**6.0%**) | iterative |
+| trapezoid (8.4 m²) | 15.5% / 15.4% (Ronda 19) | **3.9%** | 115.4 lx (29.1%) | 126.5 lx (**22.3%**) | iterative |
+
+El montaje baja de 13-26% a **2.4-3.9%** — ahora en el mismo rango que las formas rectangulares (1.9-6.9%, Rondas 6/13). Confirma de forma concluyente que la causa real era el esquema de anclaje de la grilla, no la física ni la geometría poligonal (que ya estaba bien, verificada por separado en la Ronda 14). **Con este montaje ahora confiable, los 3 casos suman evidencia real** al patrón de la Ronda 13 ("formas compactas/no elongadas favorecen `iterative`") — las 3 formas de esta ronda son razonablemente compactas y las 3 favorecen `iterative` con más margen que antes.
+
+**No se cambia el default de producción** (`first-bounce`) — sigue vigente la misma razón de siempre (§7 "qué no hacer": no ajustar con pocos casos, y `first-bounce` sigue siendo mejor para ambientes elongados, ver Ronda 6/13). Esto es evidencia que se SUMA al cuerpo de casos para la Causa B, no una resolución de esa investigación.
+
+### Segundo hallazgo, más profundo: el oráculo tampoco replicaba el espaciado ADAPTATIVO real de producción
+
+Al re-correr los 5 fixtures rectangulares con `spacing: 0.5` fijo (asumiendo que `GRID_SPACING` es lo que producción usa siempre), 2 de 5 fallaron la cota de montaje con errores grandes: `caseta-vs-guarderias` 17.0% (cota 10%) y `large-square` **52.6%** (cota 15%). Investigado antes de forzar los números: `buildProductionCalculationConfig()` (la función que TODOS los tests de este plan usan para calcular el lado "motor" de la comparación) activa `meshPolicy.adaptive: true` — bajo esa bandera, `resolveMeshSpacing()` (`hooks/adaptiveGridSpacing.ts`) **nunca usa un espaciado fijo ni la `marginalZone` declarada del recinto**: corre una pasada de sondeo barata, refina el espaciado según el coeficiente de variación de iluminancia del recinto (`finalSpacing = baseSpacing / (1 + CoV)`, piso 0.1 m), y sobrescribe la zona marginal a `spacingM / 2`.
+
+Verificado con los 8 fixtures de este plan (sondeo directo de `resolveMeshSpacing`):
+
+| Fixture | Espaciado FIJO asumido (Ronda 21a) | Espaciado ADAPTATIVO real | Zona marginal declarada | Zona marginal real (override) |
+|---|---:|---:|---:|---:|
+| sshh-vs-bano | 0.5 | 0.393 | 0.125 | 0.197 |
+| caseta-vs-guarderias | 0.5 | 0.382 | 0.350 | 0.191 |
+| long-corridor | 0.5 | 0.181 | 0.15 | 0.090 |
+| large-square | 0.5 | **0.100 (piso)** | 0.3 | 0.05 |
+| small-dark-square | 0.5 | 0.500 (coincide) | 0.15 | 0.25 |
+| l-shape | 0.5 | 0.151 | 0.15 | 0.075 |
+| chamfered-pentagon | 0.5 | 0.132 | 0.15 | 0.066 |
+| trapezoid | 0.5 | 0.133 | 0.15 | 0.067 |
+
+Ningún fixture usa realmente el espaciado ni la zona marginal que la Ronda 21a (primera mitad de esta misma ronda) le asignó al oráculo — la coincidencia aproximada en `sshh-vs-bano`/`long-corridor`/`small-dark-square`/los 3 polígonos fue suficiente para pasar las cotas de tolerancia (holgadas, 10-15%) pese al descalce, pero `caseta-vs-guarderias` y sobre todo `large-square` (un solo foco muy concentrado en un recinto grande → coeficiente de variación alto → espaciado colapsa al piso de 0.1 m) revelaron el descalce real.
+
+**Corregido**: `radianceOracle.test.ts`, `radianceOracleShapeVariation.test.ts` y `radianceOraclePolygonShapes.test.ts` ahora llaman `resolveMeshSpacing()` (la MISMA función de producción, no una reimplementación) antes de armar la grilla del oráculo, para cada fixture — eliminando cualquier valor fijo asumido a mano. `shapeVariationFixtures.ts` perdió su campo `spacing` (ya no tiene sentido declararlo por fixture; se deriva en el test).
+
+**Límite práctico aceptado, no un bug**: `large-square` a su espaciado adaptativo real (0.1 m sobre 4×4 m, zona marginal 0.05 m) requiere **~1521 sensores** — a la velocidad medida de Radiance con `-ab 8` (36 sensores ≈ 384 s en la Ronda 13), una corrida completa tomaría del orden de horas, no minutos. Se decidió NO forzar esa corrida (no es viable dentro de una sesión de trabajo normal) — queda sin re-validar contra Radiance a su resolución real. Esto no es una falla del fix: es información nueva y honesta sobre el propio diseño del fixture ("un solo downlight en 4×4 m no es una propuesta de diseño real", ya advertido en el doc-comment de `shapeVariationFixtures.ts`) empujando el espaciado adaptativo a su extremo. Si se necesita ese número en el futuro, correrlo aparte con un timeout de varias horas, fuera de una sesión interactiva.
+
+### Resultado final — 4 de 5 fixtures rectangulares, re-medidos con espaciado/zona marginal REALES
+
+| Fixture | Montaje ANTES (Ronda 6/21a) | Montaje DESPUÉS (espaciado/zona marginal real) | Full reflection Radiance | first-bounce (error) | iterative (error) | Gana |
+|---|---:|---:|---:|---:|---:|---|
+| sshh-vs-bano | 6.5% (Ronda 6) / 3.4% (21a) | **0.5%** | 164.0 lx | ~120.0 lx (26.8%) | ~151.5 lx (**7.6%**) | iterative |
+| caseta-vs-guarderias | — / 17.0% (21a, FALLÓ) | **0.6%** | 163.9 lx | — | — | — |
+| long-corridor | 4.4% (Ronda 13) | **0.4%** | 119.4 lx | 101.3 lx (**15.1%**) | 143.1 lx (19.8%) | first-bounce |
+| small-dark-square | 3.8% (Ronda 13) | **0.6%** | 263.8 lx | 208.4 lx (21.0%) | 220.1 lx (**16.6%**) | iterative |
+| large-square | 6.9% (Ronda 13) / 52.6% (21a, FALLÓ) | sin re-validar — inviable (~1521 sensores a spacing=0.1) | — | — | — | — |
+
+El montaje baja a **0.4-0.6%** en los 4 casos re-medibles — un salto grande respecto al 3.8-6.9% ya considerado "bueno" en las Rondas 6/13, confirmando que usar `resolveMeshSpacing()` real (no una aproximación) es la forma correcta de comparar. Para `sshh-vs-bano`, con el valor físico de Radiance ya confiable (164.0 lx), `iterative` (7.6% de error) queda mucho más cerca que `first-bounce` (26.8%) — coherente con el hallazgo de la Ronda 4 (con fotometría real, `iterative` se acerca más a DIALux evo que `first-bounce`, lo opuesto de lo que sugería la investigación original solo-Lambertiana). `long-corridor` (aspecto 5:1) sigue favoreciendo `first-bounce`, reforzando el patrón de aspecto ya documentado.
+
+**No se cambia el default de producción** (`first-bounce`) — sigue habiendo casos donde gana cada uno, y el criterio de §7 (no ajustar con pocos casos) sigue vigente. Lo que SÍ cambia es la CONFIANZA en estos números: antes de esta ronda, la infraestructura de comparación (oráculo vs. motor) tenía un descalce de grilla no detectado en el 100% de los fixtures — cualquier conclusión sacada de esos números heredaba ese error silencioso. Ahora los 7 de 8 fixtures medibles (todos menos `large-square`) comparan sobre EXACTAMENTE los mismos puntos que usa producción.
+
+### Qué queda pendiente después de esta ronda
+
+1. `large-square` sin re-validar contra Radiance a su resolución real (documentado como límite práctico, no bug).
+2. Con el oráculo ahora confiable, el siguiente paso natural (ya sugerido en Rondas 6/13, ahora con base sólida) es sumar más casos variando aspecto de forma controlada para intentar convertir el patrón "aspecto → modo ganador" en una regla real, no solo una observación con 7 casos.
+3. El resto de brechas ya identificadas en conversaciones previas (superficies verticales/malla normativa, formas no rectangulares en producción todavía sin exponer en la UI del cálculo) siguen sin tocar — esta ronda fue específicamente sobre la INFRAESTRUCTURA de validación, no sobre el motor de cálculo en sí.
+
+## -21c. Cierre acotado de Fase 9 (UGR profesional) — el algoritmo ya estaba completo, faltaba el benchmark de integración
+
+A pedido explícito del usuario ("cerramos ambas problemáticas... asegurarnos el 95%"), se investigó qué falta realmente para "cerrar" la Fase 9 del plan maestro (§11, "UGR y luminancia profesional") antes de comprometerse a un alcance grande.
+
+**Hallazgo: la Fase 9 ya está implementada casi por completo**, desde la Fase 15 (2026-08-04). `glareCalculation.ts`/`glareObserver.ts` ya tienen: observadores con posición/altura/dirección reales (punto medio de cada pared, no el centroide — fix ya aplicado), luminancia de superficies emisoras, ángulo sólido aparente con escorzo (`A·cosγ/d²`), índice de posición de Guth (coeficientes confirmados contra fuente secundaria independiente), luminancia de fondo con fallback documentado (`Eind/π`, cae a `avg/π` solo sin datos de interreflexión — nunca ambiguo, siempre trazado en comentarios), evaluación multi-observador con reporte del peor caso, y exclusiones documentadas (campo visual inferior, H/R>2, fuera del hemisferio frontal, oclusión). El único ítem de `informe_brechas_evaluaciones_calculos_dialux.md` §5.6 genuinamente sin cerrar era **"benchmark con tolerancia acordada"**: existían tests unitarios de `glareCalculation.ts` en aislamiento, pero ningún benchmark de INTEGRACIÓN (motor de producción real, `runProjectLightingCalculation`) sobre los fixtures reales del plan de paridad.
+
+### Investigación del caso "(manual)" — confirmado que NO es un bug nuevo, es un gap ya conocido y correctamente marcado `pending-confirmation`
+
+Se verificó si el fix de observador (pared, no centroide) resuelve el "(manual)" que Ronda 11 documentó para Guarderías/Baño. **Resultado: sigue "no evaluado" para ambos fixtures núcleo** (`sshh-vs-bano`, `caseta-vs-guarderias`) — confirmado con el motor real, no una suposición. Investigando el motivo, se encontró que `glareCalculation.test.ts` YA documenta este gap exacto desde antes de esta ronda ("DOCUMENTA UN GAP CONOCIDO": para una caseta de control real de 2.1×2.32 m con techo 4.67 m, DIALux evo SÍ calculó RUG=22 mientras nuestro motor excluye TODOS los puntos posibles por H/R>2, sin importar dónde se ubique el observador).
+
+Se buscó en la documentación pública de soporte de DIALux evo (Knowledge Base, `evo.support-en.dial.de`) para verificar si la definición de H/R difiere de la nuestra. La documentación confirma que R/T/H se determinan "con respecto al observador" (coincide con nuestro enfoque per-luminaria/per-observador), pero **no publica la fórmula geométrica exacta** — remite al texto primario de CIE 117 o a soporte directo de DIAL, ninguno de los dos accesible en esta sesión. **No se fuerza ningún cambio de umbral sin esa fuente** — sigue correctamente marcado `pending-confirmation`, consistente con el principio de todo este plan (§7: "no declarar cumplimiento sin fuente oficial").
+
+### Corregido esta ronda
+
+Nuevo benchmark de integración, `resources/js/pages/dialux/__benchmarks__/dialuxEvoParity/ugrBenchmark.test.ts` (8 tests, motor de producción real vía `runProjectLightingCalculation`):
+
+- **5 geometrías con H/R≤2** (`long-corridor`, `large-square`, `l-shape`, `chamfered-pentagon`, `trapezoid`): UGR se calcula (no "no evaluado"), finito, en rango físico sano (0-35), con observador/dirección reportados — valores regresión-fijados (11.58 / 13.24 / 15.58 / 14.71 / 15.28) para atrapar cualquier cambio futuro no deliberado del solver.
+- **3 geometrías desproporcionadas** (`sshh-vs-bano`, `caseta-vs-guarderias`, `small-dark-square`): se fija como comportamiento ESPERADO (no bug) que UGR quede "no evaluado" — documenta y bloquea el gap conocido de H/R en vez de dejarlo como un hecho silencioso.
+
+**Sin fabricar una tolerancia contra DIALux evo que no se puede verificar todavía**: no existe hoy un caso real donde tengamos la geometría exacta + fotometría real + un RUG NO-manual de DIALux evo confirmado para comparar numéricamente (el único caso conocido con RUG real de evo, la caseta de 2.1×2.32m, es precisamente el que nuestro motor excluye por el gap sin resolver). El benchmark, por eso, valida sanidad/consistencia interna y regresión — no similitud con DIALux evo — hasta que aparezca esa fuente.
+
+**Verificado**: 65 tests (suite `dialuxEvoParity` + `glareCalculation.test.ts`) pasan, `npx tsc --noEmit` limpio. Se detectaron fallos preexistentes y no relacionados en `panelCircuitCalculations.test.ts`/`wireLengthCalculations.test.ts`/`fileSizeBudget.test.ts` (cálculos eléctricos y presupuesto de tamaño de archivo) — no tocados por esta ronda ni por el trabajo de normativa en curso (`database/data/EM010.json`/`transform.cjs`, cambios no commiteados y ajenos a esta sesión).
+
+### Balance honesto hacia "95%"
+
+No existe un único número que suba a 95% — el plan mismo rechaza esa forma de medir (§1: ni DIALux evo/Relux/AGi32 coinciden al 100% entre sí). Lo que SÍ se puede afirmar con esta ronda:
+
+- La infraestructura de validación (oráculo Radiance) pasó de tener un descalce de grilla no detectado en el 100% de sus fixtures a comparar sobre exactamente los mismos puntos que produción en 7 de 8 casos — cualquier número que salga de ahí de ahora en más es confiable, no una coincidencia.
+- Fase 9 (UGR) tiene su algoritmo maduro con benchmark de regresión — el gap que queda (H/R en salas desproporcionadas) está correctamente documentado y bloqueado en tests, no oculto.
+- Lo que más movería la aguja real de similitud contra DIALux evo en proyectos concretos sigue siendo lo mismo de siempre: más fotometría real por luminaria (Causa dominante, §-1) — no una fórmula por ajustar.
+
 ## -20. Ronda 20 — "el mismo producto da lúmenes distintos": no es un bug, es catálogo duplicado sin aviso; agregada advertencia de duplicado en el import
 
 A pregunta directa del usuario ("si es el mismo producto, ¿por qué uno da más lúmenes que otro?"), se verificó en producción (vía tinker) que existen DOS `LuminaireProduct` con `catalog_number = TEG18046`:

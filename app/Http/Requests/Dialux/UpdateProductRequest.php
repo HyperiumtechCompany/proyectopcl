@@ -31,6 +31,17 @@ class UpdateProductRequest extends FormRequest
             // 'round'/'cylindrical'; para esos casos manda sobre length/width
             // al dibujar el símbolo (ver OverlayFixtures en el frontend).
             'dimensions.radius' => ['nullable', 'numeric', 'min:0'],
+            // "Tipo de lámpara" (ej. "14W LED") — Ronda 21d, corrige el
+            // hallazgo real del usuario: sin este campo editable, un
+            // producto importado con el tipo de lámpara mal declarado (o sin
+            // declarar) no se puede corregir sin volver a subir el archivo.
+            // Vive en `metadata.lamp_type`, no en una columna propia.
+            'lamp_type' => ['nullable', 'string', 'max:255'],
+            // Reemplazo del archivo fotométrico original (Ronda 21e) — un
+            // producto importado con el archivo equivocado/incompleto (o
+            // GLDF sin matriz real) se puede corregir sin perder su `id` ni
+            // las referencias que ya existan en proyectos guardados.
+            'file' => ['nullable', 'file', 'max:10240', 'extensions:ies,ldt,gldf,txt,xml'],
             'product_image' => ['nullable', 'image', 'max:5120'],
             'brand_logo' => ['nullable', 'image', 'max:2048'],
             'clear_product_image' => ['nullable', 'boolean'],

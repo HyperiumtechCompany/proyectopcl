@@ -17,67 +17,70 @@ import { DEFAULT_DIRECT_PREVIEW_CONFIG, type CalculationConfig } from './types';
  * para el MISMO proyecto. Este helper es la única fuente de verdad para
  * ambos casos.
  *
- * `interreflection: 'first-bounce'` (NO `'iterative'` — decisión evaluada
- * y descartada DOS VECES, dejar registro para no repetir el experimento a
- * ciegas): con radiosidad iterativa convergida, SS.HH (real, 2.15 m²,
- * 4.67 m de alto) da Ē≈294 lx vs los 206 lx que reporta DIALux evo para el
- * MISMO recinto/reflectancias/luminarias — un +43% que `first-bounce` no
- * tiene (+9.6%). Primera hipótesis (parche de pared sin subdividir en
- * `roomPatches.ts` colapsando el campo cercano, área de pared ≈28 m² en un
- * solo parche): implementada la subdivisión vertical
- * (`wallVerticalSegments`, activa cuando una pared sería más alta que la
- * dimensión horizontal más corta del recinto) — el resultado SOLO bajó a
- * ≈282 lx, sigue +37% sobre DIALux evo. Es decir: la subdivisión de parches
- * SÍ ayuda (y queda activa porque no tiene contra, no cambia nada en
- * recintos de proporción normal — ver tests de `roomPatches.test.ts`), pero
- * NO es la causa completa. La relación total/directo empírica del solver
- * (≈1.9-2.0) coincide con el límite asintótico teórico del método de
- * cavidad zonal 1/(1-ρ̄) para ρ̄≈0.49 — el solver converge correctamente a
- * lo que la física de ESTE modelo predice; lo que sigue sin explicarse es
- * por qué DIALux evo, con las mismas reflectancias declaradas, reporta un
- * ratio total/directo mucho menor (~1.37) específicamente en este recinto
- * angosto — probablemente un tratamiento interno de cavidad/geometría que
- * esta plataforma no reproduce todavía. Queda como investigación abierta,
- * no como tarea de una línea; hasta resolverla, `'iterative'` se queda
- * apagado en producción porque el error que evita (+9.6% con first-bounce)
- * es menor y más predecible que el que introduce (+37-43%).
+ * ## Historia de `interreflection` en este archivo (para no repetir el
+ * experimento a ciegas — Ronda 21i, 2026-08-18)
  *
- * `maxBounces`/`convergenceTolerance` se dejan en los defaults (0/0,
- * ignorados en modo `first-bounce`) — quedan documentados aquí para quien
- * reactive `'iterative'` más adelante: `maxBounces: 100`,
- * `convergenceTolerance: 1e-5` son razonables (`iterativeRadiosity.ts`
- * documenta que 60-150 iteraciones alcanzan incluso reflectancias 0.9-0.95
- * a tolerancia 1e-6, y que el costo computacional es trivial hasta el techo
- * `MAX_SAFE_BOUNCES = 300`) UNA VEZ resuelta la subdivisión de parches.
+ * Durante mucho tiempo el default fue `'first-bounce'` a secas: con
+ * radiosidad iterativa convergida, "SS.HH" (real, 2.15 m², proyecto
+ * "Módulo 22") daba Ē≈294 lx vs los 206 lx de DIALux evo (+43%, mientras
+ * `first-bounce` solo tenía +9.6%). Pero rondas posteriores (con fotometría
+ * REAL en vez de la aproximación Lambertiana original) invirtieron ese
+ * resultado en otros casos, y el oráculo Radiance (`plan_cierre_brecha_paridad_dialux_evo.md`)
+ * terminó mostrando un patrón consistente: **ambientes elongados
+ * (aspecto bounding-box ≥ ~2.3:1) favorecen `first-bounce`; ambientes
+ * compactos/casi cuadrados (≤ ~1.5:1) favorecen `iterative`** — no hay un
+ * modo ganador universal. El plan lo documentó como "hipótesis, no regla
+ * — pocos casos" y nunca cambió este default por eso.
  *
- * CONTRAEVIDENCIA (2026-08-09, `planes/plan_cierre_brecha_paridad_dialux_evo.md`
- * §-3, `__benchmarks__/dialuxEvoParity/dialuxEvoParity.test.ts` caso
- * `sshh-vs-bano`): el experimento de arriba se hizo SIEMPRE con fotometría
- * aproximada (Lambertiana) para la luminaria, porque no había archivo
- * IES/LDT real disponible. Al conseguir el .ldt real de fábrica de una
- * luminaria (Thorlux TEG18046, misma referencia de artículo que un ambiente
- * real de `MODULO I_Informe.pdf`) y repetir la comparación con esa variable
- * corregida, el resultado se INVIRTIÓ: `first-bounce` da 87.9 lx (error
- * 38.9%) contra la referencia de 144 lx, e `iterative` (maxBounces=30) da
- * 111.0 lx (error 22.9%) — `iterative` quedó MÁS cerca de DIALux evo, no
- * más lejos. Esto es un solo caso nuevo (no reemplaza el anterior, lo
- * contradice) y NO es evidencia suficiente para cambiar el default de esta
- * función — el propio plan (§7) prohíbe ajustar sobre un solo caso. Pero sí
- * es evidencia de que la conclusión "`iterative` empeora frente a DIALux
- * evo" pudo haber sido, en parte o del todo, un artefacto de comparar con
- * fotometría Lambertiana en AMBOS experimentos originales (SS.HH 2.15 m²
- * arriba), no una propiedad real del solver de radiosidad. Antes de tocar
- * este default: repetir el experimento con fotometría real en 3-4 casos
- * más (idealmente incluyendo una reproducción del caso SS.HH 2.15 m²/4.67 m
- * original con su luminaria real, si se puede identificar) y solo entonces
- * decidir con una muestra, no con un caso aislado en cualquiera de las dos
- * direcciones.
+ * El usuario, informado explícitamente de ese riesgo (incluyendo el caso
+ * +43% de arriba), pidió automatizar la selección por forma de todos modos:
+ * con la variedad real de tipos de ambiente/proyecto del sistema, pedirle
+ * que configure el modo ambiente por ambiente no es viable. `'auto-by-shape'`
+ * (`interreflectionModeHeuristic.ts`) implementa exactamente ese patrón, con
+ * el umbral (2.0:1) elegido a propósito en el medio del hueco documentado —
+ * verificado contra el proyecto real "Módulo 22": "SS.HH" (aspecto 2.40:1,
+ * el caso +43% de arriba) cae del lado correcto (`first-bounce`), "Caseta de
+ * Control" (aspecto 1.12:1) cae en `iterative`. Sigue siendo una heurística
+ * sobre evidencia limitada, no una garantía — cada ambiente que la use
+ * declara un warning (`interreflection-mode-auto-selected`) con su relación
+ * de aspecto exacta, visible en el PDF/panel, para que nunca sea un cambio
+ * de método silencioso.
+ *
+ * `maxBounces: 100`/`convergenceTolerance: 1e-5`: `iterativeRadiosity.ts`
+ * documenta que 60-150 iteraciones alcanzan incluso reflectancias 0.9-0.95 a
+ * tolerancia 1e-6, con costo trivial hasta el techo `MAX_SAFE_BOUNCES = 300`
+ * — la subdivisión de parches de pared (`wallVerticalSegments`) que en su
+ * momento bloqueaba subir estos valores ya está implementada y activa.
+ *
+ * `occlusion` — REVERTIDO a `false` (Ronda 21l, mismo día que se activó).
+ * Se activó primero pensando que el pipeline ya estaba listo (Fase 6
+ * completa, con test unitario dedicado), pero esos tests SOLO cubren
+ * paredes simples de 2 vértices (`fullWallAt()` en
+ * `lightingEngineCore.occlusion.test.ts`). Al probar contra un proyecto
+ * real ("Vinchos", aulas con muros interiores reales dibujados en el
+ * editor), el promedio cayó ~19% y el mínimo empeoró en vez de mejorar —
+ * `buildLinearOcclusionBoxes()` (`domain/geometry/occlusionBoxes.ts`) trata
+ * `wall.vertices` como una POLILÍNEA de centro (extruye cada segmento
+ * consecutivo por `thickness`), pero un muro real dibujado con jambas/
+ * recesos de puerta guarda su CONTORNO CERRADO completo (24+ vértices, ya
+ * con el grosor incluido) — extruir ese contorno otra vez por `thickness`
+ * genera una obstrucción mucho más grande y con forma incorrecta que la
+ * pared real de 0.13 m. No es un caso raro: es como el editor genera
+ * cualquier muro con una puerta empotrada. Hasta corregir
+ * `buildLinearOcclusionBoxes()` para distinguir polilínea-centro de
+ * contorno-cerrado (o normalizar `wall.vertices` a un formato único antes
+ * de llegar aquí), `occlusion` debe quedar en `false` — activarlo hoy
+ * produce resultados PEORES que no modelar oclusión en absoluto para
+ * cualquier proyecto con muros interiores reales.
  */
 export function buildProductionCalculationConfig(project: Project): CalculationConfig {
     return {
         ...DEFAULT_DIRECT_PREVIEW_CONFIG,
         maintenanceFactor: project.siteSettings?.maintenanceFactor ?? DEFAULT_DIRECT_PREVIEW_CONFIG.maintenanceFactor,
-        interreflection: 'first-bounce',
+        occlusion: false,
+        interreflection: 'auto-by-shape',
+        maxBounces: 100,
+        convergenceTolerance: 1e-5,
         meshPolicy: { ...DEFAULT_DIRECT_PREVIEW_CONFIG.meshPolicy, adaptive: true },
         excludeMarginalZoneFromStats: true,
     };

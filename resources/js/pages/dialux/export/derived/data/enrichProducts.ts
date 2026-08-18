@@ -2,7 +2,7 @@ import axios from 'axios';
 import * as productRoutes from '@/routes/dialux/products';
 import type { DialuxExportSnapshot, DialuxExportAsset, DialuxBitmapAsset, DialuxAssetPurpose, ProductUgrTable } from '../../domain/types';
 import { buildPolarSvgFromMatrix } from './buildPolarSvgFromMatrix';
-import { computeEngineUgrTable } from './computeEngineUgrTable';
+import { computeEngineUgrTable, computeEngineUgrTables } from './computeEngineUgrTable';
 
 export interface EnrichProductsResult {
     assets: DialuxExportAsset[];
@@ -74,6 +74,7 @@ export async function enrichProducts(snapshot: DialuxExportSnapshot): Promise<En
     // recalcular la tabla de referencia UGR (varias salas × 2 direcciones)
     // más de una vez por producto.
     const ugrTableByProductId = new Map<number, ProductUgrTable | null>();
+    const ugrTablesByProductId = new Map<number, ProductUgrTable[] | null>();
 
     await Promise.all(
         uniqueProductIds.map(async (id) => {
@@ -211,8 +212,30 @@ export async function enrichProducts(snapshot: DialuxExportSnapshot): Promise<En
             const result = computeEngineUgrTable(fixture);
             ugrTableComputed = result.available ? result.table : null;
         }
+        // Ronda 21c: grilla de 5 combinaciones de reflectancia habituales, la
+        // misma que ya se usa en el modal de previsualización — se muestra
+        // en el PDF en una sección de ancho completo (no en la columna
+        // angosta de 50% que usa el diagrama polar) porque 11 columnas
+        // densas no caben legibles en la mitad de una página A4. La tabla
+        // singular (`ugrTableComputed`, 70/50/20) se mantiene sin tocar por
+        // si algún renderizador viejo todavía la espera.
+        let ugrTablesComputed: ProductUgrTable[] | null = null;
+        if (typeof fixture.productId === 'number') {
+            if (!ugrTablesByProductId.has(fixture.productId)) {
+                const result = computeEngineUgrTables(fixture);
+                ugrTablesByProductId.set(fixture.productId, result.available ? result.tables : null);
+            }
+            ugrTablesComputed = ugrTablesByProductId.get(fixture.productId) ?? null;
+        } else {
+            const result = computeEngineUgrTables(fixture);
+            ugrTablesComputed = result.available ? result.tables : null;
+        }
+
         if (ugrTableComputed) {
             fixture.reportData = { ...(fixture.reportData ?? {}), ugrTableComputed };
+        }
+        if (ugrTablesComputed) {
+            fixture.reportData = { ...(fixture.reportData ?? {}), ugrTablesComputed };
         }
     }
 

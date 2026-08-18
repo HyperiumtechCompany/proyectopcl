@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildProductionCalculationConfig } from '@/pages/dialux/domain/calculation/productionCalculationConfig';
 import { runProjectLightingCalculation } from '@/pages/dialux/domain/calculation/runProjectLightingCalculation';
+import { resolveMeshSpacing } from '@/pages/dialux/hooks/adaptiveGridSpacing';
+import { GRID_SPACING } from '@/pages/dialux/hooks/lightingEngineCore';
+import { getRoomUsefulPlaneHeight } from '@/pages/dialux/hooks/roomLighting';
 import type { Project, Room, Scene } from '@/pages/dialux/hooks/types';
 import { buildAllShapeVariationFixtures, type ShapeVariationFixture } from './shapeVariationFixtures';
 import { runRadianceOracle } from './runRadianceOracle';
@@ -66,6 +69,22 @@ function relativeError(computed: number, reference: number): number {
     return Math.abs(computed - reference) / reference;
 }
 
+/**
+ * Ronda 21b: espaciado/zona marginal REALES (adaptativos), no el `spacing`
+ * declarado del fixture — bajo `meshPolicy.adaptive: true` (el que
+ * `buildProductionCalculationConfig()` activa siempre) producción nunca usa
+ * un espaciado fijo ni `room.marginalZone` tal cual, ver
+ * `hooks/adaptiveGridSpacing.ts::resolveMeshSpacing`.
+ */
+function resolveRealMesh(fixture: ShapeVariationFixture): { spacingM: number; marginalZone: number } {
+    const usefulPlaneHeight = getRoomUsefulPlaneHeight(fixture.room);
+    const { spacingM, marginalZoneOverride } = resolveMeshSpacing(fixture.room, fixture.fixtures, usefulPlaneHeight, [], {
+        gridSpacingM: GRID_SPACING,
+        adaptive: true,
+    });
+    return { spacingM, marginalZone: marginalZoneOverride ?? fixture.marginalZone };
+}
+
 describe.skipIf(!hasRadiance)('Oráculo Radiance — variación de forma/tamaño/reflectancia (§-6 siguiente paso)', () => {
     it.each(buildAllShapeVariationFixtures())(
         '$id ($label): first-bounce vs. iterative vs. Radiance (informativo)',
@@ -76,13 +95,14 @@ describe.skipIf(!hasRadiance)('Oráculo Radiance — variación de forma/tamaño
                 computeEngineAvgLux(fixture, 'iterative'),
             ]);
 
+            const realMesh = resolveRealMesh(fixture);
             const oracle = await runRadianceOracle({
                 room: {
                     width: fixture.width,
                     depth: fixture.depth,
                     height: fixture.height,
                     workingPlaneHeight: fixture.workingPlaneHeight,
-                    marginalZone: fixture.marginalZone,
+                    marginalZone: realMesh.marginalZone,
                     reflectance: fixture.reflectance,
                 },
                 fixtures: fixture.fixtures.map((f) => ({
@@ -92,7 +112,7 @@ describe.skipIf(!hasRadiance)('Oráculo Radiance — variación de forma/tamaño
                     articleNumber: f.articleNumber ?? 'desconocido',
                     provenanceNote: `oráculo Radiance — variación de forma, ${fixture.variesFrom_sshhVsBano}`,
                 })),
-                grid: fixture.grid,
+                spacing: realMesh.spacingM,
                 timeoutMs: ORACLE_TIMEOUT_MS,
             });
 
@@ -110,10 +130,11 @@ describe.skipIf(!hasRadiance)('Oráculo Radiance — variación de forma/tamaño
                     `gana=${errorFirstBounce < errorIterative ? 'first-bounce' : 'iterative'}`,
             );
 
-            // Validación del montaje (igual criterio que `radianceOracle.test.ts`,
-            // Ronda 6: 1.9%/4.7% medidos) — confirma que geometría/IES/malla
-            // están razonablemente bien armados para esta forma nueva, no que
-            // ambos motores usen la misma malla exacta.
+            // Validación del montaje — confirma que geometría/IES/malla están
+            // razonablemente bien armados para esta forma nueva. Desde la
+            // Ronda 21 el oráculo usa exactamente la misma malla que el motor
+            // real (ver `generateSensorGrid.ts`), así que un residual dentro
+            // de esta cota ya no puede explicarse por mallas distintas.
             expect(directRelativeError).toBeLessThan(0.15);
 
             // Sin aserción sobre cuál modo gana a propósito (ver doc-comment

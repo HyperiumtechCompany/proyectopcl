@@ -1,0 +1,2830 @@
+{
+  "categorias": [
+    {
+      "codigo": "1",
+      "categoria": "VIVIENDA",
+      "subcategorias": [
+        {
+          "codigo": "1.1",
+          "nombre": "Zona privada",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Dormitorio",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Baño",
+              "Em_lux": 100,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Baño (zona de espejo)",
+              "Em_lux": 500,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Cocina",
+              "Em_lux": 300,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Sala, Sala de estar",
+              "Em_lux": 100,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Comedor",
+              "Em_lux": 100,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Estudios, almacenes, depósitos, walking closet, cuartos de trabajo doméstico (planchado, lavandería y similares)",
+              "Em_lux": 500,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Patios, zonas abiertas",
+              "Em_lux": 20,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Estacionamientos bajo techo",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "1.2",
+          "nombre": "Zonas comunes (aplicable a zonas comunes de cualquier tipo de edificación)",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Vestíbulos de entrada",
+              "Em_lux": 100,
+              "UGRL": 22,
+              "Uo": null,
+              "Ra": 60,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Salas de estar (pública)",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": null,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Áreas de circulación y pasillos",
+              "Em_lux": 100,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos_especificos": [
+                "Iluminancia al nivel del suelo",
+                "Ra y UGR similares a áreas adyacentes",
+                "150 lux si hay vehículos en el recorrido",
+                "El alumbrado de salidas y entradas debe proporcionar una zona de transición para evitar cambios repentinos en iluminancia entre interior y exterior de día o de noche",
+                "Debe evitarse el deslumbramiento de conductor y peatones"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Escaleras, escaleras mecánicas y transportadores (de personas)",
+              "Em_lux": 150,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos_especificos": [
+                "Requiere contraste mejorado sobre los escalones"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Ascensores, montacargas",
+              "Em_lux": 100,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos_especificos": [
+                "El nivel de iluminación en frente del montacargas debe ser al menos Em = 200 lx"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Rampas/andenes/patios de carga",
+              "Em_lux": 150,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos_especificos": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "2",
+      "categoria": "EDUCACIÓN",
+      "items": [
+        {
+          "tipo_interior_tarea_actividad": "Sala de juegos",
+          "Em_lux": 300,
+          "UGRL": 22,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos_especificos": [
+            "Debe evitarse altas luminancias en las direcciones de visión desde abajo mediante la utilización de coberturas difusas"
+          ]
+        },
+        {
+          "tipo_interior_tarea_actividad": "Guarderías",
+          "Em_lux": 300,
+          "UGRL": 22,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos_especificos": [
+            "Debe evitarse altas luminancias en las direcciones de visión desde abajo mediante la utilización de coberturas difusas"
+          ]
+        },
+        {
+          "tipo_interior_tarea_actividad": "Sala de manualidades",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Aulas de profesores",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": ["La iluminación debe ser controlable"]
+        },
+        {
+          "tipo_interior_tarea_actividad": "Aulas para clases nocturnas y de educación de adultos",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": ["La iluminación debe ser controlable"]
+        },
+        {
+          "tipo_interior_tarea_actividad": "Salas de lectura",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": [
+            "La iluminación debe ser controlable para colocar varias A/V necesarias"
+          ]
+        },
+        {
+          "tipo_interior_tarea_actividad": "Zona de pizarra",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.7,
+          "Ra": 80,
+          "requisitos_especificos": [
+            "Deben evitarse las reflexiones especulares",
+            "El presentador/profesor debe iluminarse con la iluminancia vertical adecuada"
+          ]
+        },
+        {
+          "tipo_interior_tarea_actividad": "Mesa de demostraciones",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.7,
+          "Ra": 80,
+          "requisitos_especificos": ["En salas de lectura 750 lx"]
+        },
+        {
+          "tipo_interior_tarea_actividad": "Locales de artes y oficios",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Locales de artes (en escuelas de arte)",
+          "Em_lux": 750,
+          "UGRL": 19,
+          "Uo": 0.7,
+          "Ra": 90,
+          "requisitos_especificos": ["5 000 K ≤ TCP < 6 500 K"]
+        },
+        {
+          "tipo_interior_tarea_actividad": "Salas de dibujo técnico",
+          "Em_lux": 750,
+          "UGRL": 16,
+          "Uo": 0.7,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Locales de prácticas y laboratorios",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Aulas de manualidades",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Taller de enseñanza",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Locales de prácticas de música",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Locales de prácticas de computación",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Laboratorio de idiomas",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Locales y talleres de preparación",
+          "Em_lux": 500,
+          "UGRL": 22,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Vestíbulo de entrada",
+          "Em_lux": 200,
+          "UGRL": 22,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Áreas de circulación, pasillos",
+          "Em_lux": 100,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Escaleras",
+          "Em_lux": 150,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Locales comunes de estudiantes y salas de reuniones",
+          "Em_lux": 200,
+          "UGRL": 22,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Locales de maestros",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Biblioteca: estanterías",
+          "Em_lux": 200,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Biblioteca: áreas de lectura",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Almacenes de material de profesores",
+          "Em_lux": 100,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Salas deportivas, gimnasios y piscinas",
+          "Em_lux": 300,
+          "UGRL": 22,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": [
+            "En caso de no existir norma internacional véase la Norma EN 12193 para las condiciones de entrenamiento"
+          ]
+        },
+        {
+          "tipo_interior_tarea_actividad": "Cocina",
+          "Em_lux": 500,
+          "UGRL": 22,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        }
+      ]
+    },
+    {
+      "codigo": "3",
+      "categoria": "SALUD",
+      "subcategorias": [
+        {
+          "codigo": "3.1",
+          "nombre": "Salas de uso general",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Salas de espera",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": [
+                "Deben impedirse luminancias demasiado elevadas en el campo de visión de los pacientes"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Corredores: durante el día",
+              "Em_lux": 100,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": ["Iluminancia a nivel del suelo"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Corredores: durante la noche",
+              "Em_lux": 50,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": ["Iluminancia a nivel del suelo"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Ambientes para curaciones",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Salas para consulta médica",
+              "Em_lux": 500,
+              "UGRL": 16,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos_especificos": ["Tcp 4 000 k, como mínimo"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Ascensores para personas y visitantes",
+              "Em_lux": 100,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": ["Iluminancia a nivel del suelo"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Ascensores de servicio y montacargas",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": ["Iluminancia a nivel del suelo"]
+            }
+          ]
+        },
+        {
+          "codigo": "3.2",
+          "nombre": "Salas de personal",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Oficina del personal",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "3.3",
+          "nombre": "Salas de guardia, salas de maternidad",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Iluminación general",
+              "Em_lux": 100,
+              "UGRL": 19,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": ["Iluminancia a nivel del suelo"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Iluminación para la lectura",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Exámenes generales",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Exámenes específicos y tratamiento de maternidad",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Iluminación nocturna, iluminación de observación",
+              "Em_lux": 5,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Baños y tocadores para pacientes",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "3.4",
+          "nombre": "Salas de exámenes generales",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Alumbrado general (Salas de examen)",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 5 000 K"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Examen y tratamiento",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "3.5",
+          "nombre": "Salas de examen ocular",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Alumbrado general",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 5 000 K"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Exámenes ocular",
+              "Em_lux": 1000,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": 90,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Prueba de lectura y visión cromática con diagrama de visión",
+              "Em_lux": 500,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "3.6",
+          "nombre": "Salas de examen auditivo",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Alumbrado general",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Examen auditivo",
+              "Em_lux": 1000,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": 90,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "3.7",
+          "nombre": "Salas de escáner",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Alumbrado general",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Escáners con aumentadores de imágenes y sistemas de TV",
+              "Em_lux": 50,
+              "UGRL": 19,
+              "Uo": null,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "3.8",
+          "nombre": "Salas de parto",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Alumbrado general",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Examen y tratamiento",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": null
+            }
+          ],
+          "subgrupos": [
+            {
+              "nombre": "Salas de tratamiento (general)",
+              "items": [
+                {
+                  "tipo_interior_tarea_actividad": "Salas de diálisis",
+                  "Em_lux": 500,
+                  "UGRL": 19,
+                  "Uo": 0.6,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                },
+                {
+                  "tipo_interior_tarea_actividad": "Salas de dermatología",
+                  "Em_lux": 500,
+                  "UGRL": 19,
+                  "Uo": 0.6,
+                  "Ra": 90,
+                  "requisitos_especificos": null
+                },
+                {
+                  "tipo_interior_tarea_actividad": "Salas de endoscopías",
+                  "Em_lux": 300,
+                  "UGRL": 19,
+                  "Uo": 0.6,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                },
+                {
+                  "tipo_interior_tarea_actividad": "Salas de enyesar",
+                  "Em_lux": 500,
+                  "UGRL": 19,
+                  "Uo": 0.6,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                },
+                {
+                  "tipo_interior_tarea_actividad": "Baños de médicos",
+                  "Em_lux": 300,
+                  "UGRL": 19,
+                  "Uo": 0.6,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                },
+                {
+                  "tipo_interior_tarea_actividad": "Masaje y radioterapia",
+                  "Em_lux": 300,
+                  "UGRL": 19,
+                  "Uo": 0.6,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "codigo": "3.9",
+          "nombre": "Áreas de operación",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Salas pre-operatorias y de recuperación",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Sala de operaciones",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Quirófano",
+              "Em_lux": null,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": ["Em : 10 000 lx a 100 000 lx"]
+            }
+          ]
+        },
+        {
+          "codigo": "3.10",
+          "nombre": "Unidad de cuidados intensivos",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Iluminación general",
+              "Em_lux": 100,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos_especificos": ["Iluminancia a nivel del suelo"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Exámenes sencillos",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos_especificos": ["Iluminancia a nivel del suelo"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Exámenes y tratamiento",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["Iluminancia a nivel del suelo"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Vigilancia nocturna",
+              "Em_lux": 20,
+              "UGRL": 19,
+              "Uo": null,
+              "Ra": 90,
+              "requisitos_especificos": null
+            }
+          ],
+          "subgrupos": [
+            {
+              "nombre": "Dentistas",
+              "items": [
+                {
+                  "tipo_interior_tarea_actividad": "Iluminación general",
+                  "Em_lux": 500,
+                  "UGRL": 19,
+                  "Uo": 0.6,
+                  "Ra": 90,
+                  "requisitos_especificos": [
+                    "La iluminación debe estar libre de deslumbramiento para el paciente"
+                  ]
+                },
+                {
+                  "tipo_interior_tarea_actividad": "En el paciente",
+                  "Em_lux": 1000,
+                  "UGRL": null,
+                  "Uo": 0.7,
+                  "Ra": 90,
+                  "requisitos_especificos": null
+                },
+                {
+                  "tipo_interior_tarea_actividad": "Quirófano",
+                  "Em_lux": null,
+                  "UGRL": null,
+                  "Uo": null,
+                  "Ra": null,
+                  "requisitos_especificos": [
+                    "En la Norma EN ISO 9680 se dan requisitos específicos"
+                  ]
+                },
+                {
+                  "tipo_interior_tarea_actividad": "Maquinado de diente blanco",
+                  "Em_lux": null,
+                  "UGRL": null,
+                  "Uo": null,
+                  "Ra": null,
+                  "requisitos_especificos": [
+                    "En la Norma EN ISO 9680 se dan requisitos específicos"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "codigo": "3.11",
+          "nombre": "Laboratorios y farmacias",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Alumbrado general",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Inspección de colores",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["6 000 K ≤ TCP ≤ 6 500 K"]
+            }
+          ]
+        },
+        {
+          "codigo": "3.12",
+          "nombre": "Salas de descontaminación",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Salas de esterilización",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Salas de desinfección",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "3.13",
+          "nombre": "Sala de autopsias y depósitos mortuorios",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Alumbrado general",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Mesa de autopsias y mesa de disección",
+              "Em_lux": 5000,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": 90,
+              "requisitos_especificos": [
+                "Pueden requerirse valores mayores de 5 000 lx"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "4",
+      "categoria": "INDUSTRIA",
+      "subcategorias": [
+        {
+          "codigo": "4.1",
+          "nombre": "Agricultura",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Carga y operación de mercancías y equipos y maquinaria de manipulación de mercancías",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Edificación para ganadería",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Sala de veterinaria, establos para parir",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Preparación de alimentos, lechería, lavado de utensilios",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ],
+          "subgrupos": [
+            {
+              "nombre": "Panaderías",
+              "items": [
+                {
+                  "tipo_interior_tarea_actividad": "Preparación y horneado",
+                  "Em_lux": 300,
+                  "UGRL": 22,
+                  "Uo": 0.6,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                },
+                {
+                  "tipo_interior_tarea_actividad": "Terminado, escarchado, decoración",
+                  "Em_lux": 500,
+                  "UGRL": 22,
+                  "Uo": 0.7,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "codigo": "4.2",
+          "nombre": "Cemento, artículos de cemento, concreto, ladrillos",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Secado",
+              "Em_lux": 50,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos_especificos": [
+                "Se deben reconocer los colores de seguridad"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Preparación de materiales, trabajo en hornos y mezcladores",
+              "Em_lux": 200,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Trabajo en máquinas en general",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Encofrado",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "4.3",
+          "nombre": "Cerámicas, tejas, vidrio, artículos de vidrio",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Secado",
+              "Em_lux": 50,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Preparación, trabajo en máquinas en general",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Esmaltado, laminado, prensado, conformación de partes sencillas, escarchado, soplado del vidrio",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Trituración, estampado, pulido del vidrio, conformación de partes precisas, fabricación de instrumentos de vidrio",
+              "Em_lux": 750,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Trabajo de precisión, por ejemplo, triturado decorativo, pintura a mano",
+              "Em_lux": 750,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Trabajo de precisión, por ejemplo, triturado decorativo, pintura a mano",
+              "Em_lux": 1000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 6 500 K"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Fabricación de piedras preciosas sintéticas",
+              "Em_lux": 1500,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 6 500 K"]
+            }
+          ]
+        },
+        {
+          "codigo": "4.4",
+          "nombre": "Industria química, de plásticos y de caucho",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Instalaciones de procesamiento operadas a distancia",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos_especificos": [
+                "Se deben reconocer los colores de seguridad"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Instalaciones de procesamiento con intervención manual limitada",
+              "Em_lux": 150,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Puestos de trabajo atendidos constantemente en instalaciones de procesamiento",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Locales de mediciones precisas, laboratorios",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Producción farmacéutica",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Producción de neumáticos",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Inspección de colores",
+              "Em_lux": 1000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 6 500 K"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Corte, acabado, inspección",
+              "Em_lux": 750,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "4.5",
+          "nombre": "Industria eléctrica",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Fabricación de cable e hilos",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Impregnación de devanados",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Galvanización",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Talleres de electrónica, ensayos, ajustes",
+              "Em_lux": 1500,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ],
+          "subgrupos": [
+            {
+              "nombre": "Bobinado",
+              "items": [
+                {
+                  "tipo_interior_tarea_actividad": "Bobinas grandes",
+                  "Em_lux": 300,
+                  "UGRL": 25,
+                  "Uo": 0.6,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                },
+                {
+                  "tipo_interior_tarea_actividad": "Bobinas de tamaño mediano",
+                  "Em_lux": 500,
+                  "UGRL": 22,
+                  "Uo": 0.6,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                },
+                {
+                  "tipo_interior_tarea_actividad": "Bobinas pequeñas",
+                  "Em_lux": 750,
+                  "UGRL": 19,
+                  "Uo": 0.7,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                }
+              ]
+            },
+            {
+              "nombre": "Trabajo de montaje",
+              "items": [
+                {
+                  "tipo_interior_tarea_actividad": "obra gruesa, por ejemplo, transformadores grandes",
+                  "Em_lux": 300,
+                  "UGRL": 25,
+                  "Uo": 0.6,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                },
+                {
+                  "tipo_interior_tarea_actividad": "mediano, por ejemplo, centros generales de distribución",
+                  "Em_lux": 500,
+                  "UGRL": 22,
+                  "Uo": 0.6,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                },
+                {
+                  "tipo_interior_tarea_actividad": "fino, por ejemplo, teléfonos",
+                  "Em_lux": 750,
+                  "UGRL": 19,
+                  "Uo": 0.7,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                },
+                {
+                  "tipo_interior_tarea_actividad": "de precisión, por ejemplo, equipos de mediciones",
+                  "Em_lux": 1000,
+                  "UGRL": 16,
+                  "Uo": 0.7,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "codigo": "4.6",
+          "nombre": "Productos alimenticios e industria de alimentos de lujo",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Puestos y zonas de trabajo en cervecerías, piso de germinación de malta, lavado, llenado de barriles, limpieza, cernido (cribado), peladura, cocinado en fábricas de conservas y chocolates, puestos y zonas de trabajo en fábricas de azúcar, secado y curado de tabaco en hoja, toneles (bodegas) de fermentación",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Clasificación y lavado de productos, molienda (molturación), mezclado y envase",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Puestos y zonas de trabajo en mataderos, carnicerías, lecherías, pisos de filtros, refinerías de azúcar",
+              "Em_lux": 500,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Corte y clasificación de frutas y vegetales",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Fabricación de alimentos finos, cocinas, fabricación de tabacos y cigarrillos",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Inspección de envases (vidrio) y botellas, control de productos, adorno, decoración",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Laboratorios",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Inspección de colores",
+              "Em_lux": 1000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 6 500 K"]
+            }
+          ]
+        },
+        {
+          "codigo": "4.7",
+          "nombre": "Fabricación de piezas de metal (fundiciones, colada de metales y similares)",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Túneles soterrados sótanos, etc.",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos_especificos": [
+                "Se deben reconocer los colores de seguridad"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Preparación de arena",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Local de desarenado",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Puestos de trabajo en cubilote y mezclador",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Patio de fundición",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Áreas de desmoldeo",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Máquina moldeadora",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Moldeo manual y de machos",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Fundición en coquillas",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "4.8",
+          "nombre": "Fundiciones y colada de metales",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Salas de trabajo con iluminación suplementaria sobre cada máquina",
+              "Em_lux": 150,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Trabajo prolongado con requerimiento moderado sobre la visión",
+              "Em_lux": 300,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Trabajo mecánico con cierta discriminación de detalles",
+              "Em_lux": 300,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Trabajo mecánico que exige discriminación de detalles finos",
+              "Em_lux": 500,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Trabajo prolongado con discriminación de detalles finos",
+              "Em_lux": 1500,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Salas y paneles de control",
+              "Em_lux": 500,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Revisión prolija de artículos, corte y trazado",
+              "Em_lux": 1000,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Túneles, galerías subterráneas",
+              "Em_lux": null,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": [
+                "En los primeros ochenta (80) metros de la bocamina se deben instalar fluorescentes de 36W espaciados, por lo menos cada cinco (05) metros"
+              ]
+            }
+          ]
+        },
+        {
+          "codigo": "4.9",
+          "nombre": "Cuero y artículos de cuero",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Trabajo en cubas, toneles, fosos",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Descarnado, raspado, frotado (pulido), tambor de limpieza de pieles",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Trabajo de talabartería, fabricación de calzado, punteadora, cosido, pulido, conformado, corte, punzonado",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Clasificación",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 6 500 K"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Teñido del cuero (a máquina)",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Control de la calidad",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Inspección del color",
+              "Em_lux": 1000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 6 500 K"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Elaboración de calzado",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Elaboración de guantes",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "4.10",
+          "nombre": "Trabajo y tratamiento de metales",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Forjado con estampa abierta",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Forjado por estampación (en caliente), soldadura, extrusión en frío",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Maquinado grueso y medio: tolerancias > 0,1 mm",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Maquinado de precisión: rectificado: tolerancias < 0,1 mm",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 60,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Marcado (trazado); inspección",
+              "Em_lux": 750,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 60,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Plantillas de dibujo de alambres y tuberías",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Maquinado de planchas > 5 mm",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Labrado (metalisterías) de chapas < 5 mm",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Elaboración de herramientas: fabricación de equipos de corte",
+              "Em_lux": 750,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 60,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Galvanización",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Preparación y pintura de las superficies",
+              "Em_lux": 750,
+              "UGRL": 25,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Elaboración de herramientas, plantillas y taladradores; mecánica de precisión, micromecánica",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ],
+          "subgrupos": [
+            {
+              "nombre": "Montaje",
+              "items": [
+                {
+                  "tipo_interior_tarea_actividad": "grueso",
+                  "Em_lux": 200,
+                  "UGRL": 25,
+                  "Uo": 0.6,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                },
+                {
+                  "tipo_interior_tarea_actividad": "medio",
+                  "Em_lux": 300,
+                  "UGRL": 25,
+                  "Uo": 0.6,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                },
+                {
+                  "tipo_interior_tarea_actividad": "fino",
+                  "Em_lux": 500,
+                  "UGRL": 22,
+                  "Uo": 0.6,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                },
+                {
+                  "tipo_interior_tarea_actividad": "de precisión",
+                  "Em_lux": 750,
+                  "UGRL": 19,
+                  "Uo": 0.7,
+                  "Ra": 80,
+                  "requisitos_especificos": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "codigo": "4.11",
+          "nombre": "Papel y artículos de papel",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Molinos de pulpa, muelas verticales",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Fabricación y procesamiento del papel, maquinaria papelera y de corrugación, fabricación de cartones y cartulinas",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Trabajo normal de encuadernación de libros, por ejemplo, doblado, clasificación, encolado, corte, estampado en relieve, cosido",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "4.12",
+          "nombre": "Centrales de energía eléctrica",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Planta de suministro de combustible",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos_especificos": [
+                "Los colores de seguridad son reconocibles"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Casa de calderas",
+              "Em_lux": 100,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Salas de máquinas",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Locales auxiliares, por ejemplo, cuartos de bombas, cuartos de condensadores, cuartos de paneles eléctricos, etc.",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 60,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Cuartos de control",
+              "Em_lux": 500,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": [
+                "Los paneles de control están a menudo en vertical",
+                "Puede requerirse regulación de flujo luminoso"
+              ]
+            }
+          ]
+        },
+        {
+          "codigo": "4.13",
+          "nombre": "Imprentas",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Corte, dorado, estampado, grabado en bloque, trabajo en sillares y platinas, imprentas, elaboración de matrices (moldes)",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Clasificación del papel e impresión a mano",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Linotipia, retoque, litografía",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Inspección de colores en impresión multicolor",
+              "Em_lux": 1500,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["5 000 K ≤ TCP ≤ 6 500 K"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Grabado en acero y cobre",
+              "Em_lux": 2000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "4.14",
+          "nombre": "Laminación, instalaciones siderúrgicas",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Plantas de producción sin intervención manual",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos_especificos": [
+                "Se deben reconocer los colores de seguridad"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Plantas de producción con operación manual ocasionalmente",
+              "Em_lux": 150,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Plantas de producción con operación manual continuamente",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Almacén de palanquilla",
+              "Em_lux": 50,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos_especificos": [
+                "Los colores de seguridad deben ser reconocibles"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Hornos",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos_especificos": [
+                "Los colores de seguridad deben ser reconocibles"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Tren de laminación, bobinador, línea de cizallamiento",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 40,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Plataformas de control, paneles de control",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Ensayo, medición e inspección",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Túneles soterrados (tamaño humano), cintas transportadoras, sótanos, etc.",
+              "Em_lux": 50,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos_especificos": [
+                "Los colores de seguridad deben ser reconocibles"
+              ]
+            }
+          ]
+        },
+        {
+          "codigo": "4.15",
+          "nombre": "Industria textil",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Lugares de trabajo y zonas en baños, apertura de pacas",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Cardado, lavado, planchado, dibujo, peinado, apresto, tejeduría, prehilado, hiladura de yute y cáñamo",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Hilado, plegado, devanado, urdidura, tejeduría, trenzado, de punto tejido",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": ["Prevenir los efectos estroboscópicos"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Urdimbre, tejido, trenzado, tricotado",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": ["Prevenir los efectos estroboscópicos"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Costura, tejidos finos de punto, dar puntadas",
+              "Em_lux": 750,
+              "UGRL": 22,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Diseño manual, dibujo de patrones",
+              "Em_lux": 750,
+              "UGRL": 22,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 6 500 K"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Acabado, teñido",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Cuarto de secado",
+              "Em_lux": 100,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 60,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Impresión automática en géneros",
+              "Em_lux": 500,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Despinzado, batanado, galonado",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Inspección de colores, control de tejidos",
+              "Em_lux": 1000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 6 500 K"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Zurcido invisible",
+              "Em_lux": 1500,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 6 500 K"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Fabricación de sombreros",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "4.16",
+          "nombre": "Fabricación de vehículos",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Carrocería y ensamblaje",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Pintura, cámara de pintar (con pistola), cámara de pulir",
+              "Em_lux": 750,
+              "UGRL": 22,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Pintura: retoque, inspección",
+              "Em_lux": 1000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 6 500 K"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Tapicería (vestidura) manual",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Inspección final",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Servicios generales de vehículos, reparación y ensayos",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": ["Se debe considerar iluminación local"]
+            }
+          ]
+        },
+        {
+          "codigo": "4.17",
+          "nombre": "Industria maderera y su tratamiento",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Procesamiento automático, por ejemplo, fabricación de madera contrachapada seca",
+              "Em_lux": 50,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Fosos de vapor",
+              "Em_lux": 150,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 40,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Bastidor de sierra",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 60,
+              "requisitos_especificos": ["Prevenir efectos estroboscópicos"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Trabajo en banco de ebanista, encolado, montaje",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Pulido, pintado, ebanistería de fantasía",
+              "Em_lux": 750,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Trabajo en máquinas de carpintería, por ejemplo, torneado, ranurado, cepillado, ranurado, corte, aserrado, vertedero",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": ["Prevenir efectos estroboscópicos"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Selección de maderas en chapas, mosaicos de madera, trabajo de incrustación",
+              "Em_lux": 750,
+              "UGRL": 22,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 6 500 K"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Marquetería, incrustación en madera",
+              "Em_lux": 750,
+              "UGRL": 22,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 6 500 K"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Control de calidad, inspección",
+              "Em_lux": 1000,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 6 500 K"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "5",
+      "categoria": "COMERCIO",
+      "subcategorias": [
+        {
+          "codigo": "5.1",
+          "nombre": "Tiendas",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Área de ventas",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Área de (cajas) contadoras",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Mostrador (mesa) de envolver",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "5.2",
+          "nombre": "Áreas comunes",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Vestíbulo de entrada",
+              "Em_lux": 100,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": ["UGR sólo si es aplicable"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Guardarropas",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Salones",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Oficinas de taquillas",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "5.3",
+          "nombre": "Restaurantes y hoteles",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Carpeta de recepción/cajero, mesa de conserje",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Cocina",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": [
+                "Debe haber una zona de transición entre cocina y restaurante"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Restaurante, comedor, salón multiuso",
+              "Em_lux": null,
+              "UGRL": null,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": [
+                "El alumbrado debe diseñarse para crear la atmósfera apropiada"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Restaurante de autoservicio",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Buffet (comidas frías)",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Salas de conferencias",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": ["El alumbrado debe ser controlable"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Corredores (pasillos)",
+              "Em_lux": 100,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": [
+                "Durante la noche son aceptables niveles inferiores"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Cantinas, tabernas",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "5.4",
+          "nombre": "Teatros, salas de conciertos, salas de cines",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Teatros y salas de concierto",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Salas multipropósito",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Locales de ejercicios, vestidores",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.5,
+              "Ra": 80,
+              "requisitos_especificos": [
+                "La iluminación de espejos para maquillaje debe estar libre de deslumbramientos. El deslumbramiento perturbador debería evitarse en los espejos para maquillaje"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Museos (general)",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": ["Iluminación a nivel del suelo"]
+            }
+          ]
+        },
+        {
+          "codigo": "5.5",
+          "nombre": "Ferias, pabellones de exposiciones",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Alumbrado general",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "5.6",
+          "nombre": "Peluquerías",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Trabajo de peluquería",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 90,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "5.7",
+          "nombre": "Fabricación de joyas y relojes",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Trabajo con piedras preciosas",
+              "Em_lux": 1500,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": ["4 000 K ≤ TCP ≤ 6 500 K"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Manufactura de joyas",
+              "Em_lux": 1000,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 90,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Fabricación (manual) de relojes",
+              "Em_lux": 1500,
+              "UGRL": 16,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Fabricación (automática) de relojes",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "5.8",
+          "nombre": "Lavanderías y limpieza en seco",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Entrada de la ropa, marcado y clasificación",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Lavado (normal) y en seco",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Planchado, calandria (prensado)",
+              "Em_lux": 300,
+              "UGRL": 25,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Inspección y arreglos",
+              "Em_lux": 750,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "6",
+      "categoria": "OFICINAS",
+      "items": [
+        {
+          "tipo_interior_tarea_actividad": "Archivo, copia, circulación, etc.",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Escritura, mecanografía, lectura, procesamiento de datos",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Estación de trabajo CAD",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Salas de conferencias y reuniones",
+          "Em_lux": 500,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Archivos",
+          "Em_lux": 200,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos_especificos": null
+        }
+      ]
+    },
+    {
+      "codigo": "7",
+      "categoria": "SERVICIOS COMUNALES",
+      "subcategorias": [
+        {
+          "codigo": "7.1",
+          "nombre": "Museos",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Obras exhibidas insensibles a la luz",
+              "Em_lux": null,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": [
+                "La iluminación se debe determinar por los requisitos de presentación"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Obras exhibidas sensibles a la luz",
+              "Em_lux": null,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": null,
+              "requisitos_especificos": [
+                "La iluminación se debe determinar por los requisitos de presentación",
+                "Es imprescindible la protección contra la radiación dañina"
+              ]
+            }
+          ]
+        },
+        {
+          "codigo": "7.2",
+          "nombre": "Bibliotecas",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Estanterías (de libros)",
+              "Em_lux": 200,
+              "UGRL": 19,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Áreas de lectura",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Mostradores",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "7.3",
+          "nombre": "Templos",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Nave de iglesia",
+              "Em_lux": 100,
+              "UGRL": 25,
+              "Uo": null,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Asientos, altar, púlpito",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": null,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "8",
+      "categoria": "RECREACIÓN Y DEPORTES",
+      "items": [
+        {
+          "tipo_interior_tarea_actividad": "Salas para ejercicios físicos",
+          "Em_lux": 300,
+          "UGRL": 22,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos_especificos": null
+        },
+        {
+          "tipo_interior_tarea_actividad": "Vestuarios, salas de lavado, cuartos de baño, servicios",
+          "Em_lux": 200,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 80,
+          "requisitos_especificos": [
+            "En cada baño individual si está completamente cerrado."
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "9",
+      "categoria": "TRANSPORTE Y COMUNICACIONES",
+      "subcategorias": [
+        {
+          "codigo": "9.1",
+          "nombre": "Aeropuertos",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Salones de llegadas y partidas, áreas de recogida de equipaje",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Áreas de conexión, escaladores (mecánicos), cintas transportadoras",
+              "Em_lux": 150,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Mostradores de información, carpeta de chequear",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Aduana y control de pasaportes",
+              "Em_lux": 500,
+              "UGRL": 19,
+              "Uo": 0.7,
+              "Ra": 80,
+              "requisitos_especificos": [
+                "Tiene que proporcionarse reconocimiento facial"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Áreas de espera",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Depósitos de equipajes",
+              "Em_lux": 200,
+              "UGRL": 25,
+              "Uo": 0.4,
+              "Ra": 60,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Áreas de chequeo de seguridad",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Torre de control de tráfico",
+              "Em_lux": 500,
+              "UGRL": 16,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": [
+                "1. La iluminación debe ser regulable",
+                "2. Se debe evitar el deslumbramiento de luz diurna",
+                "4. Deben evitarse reflejos en ventanas, especialmente de noche"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Hangares de pruebas y reparaciones",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Área de prueba de máquinas",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.6,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Áreas de medición en hangares",
+              "Em_lux": 500,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            }
+          ]
+        },
+        {
+          "codigo": "9.2",
+          "nombre": "Terrapuertos",
+          "items": [
+            {
+              "tipo_interior_tarea_actividad": "Andenes completamente cubiertos",
+              "Em_lux": 100,
+              "UGRL": null,
+              "Uo": null,
+              "Ra": 40,
+              "requisitos_especificos": [
+                "1. Prestar especial atención al borde de la plataforma",
+                "2. Evitar el deslumbramiento para conductores de vehículos",
+                "3. Iluminancia a nivel del suelo"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Pasos subterráneos de pasajeros",
+              "Em_lux": 50,
+              "UGRL": 28,
+              "Uo": 0.5,
+              "Ra": 40,
+              "requisitos_especificos": ["Iluminancia a nivel del suelo"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Sala de taquillas y vestíbulo",
+              "Em_lux": 200,
+              "UGRL": 28,
+              "Uo": 0.5,
+              "Ra": 40,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Oficinas de billetes, de equipaje y de contadores",
+              "Em_lux": 300,
+              "UGRL": 19,
+              "Uo": 0.5,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Salas de espera",
+              "Em_lux": 200,
+              "UGRL": 22,
+              "Uo": 0.5,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Vestíbulos de entrada, vestíbulos de estación",
+              "Em_lux": 200,
+              "UGRL": null,
+              "Uo": 0.4,
+              "Ra": 80,
+              "requisitos_especificos": null
+            },
+            {
+              "tipo_interior_tarea_actividad": "Salas de contadores y máquinas",
+              "Em_lux": 200,
+              "UGRL": 28,
+              "Uo": 0.4,
+              "Ra": 60,
+              "requisitos_especificos": [
+                "Los colores de seguridad deben ser reconocibles"
+              ]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Túneles de acceso",
+              "Em_lux": 50,
+              "UGRL": null,
+              "Uo": 0.4,
+              "Ra": 20,
+              "requisitos_especificos": ["Iluminancia a nivel del suelo"]
+            },
+            {
+              "tipo_interior_tarea_actividad": "Naves de mantenimiento y servicio",
+              "Em_lux": 300,
+              "UGRL": 22,
+              "Uo": 0.4,
+              "Ra": 60,
+              "requisitos_especificos": null
+            }
+          ]
+        }
+      ],
+      "nota_numeracion": "En 9.1 'Torre de control de tráfico', la numeración de requisitos específicos del documento original salta del punto 2 al punto 4 (no existe punto 3 en la fuente); se transcribe tal cual."
+    },
+    {
+      "codigo": "10",
+      "categoria": "ESTACIONAMIENTOS",
+      "items": [
+        {
+          "tipo_interior_tarea_actividad": "Rampas entrada / salida (durante el día)",
+          "Em_lux": 300,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 40,
+          "requisitos_especificos": [
+            "1. Iluminancias a nivel del suelo",
+            "2. Se deben reconocer los colores de seguridad"
+          ]
+        },
+        {
+          "tipo_interior_tarea_actividad": "Rampas entrada / salida (durante la noche)",
+          "Em_lux": 75,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 40,
+          "requisitos_especificos": [
+            "1. Iluminancias a nivel del suelo",
+            "2. Se deben reconocer los colores de seguridad"
+          ]
+        },
+        {
+          "tipo_interior_tarea_actividad": "Calles interiores",
+          "Em_lux": 75,
+          "UGRL": 25,
+          "Uo": 0.4,
+          "Ra": 40,
+          "requisitos_especificos": [
+            "1. Iluminancias a nivel del suelo",
+            "2. Se deben reconocer los colores de seguridad"
+          ]
+        },
+        {
+          "tipo_interior_tarea_actividad": "Áreas de parqueo",
+          "Em_lux": 75,
+          "UGRL": null,
+          "Uo": 0.4,
+          "Ra": 40,
+          "requisitos_especificos": [
+            "1. Iluminancias a nivel del suelo",
+            "2. Se deben reconocer los colores de seguridad",
+            "3. Una elevada iluminancia vertical aumenta el reconocimiento de las caras de las personas y, por ello, la sensación de seguridad"
+          ]
+        },
+        {
+          "tipo_interior_tarea_actividad": "Caja",
+          "Em_lux": 300,
+          "UGRL": 19,
+          "Uo": 0.6,
+          "Ra": 80,
+          "requisitos_especificos": [
+            "1. Deben evitarse los reflejos en las ventanas",
+            "2. Debe prevenirse el deslumbramiento desde el exterior"
+          ]
+        }
+      ]
+    }
+  ]
+}

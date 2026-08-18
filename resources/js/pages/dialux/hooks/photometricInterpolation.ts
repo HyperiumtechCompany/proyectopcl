@@ -126,6 +126,31 @@ export function candelaFromPhotometricWeb(
 }
 
 /**
+ * Multiplicador de la tabla TILT (LM-63 Sec.2.2) aplicable a esta luminaria.
+ * Solo tiene efecto para `lamp_to_luminaire_geometry === 3` (lámpara
+ * orientable/apuntable) Y cuando el usuario declaró el ángulo real de
+ * instalación (`fixture.installationTiltDeg`) — sin ese dato el archivo IES
+ * no permite saber la orientación física real (no es un ángulo de cálculo,
+ * es una propiedad de instalación que LM-63 no declara). Para geometría 1/2
+ * (lámpara fija) no hay causa física verificable para elegir un ángulo, así
+ * que el multiplicador se mantiene en 1 (sin corrección) — ver
+ * `ProductImportService.php` warning "IES: TILT=INCLUDE detectado".
+ */
+export function tiltMultiplier(fixture: Fixture): number {
+    const tilt = fixture.photometricWeb?.tilt;
+    if (!tilt || tilt.lamp_to_luminaire_geometry !== 3) {
+        return 1;
+    }
+    if (fixture.installationTiltDeg === null || fixture.installationTiltDeg === undefined) {
+        return 1;
+    }
+    if (!tilt.angles?.length || !tilt.multipliers?.length) {
+        return 1;
+    }
+    return interpolate1D(tilt.multipliers, tilt.angles, fixture.installationTiltDeg);
+}
+
+/**
  * Candela en dirección (azimut, gamma) desde el eje del proyector.
  * Usa la matriz fotométrica real (IES/LDT) cuando está disponible; si no,
  * cae a un modelo Lambertiano aproximado a partir del flujo total.
@@ -150,7 +175,7 @@ export function candela(fixture: Fixture, gammaDeg: number, azimuthDeg = 0): num
                     ? Math.max(0, fixture.lumens) / referenceLumens
                     : 1;
 
-            return Math.max(0, rawCandela * fluxScale);
+            return Math.max(0, rawCandela * fluxScale * tiltMultiplier(fixture));
         }
     }
 

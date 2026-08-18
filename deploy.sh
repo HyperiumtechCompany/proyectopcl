@@ -29,6 +29,9 @@ test -s public/wasm/web-ifc.wasm
 echo "[DB] Ejecutando migraciones..."
 php artisan migrate --force
 
+echo "[DB] Reconciliando insumos huerfanos de todos los proyectos de Costos..."
+php artisan costos:reconcile-insumos --force
+
 echo "[DB] Sincronizando catalogo fotometrico real..."
 php artisan db:seed --class=RealPhotometryLuminaireSeeder --force
 

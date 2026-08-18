@@ -3,6 +3,7 @@
 use App\Models\Dialux\DialuxProject;
 use App\Models\LuminaireProduct;
 use App\Models\User;
+use App\Services\ProductImportService;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
@@ -810,6 +811,31 @@ test('an owner can update editable luminaire catalog properties', function () {
     ]);
 });
 
+test('an owner can edit lamp_type without losing the rest of metadata (Ronda 21d)', function () {
+    $user = User::factory()->create();
+    $product = LuminaireProduct::query()->create([
+        'user_id' => $user->id,
+        'name' => 'Downlight importado',
+        'source_format' => 'ldt',
+        'total_lumens' => 1365,
+        'power_watts' => 17,
+        'metadata' => ['parser' => 'rust', 'format_version' => 'EULUMDAT', 'luminaire_type' => 1, 'lamp_type' => null],
+    ]);
+
+    $this->actingAs($user)
+        ->patchJson(route('dialux.products.update', $product), [
+            'name' => 'Downlight importado',
+            'total_lumens' => 1365,
+            'lamp_type' => '14W LED',
+        ])
+        ->assertSuccessful();
+
+    $product->refresh();
+    expect($product->metadata['lamp_type'])->toBe('14W LED')
+        ->and($product->metadata['parser'])->toBe('rust')
+        ->and($product->metadata['luminaire_type'])->toBe(1);
+});
+
 test('a user cannot update another users luminaire', function () {
     $owner = User::factory()->create();
     $otherUser = User::factory()->create();
@@ -1091,4 +1117,285 @@ test('photometry repair restores legacy ldt data and synchronizes placed fixture
         ->and($fixture['z'])->toBe(4.67)
         ->and((float) $fixture['photometricWeb']['c_angles'][0])->toBe(0.0)
         ->and((float) $fixture['photometricWeb']['reference_lumens'])->toBe(2000.0);
+});
+
+test('parseLdt (fallback PHP, sin Rust) reads luminaire length/width/height from three separate EULUMDAT lines, not one', function () {
+    // EULUMDAT declara largo/ancho/alto en TRES líneas consecutivas
+    // (13/14/15, 1-indexadas) — confirmado contra archivos reales de EMOS y
+    // LEDVANCE descargados de luminaires.dialux.com. `parseTriplet()` (para
+    // IES, una sola línea con varios campos) no aplica aquí; usarlo dejaba
+    // ancho/alto en 0 en silencio. Este test invoca `parseLdt()` directo por
+    // reflexión porque el binario Rust real (si está compilado en esta
+    // máquina) intercepta el import público antes de llegar al parser PHP
+    // de respaldo, y Rust no parsea `dimensions` en absoluto (queda `null`,
+    // un caso ya conocido y distinto de este bug).
+    $lines = array_fill(0, 33, '');
+    $lines[0] = 'EMOS';
+    $lines[2] = '0';
+    $lines[3] = '2';
+    $lines[4] = '90';
+    $lines[5] = '3';
+    $lines[6] = '45';
+    $lines[8] = 'High Bay 100W';
+    $lines[9] = 'ZU210-9';
+    $lines[12] = '320';
+    $lines[13] = '320';
+    $lines[14] = '196';
+    $lines[26] = '1';
+    $lines[27] = 'LED';
+    $lines[28] = '17000';
+    $lines[29] = '4000';
+    $lines[30] = '80';
+    $lines[31] = '100';
+    $lines[] = '900 600 80';
+    $lines[] = '860 580 75';
+
+    $service = app(ProductImportService::class);
+    $method = new ReflectionMethod($service, 'parseLdt');
+    $method->setAccessible(true);
+    $warnings = [];
+    $parsed = $method->invokeArgs($service, [implode("\n", $lines), &$warnings]);
+
+    // EULUMDAT declara estas líneas en milímetros; el motor de cálculo
+    // espera metros — 320/320/196 mm -> 0.32/0.32/0.196 m.
+    expect($parsed['dimensions'])->toBe(['length' => 0.32, 'width' => 0.32, 'height' => 0.196]);
+});
+
+test('parseLdt strips a leading UTF-8 BOM from the manufacturer name', function () {
+    $lines = array_fill(0, 33, '');
+    $lines[0] = 'EMOS';
+    $lines[2] = '0';
+    $lines[3] = '2';
+    $lines[4] = '90';
+    $lines[5] = '3';
+    $lines[6] = '45';
+    $lines[8] = 'High Bay 100W';
+    $lines[9] = 'ZU210-9';
+    $lines[12] = '320';
+    $lines[13] = '320';
+    $lines[14] = '196';
+    $lines[26] = '1';
+    $lines[27] = 'LED';
+    $lines[28] = '17000';
+    $lines[29] = '4000';
+    $lines[30] = '80';
+    $lines[31] = '100';
+    $lines[] = '900 600 80';
+    $lines[] = '860 580 75';
+
+    $service = app(ProductImportService::class);
+    $method = new ReflectionMethod($service, 'parseLdt');
+    $method->setAccessible(true);
+    $warnings = [];
+    $parsed = $method->invokeArgs($service, ["\xEF\xBB\xBF".implode("\n", $lines), &$warnings]);
+
+    expect($parsed['manufacturer'])->toBe('EMOS');
+});
+
+test('preview endpoint parses a real LDT file and returns full data WITHOUT creating a catalog row', function () {
+    Storage::fake();
+    $user = User::factory()->create();
+
+    $lines = array_fill(0, 32, '0');
+    $lines[0] = 'ACME Lighting';
+    $lines[1] = '1';
+    $lines[2] = '1';
+    $lines[3] = '1';
+    $lines[4] = '0';
+    $lines[5] = '5';
+    $lines[6] = '22.5';
+    $lines[8] = 'Downlight de preview';
+    $lines[9] = 'ACME-PREVIEW-1';
+    $lines[12] = '180';
+    $lines[13] = '180';
+    $lines[14] = '90';
+    $lines[21] = '62.5';
+    $lines[26] = '1';
+    $lines[27] = 'LED';
+    $lines[28] = '1000';
+    $lines[29] = '4000';
+    $lines[30] = '80';
+    $lines[31] = '10,0';
+    $lines[] = '0.51';
+    $lines[] = '0.62';
+    $lines[] = '0.70';
+    $lines[] = '0.78';
+    $lines[] = '0.82';
+    $lines[] = '0.86';
+    $lines[] = '0.90';
+    $lines[] = '0.93';
+    $lines[] = '0.95';
+    $lines[] = '0.97';
+    $lines[] = '0'; // c_angles (Mc=1)
+    $lines = array_merge($lines, ['0', '22.5', '45', '67.5', '90']); // gamma
+    $lines = array_merge($lines, ['100', '250', '300', '150', '50']); // candela
+
+    $file = UploadedFile::fake()->createWithContent('preview-test.ldt', implode("\n", $lines));
+
+    $response = $this
+        ->actingAs($user)
+        ->post(route('dialux.products.preview'), [
+            'file' => $file,
+            'normative_standard' => 'universal',
+        ]);
+
+    $response->assertOk()
+        ->assertJsonPath('product.name', 'Downlight de preview')
+        ->assertJsonPath('product.manufacturer', 'ACME Lighting')
+        ->assertJsonPath('product.dimensions.length', 0.18)
+        ->assertJsonPath('product.dimensions.width', 0.18)
+        ->assertJsonPath('product.dimensions.height', 0.09)
+        ->assertJsonPath('product.metadata.downward_flux_fraction_pct', 62.5)
+        ->assertJsonPath('product.id', null);
+
+    expect(LuminaireProduct::query()->count())->toBe(0);
+});
+
+test('users can override total_lumens/power_watts/cct/cri_ra from the preview modal before confirming import', function () {
+    Storage::fake();
+    $user = User::factory()->create();
+
+    $lines = array_fill(0, 32, '0');
+    $lines[0] = 'ACME Lighting';
+    $lines[1] = '1';
+    $lines[2] = '1';
+    $lines[3] = '1';
+    $lines[4] = '0';
+    $lines[5] = '5';
+    $lines[6] = '22.5';
+    $lines[8] = 'Downlight de override';
+    $lines[9] = 'ACME-OVR-1';
+    $lines[26] = '1';
+    $lines[27] = 'LED';
+    $lines[28] = '1000';
+    $lines[29] = '4000';
+    $lines[30] = '80';
+    $lines[31] = '10,0';
+    $lines = array_merge($lines, ['0.51', '0.62', '0.70', '0.78', '0.82', '0.86', '0.90', '0.93', '0.95', '0.97']);
+    $lines[] = '0';
+    $lines = array_merge($lines, ['0', '22.5', '45', '67.5', '90']);
+    $lines = array_merge($lines, ['100', '250', '300', '150', '50']);
+
+    $file = UploadedFile::fake()->createWithContent('override-test.ldt', implode("\n", $lines));
+
+    $response = $this
+        ->actingAs($user)
+        ->post(route('dialux.products.import'), [
+            'file' => $file,
+            'normative_standard' => 'universal',
+            'total_lumens' => 1250,
+            'power_watts' => 12,
+            'cct' => '3000K',
+            'cri_ra' => 90,
+        ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('product.total_lumens', 1250)
+        ->assertJsonPath('product.power_watts', 12)
+        ->assertJsonPath('product.cct', '3000K')
+        ->assertJsonPath('product.cri_ra', 90);
+
+    // La matriz de candela cruda queda a la escala del archivo original
+    // (reference_lumens=1000) — el override de flujo es metadata, no
+    // reescribe la curva; cualquier consumidor (colocar la luminaria en una
+    // escena) aplica `candelaScale = fixture.lumens / reference_lumens`.
+    $product = LuminaireProduct::query()->firstOrFail();
+    expect((float) $product->photometric_web['reference_lumens'])->toBe(1000.0);
+});
+
+test('an owner can replace the photometric file of an already-saved product without losing its id (Ronda 21e)', function () {
+    Storage::fake();
+    $user = User::factory()->create();
+    $product = LuminaireProduct::query()->create([
+        'user_id' => $user->id,
+        'name' => 'Downlight con archivo equivocado',
+        'source_format' => 'manual',
+        'total_lumens' => 500,
+        'power_watts' => 5,
+    ]);
+    $originalId = $product->id;
+
+    $lines = array_fill(0, 32, '0');
+    $lines[0] = 'ACME Lighting';
+    $lines[1] = '1';
+    $lines[2] = '1';
+    $lines[3] = '1';
+    $lines[4] = '0';
+    $lines[5] = '5';
+    $lines[6] = '22.5';
+    $lines[8] = 'Downlight correcto';
+    $lines[9] = 'ACME-CORRECT-1';
+    $lines[26] = '1';
+    $lines[27] = '14W LED';
+    $lines[28] = '1365';
+    $lines[29] = '4000';
+    $lines[30] = '90';
+    $lines[31] = '17,0';
+    $lines = array_merge($lines, ['0.51', '0.62', '0.70', '0.78', '0.82', '0.86', '0.90', '0.93', '0.95', '0.97']);
+    $lines[] = '0';
+    $lines = array_merge($lines, ['0', '22.5', '45', '67.5', '90']);
+    $lines = array_merge($lines, ['100', '250', '300', '150', '50']);
+
+    $file = UploadedFile::fake()->createWithContent('correct-file.ldt', implode("\n", $lines));
+
+    $this->actingAs($user)
+        ->patchJson(route('dialux.products.update', $product), [
+            'name' => 'Downlight correcto',
+            'total_lumens' => 1365,
+            'file' => $file,
+        ])
+        ->assertSuccessful()
+        ->assertJsonPath('product.id', $originalId)
+        ->assertJsonPath('product.name', 'Downlight correcto')
+        ->assertJsonPath('product.total_lumens', 1365)
+        ->assertJsonPath('product.source_format', 'ldt')
+        ->assertJsonPath('product.metadata.lamp_type', '14W LED');
+
+    $product->refresh();
+    expect($product->id)->toBe($originalId)
+        ->and($product->photometric_web['candela'])->not->toBeEmpty();
+});
+
+test('buildPolarSvg muestra el flujo total y dibuja C0/C180 + C90/C270 cuando hay dos planos reales (Ronda 21g)', function () {
+    $service = app(ProductImportService::class);
+    $method = new ReflectionMethod($service, 'buildPolarSvg');
+    $method->setAccessible(true);
+
+    $web = [
+        'c_angles' => [0.0, 90.0],
+        'gamma_angles' => [0, 45, 90],
+        'candela' => [
+            [1000.0, 500.0, 0.0],
+            [600.0, 300.0, 0.0],
+        ],
+        'reference_lumens' => 2014.0,
+    ];
+
+    $svg = $method->invoke($service, $web, 'Luminaria de prueba');
+
+    expect($svg)->toContain('Imax 1,000 cd · Φ 2,014 lm')
+        ->and($svg)->toContain('C0/C180')
+        ->and($svg)->toContain('C90/C270')
+        ->and($svg)->toContain('#dc2626')
+        ->and($svg)->toContain('#2563eb');
+});
+
+test('buildPolarSvg con un solo plano C mantiene la curva azul única, sin leyenda (sin regresión visual)', function () {
+    $service = app(ProductImportService::class);
+    $method = new ReflectionMethod($service, 'buildPolarSvg');
+    $method->setAccessible(true);
+
+    $web = [
+        'c_angles' => [0.0],
+        'gamma_angles' => [0, 45, 90],
+        'candela' => [[802.0, 400.0, 0.0]],
+        'reference_lumens' => 2014.0,
+    ];
+
+    $svg = $method->invoke($service, $web, 'Luminaria simétrica');
+
+    expect($svg)->toContain('Imax 802 cd · Φ 2,014 lm')
+        ->and($svg)->not->toContain('C0/C180')
+        ->and($svg)->not->toContain('#dc2626')
+        ->and($svg)->toContain('#2563eb');
 });

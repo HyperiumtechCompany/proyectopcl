@@ -107,7 +107,7 @@ export async function uploadDialuxPlanFile(
     projectId: string,
     sceneId: string,
     file: File,
-): Promise<void> {
+): Promise<{ warning: string | null }> {
     const formData = new FormData();
     formData.append('plan', file);
 
@@ -128,6 +128,9 @@ export async function uploadDialuxPlanFile(
     if (!response.ok) {
         throw new Error(`No se pudo guardar el plano en el servidor (HTTP ${response.status}).`);
     }
+
+    const body = (await response.json().catch(() => null)) as { warning?: string | null } | null;
+    return { warning: body?.warning ?? null };
 }
 
 export async function loadDialuxPlanFromServer(

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dialux;
 
 use App\Concerns\AuthorizesDialuxProject;
+use App\Concerns\DetectsDwgCompatibility;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Dialux\LinkDialuxPlanFileRequest;
 use App\Http\Requests\Dialux\StoreDialuxPlanFileRequest;
@@ -19,6 +20,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class PlanFileController extends Controller
 {
     use AuthorizesDialuxProject;
+    use DetectsDwgCompatibility;
 
     /**
      * Sube un plano DXF/DWG nuevo y lo vincula al piso indicado. Si el piso
@@ -36,6 +38,7 @@ class PlanFileController extends Controller
         $file = $request->file('plan');
         $disk = 'local';
         $extension = strtolower($file->getClientOriginalExtension());
+        $warning = $this->detectDwgCompatibilityWarning($file);
         $directory = sprintf('dialux/plans/%s', $dialuxProject->id);
         $path = $file->storeAs($directory, Str::uuid().'.'.$extension, $disk);
         if (! $path) {
@@ -57,6 +60,7 @@ class PlanFileController extends Controller
             'message' => 'Plano guardado correctamente.',
             'file_name' => $plan->original_name,
             'size_bytes' => $plan->size_bytes,
+            'warning' => $warning,
         ]);
     }
 

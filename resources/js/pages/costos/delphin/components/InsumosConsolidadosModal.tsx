@@ -4,6 +4,7 @@ import {
     ArrowUpDown,
     Briefcase,
     Check,
+    Edit3,
     FileSpreadsheet,
     Layers,
     Maximize2,
@@ -18,6 +19,8 @@ import {
 import Decimal from 'decimal.js';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import axios from 'axios';
+import Swal from 'sweetalert2';
 import type { ACUComponenteRow, ACURowSummary } from '@/types/presupuestos';
 import type { DelphinRow, InsumosScope } from '../types';
 import { exportInsumosConsolidadosExcel } from '../helpers/exportDelphinExcel';
@@ -49,6 +52,8 @@ export interface RawInsumo {
     sourceKey: string;
     type: InsumoType;
     codigo: string;
+    codigo_producto?: string | null;
+    insumo_id?: number | null;
     descripcion: string;
     unidad: string;
     cantidad: number;
@@ -73,6 +78,8 @@ export interface ConsolidatedInsumo {
     key: string;
     type: InsumoType;
     codigo: string;
+    codigo_producto?: string | null;
+    insumo_id?: number | null;
     descripcion: string;
     unidad: string;
     cantidad: number;
@@ -273,11 +280,12 @@ export function flattenInsumos(
                     normalizeKey(unidad),
                     codigo ? normalizeKey(codigo) : '',
                 ].join('|');
-
                 rows.push({
                     sourceKey: baseKey,
                     type: key,
                     codigo,
+                    codigo_producto: item.codigo_producto ?? null,
+                    insumo_id: item.insumo_id ?? null,
                     descripcion,
                     unidad,
                     cantidad: usage.cantidad,
@@ -333,6 +341,10 @@ export function consolidateInsumos(
                     ? `${existing.codigo}, ${row.codigo}`
                     : row.codigo;
             }
+            if (row.insumo_id && !existing.insumo_id) {
+                existing.insumo_id = row.insumo_id;
+                existing.codigo_producto = row.codigo_producto;
+            }
             if (!existing.sourceKeys.includes(row.sourceKey)) {
                 existing.sourceKeys.push(row.sourceKey);
             }
@@ -344,6 +356,8 @@ export function consolidateInsumos(
                 key,
                 type: row.type,
                 codigo: row.codigo,
+                codigo_producto: row.codigo_producto,
+                insumo_id: row.insumo_id,
                 descripcion: displayName,
                 unidad: row.unidad,
                 cantidad: row.cantidad,
@@ -490,12 +504,12 @@ export function InsumosConsolidadosModal({
         key: 'parcial',
         direction: 'desc',
     });
-    const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<
-        number | null
-    >(null);
-    const [referenceRow, setReferenceRow] = useState<ConsolidatedInsumo | null>(
-        null,
-    );
+    const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<number | null>(null);
+    const [referenceRow, setReferenceRow] = useState<ConsolidatedInsumo | null>(null);
+    const [editingInsumo, setEditingInsumo] = useState<ConsolidatedInsumo | null>(null);
+    const [editName, setEditName] = useState('');
+    const [editPrice, setEditPrice] = useState(0);
+    const [isSaving, setIsSaving] = useState(false);
     const [isMaximized, setIsMaximized] = useState(false);
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const dragRef = useRef<{
@@ -636,6 +650,71 @@ export function InsumosConsolidadosModal({
         setSelectedKeys(new Set());
         setMergeName('');
         setReferenceRow(null);
+    };
+
+    const handleEditClick = (row: ConsolidatedInsumo) => {
+        setEditingInsumo(row);
+        setEditName(row.descripcion);
+        setEditPrice(row.precio);
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editingInsumo) return;
+        
+        // Evita el error "Blocked aria-hidden on an element because its descendant retained focus"
+        if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+        }
+        
+        const result = await Swal.fire({
+            title: '¿Confirmar cambios?',
+            text: `Se actualizará el nombre y precio en todos los ACUs del proyecto para "${editingInsumo.descripcion}". Esta acción es segura (no elimina datos) pero afectará los montos del presupuesto.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#0ea5e9',
+            cancelButtonColor: '#475569',
+            confirmButtonText: 'Sí, guardar',
+            cancelButtonText: 'Cancelar',
+            target: document.body
+        });
+
+        if (!result.isConfirmed) return;
+
+        setIsSaving(true);
+        try {
+            if (editingInsumo.insumo_id) {
+                // Caso A: Ya está vinculado al catálogo
+                await axios.put(`/costos/proyectos/${projectData.id}/presupuesto/insumos/${editingInsumo.insumo_id}`, {
+                    descripcion: editName,
+                    costo_unitario: editPrice
+                });
+            } else {
+                // Caso B: Insumo huérfano, propagar por descripción
+                await axios.post(`/costos/proyectos/${projectData.id}/presupuesto/insumos/update-unlinked`, {
+                    tipo: activeType,
+                    old_descripcion: editingInsumo.descripcion,
+                    new_descripcion: editName,
+                    new_precio: editPrice
+                });
+            }
+            
+            Swal.fire('Guardado!', 'Los cambios han sido propagados.', 'success');
+            setEditingInsumo(null);
+            
+            // Recargar ACUs en la vista principal
+            // Idealmente mediante una prop, pero recargando si no hay prop funciona.
+            if ('onRefetch' in window) {
+                // ... logic is better in DelphinView
+            }
+            // Emit un custom event for DelphinView to catch and refetch
+            window.dispatchEvent(new CustomEvent('insumoUpdated'));
+            
+        } catch (error: any) {
+            console.error('Error actualizando insumo:', error);
+            Swal.fire('Error', error?.response?.data?.message || 'No se pudo actualizar el insumo', 'error');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleSort = (key: InsumoSortKey) => {
@@ -1060,19 +1139,28 @@ export function InsumosConsolidadosModal({
                                                         {row.usos}
                                                     </td>
                                                     <td className="p-2 text-center">
-                                                        <button
-                                                            type="button"
-                                                            className="inline-flex rounded p-1.5 text-sky-400 transition-colors hover:bg-sky-950 hover:text-sky-200"
-                                                            onClick={() =>
-                                                                setReferenceRow(
-                                                                    row,
-                                                                )
-                                                            }
-                                                            title={`Ver de dónde proviene ${row.descripcion}`}
-                                                            aria-label={`Ver referencias de ${row.descripcion}`}
-                                                        >
-                                                            <Search size={14} />
-                                                        </button>
+                                                        <div className="flex justify-center gap-1">
+                                                            <button
+                                                                type="button"
+                                                                className="inline-flex rounded p-1.5 text-sky-400 transition-colors hover:bg-sky-950 hover:text-sky-200"
+                                                                onClick={() =>
+                                                                    setReferenceRow(row)
+                                                                }
+                                                                title={`Ver de dónde proviene ${row.descripcion}`}
+                                                                aria-label={`Ver referencias de ${row.descripcion}`}
+                                                            >
+                                                                <Search size={14} />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="inline-flex rounded p-1.5 text-amber-400 transition-colors hover:bg-amber-950/50 hover:text-amber-200"
+                                                                onClick={() => handleEditClick(row)}
+                                                                title={`Editar nombre o precio`}
+                                                                aria-label={`Editar ${row.descripcion}`}
+                                                            >
+                                                                <Edit3 size={14} />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             );
@@ -1178,6 +1266,78 @@ export function InsumosConsolidadosModal({
                                     ? 'referencia'
                                     : 'referencias'}{' '}
                                 encontradas
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {editingInsumo && (
+                    <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/80 p-6">
+                        <div className="flex w-full max-w-md flex-col overflow-hidden rounded-lg border border-slate-600 bg-slate-900 shadow-2xl">
+                            <div className="flex items-start justify-between border-b border-slate-700 bg-slate-800 px-4 py-3">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-slate-100">
+                                        Editar Insumo
+                                    </h3>
+                                    <p className="mt-1 text-xs text-sky-300">
+                                        {editingInsumo.codigo ? `${editingInsumo.codigo} - ` : ''}{editingInsumo.unidad}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
+                                    onClick={() => setEditingInsumo(null)}
+                                    aria-label="Cerrar edición"
+                                    disabled={isSaving}
+                                >
+                                    <X size={16} />
+                                </button>
+                            </div>
+                            <div className="p-4 space-y-4">
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-slate-300">
+                                        Descripción
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editName}
+                                        onChange={(e) => setEditName(e.target.value)}
+                                        className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+                                        disabled={isSaving}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-slate-300">
+                                        Precio / Costo Unitario
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={editPrice}
+                                        onChange={(e) => setEditPrice(parseFloat(e.target.value) || 0)}
+                                        className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+                                        disabled={isSaving}
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex justify-end gap-2 border-t border-slate-700 bg-slate-800 p-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setEditingInsumo(null)}
+                                    className="rounded px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+                                    disabled={isSaving}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleSaveEdit}
+                                    className="rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-500 disabled:opacity-50"
+                                    disabled={isSaving || !editName.trim()}
+                                >
+                                    {isSaving ? 'Guardando...' : 'Guardar y Propagar'}
+                                </button>
                             </div>
                         </div>
                     </div>

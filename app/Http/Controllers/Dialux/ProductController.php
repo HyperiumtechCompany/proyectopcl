@@ -58,6 +58,11 @@ class ProductController extends Controller
                 'normative_standard' => $request->input('normative_standard'),
                 'fixture_type' => $request->input('fixture_type'),
                 'fixture_shape' => $request->input('fixture_shape'),
+                'total_lumens' => $request->input('total_lumens'),
+                'power_watts' => $request->input('power_watts'),
+                'cct' => $request->input('cct'),
+                'cri_ra' => $request->input('cri_ra'),
+                'lamp_type' => $request->input('lamp_type'),
             ]),
         );
 
@@ -69,6 +74,41 @@ class ProductController extends Controller
             'warnings' => $warnings,
             'message' => 'Producto importado correctamente.',
         ], 201);
+    }
+
+    /**
+     * Parsea un archivo fotométrico (.ies/.ldt/.gldf) SIN guardarlo en el
+     * catálogo — alimenta el modal de previsualización/edición (tabla de
+     * datos, CDL polar, tabla UGR) antes de que el usuario confirme. El
+     * archivo original sí queda en storage (necesario para que el binario
+     * Rust lo lea), pero no se crea ninguna fila en `luminaire_products`.
+     */
+    public function preview(ImportProductRequest $request): JsonResponse
+    {
+        $userId = $request->user()?->id;
+
+        $result = $this->importService->import(
+            file: $request->file('file'),
+            userId: $userId,
+            overrides: array_filter([
+                'name' => $request->input('name'),
+                'manufacturer' => $request->input('manufacturer'),
+                'normative_standard' => $request->input('normative_standard'),
+                'fixture_type' => $request->input('fixture_type'),
+                'fixture_shape' => $request->input('fixture_shape'),
+                'total_lumens' => $request->input('total_lumens'),
+                'power_watts' => $request->input('power_watts'),
+                'cct' => $request->input('cct'),
+                'cri_ra' => $request->input('cri_ra'),
+                'lamp_type' => $request->input('lamp_type'),
+            ]),
+            persist: false,
+        );
+
+        return response()->json([
+            'product' => $this->formatProduct($result['product'], withWeb: true, userId: $userId),
+            'warnings' => $result['warnings'],
+        ]);
     }
 
     /**
@@ -136,6 +176,7 @@ class ProductController extends Controller
         }
 
         $data = $request->validated();
+        unset($data['file']); // se maneja aparte abajo, nunca es una columna propia.
 
         if ($request->hasFile('product_image')) {
             $data['product_image_path'] = $this->storeProductMedia($request->file('product_image'), $request->user()->id, 'images');
@@ -149,7 +190,27 @@ class ProductController extends Controller
             $data['brand_logo_path'] = null;
         }
 
-        $product->update($data);
+        if ($request->hasFile('file')) {
+            // Reemplazo del archivo fotométrico (Ronda 21e) — el resto de
+            // `$data` (nombre, marca, lúmenes/watts/CCT/CRI editados,
+            // `lamp_type`, imágenes ya resueltas arriba) viaja como
+            // overrides sobre lo que el archivo NUEVO declare.
+            $result = $this->importService->replacePhotometricFile($product, $request->file('file'), $request->user()->id, $data);
+            $product = $result['product'];
+            $warnings = array_merge($warnings, $result['warnings']);
+        } else {
+            // `lamp_type` vive en `metadata`, no en una columna propia — se
+            // fusiona con lo que ya haya (parser/format_version/
+            // luminaire_type/etc.) en vez de reemplazar todo el JSON, igual
+            // criterio que ya usa `repairStoredProduct()` para
+            // `source_internal_name`.
+            if (array_key_exists('lamp_type', $data)) {
+                $lampType = $data['lamp_type'];
+                unset($data['lamp_type']);
+                $data['metadata'] = array_merge($product->metadata ?? [], ['lamp_type' => $lampType]);
+            }
+            $product->update($data);
+        }
 
         return response()->json([
             'product' => $this->formatProduct($product->refresh(), userId: $request->user()->id),
@@ -287,6 +348,7 @@ class ProductController extends Controller
             'photometric_summary' => $product->photometric_summary,
             'dimensions' => $product->dimensions,
             'luminous_opening' => $product->luminous_opening,
+            'metadata' => $product->metadata,
             'report_data' => $product->report_data,
             'report_assets' => $product->report_assets,
             'created_at' => $product->created_at,

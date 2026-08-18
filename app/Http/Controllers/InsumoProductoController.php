@@ -39,7 +39,7 @@ class InsumoProductoController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => "Catálogo inicializado: {$diccionarioCount} diccionarios, {$unidadCount} unidades, {$insumoCount} insumos base.",
+            'message' => "CatÃ¡logo inicializado: {$diccionarioCount} diccionarios, {$unidadCount} unidades, {$insumoCount} insumos base.",
             'diccionarios' => $diccionarioCount,
             'unidades' => $unidadCount,
             'insumos' => $insumoCount,
@@ -47,7 +47,7 @@ class InsumoProductoController extends Controller
     }
 
     /**
-     * Buscar productos/insumos por descripción o código.
+     * Buscar productos/insumos por descripciÃ³n o cÃ³digo.
      * GET /costos/proyectos/{project}/presupuesto/insumos/search?q=cemento&tipo=materiales
      */
     public function search(Request $request, $project): JsonResponse
@@ -61,7 +61,7 @@ class InsumoProductoController extends Controller
 
         // Cuando se solicita "solo usados", los insumos se obtienen directamente
         // de las tablas hijas de ACU (una por cada tipo), de modo que se muestren
-        // incluso los que no estÃ¡n enlazados al catÃ¡logo maestro.
+        // incluso los que no estÃƒÂ¡n enlazados al catÃƒÂ¡logo maestro.
         if ($usadosOnly) {
             $tableMap = [
                 'mano_de_obra' => [
@@ -94,7 +94,7 @@ class InsumoProductoController extends Controller
             if (! $tipo || ! isset($tableMap[$tipo])) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Debe especificar un tipo válido para listar insumos usados.',
+                    'message' => 'Debe especificar un tipo vÃ¡lido para listar insumos usados.',
                     'productos' => [],
                 ], 422);
             }
@@ -260,7 +260,7 @@ class InsumoProductoController extends Controller
             ->where('presupuesto_id', $tenantPresupuestoId)
             ->get(['partida', 'descripcion']);
 
-        // Filtrar estrictamente solo aquellas partidas que sean exactamente un par de números (ej. '01', '02', '10')
+        // Filtrar estrictamente solo aquellas partidas que sean exactamente un par de nÃºmeros (ej. '01', '02', '10')
         $especialidades = $todas->filter(function ($item) {
             $cleanPartida = trim((string) $item->partida);
 
@@ -272,7 +272,7 @@ class InsumoProductoController extends Controller
             $cleanPartida = trim((string) $item->partida);
 
             return [
-                'value' => $cleanPartida, // enviamos '02' para que en la búsqueda (like 02%) coincida perfectamente
+                'value' => $cleanPartida, // enviamos '02' para que en la bÃºsqueda (like 02%) coincida perfectamente
                 'label' => $cleanPartida.' '.$item->descripcion,
             ];
         });
@@ -339,10 +339,10 @@ class InsumoProductoController extends Controller
 
         $connection = DB::connection('costos_tenant');
 
-        // Generar código de producto automáticamente
+        // Generar cÃ³digo de producto automÃ¡ticamente
         $diccionario = $connection->table('diccionario')->where('id', $validated['diccionario_id'])->first();
         if (! $diccionario) {
-            return response()->json(['success' => false, 'message' => 'Diccionario inválido.'], 422);
+            return response()->json(['success' => false, 'message' => 'Diccionario invÃ¡lido.'], 422);
         }
 
         $diccionarioCodigo = data_get($diccionario, 'codigo', '');
@@ -411,9 +411,9 @@ class InsumoProductoController extends Controller
 
         $producto = $connection->table('insumo_productos')->where('id', $insumoId)->first();
 
-        // ─────────────────────────────────────────────────────────────────────
-        // PROPAGACIÓN DE PRECIO A ACUS Y PRESUPUESTO
-        // ─────────────────────────────────────────────────────────────────────
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // PROPAGACIÃ“N DE PRECIO A ACUS Y PRESUPUESTO
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if ($producto) {
             app(CostoDatabaseService::class)->propagateInsumoUpdate($project, $producto);
         }
@@ -493,7 +493,7 @@ class InsumoProductoController extends Controller
             ], 404);
         }
 
-        // Si se seleccionó un insumo de catálogo para reemplazar:
+        // Si se seleccionÃ³ un insumo de catÃ¡logo para reemplazar:
         $newInsumo = null;
         if (! empty($validated['new_insumo_id'])) {
             $newInsumo = $connection->table('insumo_productos')->where('id', $validated['new_insumo_id'])->first();
@@ -525,11 +525,11 @@ class InsumoProductoController extends Controller
             }
 
             if (! empty($updateData)) {
-                // Recalcular parcial — 10 decimales (no 4), igual que calculateACU()/
+                // Recalcular parcial â€” 10 decimales (no 4), igual que calculateACU()/
                 // CostoDatabaseService::recalculateAcuFromJson(). recalculateAcus() abajo
                 // suma este campo directo hacia costo_unitario_total/Costo Directo; con
-                // metrados grandes hasta 6dp se queda corto y se amplifica a céntimos
-                // frente a Insumos Consolidados (que recalcula cantidad × precio_unitario
+                // metrados grandes hasta 6dp se queda corto y se amplifica a cÃ©ntimos
+                // frente a Insumos Consolidados (que recalcula cantidad Ã— precio_unitario
                 // crudos, sin leer "parcial").
                 $cant = (float) $item->cantidad;
                 $prec = (float) ($updateData[$conf['price_column']] ?? $item->{$conf['price_column']});
@@ -545,7 +545,7 @@ class InsumoProductoController extends Controller
 
         $affectedAcuIds = array_unique($affectedAcuIds);
 
-        // Disparar recálculo de los ACUs afectados
+        // Disparar recÃ¡lculo de los ACUs afectados
         app(CostoDatabaseService::class)->propagateInsumoUpdate($projectModel, (object) ['id' => -1]); // Triggers update for the ACUs we just saved
 
         // The propagateInsumoUpdate currently works differently: it takes an insumo and finds ACUs.
@@ -558,7 +558,109 @@ class InsumoProductoController extends Controller
         ]);
     }
 
-    private function recalculateAcus($connection, $affectedAcuIds, $tenantPresupuestoId, $projectModel)
+    /**
+     * Actualizar nombre y/o precio de un insumo NO vinculado al catÃ¡logo
+     * (insumo_id = null) en todas las tablas acu_* por coincidencia de descripciÃ³n.
+     *
+     * Este endpoint es el equivalente para insumos huÃ©rfanos de lo que
+     * InsumoProductoController::update + CostoDatabaseService::propagateInsumoUpdate
+     * hace para insumos del catÃ¡logo. No elimina ni crea registros; solo actualiza
+     * descripcion y/o precio en cada fila coincidente y recalcula parciales.
+     *
+     * POST /costos/proyectos/{project}/presupuesto/insumos/update-unlinked
+     * Body: { tipo, old_descripcion, new_descripcion?, new_precio? }
+     */
+    public function updateUnlinkedInsumo(Request $request, $project): JsonResponse
+    {
+        $validated = $request->validate([
+            'tipo' => 'required|in:mano_de_obra,materiales,equipos,subcontratos,subpartidas',
+            'old_descripcion' => 'required|string',
+            'new_descripcion' => 'nullable|string',
+            'new_precio' => 'nullable|numeric|min:0',
+        ]);
+
+        $tipo = $validated['tipo'];
+        $oldDescripcion = trim($validated['old_descripcion']);
+        $newDescripcion = isset($validated['new_descripcion']) ? trim($validated['new_descripcion']) : null;
+        $newPrecio = $validated['new_precio'] ?? null;
+
+        // Al menos uno debe estar presente
+        if ($newDescripcion === null && $newPrecio === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Debe proporcionar new_descripcion o new_precio.',
+            ], 422);
+        }
+
+        $tableMap = [
+            'mano_de_obra' => ['table' => 'acu_mano_de_obra',  'price_column' => 'precio_unitario'],
+            'materiales' => ['table' => 'acu_materiales',    'price_column' => 'precio_unitario'],
+            'equipos' => ['table' => 'acu_equipos',       'price_column' => 'precio_hora'],
+            'subcontratos' => ['table' => 'acu_subcontratos',  'price_column' => 'precio_unitario'],
+            'subpartidas' => ['table' => 'acu_subpartidas',   'price_column' => 'precio_unitario'],
+        ];
+
+        $conf = $tableMap[$tipo];
+        $connection = DB::connection('costos_tenant');
+
+        $projectModel = $project instanceof CostoProject ? $project : CostoProject::findOrFail($project);
+        $tenantPresupuestoId = app(CostoDatabaseService::class)->getDefaultPresupuestoId($projectModel->database_name);
+
+        // Buscar filas huÃ©rfanas que coincidan por descripciÃ³n (con o sin insumo_id â€”
+        // cubrimos tambiÃ©n las que ya tienen insumo_id si se busca por old_descripcion,
+        // pero solo actualizamos texto/precio en las columnas locales del ACU).
+        $items = $connection->table($conf['table'])
+            ->join('presupuesto_acus as a', $conf['table'].'.acu_id', '=', 'a.id')
+            ->where('a.presupuesto_id', $tenantPresupuestoId)
+            ->whereRaw('UPPER(TRIM('.$conf['table'].'.descripcion)) = ?', [strtoupper($oldDescripcion)])
+            ->select($conf['table'].'.*')
+            ->get();
+
+        if ($items->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se encontraron filas con esa descripciÃ³n en el proyecto.',
+            ], 404);
+        }
+
+        $affectedAcuIds = [];
+
+        foreach ($items as $item) {
+            $affectedAcuIds[] = $item->acu_id;
+
+            $updateData = ['updated_at' => now()];
+
+            if ($newDescripcion !== null && $newDescripcion !== '') {
+                $updateData['descripcion'] = $newDescripcion;
+            }
+
+            if ($newPrecio !== null) {
+                $updateData[$conf['price_column']] = $newPrecio;
+
+                // Recalcular parcial con la nueva precision (10dp como el resto del sistema)
+                $cant = (float) ($item->cantidad ?? 0);
+                $factor = (float) ($item->factor_desperdicio ?? 1);
+                $isMateria = ($tipo === 'materiales');
+                $updateData['parcial'] = round($cant * $newPrecio * ($isMateria ? $factor : 1), 10);
+            }
+
+            $connection->table($conf['table'])
+                ->where('id', $item->id)
+                ->update($updateData);
+        }
+
+        $affectedAcuIds = array_unique($affectedAcuIds);
+        $this->recalculateAcus($connection, $affectedAcuIds, $tenantPresupuestoId, $projectModel);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Insumo actualizado y propagado correctamente.',
+            'filas_afectadas' => count($items),
+            'acus_afectados' => count($affectedAcuIds),
+        ]);
+    }
+
+    private function recalculateAcus($connection, $affectedAcuIds, $tenantPresupuestoId, $projectModel): void
     {
         $updatedPartidas = [];
         foreach ($affectedAcuIds as $acuId) {
@@ -573,7 +675,6 @@ class InsumoProductoController extends Controller
             $costoEq = $eq->sum('parcial');
             $costoSc = $sc->sum('parcial');
             $costoSp = $sp->sum('parcial');
-            $costoTotal = $costoMo + $costoMa + $costoEq + $costoSc + $costoSp;
 
             $acu = $connection->table('presupuesto_acus')->where('id', $acuId)->first();
             if ($acu) {
@@ -590,7 +691,7 @@ class InsumoProductoController extends Controller
                         'costo_equipos' => $costoEq,
                         'costo_subcontratos' => $costoSc,
                         'costo_subpartidas' => $costoSp,
-                        // 'costo_unitario_total' es una generated column y se calcula automáticamente
+                        // 'costo_unitario_total' es una generated column y se calcula automaticamente
                         'updated_at' => now(),
                     ]);
 
@@ -606,7 +707,7 @@ class InsumoProductoController extends Controller
                     ->first();
 
                 if ($acuRes) {
-                    // Match por código normalizado — presupuesto_acus.partida y
+                    // Match por codigo normalizado â€” presupuesto_acus.partida y
                     // presupuesto_general.partida pueden diferir en padding de ceros
                     // (ver CostoDatabaseService::normalizePartidaCode()); un WHERE
                     // exacto puede actualizar 0 filas y dejar precio_unitario stale.

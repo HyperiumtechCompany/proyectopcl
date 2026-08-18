@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dialux\V2;
 
 use App\Concerns\AuthorizesDialuxModule;
+use App\Concerns\DetectsDwgCompatibility;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Dialux\LinkDialuxPlanFileRequest;
 use App\Http\Requests\Dialux\StoreDialuxPlanFileRequest;
@@ -20,6 +21,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class PlanFileController extends Controller
 {
     use AuthorizesDialuxModule;
+    use DetectsDwgCompatibility;
 
     public function store(
         StoreDialuxPlanFileRequest $request,
@@ -31,6 +33,7 @@ class PlanFileController extends Controller
 
         $file = $request->file('plan');
         $extension = strtolower($file->getClientOriginalExtension());
+        $warning = $this->detectDwgCompatibilityWarning($file);
         $directory = "dialux/v2/modules/{$dialuxModule->id}/plans";
         $path = $file->storeAs($directory, Str::uuid().'.'.$extension, 'local');
 
@@ -53,6 +56,7 @@ class PlanFileController extends Controller
             'message' => 'Plano del módulo guardado correctamente.',
             'file_name' => $plan->original_name,
             'size_bytes' => $plan->size_bytes,
+            'warning' => $warning,
         ]);
     }
 
