@@ -12,6 +12,7 @@ import {
     VirtualWireProps,
 } from './properties/ElectricalProps';
 import { FixtureProps } from './properties/FixtureProps';
+import { ArrangementProps } from './properties/ArrangementProps';
 import { CanopyProps, DoorProps, WindowProps } from './properties/OpeningProps';
 import { PartitionProps } from './properties/PartitionProps';
 import { RoomProps } from './properties/RoomProps';
@@ -21,7 +22,14 @@ import { WallProps } from './properties/WallProps';
 export const PropertiesPanel = React.memo(function PropertiesPanel() {
     const store = useEditorStore();
     const scene = store.activeScene();
-    const selectedId = store.ui.selectedId;
+    const initialSelectedId = store.ui.selectedId;
+    let selectedId = initialSelectedId;
+    if (initialSelectedId && scene) {
+        const clickedFixture = scene.fixtures.find(f => f.id === initialSelectedId);
+        if (clickedFixture?.arrangementId) {
+            selectedId = clickedFixture.arrangementId;
+        }
+    }
     const selectedFixtureIds = store.ui.selectedFixtureIds;
 
     if (!selectedId && selectedFixtureIds.length === 0) {
@@ -94,6 +102,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
     const win = scene?.windows.find((w) => w.id === selectedId);
     const door = scene?.doors.find((d) => d.id === selectedId);
     const canopy = scene?.canopies.find((c) => c.id === selectedId);
+    const arrangement = scene?.fixtureArrangements?.find((a) => a.id === selectedId);
     const fixture = scene?.fixtures.find((f) => f.id === selectedId);
     const partition = scene?.partitions?.find((p) => p.id === selectedId);
     const structuralObstacle = scene?.structuralObstacles?.find(
@@ -266,6 +275,10 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
                 onUpdate={(patch) => store.updateCanopy(canopy.id, patch)}
             />
         );
+    }
+
+    if (arrangement) {
+        return <ArrangementProps arrangement={arrangement} />;
     }
 
     if (fixture) {

@@ -52,32 +52,45 @@ import { DEFAULT_DIRECT_PREVIEW_CONFIG, type CalculationConfig } from './types';
  * — la subdivisión de parches de pared (`wallVerticalSegments`) que en su
  * momento bloqueaba subir estos valores ya está implementada y activa.
  *
- * `occlusion` — REVERTIDO a `false` (Ronda 21l, mismo día que se activó).
- * Se activó primero pensando que el pipeline ya estaba listo (Fase 6
- * completa, con test unitario dedicado), pero esos tests SOLO cubren
- * paredes simples de 2 vértices (`fullWallAt()` en
- * `lightingEngineCore.occlusion.test.ts`). Al probar contra un proyecto
- * real ("Vinchos", aulas con muros interiores reales dibujados en el
- * editor), el promedio cayó ~19% y el mínimo empeoró en vez de mejorar —
- * `buildLinearOcclusionBoxes()` (`domain/geometry/occlusionBoxes.ts`) trata
- * `wall.vertices` como una POLILÍNEA de centro (extruye cada segmento
- * consecutivo por `thickness`), pero un muro real dibujado con jambas/
- * recesos de puerta guarda su CONTORNO CERRADO completo (24+ vértices, ya
- * con el grosor incluido) — extruir ese contorno otra vez por `thickness`
- * genera una obstrucción mucho más grande y con forma incorrecta que la
- * pared real de 0.13 m. No es un caso raro: es como el editor genera
- * cualquier muro con una puerta empotrada. Hasta corregir
- * `buildLinearOcclusionBoxes()` para distinguir polilínea-centro de
- * contorno-cerrado (o normalizar `wall.vertices` a un formato único antes
- * de llegar aquí), `occlusion` debe quedar en `false` — activarlo hoy
- * produce resultados PEORES que no modelar oclusión en absoluto para
- * cualquier proyecto con muros interiores reales.
+ * `occlusion` — historia completa antes de reactivarlo (Ronda 21l→23,
+ * 2026-08-19), para no repetir el ciclo:
+ *
+ *   1. (21l) Se activó pensando que el pipeline ya estaba listo (Fase 6
+ *      completa, con test dedicado) — pero esos tests solo cubrían paredes
+ *      simples de 2 vértices. Contra un proyecto real ("Vinchos"),
+ *      `buildLinearOcclusionBoxes()` trataba el CONTORNO CERRADO que el
+ *      editor guarda para un muro con jamba (24+ vértices, grosor ya
+ *      incluido) como si fuera una polilínea de centro simple, duplicando
+ *      el grosor — el promedio caía ~19%. Revertido a `false`.
+ *   2. (22) Primer intento de fix (reducir el contorno a sus 2 vértices más
+ *      distantes) funcionaba en un caso sintético de un tramo recto, pero
+ *      colapsaba un muro real con giros a una diagonal sin sentido físico
+ *      — puntos en 0 lx. Revertido.
+ *   3. (23) Descomposición geométrica exacta por barrido
+ *      (`decomposeClosedRing`, `domain/geometry/occlusionBoxes.ts`) — válida
+ *      para cualquier forma ortogonal (recta, L, T, U), verificada contra
+ *      5 formas sintéticas Y la geometría exacta de los 2 muros reales de
+ *      Vinchos. Con salvaguarda: si el contorno no es ortogonal dentro de
+ *      tolerancia (`isRectilinearInFrame`), no arriesga la descomposición
+ *      nueva — cae al comportamiento de segmento-por-segmento anterior
+ *      (conocido, conservador) en vez de producir geometría sin sentido.
+ *      Los 2 muros reales de Vinchos, que resultaron tener datos anómalos
+ *      (su área de polígono no representa un muro delgado, ver hallazgo de
+ *      la Ronda 23), activan justamente esa salvaguarda — no la
+ *      descomposición nueva — así que no reproducen el fallo de 0 lx de
+ *      la Ronda 22 aunque sigan siendo datos de mala calidad pendientes de
+ *      corregir a mano en el editor.
+ *
+ * Reactivado a `true` con esta base. Sigue siendo una funcionalidad joven
+ * — si un proyecto real muestra un resultado peor que con oclusión
+ * desactivada, es evidencia real de un caso no cubierto, no una razón para
+ * revertir en silencio: documentar la ronda nueva aquí primero.
  */
 export function buildProductionCalculationConfig(project: Project): CalculationConfig {
     return {
         ...DEFAULT_DIRECT_PREVIEW_CONFIG,
         maintenanceFactor: project.siteSettings?.maintenanceFactor ?? DEFAULT_DIRECT_PREVIEW_CONFIG.maintenanceFactor,
-        occlusion: false,
+        occlusion: true,
         interreflection: 'auto-by-shape',
         maxBounces: 100,
         convergenceTolerance: 1e-5,

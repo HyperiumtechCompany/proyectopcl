@@ -18,7 +18,6 @@ import {
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import type { Room, Scene } from '@/pages/dialux/hooks/useEditorStore';
 import { RoomConstructionSection } from './room/RoomConstructionSection';
-import { RoomFixtureGridSection } from './room/RoomFixtureGridSection';
 import { RoomGeometrySection } from './room/RoomGeometrySection';
 import { RoomLightingSection } from './room/RoomLightingSection';
 import { RoomOutletsSection } from './room/RoomOutletsSection';
@@ -136,17 +135,7 @@ export const RoomProps: React.FC<{
                 />
             )}
 
-            {isAmbiente && (
-                <RoomFixtureGridSection
-                    room={room}
-                    calculationVertices={calculationRoom.vertices}
-                    lumensRequired={inputs.lumensRequired}
-                    fixtureLumensFallback={inputs.fixtureLumens}
-                    fixturesInRoom={fixturesInRoom}
-                    calculationRoomId={calculationRoom.id}
-                    targetLux={inputs.illuminanceLux}
-                />
-            )}
+    // RoomFixtureGridSection has been removed in favor of Fixture Arrangements
 
             {isAmbiente && (
                 <RoomOutletsSection
@@ -162,3 +151,5 @@ export const RoomProps: React.FC<{
         </div>
     );
 };
+
+

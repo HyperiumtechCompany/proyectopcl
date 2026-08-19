@@ -77,7 +77,7 @@ export default function DialuxShow({ project }: Props) {
         }
 
         // Los proyectos nuevos persisten `defaultRoomNormativeStandard`. Para
-        // documentos antiguos inferimos la norma mÃ¡s usada por sus ambientes.
+        // documentos antiguos inferimos la norma mas usada por sus ambientes.
         type RoomStandard = NonNullable<
             Project['scenes'][number]['rooms'][number]['normativeStandard']
         >;
@@ -115,7 +115,7 @@ export default function DialuxShow({ project }: Props) {
         // de vuelta a un proyecto sin sembrar.
         resetHistory();
 
-        // Arranca la carga del catÃ¡logo BD (fuente Ãºnica de verdad) apenas se
+        // Arranca la carga del catalogo BD (fuente unica de verdad) apenas se
         // abre el proyecto, para que los paneles de propiedades (pared,
         // ambiente) no muestren la transcripciÃ³n estÃ¡tica desactualizada
         // mientras el usuario ya estÃ¡ trabajando.

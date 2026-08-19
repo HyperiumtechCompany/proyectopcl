@@ -3,16 +3,13 @@ import type { Project } from '@/pages/dialux/hooks/types';
 import { buildProductionCalculationConfig } from './productionCalculationConfig';
 
 /**
- * Ronda 21l: `config.occlusion` se activó y se REVIRTIÓ el mismo día. El
- * pipeline pasa los tests unitarios (`lightingEngineCore.occlusion.test.ts`,
- * con paredes simples de 2 vértices), pero contra un proyecto real con
- * muros dibujados con jambas de puerta (`wall.vertices` como contorno
- * cerrado de 24+ puntos), `buildLinearOcclusionBoxes()` los trata como
- * polilínea-centro y extruye cada segmento del contorno por el grosor OTRA
- * VEZ — obstrucción mucho mayor que el muro real, promedio -19% y mínimo
- * peor que sin oclusión. Este test es el guardián en la dirección opuesta:
- * si alguien reactiva el flag sin corregir `buildLinearOcclusionBoxes()`
- * primero, esto debe fallar y recordar por qué.
+ * Ronda 21l→23: `config.occlusion` se activó, se revirtió el mismo día por
+ * un bug real de geometría (`wall.vertices` como contorno cerrado tratado
+ * como polilínea-centro), y quedó reactivado el 2026-08-19 tras corregir
+ * `buildLinearOcclusionBoxes()` con una descomposición geométrica exacta
+ * (`decomposeClosedRing`) verificada contra 5 formas sintéticas y los 2
+ * muros reales de Vinchos — ver el doc-comment de
+ * `buildProductionCalculationConfig` para la historia completa.
  */
 function buildMinimalProject(): Project {
     return {
@@ -23,9 +20,9 @@ function buildMinimalProject(): Project {
 }
 
 describe('buildProductionCalculationConfig — flags de producción', () => {
-    it('oclusión sigue desactivada por defecto — ver doc-comment (bug de geometría con contornos de muro reales, Ronda 21l)', () => {
+    it('oclusión activada por defecto — ver doc-comment (Ronda 21l→23, historia completa)', () => {
         const config = buildProductionCalculationConfig(buildMinimalProject());
-        expect(config.occlusion).toBe(false);
+        expect(config.occlusion).toBe(true);
     });
 
     it('mantiene los demás defaults de producción ya establecidos', () => {

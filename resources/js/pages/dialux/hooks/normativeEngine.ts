@@ -255,8 +255,8 @@ export const NORMATIVE_STANDARDS_META: Record<NormativeStandard, NormativeStanda
         url: 'https://www.gob.pe/minem',
         disclaimer: DS024_DISCLAIMER,
         
-        priority: 15,
-        tags: ['Minería', 'Nacional', 'Seguridad'],
+        
+        
     },
     en_12464_2: {
         id: 'en_12464_2',
@@ -272,9 +272,9 @@ export const NORMATIVE_STANDARDS_META: Record<NormativeStandard, NormativeStanda
         active: true,
         notes: 'Norma europea para iluminación de áreas exteriores.',
         
-        priority: 16,
+        
         disclaimer: '',
-        tags: ['Exterior', 'Europa'],
+        
     },
     en_13201_2: {
         id: 'en_13201_2',
@@ -290,9 +290,9 @@ export const NORMATIVE_STANDARDS_META: Record<NormativeStandard, NormativeStanda
         active: true,
         notes: 'Norma europea para iluminación de carreteras.',
         
-        priority: 17,
+        
         disclaimer: '',
-        tags: ['Vial', 'Exterior'],
+        
     },
     en_12193: {
         id: 'en_12193',
@@ -308,9 +308,9 @@ export const NORMATIVE_STANDARDS_META: Record<NormativeStandard, NormativeStanda
         active: true,
         notes: 'Norma europea para iluminación deportiva.',
         
-        priority: 18,
+        
         disclaimer: '',
-        tags: ['Deportes', 'Europa'],
+        
     },
     en_15193: {
         id: 'en_15193',
@@ -326,9 +326,9 @@ export const NORMATIVE_STANDARDS_META: Record<NormativeStandard, NormativeStanda
         active: true,
         notes: 'Norma europea para eficiencia energética en iluminación.',
         
-        priority: 19,
+        
         disclaimer: '',
-        tags: ['Eficiencia Energética', 'Europa'],
+        
     },
 } as const;
 

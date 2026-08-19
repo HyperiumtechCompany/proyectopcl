@@ -1,4 +1,4 @@
-﻿import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import { calculateCenteredOffsetOnWall, polygonBBox, suggestFixtureGridSize } from '../fixtureGrid';
 import {
     buildFixtureGridObjects,
@@ -164,6 +164,8 @@ export interface SceneObjectsSlice {
     updateConductor: (id: string, patch: Partial<Omit<Conductor, 'id'>>) => void;
     updateJunctionBox: (id: string, patch: Partial<Omit<JunctionBox, 'id'>>) => void;
     updateElectricalDevice: (id: string, patch: Partial<Omit<ElectricalDevice, 'id'>>) => void;
+    updateFixtureArrangement: (id: string, config: FixtureGridConfig) => void;
+    removeFixtureArrangement: (id: string) => void;
     /** Recalcula grillas afectadas cuando cambian vertices/altura/elevacion (ver recomputeFixtureGridsNearObstacle). */
     updateStructuralObstacle: (id: string, patch: Partial<Omit<StructuralObstacle, 'id'>>) => void;
     setElectricalDeviceTemplate: (
@@ -690,6 +692,62 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
             });
         });
     },
+
+    updateFixtureArrangement: (id, config) => {
+        const scene = get().activeScene();
+        if (!scene) return;
+        const arrangement = scene.fixtureArrangements?.find(a => a.id === id);
+        if (!arrangement) return;
+
+        let vertices: Vertex[];
+        if (config.roomId) {
+            const room = scene.rooms.find((r) => r.id === config.roomId);
+            if (!room) return;
+            vertices = config.ambientVertices ?? room.vertices;
+        } else {
+            if (!config.ambientVertices || config.ambientVertices.length < 3) return;
+            vertices = config.ambientVertices;
+        }
+
+        const fixtureData = buildFixtureGridObjects(
+            config,
+            vertices,
+            uuidv4,
+            scene.structuralObstacles ?? [],
+        );
+        const newIds: string[] = [];
+
+        set((state) => {
+            if (!state.project || !state.activeSceneId) return state;
+            
+            const newFixtures = fixtureData.map((fd) => {
+                const fixId = uuidv4();
+                newIds.push(fixId);
+                // Keep the same gridGroupId and arrangementId
+                return { ...fd, id: fixId, arrangementId: id, gridGroupId: id };
+            });
+
+            return mutateScene(state, (s) => ({
+                ...s,
+                fixtures: [
+                    ...s.fixtures.filter(f => f.arrangementId !== id),
+                    ...newFixtures
+                ],
+                fixtureArrangements: s.fixtureArrangements?.map(a => 
+                    a.id === id ? { ...a, config, fixtureIds: newIds } : a
+                )
+            }));
+        });
+    },
+
+    removeFixtureArrangement: (id) =>
+        set((s) =>
+            mutateScene(s, (sc) => ({
+                ...sc,
+                fixtures: sc.fixtures.filter(f => f.arrangementId !== id),
+                fixtureArrangements: sc.fixtureArrangements?.filter(a => a.id !== id)
+            }))
+        ),
 
     updateStructuralObstacle: (id, patch) => {
         const existing = get().activeScene()?.structuralObstacles?.find((o) => o.id === id);

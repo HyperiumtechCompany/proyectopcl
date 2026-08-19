@@ -592,6 +592,7 @@ export interface Fixture {
     articleNumber?: string;
     productId?: number;
     productSourceFormat?: string;
+    arrangementId?: string;
     lightColor: string; // hex, e.g. '#fff5e1' blanco cÃƒÂ¡lido
     wallId?: string; // opcional: ID de la pared donde estÃƒÂ¡ colocada (para drag/drop)
     roomId?: string; // opcional: ID del recinto al que pertenece
@@ -1161,12 +1162,23 @@ export interface JunctionBox {
     y: number;
     size: '100x100x50' | '100x55x50';
     label?: string;
+
 }
 
-/** ConfiguraciÃƒÂ³n para inserciÃƒÂ³n de grilla de luminarias */
+/** Configuración de la disposición de luminarias (Grilla) */
+export interface FixtureArrangement {
+    id: string;
+    roomId?: string | null;
+    config: FixtureGridConfig;
+    fixtureIds: string[];
+    rotation: number; // Rotación total de la grilla en grados
+    createdAt: string;
+}
+
+/** Configuración para inserción de grilla de luminarias */
 export interface FixtureGridConfig {
-    rows: number; // filas de focos (Ã¢â€°Â¥1)
-    columns: number; // columnas de focos (Ã¢â€°Â¥1)
+    rows: number; // filas de focos (≥1)
+    columns: number; // columnas de focos (≥1)
     roomId?: string | null; // recinto donde se coloca la grilla (null = usar ambientVertices directamente)
     fixtureTemplate: Partial<Fixture>; // template para cada foco
     mountingHeight?: number; // altura de montaje (default 2.7m)
@@ -1288,6 +1300,7 @@ export interface Scene {
     doors: Door[];
     canopies: Canopy[];
     fixtures: Fixture[];
+    fixtureArrangements?: FixtureArrangement[];
     lightSwitches: LightSwitch[];
     conductors?: Conductor[];
     junctionBoxes?: JunctionBox[];
