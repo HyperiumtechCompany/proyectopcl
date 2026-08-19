@@ -19,6 +19,9 @@ import type { NormativeStandard } from './roomLighting';
 const STANDARD_TO_NORM_KEY: Partial<Record<NormativeStandard, NormKey>> = {
     rne_peru: 'NTP_370',
     en_1838: 'EN_1838',
+    en_12464_1: 'EN_12464_1',
+    en_12464_2: 'EN_12464_2',
+    iesna_handbook: 'IESNA',
 };
 
 interface RequirementRow {
@@ -33,6 +36,8 @@ interface RequirementRow {
     ugrl: number | null;
     uo: number | null;
     ra: number | null;
+    lpd_wm2: number | null;
+    hours_yr: number | null;
     requirements: string[] | null;
 }
 
@@ -46,6 +51,8 @@ function toLeaf(row: RequirementRow): RawNormativeLeaf {
         UGR: row.ugrl,
         Uo: row.uo,
         Ra: row.ra,
+        lpd_wm2: row.lpd_wm2,
+        hours_yr: row.hours_yr,
         requisitos_especificos: requirements,
     };
 }
@@ -87,7 +94,23 @@ export function buildTreeFromRows(rows: RequirementRow[]): RawNormativeBranch[] 
                 branch.subsections.push({ title: 'General', subsubsections: category.direct });
             }
         } else {
-            branch.subsections = [{ title: category.name, subsubsections: category.direct }];
+            // Hallazgo real (Ronda 21p, auditoría de un caso real "Vinchos"):
+            // envolver las hojas directas en una subsección SINTÉTICA
+            // nombrada como la propia categoría (`{ title: category.name,
+            // subsubsections: category.direct }`) hacía que
+            // `flattenNormativeTree` (`roomLighting.ts::buildLeaf`) les
+            // asignara `section = category.name` en vez de `section: null`
+            // — un área SIN subcategoría real en BD (`subcategory_key IS
+            // NULL`, ej. "Aulas para clases nocturnas y de educación de
+            // adultos") terminaba con `normativeSection` igual a
+            // `normativeCategory` (ej. "EDUCACIÓN"/"EDUCACIÓN") al elegirla
+            // en el editor. Esto es exactamente el mismo caso que
+            // `flattenNormativeTree` YA maneja bien para el dataset
+            // estático (`isRawLeaf(subsection)` → `buildLeaf(category.title,
+            // null, subsection)`) — la corrección es poner las hojas
+            // directas TAL CUAL en `branch.subsections` (`RawNormativeLeaf`
+            // pasa `isRawLeaf`), no envolverlas en una subsección falsa.
+            branch.subsections = category.direct;
         }
 
         tree.push(branch);

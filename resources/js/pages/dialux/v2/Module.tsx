@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react';
+﻿import { Head } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import { EditorLayout } from '@/pages/dialux/components/EditorLayout';
@@ -50,7 +50,7 @@ export default function DialuxV2Module({ project, module, modules }: Props) {
 
         setProject(initial);
         if (initial.scenes[0]) setActiveScene(initial.scenes[0].id);
-        setDefaultStandard(initial.defaultRoomNormativeStandard ?? 'en_12464');
+        setDefaultStandard(initial.defaultRoomNormativeStandard ?? 'en_12464_1');
         resetHistory();
         void ensureStandardDataLoaded('rne_peru');
         void ensureStandardDataLoaded('en_1838');
@@ -62,7 +62,7 @@ export default function DialuxV2Module({ project, module, modules }: Props) {
         return () => {
             mounted = false;
         };
-        // El cambio de módulo debe reinicializar todo el editor; las acciones del store son estables.
+        // El cambio de mÃ³dulo debe reinicializar todo el editor; las acciones del store son estables.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [module.id]);
 
@@ -81,7 +81,7 @@ export default function DialuxV2Module({ project, module, modules }: Props) {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`${module.name} — ${project.name}`} />
+            <Head title={`${module.name} â€” ${project.name}`} />
             <div className="flex h-[calc(100vh-4rem)] min-h-0 overflow-hidden">
                 <ModuleSidebar
                     projectId={project.id}
@@ -96,3 +96,4 @@ export default function DialuxV2Module({ project, module, modules }: Props) {
         </AppLayout>
     );
 }
+

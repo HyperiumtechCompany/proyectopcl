@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
     computeOverallStatus,
     evaluateCompliance,
@@ -12,11 +12,11 @@ import {
 import type { Fixture, LightingResult, Room } from './types';
 
 /**
- * Cobertura mínima de `normativeEngine.ts` (hallazgo de Fase 6,
+ * Cobertura mÃ­nima de `normativeEngine.ts` (hallazgo de Fase 6,
  * planes/plan_agentes_skills_revision_normativa_dialux.md): es la pieza con
- * las citas normativas más específicas de todo el sistema
- * (`NORMATIVE_STANDARDS_META`) y, antes de este archivo, no tenía ningún
- * test — un refactor futuro podía invertir silenciosamente
+ * las citas normativas mÃ¡s especÃ­ficas de todo el sistema
+ * (`NORMATIVE_STANDARDS_META`) y, antes de este archivo, no tenÃ­a ningÃºn
+ * test â€” un refactor futuro podÃ­a invertir silenciosamente
  * `compliant`/`non_compliant` sin que nada lo detectara.
  */
 
@@ -68,7 +68,7 @@ function buildFixture(overrides: Partial<Fixture> = {}): Fixture {
 function buildNormative(overrides: Partial<NormativeLeafOption> = {}): NormativeLeafOption {
     return {
         title: 'Aula',
-        label: 'Aula de enseñanza',
+        label: 'Aula de enseÃ±anza',
         illuminanceLux: 500,
         ugr: 19,
         uniformity: 0.6,
@@ -79,7 +79,7 @@ function buildNormative(overrides: Partial<NormativeLeafOption> = {}): Normative
 }
 
 describe('evaluateCompliance', () => {
-    it('marca compliant cuando todos los parámetros cumplen holgadamente', () => {
+    it('marca compliant cuando todos los parÃ¡metros cumplen holgadamente', () => {
         const room = buildRoom();
         const result = buildResult({ avg_lux: 600, uniformity: 0.75, ugr: 15 });
         const normative = buildNormative();
@@ -107,9 +107,9 @@ describe('evaluateCompliance', () => {
         expect(em.requiredValue).toBe(500);
     });
 
-    it('marca warning cuando el valor cumple pero está muy cerca del mínimo (dentro del 15%)', () => {
+    it('marca warning cuando el valor cumple pero estÃ¡ muy cerca del mÃ­nimo (dentro del 15%)', () => {
         const room = buildRoom();
-        // 500 requerido; 520 cumple pero está a menos del 15% (575) del mínimo.
+        // 500 requerido; 520 cumple pero estÃ¡ a menos del 15% (575) del mÃ­nimo.
         const result = buildResult({ avg_lux: 520 });
         const normative = buildNormative({ illuminanceLux: 500 });
 
@@ -119,7 +119,7 @@ describe('evaluateCompliance', () => {
         expect(em.status).toBe('warning');
     });
 
-    it('UGR usa <=: un valor mayor al límite es non_compliant, uno menor es compliant', () => {
+    it('UGR usa <=: un valor mayor al lÃ­mite es non_compliant, uno menor es compliant', () => {
         const room = buildRoom();
         const normative = buildNormative({ ugr: 19 });
 
@@ -140,7 +140,7 @@ describe('evaluateCompliance', () => {
         expect(evaluations.find((e) => e.parameterId === 'ugr')!.status).toBe('needs_review');
     });
 
-    it('Ra: no se evalúa si la norma no lo exige; needs_review si se exige pero falta el dato de la luminaria', () => {
+    it('Ra: no se evalÃºa si la norma no lo exige; needs_review si se exige pero falta el dato de la luminaria', () => {
         const room = buildRoom(); // sin colorRenderingRa
         const result = buildResult();
 
@@ -152,11 +152,11 @@ describe('evaluateCompliance', () => {
         expect(ra.status).toBe('needs_review');
     });
 
-    it('Ra: compliant/non_compliant cuando el dato de la luminaria está disponible', () => {
+    it('Ra: compliant/non_compliant cuando el dato de la luminaria estÃ¡ disponible', () => {
         const result = buildResult();
         const normative = buildNormative({ ra: 80 });
 
-        // 80 requerido; 95 supera el umbral de "warning" (80×1.15=92).
+        // 80 requerido; 95 supera el umbral de "warning" (80Ã—1.15=92).
         const bien = evaluateCompliance(buildRoom({ colorRenderingRa: 95 }), result, normative);
         expect(bien.find((e) => e.parameterId === 'ra')!.status).toBe('compliant');
 
@@ -167,9 +167,9 @@ describe('evaluateCompliance', () => {
     it('Ra: cuando se pasan luminarias, usa el CRI real (peor caso) en vez de room.colorRenderingRa', () => {
         const result = buildResult();
         const normative = buildNormative({ ra: 80 });
-        // `colorRenderingRa` quedó igual al requisito (bug histórico: la UI
-        // copiaba `act.ra` ahí) — si el motor lo siguiera leyendo, esto
-        // saldría "compliant" sin importar la luminaria real instalada.
+        // `colorRenderingRa` quedÃ³ igual al requisito (bug histÃ³rico: la UI
+        // copiaba `act.ra` ahÃ­) â€” si el motor lo siguiera leyendo, esto
+        // saldrÃ­a "compliant" sin importar la luminaria real instalada.
         const room = buildRoom({ colorRenderingRa: 80 });
 
         const fixtures = [buildFixture({ cri: 90 }), buildFixture({ id: 'fixture-2', cri: 70 })];
@@ -193,7 +193,7 @@ describe('evaluateCompliance', () => {
         expect(ra.status).toBe('needs_review');
     });
 
-    it('normativeSource proviene de standardMeta.source cuando se provee, y de un valor genérico si no', () => {
+    it('normativeSource proviene de standardMeta.source cuando se provee, y de un valor genÃ©rico si no', () => {
         const room = buildRoom();
         const result = buildResult();
         const normative = buildNormative();
@@ -208,7 +208,7 @@ describe('evaluateCompliance', () => {
     });
 });
 
-describe('computeOverallStatus — prioridad determinista', () => {
+describe('computeOverallStatus â€” prioridad determinista', () => {
     const base: ComplianceResult = {
         parameterId: 'em', parameterName: 'Em', requiredValue: 500, calculatedValue: 500,
         unit: 'lux', status: 'compliant', message: '', normativeSource: 'x',
@@ -240,20 +240,20 @@ describe('computeOverallStatus — prioridad determinista', () => {
         expect(computeOverallStatus(results)).toBe('needs_review');
     });
 
-    it('compliant solo si todos los parámetros son compliant', () => {
+    it('compliant solo si todos los parÃ¡metros son compliant', () => {
         const results: ComplianceResult[] = [{ ...base, status: 'compliant' }, { ...base, status: 'compliant' }];
         expect(computeOverallStatus(results)).toBe('compliant');
     });
 });
 
-describe('getNormData — normas sin catálogo cargado', () => {
-    it('nfpa101 y ds024 devuelven catálogo vacío (documentado explícitamente en el código)', () => {
+describe('getNormData â€” normas sin catÃ¡logo cargado', () => {
+    it('nfpa101 y ds024 devuelven catÃ¡logo vacÃ­o (documentado explÃ­citamente en el cÃ³digo)', () => {
         expect(getNormData('nfpa101')).toEqual([]);
         expect(getNormData('ds024')).toEqual([]);
     });
 
-    it('en_12464, ies_na, rne_peru y en_1838 sí tienen catálogo cargado', () => {
-        expect(getNormData('en_12464').length).toBeGreaterThan(0);
+    it('en_12464, ies_na, rne_peru y en_1838 sÃ­ tienen catÃ¡logo cargado', () => {
+        expect(getNormData('en_12464_1').length).toBeGreaterThan(0);
         expect(getNormData('ies_na').length).toBeGreaterThan(0);
         expect(getNormData('rne_peru').length).toBeGreaterThan(0);
         expect(getNormData('en_1838').length).toBeGreaterThan(0);
@@ -261,20 +261,21 @@ describe('getNormData — normas sin catálogo cargado', () => {
 });
 
 describe('findBestMatchActivity', () => {
-    it('devuelve null para nfpa101/ds024 sin importar el texto de búsqueda (catálogo vacío)', () => {
+    it('devuelve null para nfpa101/ds024 sin importar el texto de bÃºsqueda (catÃ¡logo vacÃ­o)', () => {
         expect(findBestMatchActivity('nfpa101', 'aula')).toBeNull();
         expect(findBestMatchActivity('ds024', 'mina')).toBeNull();
     });
 
-    it('devuelve null cuando ninguna actividad coincide con la búsqueda en una norma con catálogo', () => {
-        expect(findBestMatchActivity('en_12464', 'xyzxyz-no-deberia-existir-jamas')).toBeNull();
+    it('devuelve null cuando ninguna actividad coincide con la bÃºsqueda en una norma con catÃ¡logo', () => {
+        expect(findBestMatchActivity('en_12464_1', 'xyzxyz-no-deberia-existir-jamas')).toBeNull();
     });
 
     it('encuentra una actividad real por coincidencia parcial de texto', () => {
-        // No fijamos el título exacto (depende del contenido de normativaData.ts),
-        // solo confirmamos que una búsqueda genérica de "oficina" encuentra algo.
-        const match = findBestMatchActivity('en_12464', 'oficina');
+        // No fijamos el tÃ­tulo exacto (depende del contenido de normativaData.ts),
+        // solo confirmamos que una bÃºsqueda genÃ©rica de "oficina" encuentra algo.
+        const match = findBestMatchActivity('en_12464_1', 'oficina');
         expect(match).not.toBeNull();
         expect(match!.illuminanceLux).toBeGreaterThan(0);
     });
 });
+

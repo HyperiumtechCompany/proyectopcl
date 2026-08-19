@@ -18,6 +18,8 @@ import {
     Trash2,
     Upload,
     Wrench,
+    Search,
+    X,
 } from 'lucide-react';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import Swal from 'sweetalert2';
@@ -119,6 +121,8 @@ export const Toolbar: React.FC = () => {
     /** Aviso de simetria entre modulos adyacentes (ver fixtureGridSymmetry.ts) -- borrador de UI puro, no persiste nada. */
     const [symmetryWarning, setSymmetryWarning] =
         useState<SymmetryCheckResult | null>(null);
+
+    const [gridSearch, setGridSearch] = useState('');
 
     /**
      * Confirma el area de proyeccion recien dibujada (herramienta Luminarias,
@@ -1272,10 +1276,33 @@ export const Toolbar: React.FC = () => {
                         </div>
 
                         <div className="min-h-0 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                            <div className="relative mb-3">
+                                <Search
+                                    size={14}
+                                    className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-500"
+                                />
+                                <input
+                                    type="text"
+                                    value={gridSearch}
+                                    onChange={(e) => setGridSearch(e.target.value)}
+                                    placeholder="Buscar luminaria por nombre o fabricante..."
+                                    className="h-9 w-full rounded-lg border border-slate-300 bg-white pr-10 pl-9 text-sm text-slate-900 placeholder:text-slate-500 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
+                                />
+                                {gridSearch && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setGridSearch('')}
+                                        className="absolute top-1/2 right-3 -translate-y-1/2 rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
                             <CatalogPanel
                                 filterCategory="luminaires"
                                 variant="compact-grid"
                                 fixtureItemsPerPage={15}
+                                search={gridSearch}
                                 onSelect={() => store.setTool('fixture-grid')}
                             />
                             <button

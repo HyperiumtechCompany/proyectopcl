@@ -1,8 +1,8 @@
-/**
- * useEditorStore.ts — Store global Zustand del editor DIAlux
+﻿/**
+ * useEditorStore.ts â€” Store global Zustand del editor DIAlux
  *
  * Todos los tipos de dominio viven en ./types.ts.
- * Aquí solo se define el estado reactivo y las mutaciones.
+ * AquÃ­ solo se define el estado reactivo y las mutaciones.
  *
  * Selectors exportados al final del archivo evitan re-renders
  * innecesarios al suscribir solo la slice relevante.
@@ -124,7 +124,7 @@ import {
 
 export { createScaleConfig, normalizeScaleConfig } from './storeHelpers';
 
-// ─── UI State ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ UI State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface UIState {
     activeTool: DrawTool;
@@ -154,22 +154,22 @@ interface UIState {
         wireLabel: NonNullable<Conductor['wireLabel']>;
     };
     junctionBoxTemplate: { size: JunctionBox['size'] };
-    /** Template para el dispositivo eléctrico activo (tipo que se insertará al hacer clic) */
+    /** Template para el dispositivo elÃ©ctrico activo (tipo que se insertarÃ¡ al hacer clic) */
     electricalDeviceTemplate: {
         type: ElectricalDeviceType;
         label?: string;
-        /** Overrides de propiedades (p.ej. potencia, marca) al colocar desde el catálogo. */
+        /** Overrides de propiedades (p.ej. potencia, marca) al colocar desde el catÃ¡logo. */
         properties?: Partial<ElectricalDeviceProperties>;
     } | null;
-    /** Tipo de muro que se creará al dibujar con la herramienta 'wall' */
+    /** Tipo de muro que se crearÃ¡ al dibujar con la herramienta 'wall' */
     wallTypeTemplate: 'interior' | 'exterior' | 'cerco';
     /**
-     * Tipo de espacio que se creará al dibujar con la herramienta 'room':
-     *   'room'    → Recinto (envolvente exterior, sin iluminación)
-     *   'ambient' → Ambiente interior (espacio habitable con normativa)
+     * Tipo de espacio que se crearÃ¡ al dibujar con la herramienta 'room':
+     *   'room'    â†’ Recinto (envolvente exterior, sin iluminaciÃ³n)
+     *   'ambient' â†’ Ambiente interior (espacio habitable con normativa)
      */
     roomTypeTemplate: 'room' | 'ambient';
-    /** Configuración de la grilla de focos en el panel de luz */
+    /** ConfiguraciÃ³n de la grilla de focos en el panel de luz */
     fixtureGridRows: number;
     fixtureGridCols: number;
     /** Cuando true, el canvas 2D y 3D muestran todos los pisos visibles superpuestos */
@@ -177,7 +177,7 @@ interface UIState {
     electricalLayerVisibility: Record<ElectricalLayerGroup, boolean>;
     hiddenElectricalIds: string[];
     /**
-     * Se incrementa cada vez que el plano del piso activo cambia por una vía
+     * Se incrementa cada vez que el plano del piso activo cambia por una vÃ­a
      * que no cambia `activeSceneId` (ej. reutilizar el plano de otro piso
      * para el piso ya abierto). El canvas 2D lo usa para saber que debe
      * releer el plano aunque siga en el mismo piso.
@@ -187,7 +187,7 @@ interface UIState {
      * Editor interactivo de lineas guia para la grilla de luminarias (no
      * construye ninguna entidad de dominio -- es un borrador de UI que solo
      * se traduce a `FixtureGridConfig.rowGuides/columnGuides` al confirmar
-     * con el botón "Generar" del panel Luminarias). `null` = cerrado.
+     * con el botÃ³n "Generar" del panel Luminarias). `null` = cerrado.
      */
     fixtureGridGuideEditor: FixtureGridGuideEditorState | null;
     /**
@@ -223,7 +223,7 @@ export interface FixtureGridGuideEditorState {
     rowGuides: number[];
 }
 
-// ─── Estado global ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Estado global â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSlice, FloorSlice, ScaleDxfSlice, ProjectSlice, UiSlice {
     project: Project | null;
@@ -232,9 +232,9 @@ export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSl
     result: LightingResult | null;
     resultsByRoom: Record<string, LightingResult>;
     /**
-     * Último `CalculationRun` completo (Fase 13: "evitar recálculos... e
+     * Ãšltimo `CalculationRun` completo (Fase 13: "evitar recÃ¡lculos... e
      * invalidar si stale"). Distinto de `resultsByRoom` (solo valores
-     * planos) — trae `snapshotHash`/`engineVersion`/`warnings`, necesarios
+     * planos) â€” trae `snapshotHash`/`engineVersion`/`warnings`, necesarios
      * para `isCalculationRunStale` y para mostrar trazabilidad en la UI/PDF.
      */
     lastCalculationRun: CalculationRun | null;
@@ -242,17 +242,17 @@ export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSl
     dxfExtents: DxfExtents | null;
     /**
      * Conteo por tipo de entidad DXF del plano base importado que el
-     * parser encontró pero no pudo extraer (ej. "DIMENSION (bloque no
-     * encontrado)"). Se muestra como warning en el panel de exportación
-     * DXF -- `null` si no se parseó nada aún o no hubo entidades omitidas.
+     * parser encontrÃ³ pero no pudo extraer (ej. "DIMENSION (bloque no
+     * encontrado)"). Se muestra como warning en el panel de exportaciÃ³n
+     * DXF -- `null` si no se parseÃ³ nada aÃºn o no hubo entidades omitidas.
      */
     dxfSkippedEntityTypes: Record<string, number> | null;
     ui: UIState;
     defaultRoomNormativeStandard: NormativeStandard;
-    /** Configuración normativa del proyecto (síncrona con backend) */
+    /** ConfiguraciÃ³n normativa del proyecto (sÃ­ncrona con backend) */
     projectNormativeConfig: ProjectNormativeConfig | null;
 
-    // ── Project ──────────────────────────────────────────────────────────────
+    // â”€â”€ Project â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     setProject: (project: Project) => void;
     setActiveScene: (sceneId: string) => void;
     setDefaultRoomNormativeStandard: (standard: NormativeStandard) => void;
@@ -275,7 +275,7 @@ export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSl
         summary: ProjectNormativeConfig['complianceSummary'],
     ) => void;
 
-    // ── Scale ────────────────────────────────────────────────────────────────
+    // â”€â”€ Scale â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     setScaleConfig: (
         scaleConfig: ScaleConfig,
         rescaleObjects?: boolean,
@@ -296,14 +296,14 @@ export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSl
     ) => ScaleConfig | null;
     resetCalibration: () => ScaleConfig | null;
 
-    // ── Scene mutations ───────────────────────────────────────────────────────
+    // â”€â”€ Scene mutations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     addRoom: (room: Omit<Room, 'id'>) => string;
     addWall: (wall: Omit<Wall, 'id'>) => string;
     addWindow: (win: Omit<Window, 'id'>) => string;
     addDoor: (door: Omit<Door, 'id'>) => string;
     addCanopy: (can: Omit<Canopy, 'id'>) => string;
     addFixture: (fix: Omit<Fixture, 'id'>) => string;
-    /** Genera una grilla de focos N×M centrada en el room indicado */
+    /** Genera una grilla de focos NÃ—M centrada en el room indicado */
     addFixtureGrid: (config: FixtureGridConfig) => string[];
     addPartition: (partition: Omit<Partition, 'id'>) => string;
     addLightSwitch: (
@@ -358,7 +358,7 @@ export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSl
 
     removeObject: (id: string) => void;
 
-    // ── UI ───────────────────────────────────────────────────────────────────
+    // â”€â”€ UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     setTool: (tool: DrawTool) => void;
     setAngleSnapMode: (mode: AngleSnapMode) => void;
     setSidebarTab: (tab: SidebarTab) => void;
@@ -392,7 +392,7 @@ export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSl
     setFixtureGridRows: (rows: number) => void;
     setFixtureGridCols: (cols: number) => void;
 
-    // ── Calculation & DXF ────────────────────────────────────────────────────
+    // â”€â”€ Calculation & DXF â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     setCalculating: (val: boolean) => void;
     setResult: (result: LightingResult | null) => void;
     /** Fuerza al canvas 2D a releer el plano del piso activo (ver planReloadTick) */
@@ -400,13 +400,13 @@ export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSl
     setResultsByRoom: (results: Record<string, LightingResult>) => void;
     setLastCalculationRun: (run: CalculationRun | null) => void;
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     activeScene: () => Scene | null;
-    /** Devuelve todos los pisos ordenados de sótano a planta alta */
+    /** Devuelve todos los pisos ordenados de sÃ³tano a planta alta */
     getFloorsSorted: () => Scene[];
 
-    // ── Floor Management ─────────────────────────────────────────────────────
-    /** Crea un nuevo piso vacío. Devuelve el ID de la nueva Scene. */
+    // â”€â”€ Floor Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    /** Crea un nuevo piso vacÃ­o. Devuelve el ID de la nueva Scene. */
     addFloor: (
         name: string,
         floorIndex: number,
@@ -415,7 +415,7 @@ export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSl
     /** Elimina un piso (y cambia activeScene si era el activo) */
     removeFloor: (sceneId: string) => void;
     /**
-     * Duplica la geometría de un piso como nuevo piso.
+     * Duplica la geometrÃ­a de un piso como nuevo piso.
      * Genera IDs nuevos para todos los objetos del piso clonado.
      */
     duplicateFloor: (
@@ -429,7 +429,7 @@ export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSl
         patch: Partial<Pick<Scene, 'name' | 'floorHeight' | 'floorIndex' | 'ifcGlobalId'>>,
     ) => void;
     /**
-     * Recalcula `floorElevation` de todos los pisos basándose en su
+     * Recalcula `floorElevation` de todos los pisos basÃ¡ndose en su
      * `floorIndex` y `floorHeight`. Llamar tras cualquier reordenamiento.
      */
     reorderFloors: () => void;
@@ -439,7 +439,7 @@ export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSl
     toggleAllFloors: () => void;
 }
 
-// ─── Store ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Store â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const useEditorStore = create<EditorState>()(
     subscribeWithSelector((set, get, api) => ({
@@ -459,7 +459,7 @@ export const useEditorStore = create<EditorState>()(
         dxfEntities: null,
         dxfExtents: null,
         dxfSkippedEntityTypes: null,
-        defaultRoomNormativeStandard: 'en_12464',
+        defaultRoomNormativeStandard: 'en_12464_1',
         projectNormativeConfig: null,
 
         ui: {
@@ -479,9 +479,9 @@ export const useEditorStore = create<EditorState>()(
             fixtureTemplate: {
                 fixtureType: 'recessed',
                 // 'rectangular' es el default seguro hasta que el usuario elija
-                // un producto real del catálogo — 'round' aquí hacía que toda
+                // un producto real del catÃ¡logo â€” 'round' aquÃ­ hacÃ­a que toda
                 // luminaria colocada sin producto seleccionado se dibujara como
-                // círculo, aunque terminara siendo un panel/lineal.
+                // cÃ­rculo, aunque terminara siendo un panel/lineal.
                 fixtureShape: 'rectangular',
                 lumens: 4000,
                 efficiency: 0.8,
@@ -534,7 +534,7 @@ export const useEditorStore = create<EditorState>()(
             pendingFixtureGridArea: null,
         },
 
-        // ── Calc & DXF ────────────────────────────────────────────────────────
+        // â”€â”€ Calc & DXF â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         setCalculating: (val) => set({ isCalculating: val }),
         setResult: (result) => set({ result }),
         setResultsByRoom: (resultsByRoom) => set({ resultsByRoom }),
@@ -553,12 +553,12 @@ export type {
     DeletionChild,
 } from '@/pages/dialux/selection/deletionPolicy';
 
-// ─── Helper privado ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Helper privado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-// ─── Selectors memoizados ─────────────────────────────────────────────────────
+// â”€â”€â”€ Selectors memoizados â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Usar estos en lugar de `useEditorStore()` completo para evitar re-renders.
 
-/** Solo la herramienta activa — re-renderiza únicamente cuando cambia el tool. */
+/** Solo la herramienta activa â€” re-renderiza Ãºnicamente cuando cambia el tool. */
 export const useActiveTool = () => useEditorStore((s) => s.ui.activeTool);
 
 /** Solo el showGrid flag */
@@ -573,7 +573,7 @@ export const useShow3DView = () => useEditorStore((s) => s.ui.show3DView);
 /** Solo el elemento seleccionado */
 export const useSelectedId = () => useEditorStore((s) => s.ui.selectedId);
 
-/** La escena activa — usa referencia estable */
+/** La escena activa â€” usa referencia estable */
 export const useActiveScene = () =>
     useEditorStore((s) => {
         const { project, activeSceneId } = s;
@@ -590,7 +590,7 @@ export const useScaleConfig = () =>
         }),
     );
 
-/** El resultado de cálculo lumínico */
+/** El resultado de cÃ¡lculo lumÃ­nico */
 export const useLightingResultSelector = () => useEditorStore((s) => s.result);
 
 /** Zoom y pan (UI de overlay) */
@@ -602,3 +602,4 @@ export const useViewport = () =>
             panY: s.ui.panY,
         })),
     );
+

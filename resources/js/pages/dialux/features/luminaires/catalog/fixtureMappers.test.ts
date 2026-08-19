@@ -57,4 +57,20 @@ describe('Ronda 21j — productToFixtureFields copia metadata/luminous_opening',
         expect(fields.metadata).toBeNull();
         expect(fields.luminousOpening).toBeNull();
     });
+
+    it('copia cri_ra (CRI/Ra declarado por fábrica) al colocar la luminaria en el plano — mismo patrón que metadata/luminous_opening: un campo nuevo del producto que faltaba en este mapeo quedaba en 0 en el panel de propiedades aunque la BD lo tuviera correcto', () => {
+        const product = buildProduct({ cri_ra: 100 });
+
+        const fields = productToFixtureFields(product);
+
+        expect(fields.cri).toBe(100);
+    });
+
+    it('sin cri_ra en el producto, no inventa un valor (queda null, no 0)', () => {
+        const product = buildProduct();
+
+        const fields = productToFixtureFields(product);
+
+        expect(fields.cri).toBeNull();
+    });
 });

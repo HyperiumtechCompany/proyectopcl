@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GRID_SPACING } from '@/pages/dialux/hooks/lightingEngineCore';
+import { getRoomMarginalZone } from '@/pages/dialux/hooks/roomLighting';
 import { buildGradientProject } from './__fixtures__/gradientProjectFixture';
 import { buildCalculationSnapshot } from './buildCalculationSnapshot';
 import { runDirectPreviewEngine } from './runDirectPreviewEngine';
@@ -26,11 +26,12 @@ describe('runDirectPreviewEngine — meshPolicy.adaptive', () => {
         expect(withFalseFlag.surfaces[0]!.result).toEqual(withoutFlag.surfaces[0]!.result);
     });
 
-    it('meshPolicy.adaptive refina la malla en un recinto con gradiente de luz real y liga la zona marginal al espaciado efectivo', async () => {
+    it('meshPolicy.adaptive refina la malla en un recinto con gradiente de luz real, sin tocar la zona marginal real (Ronda 21n)', async () => {
         // `buildGradientProject`: recinto grande (10x10) con UNA sola
         // luminaria pegada a una esquina — garantiza un gradiente real de
         // iluminancia dentro del mismo recinto.
-        const snapshot = buildCalculationSnapshot(buildGradientProject());
+        const project = buildGradientProject();
+        const snapshot = buildCalculationSnapshot(project);
 
         const fixed = await runDirectPreviewEngine(snapshot);
         const adaptive = await runDirectPreviewEngine(snapshot, {
@@ -45,11 +46,17 @@ describe('runDirectPreviewEngine — meshPolicy.adaptive', () => {
         expect(adaptiveResult.grid_cols * adaptiveResult.grid_rows).toBeGreaterThan(
             fixedResult.grid_cols * fixedResult.grid_rows,
         );
-        // La zona marginal reportada ahora es físicamente real: la mitad
-        // del espaciado efectivo usado en ESTE cálculo, no la heurística
-        // desconectada de `getRoomMarginalZone`.
-        const effectiveSpacingX = 10 / adaptiveResult.grid_cols;
-        expect(adaptiveResult.marginal_zone).toBeCloseTo(effectiveSpacingX / 2, 6);
-        expect(adaptiveResult.marginal_zone).toBeLessThan(GRID_SPACING / 2);
+        // Ronda 21n: la zona marginal NUNCA debe atarse al espaciado
+        // adaptativo (una heurística de coeficiente de variación calibrada
+        // para resolución de cálculo, sin relación con la norma) — debe ser
+        // SIEMPRE `getRoomMarginalZone(room)` (fórmula EN 12464-1, la misma
+        // que reporta un valor casi idéntico al que declara DIALux evo),
+        // sin importar si la malla es fija o adaptativa. Hallazgo real:
+        // atarla al espaciado adaptativo encogió el margen en un proyecto
+        // real (0.229→0.117 m) y dejó puntos de una esquina oscura dentro
+        // de Emin/Uo cuando debían excluirse.
+        const room = project.scenes[0]!.rooms[0]!;
+        expect(adaptiveResult.marginal_zone).toBeCloseTo(getRoomMarginalZone(room), 6);
+        expect(adaptiveResult.marginal_zone).toBe(fixedResult.marginal_zone);
     });
 });

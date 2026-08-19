@@ -5,6 +5,8 @@ export interface RawNormativeLeaf {
     UGR: number | null;
     Uo: number | null;
     Ra: number | null;
+    lpd_wm2?: number | null;
+    hours_yr?: number | null;
     requisitos_especificos: string | null;
     /**
      * Altura del plano útil (m) que DIALux evo usa por defecto para esta

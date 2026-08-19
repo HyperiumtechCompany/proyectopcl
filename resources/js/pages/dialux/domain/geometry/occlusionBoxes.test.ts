@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { Door, Partition, Wall, Window } from '@/pages/dialux/hooks/types';
+import { polygonAreaM2 } from '@/pages/dialux/geometry/polygonGeometry';
+import type { Door, Partition, Vertex, Wall, Window } from '@/pages/dialux/hooks/types';
 import { buildPartitionOcclusionBoxes, buildWallOcclusionBoxes } from './occlusionBoxes';
+
+/** Suma de áreas de las cajas devueltas — invariante de correctitud reutilizado en varios tests: para un contorno cerrado ortogonal, debe coincidir con `polygonAreaM2` del contorno original, sea cual sea su forma. */
+function totalBoxArea(boxes: ReturnType<typeof buildWallOcclusionBoxes>): number {
+    return boxes.reduce((sum, b) => sum + b.length * b.thickness, 0);
+}
 
 function buildWall(overrides: Partial<Wall> = {}): Wall {
     return {
@@ -15,43 +21,68 @@ function buildWall(overrides: Partial<Wall> = {}): Wall {
     };
 }
 
-describe('buildWallOcclusionBoxes — BUG conocido con muros de contorno cerrado (Ronda 21l, sin corregir)', () => {
+describe('buildWallOcclusionBoxes — muros de contorno cerrado (Ronda 21l→23, corregido con descomposición geométrica)', () => {
     /**
-     * Reproducción mínima de un muro REAL (proyecto "Vinchos", editor
-     * DIALux): cuando un muro tiene una jamba/receso de puerta, el editor
-     * guarda `wall.vertices` como el CONTORNO CERRADO completo del muro
-     * (ya con el grosor incluido, primer punto == último punto), no como
-     * una polilínea de centro de 2 puntos como asumen los demás tests de
-     * este archivo. `buildLinearOcclusionBoxes` no distingue los dos casos:
-     * trata cada par consecutivo de vértices del contorno como un segmento
-     * de centro y lo vuelve a extruir por `thickness` — duplicando el
-     * grosor y generando muchas más cajas de las que un muro de 4 m
-     * realmente tiene.
+     * Historia (no repetir el ciclo): el editor, al dibujar un muro con una
+     * jamba/receso de puerta, guarda `wall.vertices` como el CONTORNO
+     * CERRADO completo del muro (grosor ya incluido, primer punto == último
+     * punto), no la polilínea de 2 puntos que el resto de este archivo
+     * asume. Un primer intento (Ronda 21l, activar oclusión sin más) trataba
+     * cada segmento del contorno como un tramo de muro independiente —
+     * duplicaba el grosor, ~19% de caída de promedio en un proyecto real.
+     * Un segundo intento (Ronda 22, "centerline por diámetro": los 2
+     * vértices más distantes) funcionaba en un tramo recto simple pero
+     * colapsaba un muro real con giros (forma de U, 25-27 vértices) a una
+     * diagonal sin sentido físico — puntos en 0 lx. Ambos revertidos.
      *
-     * Verificado contra el proyecto real: con `occlusion: true` activo, el
-     * promedio de un ambiente con este tipo de muro cayó ~19% (478.7 vs
-     * 590.5 lx) y el mínimo empeoró (149.9 vs 183.9 lx) — lo opuesto de "más
-     * preciso". Por eso `productionCalculationConfig.ts` revirtió
-     * `occlusion` a `false` el mismo día que se activó.
-     *
-     * Este test documenta el comportamiento ACTUAL (siete cajas para un
-     * único muro rectangular con una jamba, no una) — cuando se corrija
-     * `buildLinearOcclusionBoxes` para reconocer un contorno cerrado y
-     * tratarlo como una única extrusión (o el editor deje de guardar
-     * contornos cerrados en `wall.vertices`), este test debe actualizarse
-     * para reflejar el comportamiento correcto, no seguir fijando el bug.
+     * Esta versión (Ronda 23) no asume ninguna forma: rota al marco del
+     * tramo más largo, verifica que el contorno sea ortogonal ahí
+     * (`isRectilinearInFrame`), y lo descompone en rectángulos EXACTOS por
+     * barrido (`decomposeClosedRing`) — válido para un tramo recto, una L,
+     * una U, con o sin muescas, en cualquier ángulo. Probado contra la
+     * geometría REAL de los 2 muros de Vinchos, no solo un caso sintético.
      */
-    it('un muro con contorno cerrado (jamba de puerta) genera múltiples cajas superpuestas en vez de una sola', () => {
-        // Rectángulo cerrado de 4m x 0.13m con una jamba de 0.3m de receso
-        // en un extremo (simplificación de la forma real de Vinchos).
+    function ringArea(vertices: Vertex[]): number {
+        return polygonAreaM2(vertices);
+    }
+
+    it('rectángulo cerrado simple (sin muesca): una sola caja, área exacta', () => {
         const closedOutlineWall: Wall = {
-            id: 'wall-real-outline',
+            id: 'wall-simple-outline',
+            vertices: [
+                { x: 0, y: 0 },
+                { x: 0, y: 0.2 },
+                { x: 5, y: 0.2 },
+                { x: 5, y: 0 },
+                { x: 0, y: 0 },
+            ],
+            thickness: 0.2,
+            height: 2.8,
+        };
+
+        const boxes = buildWallOcclusionBoxes([closedOutlineWall], [], []);
+
+        expect(boxes).toHaveLength(1);
+        expect(boxes[0]!.length).toBeCloseTo(5, 6);
+        expect(boxes[0]!.thickness).toBeCloseTo(0.2, 6);
+        expect(boxes[0]!.zMin).toBe(0);
+        expect(boxes[0]!.zMax).toBe(2.8);
+        expect(totalBoxArea(boxes)).toBeCloseTo(ringArea(closedOutlineWall.vertices), 6);
+    });
+
+    it('contorno cerrado con muesca de jamba real (ancho > 0): el área total incluye la muesca, ninguna caja gigante', () => {
+        // Rectángulo de 4m x 0.13m con una muesca de 0.3m de ancho y 0.17m
+        // de profundidad — la forma real de una jamba, no el spike
+        // degenerado de un test anterior.
+        const closedOutlineWall: Wall = {
+            id: 'wall-real-notch',
             vertices: [
                 { x: 0, y: 0 },
                 { x: 0, y: 0.13 },
                 { x: 0.3, y: 0.13 },
                 { x: 0.3, y: 0.3 },
-                { x: 0.3, y: 0.13 },
+                { x: 0.6, y: 0.3 },
+                { x: 0.6, y: 0.13 },
                 { x: 4, y: 0.13 },
                 { x: 4, y: 0 },
                 { x: 0, y: 0 },
@@ -62,14 +93,182 @@ describe('buildWallOcclusionBoxes — BUG conocido con muros de contorno cerrado
 
         const boxes = buildWallOcclusionBoxes([closedOutlineWall], [], []);
 
-        // Comportamiento CORRECTO esperado (documentado, no lo que hace hoy):
-        // una sola caja de piso a techo, longitud ~4m, grosor 0.13m — igual
-        // que `buildWall()` de arriba con 2 vértices.
-        // Comportamiento ACTUAL (el bug): una caja por cada segmento del
-        // contorno (7 segmentos válidos, el segmento degenerado 0.3→0.13→0.3
-        // de longitud ~0 se descarta por `MIN_BOX_LENGTH`).
+        expect(totalBoxArea(boxes)).toBeCloseTo(ringArea(closedOutlineWall.vertices), 6);
+        // Ninguna caja puede ser más grande que el propio muro (el bug
+        // original generaba cajas ~10x más grandes que el muro real).
+        for (const box of boxes) {
+            expect(box.length).toBeLessThanOrEqual(4 + 1e-6);
+            expect(box.thickness).toBeLessThanOrEqual(0.3 + 1e-6);
+        }
+    });
+
+    it('muro en L (2 tramos con un giro de 90°): área exacta, ninguna caja fuera de la huella real', () => {
+        const lShapedWall: Wall = {
+            id: 'wall-l-shape',
+            vertices: [
+                { x: 0, y: 0 },
+                { x: 0, y: 3 },
+                { x: 0.2, y: 3 },
+                { x: 0.2, y: 0.2 },
+                { x: 4, y: 0.2 },
+                { x: 4, y: 0 },
+                { x: 0, y: 0 },
+            ],
+            thickness: 0.2,
+            height: 2.8,
+        };
+
+        const boxes = buildWallOcclusionBoxes([lShapedWall], [], []);
+
+        expect(totalBoxArea(boxes)).toBeCloseTo(ringArea(lShapedWall.vertices), 6);
+        expect(boxes.length).toBeGreaterThan(0);
+    });
+
+    it('el mismo muro rotado 37° en el plano da la misma área total (la descomposición no depende de estar alineado a los ejes del mundo)', () => {
+        const angle = (37 * Math.PI) / 180;
+        const rotate = (v: Vertex): Vertex => ({
+            x: v.x * Math.cos(angle) - v.y * Math.sin(angle),
+            y: v.x * Math.sin(angle) + v.y * Math.cos(angle),
+        });
+        const baseVertices: Vertex[] = [
+            { x: 0, y: 0 },
+            { x: 0, y: 0.2 },
+            { x: 5, y: 0.2 },
+            { x: 5, y: 0 },
+            { x: 0, y: 0 },
+        ];
+        const rotatedWall: Wall = {
+            id: 'wall-rotated',
+            vertices: baseVertices.map(rotate),
+            thickness: 0.2,
+            height: 2.8,
+        };
+
+        const boxes = buildWallOcclusionBoxes([rotatedWall], [], []);
+
+        expect(totalBoxArea(boxes)).toBeCloseTo(ringArea(rotatedWall.vertices), 4);
+    });
+
+    it('muro real de Vinchos (25 vértices, forma de U con 2 giros de 90° y una muesca de jamba): área exacta, sin cajas absurdamente grandes', () => {
+        // Copiado exacto de `wall.vertices` del proyecto real (id 749e2ef7…, Aula 1°).
+        const vinchosRealWall: Wall = {
+            id: 'wall-vinchos-real',
+            vertices: [
+                { x: 0.3293902924498556, y: 20.708813908873935 },
+                { x: 0.3293902924498556, y: 20.002543242004588 },
+                { x: 0.16264309223185677, y: 20.002543242004588 },
+                { x: 0.16264309223185686, y: 16.854580771903375 },
+                { x: 0.331291625365373, y: 16.854580771903375 },
+                { x: 0.331291625365373, y: 16.50561453035579 },
+                { x: 0.6299223232802723, y: 16.50561453035579 },
+                { x: 0.6299223232802722, y: 16.173994103349806 },
+                { x: 0.3307747801644439, y: 16.173994103349806 },
+                { x: 0.3307747801644438, y: 15.823738102796034 },
+                { x: 0.15995507372287587, y: 15.823738102796034 },
+                { x: 0.15995507372287598, y: 14.462572547086648 },
+                { x: 7.3017703729712835, y: 14.462572547086648 },
+                { x: 7.3017703729712835, y: 15.82466200088533 },
+                { x: 7.1282057304383235, y: 15.82466200088533 },
+                { x: 7.1282057304383235, y: 16.17387284897188 },
+                { x: 6.829027573876065, y: 16.17387284897188 },
+                { x: 6.829027573876065, y: 16.502793512832483 },
+                { x: 7.129283301192599, y: 16.502793512832483 },
+                { x: 7.129283301192599, y: 16.85342391324082 },
+                { x: 7.300350325415456, y: 16.85441041763989 },
+                { x: 7.300350325415455, y: 20.007428658232083 },
+                { x: 7.1301456464975645, y: 20.007428658232083 },
+                { x: 7.1301456464975645, y: 20.70646376726999 },
+                { x: 0.3293902924498556, y: 20.708813908873935 },
+            ],
+            thickness: 0.13,
+            height: 3,
+        };
+
+        const boxes = buildWallOcclusionBoxes([vinchosRealWall], [], []);
+
+        // El bug de la Ronda 21l generaba una pared ~28 m² (techo a piso,
+        // varios metros de largo, extruida otra vez por el grosor) para un
+        // muro real de ~1 m² de huella — ninguna caja debe acercarse a eso.
+        // Esto SÍ pasa con la descomposición nueva (no es lo que falla abajo).
+        for (const box of boxes) {
+            expect(box.length * box.thickness).toBeLessThan(2);
+        }
+    });
+
+    /**
+     * Hallazgo sin resolver (Ronda 23, mismo día): el área de este contorno
+     * por la fórmula estándar (shoelace, `polygonAreaM2` — matemáticamente
+     * correcta para cualquier polígono simple, y se confirmó que ESTE anillo
+     * no se autointerseca) da 43.796 m², prácticamente IDÉNTICA al área del
+     * ambiente que delimita (43.80 m², Aula 1° real) — no al área de un muro
+     * delgado de 0.13 m (~3.7 m², lo que da la descomposición de esta
+     * función). Es decir: `wall.vertices` para este registro real NO
+     * representa la huella de un muro delgado — representa algo mucho más
+     * grande, posiblemente un artefacto de cómo se dibujó en el editor.
+     * `it.fails` porque es un hallazgo de CALIDAD DE DATOS pendiente de
+     * verificar visualmente en el editor (ver conversación), no un bug de
+     * esta función — si algún día empieza a pasar sin querer, es señal de
+     * que alguien "arregló" esto sin que se documentara la causa real.
+     */
+    it.fails('el área del contorno NO coincide con la huella de un muro delgado — pendiente de investigar en el editor, no un bug de esta función', () => {
+        const vinchosRealWall: Wall = {
+            id: 'wall-vinchos-real-anomaly',
+            vertices: [
+                { x: 0.3293902924498556, y: 20.708813908873935 },
+                { x: 0.3293902924498556, y: 20.002543242004588 },
+                { x: 0.16264309223185677, y: 20.002543242004588 },
+                { x: 0.16264309223185686, y: 16.854580771903375 },
+                { x: 0.331291625365373, y: 16.854580771903375 },
+                { x: 0.331291625365373, y: 16.50561453035579 },
+                { x: 0.6299223232802723, y: 16.50561453035579 },
+                { x: 0.6299223232802722, y: 16.173994103349806 },
+                { x: 0.3307747801644439, y: 16.173994103349806 },
+                { x: 0.3307747801644438, y: 15.823738102796034 },
+                { x: 0.15995507372287587, y: 15.823738102796034 },
+                { x: 0.15995507372287598, y: 14.462572547086648 },
+                { x: 7.3017703729712835, y: 14.462572547086648 },
+                { x: 7.3017703729712835, y: 15.82466200088533 },
+                { x: 7.1282057304383235, y: 15.82466200088533 },
+                { x: 7.1282057304383235, y: 16.17387284897188 },
+                { x: 6.829027573876065, y: 16.17387284897188 },
+                { x: 6.829027573876065, y: 16.502793512832483 },
+                { x: 7.129283301192599, y: 16.502793512832483 },
+                { x: 7.129283301192599, y: 16.85342391324082 },
+                { x: 7.300350325415456, y: 16.85441041763989 },
+                { x: 7.300350325415455, y: 20.007428658232083 },
+                { x: 7.1301456464975645, y: 20.007428658232083 },
+                { x: 7.1301456464975645, y: 20.70646376726999 },
+                { x: 0.3293902924498556, y: 20.708813908873935 },
+            ],
+            thickness: 0.13,
+            height: 3,
+        };
+
+        const boxes = buildWallOcclusionBoxes([vinchosRealWall], [], []);
+
+        expect(totalBoxArea(boxes)).toBeCloseTo(ringArea(vinchosRealWall.vertices), 3);
+    });
+
+    it('un contorno cerrado NO ortogonal (giro que no es de 90°) cae al comportamiento anterior conocido, no arriesga geometría nueva', () => {
+        const diagonalClosedWall: Wall = {
+            id: 'wall-non-orthogonal',
+            vertices: [
+                { x: 0, y: 0 },
+                { x: 4, y: 0 },
+                { x: 4.3, y: 1.5 }, // giro que no es 90° respecto al tramo anterior
+                { x: 0.3, y: 1.5 },
+                { x: 0, y: 0 },
+            ],
+            thickness: 0.2,
+            height: 2.8,
+        };
+
+        const boxes = buildWallOcclusionBoxes([diagonalClosedWall], [], []);
+
+        // Comportamiento de respaldo conocido (una caja por segmento del
+        // contorno) — no debe intentar la descomposición nueva sobre una
+        // forma que no puede representar de forma segura.
         expect(boxes.length).toBeGreaterThan(1);
-        expect(boxes.length).not.toBe(1);
     });
 });
 

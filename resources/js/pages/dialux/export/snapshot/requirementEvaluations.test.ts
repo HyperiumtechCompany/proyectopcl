@@ -1,15 +1,15 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import type { Fixture, Room } from '@/pages/dialux/hooks/useEditorStore';
 import { buildRequirementEvaluations, resolveRaCalculated, resolveRaRequired } from './requirementEvaluations';
 
 /**
- * Hallazgo bloqueante (planes/plan_cierre_brecha_paridad_dialux_evo.md §-9.4):
+ * Hallazgo bloqueante (planes/plan_cierre_brecha_paridad_dialux_evo.md Â§-9.4):
  * `buildRequirementEvaluations()` (el que alimenta el PDF exportado) no
  * evaluaba Ra/CRI en absoluto, mientras `evaluateCompliance()`
- * (`normativeEngine.ts`, el panel interactivo) sí lo hacía — el mismo
- * ambiente podía mostrar "Cumple" en el documento entregado y "No cumple"
- * en la pantalla que el proyectista ya revisó. Estas pruebas cubren la
- * resolución del requisito/valor de Ra y su integración en la evaluación.
+ * (`normativeEngine.ts`, el panel interactivo) sÃ­ lo hacÃ­a â€” el mismo
+ * ambiente podÃ­a mostrar "Cumple" en el documento entregado y "No cumple"
+ * en la pantalla que el proyectista ya revisÃ³. Estas pruebas cubren la
+ * resoluciÃ³n del requisito/valor de Ra y su integraciÃ³n en la evaluaciÃ³n.
  */
 
 function buildFixture(overrides: Partial<Fixture> = {}): Fixture {
@@ -53,7 +53,7 @@ describe('resolveRaRequired', () => {
 
     it('con una actividad EN 12464-1 real que exige Ra, resuelve el mismo valor que usa el panel interactivo', () => {
         const room = buildRoom({
-            normativeStandard: 'en_12464',
+            normativeStandard: 'en_12464_1',
             normativeActivity: 'Vestibulos de entrada',
         });
         // EN 12464-1 exige Ra >= 60 para "Vestibulos de entrada" (normativaData.ts).
@@ -66,7 +66,7 @@ describe('resolveRaCalculated', () => {
         expect(resolveRaCalculated([buildFixture({ cri: undefined })])).toBeNull();
     });
 
-    it('toma el peor caso (mínimo) entre las luminarias instaladas', () => {
+    it('toma el peor caso (mÃ­nimo) entre las luminarias instaladas', () => {
         const fixtures = [
             buildFixture({ id: 'f1', cri: 90 }),
             buildFixture({ id: 'f2', cri: 70 }),
@@ -75,7 +75,7 @@ describe('resolveRaCalculated', () => {
     });
 });
 
-describe('buildRequirementEvaluations — métrica "ra"', () => {
+describe('buildRequirementEvaluations â€” mÃ©trica "ra"', () => {
     const inputs = { illuminanceLux: 100 };
 
     it('sin raRequired (actividad no regula Ra, o sin actividad asignada), no agrega ninguna fila de Ra', () => {
@@ -84,14 +84,14 @@ describe('buildRequirementEvaluations — métrica "ra"', () => {
     });
 
     it('con raRequired pero ninguna luminaria declara CRI: not-evaluated, no fail decorativo', () => {
-        const evaluations = buildRequirementEvaluations(inputs, null, null, null, 'EN 12464 · Vestibulos', null, 60, null);
+        const evaluations = buildRequirementEvaluations(inputs, null, null, null, 'EN 12464 Â· Vestibulos', null, 60, null);
         const ra = evaluations.find((e) => e.metric === 'ra')!;
         expect(ra.status).toBe('not-evaluated');
         expect(ra.calculatedValue).toBeNull();
     });
 
-    it('luminaria instalada con CRI por debajo del mínimo exigido: falla explícitamente (el bug que esto corrige)', () => {
-        const evaluations = buildRequirementEvaluations(inputs, null, null, null, 'EN 12464 · Vestibulos', null, 60, 50);
+    it('luminaria instalada con CRI por debajo del mÃ­nimo exigido: falla explÃ­citamente (el bug que esto corrige)', () => {
+        const evaluations = buildRequirementEvaluations(inputs, null, null, null, 'EN 12464 Â· Vestibulos', null, 60, 50);
         const ra = evaluations.find((e) => e.metric === 'ra')!;
         expect(ra.status).toBe('fail');
         expect(ra.calculatedValue).toBe(50);
@@ -99,7 +99,7 @@ describe('buildRequirementEvaluations — métrica "ra"', () => {
     });
 
     it('luminaria instalada cumple el Ra exigido: pass', () => {
-        const evaluations = buildRequirementEvaluations(inputs, null, null, null, 'EN 12464 · Vestibulos', null, 60, 80);
+        const evaluations = buildRequirementEvaluations(inputs, null, null, null, 'EN 12464 Â· Vestibulos', null, 60, 80);
         const ra = evaluations.find((e) => e.metric === 'ra')!;
         expect(ra.status).toBe('pass');
     });
@@ -110,3 +110,4 @@ describe('buildRequirementEvaluations — métrica "ra"', () => {
         expect(ra.status).toBe('not-evaluated');
     });
 });
+

@@ -1,9 +1,9 @@
-import { polygonAreaM2 } from '@/pages/dialux/geometry/polygonGeometry';
+﻿import { polygonAreaM2 } from '@/pages/dialux/geometry/polygonGeometry';
 import { getActivityOptions } from './roomLighting';
 import type { Scene } from './types';
 import type { Fixture, Room, Vertex, Wall } from './types';
 
-// Logger condicional — silenciado en producción
+// Logger condicional â€” silenciado en producciÃ³n
 const isDev =
     typeof import.meta !== 'undefined' &&
     (import.meta as { env?: { DEV?: boolean } }).env?.DEV;
@@ -140,14 +140,14 @@ function polygonAreaCentroid(vertices: Vertex[]): Vertex | null {
 }
 
 /**
- * Encuentra el punto interior más alejado de todos los bordes del polígono
- * (polo de inaccessibilidad aproximado). Usa grilla 24×24 para polígonos
- * complejos o estrechos donde el centroide puede caer fuera del área.
+ * Encuentra el punto interior mÃ¡s alejado de todos los bordes del polÃ­gono
+ * (polo de inaccessibilidad aproximado). Usa grilla 24Ã—24 para polÃ­gonos
+ * complejos o estrechos donde el centroide puede caer fuera del Ã¡rea.
  */
 function findInteriorPoint(vertices: Vertex[]): Vertex {
     if (vertices.length === 0) return { x: 0, y: 0 };
 
-    // Intentar candidatos rápidos primero
+    // Intentar candidatos rÃ¡pidos primero
     const candidates: Vertex[] = [];
     const areaCentroid = polygonAreaCentroid(vertices);
     if (areaCentroid) candidates.push(areaCentroid);
@@ -165,8 +165,8 @@ function findInteriorPoint(vertices: Vertex[]): Vertex {
         }
     }
 
-    // Grilla de búsqueda más densa (24×24) para formas irregulares o estrechas
-    // como corredores en L, habitaciones en U o polígonos cóncavos.
+    // Grilla de bÃºsqueda mÃ¡s densa (24Ã—24) para formas irregulares o estrechas
+    // como corredores en L, habitaciones en U o polÃ­gonos cÃ³ncavos.
     const cols = 24;
     const rows = 24;
     const boundsW = bounds.maxX - bounds.minX;
@@ -200,10 +200,10 @@ function findInteriorPoint(vertices: Vertex[]): Vertex {
         }
     }
 
-    // Si encontramos un punto interior válido, devolverlo
+    // Si encontramos un punto interior vÃ¡lido, devolverlo
     if (bestPoint !== null) return bestPoint;
 
-    // Último recurso: primer vértice del polígono (garantizado en el borde)
+    // Ãšltimo recurso: primer vÃ©rtice del polÃ­gono (garantizado en el borde)
     return vertices[0];
 }
 
@@ -290,10 +290,10 @@ function simplifyVertices(vertices: Vertex[]): Vertex[] {
 }
 
 /**
- * Construye el polígono contorno a partir de las celdas de la región raster.
+ * Construye el polÃ­gono contorno a partir de las celdas de la regiÃ³n raster.
  *
  * Problema conocido: cuando las celdas forman una figura con "estrechamientos"
- * (p. ej. dos rectángulos unidos por un solo vértice diagonal), el algoritmo
+ * (p. ej. dos rectÃ¡ngulos unidos por un solo vÃ©rtice diagonal), el algoritmo
  * de media-bordes puede generar una cadena no cerrada. En ese caso se detecta
  * el problema y se retorna [] para que el caller use el fallback de bounds.
  */
@@ -308,7 +308,7 @@ function buildRegionPolygon(
 
     // Registrar cada arista exterior exactamente una vez.
     // Si una arista aparece desde ambos lados (colindante con otra celda en
-    // la misma dirección) se cancela → la arista de frontera real sobrevive.
+    // la misma direcciÃ³n) se cancela â†’ la arista de frontera real sobrevive.
     const edgeCount = new Map<string, number>();
     const edgeTarget = new Map<string, Vertex>();
 
@@ -355,7 +355,7 @@ function buildRegionPolygon(
 
         const next = nextByStart.get(cursorKey);
         if (!next) {
-            // Cadena no cerrada → la geometría de la región es degenerada.
+            // Cadena no cerrada â†’ la geometrÃ­a de la regiÃ³n es degenerada.
             // Retornar [] para que buildRasterRegions use el fallback de bounds.
             ambientLog(
                 `buildRegionPolygon: open chain detected after ${vertices.length} verts (cells=${cells.length})`,
@@ -365,7 +365,7 @@ function buildRegionPolygon(
         cursorKey = `${next.x},${next.y}`;
     }
 
-    // Verificar que el polígono tiene al menos 3 vértices no colineales
+    // Verificar que el polÃ­gono tiene al menos 3 vÃ©rtices no colineales
     const simplified = simplifyVertices(vertices);
     if (simplified.length < 3) {
         ambientLog(
@@ -640,7 +640,7 @@ function buildSingleAmbientSpace(
         ambientConfig?.activity ?? room.normativeActivity ?? undefined;
     const activityOption = activity
         ? (getActivityOptions(
-              ambientConfig?.normativeStandard ?? room.normativeStandard ?? 'en_12464',
+              ambientConfig?.normativeStandard ?? room.normativeStandard ?? 'en_12464_1',
               ambientConfig?.normativeCategory ?? room.normativeCategory,
               ambientConfig?.normativeSection ?? room.normativeSection,
           ).find((option) => option.activity === activity) ?? null)
@@ -704,8 +704,8 @@ function buildWallDefinedAmbientSpaces(
     walls: Wall[],
     fixtures: Fixture[],
 ): DerivedAmbientSpace[] {
-    // Fase 16: una ruta de evacuación/área antipánico es un polígono único,
-    // igual que un pasadizo — nunca se subdivide por muros interiores.
+    // Fase 16: una ruta de evacuaciÃ³n/Ã¡rea antipÃ¡nico es un polÃ­gono Ãºnico,
+    // igual que un pasadizo â€” nunca se subdivide por muros interiores.
     if (room.roomType === 'corridor' || room.roomType === 'evacuation-route' || room.roomType === 'antipanic-area') {
         return [];
     }
@@ -739,13 +739,13 @@ function buildWallDefinedAmbientSpaces(
 
     if (closedWallAmbients.length === 0) return [];
 
-    // Ancla cada pared a su `configKey` ya guardado (vía `AmbientConfig.
-    // wallId`) en vez de asignarlo siempre por orden de área — si la
-    // geometría cambia de forma que el orden de tamaño entre dos
+    // Ancla cada pared a su `configKey` ya guardado (vÃ­a `AmbientConfig.
+    // wallId`) en vez de asignarlo siempre por orden de Ã¡rea â€” si la
+    // geometrÃ­a cambia de forma que el orden de tamaÃ±o entre dos
     // sub-ambientes se invierte, la config de un ambiente nombrado por el
     // usuario ya no salta a la pared equivocada en silencio. Paredes sin
-    // pin todavía (nunca configuradas, o config vieja de antes de este fix)
-    // se siguen asignando por orden de área descendente, igual que siempre.
+    // pin todavÃ­a (nunca configuradas, o config vieja de antes de este fix)
+    // se siguen asignando por orden de Ã¡rea descendente, igual que siempre.
     const pinnedKeyByWallId = new Map<string, string>();
     for (const [key, config] of Object.entries(room.ambientConfigs ?? {})) {
         if (config?.wallId) {
@@ -778,7 +778,7 @@ function buildWallDefinedAmbientSpaces(
             ambientConfig?.activity ?? room.normativeActivity ?? undefined;
         const activityOption = activity
             ? (getActivityOptions(
-                  ambientConfig?.normativeStandard ?? room.normativeStandard ?? 'en_12464',
+                  ambientConfig?.normativeStandard ?? room.normativeStandard ?? 'en_12464_1',
                   ambientConfig?.normativeCategory ?? room.normativeCategory,
                   ambientConfig?.normativeSection ?? room.normativeSection,
               ).find((option) => option.activity === activity) ?? null)
@@ -875,7 +875,7 @@ export function deriveAmbientSpaces(
             ambientConfig?.activity ?? room.normativeActivity ?? undefined;
         const activityOption = activity
             ? (getActivityOptions(
-                  ambientConfig?.normativeStandard ?? room.normativeStandard ?? 'en_12464',
+                  ambientConfig?.normativeStandard ?? room.normativeStandard ?? 'en_12464_1',
                   ambientConfig?.normativeCategory ?? room.normativeCategory,
                   ambientConfig?.normativeSection ?? room.normativeSection,
               ).find((option) => option.activity === activity) ?? null)
@@ -950,7 +950,7 @@ export function deriveAmbientSpaces(
             ambientConfig?.activity ?? room.normativeActivity ?? undefined;
         const activityOption = activity
             ? (getActivityOptions(
-                  ambientConfig?.normativeStandard ?? room.normativeStandard ?? 'en_12464',
+                  ambientConfig?.normativeStandard ?? room.normativeStandard ?? 'en_12464_1',
                   ambientConfig?.normativeCategory ?? room.normativeCategory,
                   ambientConfig?.normativeSection ?? room.normativeSection,
               ).find((option) => option.activity === activity) ?? null)
@@ -1016,11 +1016,11 @@ export function deriveAmbientSpaces(
 }
 
 export function deriveSceneAmbientSpaces(scene: Scene): DerivedAmbientSpace[] {
-    // Mismo criterio que buildWallDefinedAmbientSpaces (línea ~709) y
-    // deriveAmbientSpaces (línea ~856): una ruta de evacuación/área
-    // antipánico se trata como espacio único contenible, igual que un
-    // pasadizo — si no se excluye aquí también, queda en `regularRooms` y
-    // pierde la lógica de fusión/contención bajo su sala padre.
+    // Mismo criterio que buildWallDefinedAmbientSpaces (lÃ­nea ~709) y
+    // deriveAmbientSpaces (lÃ­nea ~856): una ruta de evacuaciÃ³n/Ã¡rea
+    // antipÃ¡nico se trata como espacio Ãºnico contenible, igual que un
+    // pasadizo â€” si no se excluye aquÃ­ tambiÃ©n, queda en `regularRooms` y
+    // pierde la lÃ³gica de fusiÃ³n/contenciÃ³n bajo su sala padre.
     const regularRooms = scene.rooms.filter(
         (room) =>
             room.roomType !== 'corridor' &&
@@ -1087,7 +1087,7 @@ export function deriveSceneAmbientSpaces(scene: Scene): DerivedAmbientSpace[] {
 
 /**
  * Igual que `findAmbientSpaceAtPoint` pero recibe los ambientes ya derivados
- * — evita recalcular `deriveSceneAmbientSpaces` (rasterizado por ambiente)
+ * â€” evita recalcular `deriveSceneAmbientSpaces` (rasterizado por ambiente)
  * en llamadas repetidas dentro de un mismo escaneo de escena.
  */
 export function findAmbientSpaceContainingPoint(
@@ -1125,3 +1125,4 @@ export function findAmbientSpaceAtPoint(
 ): DerivedAmbientSpace | null {
     return findAmbientSpaceContainingPoint(deriveSceneAmbientSpaces(scene), point);
 }
+

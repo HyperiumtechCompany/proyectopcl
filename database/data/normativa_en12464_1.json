@@ -1,0 +1,1288 @@
+{
+    "requisitos_minimos_iluminacion": {
+        "1": {
+            "categoria": "ZONAS DE TRÁFICO Y ZONAS GENERALES DEL EDIFICIO",
+            "subcategorias": {
+                "1.1": {
+                    "nombre": "Zonas de circulación",
+                    "areas": [
+                        {
+                            "area": "Zonas de circulación y pasillos",
+                            "Em_lux": 100,
+                            "UGRL": 28,
+                            "Uo": 0.4,
+                            "Ra": 40,
+                            "requisitos": "En las salidas y entradas la luz debe proveer una transición adecuada."
+                        },
+                        {
+                            "area": "Escaleras, escaleras mecánicas y pasillos rodantes",
+                            "Em_lux": 150,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 40,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Rampas de carga y descarga",
+                            "Em_lux": 150,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 40,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "1.2": {
+                    "nombre": "Salas de descanso, saneamiento y primeros auxilios",
+                    "areas": [
+                        {
+                            "area": "Cantinas y comedores",
+                            "Em_lux": 200,
+                            "UGRL": 22,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Salas de descanso",
+                            "Em_lux": 100,
+                            "UGRL": 22,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Salas para ejercicio físico",
+                            "Em_lux": 300,
+                            "UGRL": 22,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Vestuarios, aseos y baños",
+                            "Em_lux": 200,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Salas de primeros auxilios",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "1.3": {
+                    "nombre": "Salas de control",
+                    "areas": [
+                        {
+                            "area": "Salas de control e instalaciones (cuadros de distribución)",
+                            "Em_lux": 200,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Salas de ordenadores, télex, correos",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                }
+            }
+        },
+        "2": {
+            "categoria": "ACTIVIDADES INDUSTRIALES Y ARTESANALES",
+            "subcategorias": {
+                "2.1": {
+                    "nombre": "Agricultura",
+                    "areas": [
+                        {
+                            "area": "Carga y descarga de mercancías, manipulación de equipos",
+                            "Em_lux": 200,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Edificios para ganado",
+                            "Em_lux": 50,
+                            "UGRL": 28,
+                            "Uo": 0.4,
+                            "Ra": 40,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Corrales de animales enfermos y paritorios",
+                            "Em_lux": 200,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Preparación de piensos, lechería, lavado de utensilios",
+                            "Em_lux": 200,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.2": {
+                    "nombre": "Panaderías",
+                    "areas": [
+                        {
+                            "area": "Preparación y horneado",
+                            "Em_lux": 300,
+                            "UGRL": 22,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Acabado, glaseado, decoración",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.3": {
+                    "nombre": "Industria del cemento, hormigón y ladrillos",
+                    "areas": [
+                        {
+                            "area": "Secado y preparación de materiales",
+                            "Em_lux": 50,
+                            "UGRL": 28,
+                            "Uo": 0.4,
+                            "Ra": 40,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Trabajo de materiales en general",
+                            "Em_lux": 200,
+                            "UGRL": 28,
+                            "Uo": 0.4,
+                            "Ra": 40,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Montaje de moldes",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.4": {
+                    "nombre": "Cerámica y vidrio",
+                    "areas": [
+                        {
+                            "area": "Secado",
+                            "Em_lux": 50,
+                            "UGRL": 28,
+                            "Uo": 0.4,
+                            "Ra": 40,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Preparación, trabajo a máquina general",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Esmaltado, soplado de vidrio",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Trabajos de decoración (pulido, grabado)",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Trabajo de precisión (pintura a mano, micrograbado)",
+                            "Em_lux": 1000,
+                            "UGRL": 16,
+                            "Uo": 0.7,
+                            "Ra": 90,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.5": {
+                    "nombre": "Industria química, plásticos y caucho",
+                    "areas": [
+                        {
+                            "area": "Procesamiento automatizado remoto",
+                            "Em_lux": 50,
+                            "UGRL": null,
+                            "Uo": 0.4,
+                            "Ra": 40,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Salas de procesamiento con intervenciones limitadas",
+                            "Em_lux": 150,
+                            "UGRL": 28,
+                            "Uo": 0.4,
+                            "Ra": 40,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Lugares de trabajo permanente",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Medición de precisión, laboratorios",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Inspección de color",
+                            "Em_lux": 1000,
+                            "UGRL": 16,
+                            "Uo": 0.7,
+                            "Ra": 90,
+                            "requisitos": "Temperatura de color constante y alta reproducción cromática"
+                        }
+                    ]
+                },
+                "2.6": {
+                    "nombre": "Industria eléctrica y electrónica",
+                    "areas": [
+                        {
+                            "area": "Fabricación de cables",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Bobinado (bobinas grandes)",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Bobinado (bobinas pequeñas)",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Impregnación y pintado",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Ensamblaje (vasto)",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Ensamblaje (medio, p. ej., centralitas, equipos de oficina)",
+                            "Em_lux": 500,
+                            "UGRL": 22,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Ensamblaje (fino, teléfonos, equipos de precisión)",
+                            "Em_lux": 750,
+                            "UGRL": 19,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Ensamblaje (precisión, componentes electrónicos miniaturizados)",
+                            "Em_lux": 1000,
+                            "UGRL": 16,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Control, pruebas y ajustes",
+                            "Em_lux": 1000,
+                            "UGRL": 16,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.7": {
+                    "nombre": "Industria alimentaria",
+                    "areas": [
+                        {
+                            "area": "Lugares de trabajo en cervecerías, lavado de barriles, pelado, cocción",
+                            "Em_lux": 200,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Clasificación y limpieza, molienda, mezcla",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Trabajo a máquina (cortado, troceado)",
+                            "Em_lux": 500,
+                            "UGRL": 22,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Corte y clasificación minuciosa, inspección de color",
+                            "Em_lux": 500,
+                            "UGRL": 22,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.8": {
+                    "nombre": "Fundiciones y moldeado de metales",
+                    "areas": [
+                        {
+                            "area": "Túneles para personal por debajo del nivel del suelo",
+                            "Em_lux": 50,
+                            "UGRL": 28,
+                            "Uo": 0.4,
+                            "Ra": 40,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Plataformas de hornos",
+                            "Em_lux": 200,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Preparación de arena",
+                            "Em_lux": 200,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Moldeo en taller y núcleos",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.9": {
+                    "nombre": "Peluquerías",
+                    "areas": [
+                        {
+                            "area": "Peluquería (Corte, lavado, secado, tinte)",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 90,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.10": {
+                    "nombre": "Fabricación de joyas y relojería",
+                    "areas": [
+                        {
+                            "area": "Trabajo con piedras preciosas, relojería fina",
+                            "Em_lux": 1500,
+                            "UGRL": 16,
+                            "Uo": 0.7,
+                            "Ra": 90,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.11": {
+                    "nombre": "Lavanderías y limpieza en seco",
+                    "areas": [
+                        {
+                            "area": "Recepción, marcado y clasificación de ropa",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Lavado y limpieza",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Planchado (prensa y tabla)",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Reparaciones e inspección rigurosa",
+                            "Em_lux": 750,
+                            "UGRL": 19,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.12": {
+                    "nombre": "Cuero y peletería",
+                    "areas": [
+                        {
+                            "area": "Trabajos en depósitos, tonelería, tinas",
+                            "Em_lux": 200,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 40,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Descarnado, descortezado, raspado",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Marroquinería, talabartería (corte y costura)",
+                            "Em_lux": 500,
+                            "UGRL": 22,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Clasificación e inspección de pieles (color)",
+                            "Em_lux": 1000,
+                            "UGRL": 16,
+                            "Uo": 0.7,
+                            "Ra": 90,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.13": {
+                    "nombre": "Mecanizado y conformado de metales",
+                    "areas": [
+                        {
+                            "area": "Trabajo de forja a matriz",
+                            "Em_lux": 200,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Soldadura",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Mecanizado basto y medio",
+                            "Em_lux": 300,
+                            "UGRL": 22,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Mecanizado de precisión, ajuste fino",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Trazado e inspección de superficies",
+                            "Em_lux": 750,
+                            "UGRL": 19,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.14": {
+                    "nombre": "Papel y cartón",
+                    "areas": [
+                        {
+                            "area": "Procesamiento de la madera y corcho",
+                            "Em_lux": 200,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Fabricación de papel y cartón",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Trabajo estándar del papel (cortar, encuadernar)",
+                            "Em_lux": 500,
+                            "UGRL": 22,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.15": {
+                    "nombre": "Imprentas",
+                    "areas": [
+                        {
+                            "area": "Corte, dorado, gofrado",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Clasificación de papel e impresión",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Ajuste de matrices e inspección de copias",
+                            "Em_lux": 1000,
+                            "UGRL": 16,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Impresión a color e inspección visual de colores",
+                            "Em_lux": 1500,
+                            "UGRL": 16,
+                            "Uo": 0.7,
+                            "Ra": 90,
+                            "requisitos": "Evaluación estricta de color"
+                        }
+                    ]
+                },
+                "2.16": {
+                    "nombre": "Fábricas de hierro y acero",
+                    "areas": [
+                        {
+                            "area": "Plantas de producción (sin operaciones manuales)",
+                            "Em_lux": 50,
+                            "UGRL": 28,
+                            "Uo": 0.4,
+                            "Ra": 40,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Zonas de procesamiento manual seguro",
+                            "Em_lux": 200,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Plataformas de operación y de hornos",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Salas de inspección y control visual",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.17": {
+                    "nombre": "Industria textil",
+                    "areas": [
+                        {
+                            "area": "Bañeras de lavado, empacado",
+                            "Em_lux": 200,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Hilado, trenzado, devanado",
+                            "Em_lux": 300,
+                            "UGRL": 22,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Costura, tejido de punto",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Costura fina (agujas pequeñas, costura invisible)",
+                            "Em_lux": 750,
+                            "UGRL": 22,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Inspección de color y diseño textil",
+                            "Em_lux": 1000,
+                            "UGRL": 16,
+                            "Uo": 0.7,
+                            "Ra": 90,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.18": {
+                    "nombre": "Fabricación de vehículos",
+                    "areas": [
+                        {
+                            "area": "Trabajos en chasis y ensamblaje general",
+                            "Em_lux": 500,
+                            "UGRL": 22,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Pintura y rociado",
+                            "Em_lux": 750,
+                            "UGRL": 22,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Inspección de pintura y control de calidad fina",
+                            "Em_lux": 1000,
+                            "UGRL": 16,
+                            "Uo": 0.7,
+                            "Ra": 90,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Tapicería",
+                            "Em_lux": 1000,
+                            "UGRL": 19,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "2.19": {
+                    "nombre": "Industria de la madera",
+                    "areas": [
+                        {
+                            "area": "Procesado automático, aserraderos",
+                            "Em_lux": 200,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 40,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Mecanizado de banco y cepillado",
+                            "Em_lux": 300,
+                            "UGRL": 25,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Ebanistería fina y trabajo en máquinas herramientas",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Lijado, pintura, marquetería fina e inspección",
+                            "Em_lux": 750,
+                            "UGRL": 19,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                }
+            }
+        },
+        "3": {
+            "categoria": "OFICINAS",
+            "subcategorias": {
+                "3.1": {
+                    "nombre": "Espacios de trabajo ofimático",
+                    "areas": [
+                        {
+                            "area": "Archivos, copiado, circulación, pasillos",
+                            "Em_lux": 300,
+                            "UGRL": 19,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Escritura, mecanografía, lectura, datos (PC)",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Dibujo técnico (CAD\/Tableros)",
+                            "Em_lux": 750,
+                            "UGRL": 16,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Salas de reuniones y conferencias",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": "Preferible control de atenuación (dimming)"
+                        },
+                        {
+                            "area": "Mostradores de recepción",
+                            "Em_lux": 300,
+                            "UGRL": 22,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Salas de archivos locales",
+                            "Em_lux": 200,
+                            "UGRL": 25,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                }
+            }
+        },
+        "4": {
+            "categoria": "COMERCIO MINORISTA (RETAIL)",
+            "subcategorias": {
+                "4.1": {
+                    "nombre": "Áreas de venta",
+                    "areas": [
+                        {
+                            "area": "Área de ventas",
+                            "Em_lux": 300,
+                            "UGRL": 22,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Área de cajas y comprobación",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Mesas de envoltorio y empaque",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                }
+            }
+        },
+        "5": {
+            "categoria": "LUGARES DE ASAMBLEA PÚBLICA",
+            "subcategorias": {
+                "5.1": {
+                    "nombre": "Locales públicos",
+                    "areas": [
+                        {
+                            "area": "Vestíbulos y guardarropas",
+                            "Em_lux": 200,
+                            "UGRL": 22,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Salas de estar, áreas de descanso",
+                            "Em_lux": 200,
+                            "UGRL": 22,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Taquillas y ventanillas",
+                            "Em_lux": 300,
+                            "UGRL": 22,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "5.2": {
+                    "nombre": "Restaurantes y Hoteles",
+                    "areas": [
+                        {
+                            "area": "Comedor y restaurantes (ambiente general)",
+                            "Em_lux": 200,
+                            "UGRL": 22,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": "Depende mucho de la atmósfera deseada."
+                        },
+                        {
+                            "area": "Restaurantes de autoservicio (buffets)",
+                            "Em_lux": 200,
+                            "UGRL": 22,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Cocinas comerciales (preparación de alimentos)",
+                            "Em_lux": 500,
+                            "UGRL": 22,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "5.3": {
+                    "nombre": "Teatros, salas de conciertos, cines",
+                    "areas": [
+                        {
+                            "area": "Zonas de butacas (general y ensayos)",
+                            "Em_lux": 200,
+                            "UGRL": 22,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "5.4": {
+                    "nombre": "Ferias de exposición, Museos",
+                    "areas": [
+                        {
+                            "area": "Iluminación general en salones de ferias",
+                            "Em_lux": 300,
+                            "UGRL": 22,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                }
+            }
+        },
+        "6": {
+            "categoria": "EDUCACIÓN (CENTROS DE ENSEÑANZA)",
+            "subcategorias": {
+                "6.1": {
+                    "nombre": "Guarderías y parvularios",
+                    "areas": [
+                        {
+                            "area": "Salas de juego y guarderías",
+                            "Em_lux": 300,
+                            "UGRL": 22,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Zonas de manualidades",
+                            "Em_lux": 300,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "6.2": {
+                    "nombre": "Colegios y universidades",
+                    "areas": [
+                        {
+                            "area": "Aulas y salas de tutoría",
+                            "Em_lux": 300,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": "500 lux para adultos o clases nocturnas"
+                        },
+                        {
+                            "area": "Pizarras",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Salas de arte (pintura, escultura)",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 90,
+                            "requisitos": "750 lux si es arte de detalle"
+                        },
+                        {
+                            "area": "Salas de diseño técnico",
+                            "Em_lux": 750,
+                            "UGRL": 16,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Laboratorios de ciencias \/ prácticas",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Salas de música",
+                            "Em_lux": 300,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Aulas de informática",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Pabellones deportivos",
+                            "Em_lux": 300,
+                            "UGRL": 22,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                }
+            }
+        },
+        "7": {
+            "categoria": "ASISTENCIA SANITARIA (HOSPITALES Y CLÍNICAS)",
+            "subcategorias": {
+                "7.1": {
+                    "nombre": "Salas de pacientes",
+                    "areas": [
+                        {
+                            "area": "Iluminación general de la sala",
+                            "Em_lux": 100,
+                            "UGRL": 19,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Luz de lectura del paciente",
+                            "Em_lux": 300,
+                            "UGRL": 19,
+                            "Uo": 0.7,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Examen médico simple en cama",
+                            "Em_lux": 300,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Baños de pacientes",
+                            "Em_lux": 200,
+                            "UGRL": 22,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "7.2": {
+                    "nombre": "Salas de examen y tratamiento",
+                    "areas": [
+                        {
+                            "area": "Consultorios (General)",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 90,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Salas de extracciones y curas",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 90,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Examen de la vista, oído o dermatológico",
+                            "Em_lux": 1000,
+                            "UGRL": 19,
+                            "Uo": 0.7,
+                            "Ra": 90,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "7.3": {
+                    "nombre": "Quirófanos y cuidados especiales",
+                    "areas": [
+                        {
+                            "area": "Preoperatorio y salas de recuperación",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 90,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Quirófano (Iluminación general)",
+                            "Em_lux": 1000,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 90,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Quirófano (Luz de cavidad operatoria)",
+                            "Em_lux": 100000,
+                            "UGRL": null,
+                            "Uo": null,
+                            "Ra": 90,
+                            "requisitos": "De 10,000 a 100,000 lux según la luminaria quirúrgica"
+                        },
+                        {
+                            "area": "Cuidados intensivos (General)",
+                            "Em_lux": 100,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 90,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Cuidados intensivos (Examen y tratamiento)",
+                            "Em_lux": 1000,
+                            "UGRL": 19,
+                            "Uo": 0.7,
+                            "Ra": 90,
+                            "requisitos": null
+                        }
+                    ]
+                },
+                "7.4": {
+                    "nombre": "Odontología",
+                    "areas": [
+                        {
+                            "area": "Iluminación general del consultorio dental",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 90,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "En la zona de trabajo del paciente",
+                            "Em_lux": 1000,
+                            "UGRL": null,
+                            "Uo": 0.7,
+                            "Ra": 90,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Luminaria quirúrgica odontológica",
+                            "Em_lux": 5000,
+                            "UGRL": null,
+                            "Uo": null,
+                            "Ra": 90,
+                            "requisitos": "Por encima de 5000 lux"
+                        }
+                    ]
+                },
+                "7.5": {
+                    "nombre": "Laboratorios y Farmacias",
+                    "areas": [
+                        {
+                            "area": "Trabajos generales de laboratorio",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Farmacia local y dispensario",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                }
+            }
+        },
+        "8": {
+            "categoria": "TRANSPORTE (AEROPUERTOS, ESTACIONES)",
+            "subcategorias": {
+                "8.1": {
+                    "nombre": "Instalaciones de pasajeros",
+                    "areas": [
+                        {
+                            "area": "Vestíbulos de salida y llegada",
+                            "Em_lux": 200,
+                            "UGRL": 22,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Zonas de recogida de equipaje",
+                            "Em_lux": 200,
+                            "UGRL": 22,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Mostradores de facturación y billetes",
+                            "Em_lux": 500,
+                            "UGRL": 19,
+                            "Uo": 0.6,
+                            "Ra": 80,
+                            "requisitos": null
+                        },
+                        {
+                            "area": "Zonas de espera y asientos",
+                            "Em_lux": 200,
+                            "UGRL": 22,
+                            "Uo": 0.4,
+                            "Ra": 80,
+                            "requisitos": null
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}

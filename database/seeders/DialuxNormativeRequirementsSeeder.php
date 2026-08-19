@@ -24,6 +24,12 @@ class DialuxNormativeRequirementsSeeder extends Seeder
         // de alumbrado de emergencia en Perú — 'rne_peru' (EM.010) no trata
         // este tema en absoluto (verificado por texto completo del RNE).
         'normativa_a130.json' => 'rne_a130',
+        'normativa_en12464_1.json' => 'en_12464_1',
+        'normativa_en12464_2.json' => 'en_12464_2',
+        'normativa_en13201_2.json' => 'en_13201_2',
+        'normativa_en12193.json' => 'en_12193',
+        'normativa_iesna.json' => 'iesna_handbook',
+        'normativa_en15193.json' => 'en_15193',
     ];
 
     /**
@@ -126,6 +132,8 @@ class DialuxNormativeRequirementsSeeder extends Seeder
                 'ugrl' => isset($area['UGRL']) ? (int) $area['UGRL'] : null,
                 'uo' => isset($area['Uo']) ? (float) $area['Uo'] : null,
                 'ra' => isset($area['Ra']) ? (int) $area['Ra'] : null,
+                'lpd_wm2' => isset($area['lpd_wm2']) ? (float) $area['lpd_wm2'] : null,
+                'hours_yr' => isset($area['hours_yr']) ? (int) $area['hours_yr'] : null,
                 'requirements' => $requirements !== null ? json_encode($requirements, JSON_UNESCAPED_UNICODE) : null,
                 'created_at' => $now,
                 'updated_at' => $now,

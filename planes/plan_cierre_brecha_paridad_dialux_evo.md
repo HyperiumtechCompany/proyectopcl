@@ -1,5 +1,102 @@
 # Plan de cierre de brecha de paridad con DIALux evo (benchmark Pozuzo vs. MÓDULO I)
 
+## -22. Ronda 22 (2026-08-19) — la altura NO explica la contradicción first-bounce/iterative; se instaló Radiance para investigarlo con evidencia real
+
+Pregunta pendiente desde antes: el proyecto real "Módulo 22" (SS.HH, aspecto 2.40:1, altura 4.67 m) favorece `first-bounce` frente a DIALux evo; el benchmark `sshh-vs-bano` (aspecto 2.33:1, altura 3.5 m) favorece `iterative` frente al oráculo Radiance — misma familia de aspecto, veredicto contrario, y la única diferencia obvia entre ambos era la altura.
+
+**Se instaló Radiance** (open-source, LBNL, BSD — no estaba disponible en este entorno, se descargó el build portable oficial de GitHub Releases) para poder investigar esto con evidencia real en vez de otra heurística. Antes de confiar en el resultado, se corrió el test de integración YA existente (`radianceOracle.test.ts`) como sanity-check — reveló un valor de referencia obsoleto (`caseta-vs-guarderias` esperaba 163.9 lx, la corrida real dio 275.6 lx), pero el chequeo de luz directa motor-vs-Radiance (más difícil de falsear) coincidió al 0.5%, confirmando que era un dato de referencia desactualizado (la fotometría real del fixture cambió el 2026-08-18, después de que se registrara 163.9) y no una inestabilidad del oráculo. Corregido el valor registrado con la fecha y la causa documentadas.
+
+**Experimento** (`radianceOracle/heightSweepExperiment.test.ts`, permanente): la MISMA geometría de `sshh-vs-bano` (piso, fotometría real TEG18046, reflectancias) corrida a 3.5 m y a 4.67 m, luminaria siempre al techo, contra Radiance como árbitro físico independiente de ambos modos.
+
+| Altura | Radiance | `first-bounce` | `iterative` |
+|---|---:|---:|---:|
+| 3.5 m | 164.0 lx | 120.0 lx (-26.8%) | 151.5 lx (-7.6%) |
+| 4.67 m | 98.5 lx | 70.5 lx (-28.4%) | 88.1 lx (-10.6%) |
+
+**Resultado: la altura queda descartada.** `iterative` gana claramente en AMBAS alturas para esta geometría — la hipótesis de que la altura era el factor de confusión NO se confirmó, se refutó con evidencia directa. Sigue sin explicación por qué Módulo 22 (comparado contra el PDF de DIALux evo) favorece lo contrario. Candidatos sin investigar todavía: el patrón de haz real de la luminaria de Módulo 22 (una luminaria distinta a TEG18046, con su propia distribución fotométrica), o que comparar contra DIALux evo (caja negra, sin acceso a su código) simplemente no tiene el mismo rigor que comparar contra un solver físico independiente como Radiance — no se puede saber si DIALux evo mismo se parece más a `first-bounce` o a `iterative` en este tipo de geometría.
+
+**No se cambió ningún default de producción por esto** — mismo criterio de todo este plan: un experimento (aunque descarte una hipótesis con evidencia sólida) no es "3-5 formas de ambiente" y la contradicción real sigue abierta.
+
+## -21p. Ronda 21p — bug real de cumplimiento normativo en Vinchos (más grave que la brecha numérica), encontrado y corregido
+
+Investigando la pregunta de seguridad del usuario ("dame un estudio argumentativo"), se auditó el pipeline de resolución de normativa (`ambientSpaces.ts`) para un ambiente derivado de pared en el proyecto real Vinchos. Se encontró que el panel en vivo mostraba **"Uo OK"** para un Uo calculado (0.316-0.440) muy por debajo del mínimo real de la norma (RNE Perú, "Aulas para clases nocturnas y de educación de adultos": Uo=0.60, UGR=19) — una etiqueta de cumplimiento falsa, no un error de precisión numérica.
+
+**Causa raíz (doble, ambas corregidas)**:
+1. `normativeRemoteData.ts::buildTreeFromRows` envolvía las áreas SIN subcategoría (`subcategory_key IS NULL`, como esta) en una subsección sintética nombrada como la propia categoría, produciendo `normativeSection = normativeCategory` ("EDUCACIÓN"/"EDUCACIÓN") en vez de `section: null` al elegir la actividad en el editor. **Fix**: `branch.subsections = category.direct;` (hojas directas sin envolver), igual al patrón ya usado por el dataset estático. 5 tests de regresión nuevos en `normativeRemoteData.test.ts`.
+2. Ese `normativeSection` inválido quedó guardado de forma persistente junto con valores de override manual obsoletos (`uniformityTarget: 0.3`/`0`, `ugrLimit: 23`) en `room.ambientConfigs` de 2 ambientes reales de Vinchos — restos de la Ronda de normativa cerrada el 2026-07-13 (`dialux-normativa-scoping-bug`). Como `ambientConfig?.uniformityTarget` tiene prioridad sobre la resolución en vivo contra la norma, el bug de código (ya corregido) no alcanzaba a los datos ya guardados.
+
+**Alcance auditado**: los 3 proyectos reales de la BD, buscando la firma `normativeSection === normativeCategory` con overrides explícitos. Solo Vinchos (2 ambientes) tenía el patrón; se corrigieron removiendo los overrides obsoletos (dejando que la resolución en vivo tome el valor real de la norma) y se verificó con una prueba de extremo a extremo contra la escena real del proyecto (`uniformityTarget=0.6, ugrLimit=19, illuminanceLux=500` — correcto tras el fix).
+
+**Por qué se documenta aparte del resto de este plan**: este bug no es parte de la brecha de precisión numérica vs. DIALux evo que documentan las rondas 1-21o — es un bug de la capa de verificación de cumplimiento, con impacto de seguridad directo (afirmar "conforme" sin haberlo verificado contra el valor correcto). Ver `planes/estudio_argumentativo_precision_vs_seguridad.md` para el análisis completo de por qué esto pesa más que seguir puliendo el margen de ±5%.
+
+## -21o. Ronda 21o — Aula 1° (Vinchos): el punto mínimo NO es un bug, es un rincón real; conclusión algorítmica sin forzar ningún ajuste
+
+A pedido explícito del usuario ("testeamos con aula 1, y sacamos conclusiones algorítmicas para el resto"), se verificó el punto mínimo de Aula 1° (el que la Ronda 21n dejó sin resolver) desglosando la contribución de CADA luminaria por separado, en vez de confiar en el agregado.
+
+### Verificación (no una suposición)
+
+Punto mínimo real: (7.1786, 14.5875), valor reportado 183.9 lx. Desglose de luz directa por luminaria:
+
+| Luminaria | Distancia 3D | Ángulo γ | Aporte |
+|---|---:|---:|---:|
+| (5.38, 15.33) — la más cercana | 2.79 m | 44.2° | **131.17 lx** (73% del total) |
+| (2.03, 17.56) | 6.27 m | 71.4° | 4.81 lx |
+| (5.43, 17.56) | 3.99 m | 59.9° | 26.36 lx |
+| (2.03, 19.66) | 7.50 m | 74.5° | 2.23 lx |
+| (5.43, 19.66) | 5.73 m | 69.6° | 5.71 lx |
+| (2.01, 15.33) | 5.59 m | 69.0° | 7.94 lx |
+| **Suma directa** | | | **178.23 lx** |
+| + reflejada (first-bounce/iterative) | | | 5.67 lx (≈3%, plausible) |
+| **Total** | | | **183.9 lx — coincide exacto con lo reportado** |
+
+Cada término sigue la ley del inverso del cuadrado y el coseno correctamente. **No hay ningún bug de cálculo en este punto** — es un rincón real de la sala (junto a la jamba de la puerta compartida entre las dos aulas), a 2.79 m de la luminaria más cercana, dominado por una sola luminaria porque las otras 5 están mucho más lejos (3.99-7.50 m). Físicamente, es el punto más alejado de la cuadrícula de 6 luminarias dentro del área EN 12464-1 útil.
+
+### Conclusión algorítmica (generalizable, no específica de este proyecto)
+
+El motor de cálculo está bien — el patrón que sí generaliza es una **sensibilidad de Emin/Uo a la resolución de malla en rincones arquitectónicos angostos**: con una malla de ~0.24-0.25 m de espaciado (25×29 puntos para 43 m²), un rincón real de apenas ~0.17×1.4 m (el área entre la jamba y la pared, fuera del alcance directo de cualquier luminaria) puede quedar representado por MUY POCOS puntos de muestreo — a veces uno solo. Como Emin/Uo se definen sobre el peor punto único, un rincón real pero angosto puede arrastrar el reporte de TODA la sala hacia abajo, aunque >95% del área útil esté bien iluminada.
+
+Esto **no se corrigió en esta ronda** — no hay evidencia todavía de si DIALux evo:
+(a) simplemente no coloca un punto de muestreo exacto en ese rincón (una diferencia de discretización, no de modelo), o
+(b) excluye ese tipo de rincón angosto del polígono de cálculo por otro criterio, o
+(c) su Emin reportado también cae en ese rincón pero con un valor distinto (fotometría/ángulo distinto de la luminaria real usada en su proyecto).
+
+**Deliberadamente NO se tocó ningún parámetro de malla/margen para "arreglar" este caso puntual** — el propio historial de este archivo (`adaptiveGridSpacing.ts`, comentario "NOTA evaluado y descartado") ya documenta que un intento anterior de acoplar la malla a la fórmula EN 12464-1 no movió el promedio y empeoró otros casos (Ventanilla, Caseta/SS.HH). Repetir ese experimento sin un segundo proyecto real de referencia sería exactamente el sobreajuste que este plan prohíbe.
+
+### Qué haría falta para cerrar esto de verdad
+
+Un segundo (o tercer) proyecto real, de forma/tamaño distinto, con PDF de DIALux evo real de referencia — para confirmar si "rincones angostos mal muestreados por una malla gruesa" es un patrón que se repite (en cuyo caso ameritaría una solución de malla, ej. refinar SOLO cerca de vértices cóncavos del polígono) o si Vinchos es un caso aislado por su geometría particular de jambas. El usuario ya indicó que probará con más proyectos — este hallazgo queda documentado para esa siguiente ronda, no cerrado a ciegas ahora.
+
+## -21n. Ronda 21n — bug real encontrado y corregido: la zona marginal EN 12464-1 (la que coincide con DIALux evo) se ignoraba en silencio bajo malla adaptativa
+
+A pedido explícito del usuario ("continúa con esos puntos mínimos"), se profundizó en la esquina oscura del proyecto real "Vinchos" (Ronda 21l) hasta encontrar la causa raíz verificable — no una hipótesis, un bug real localizado y corregido.
+
+### Cadena de hallazgos (cada uno descartó al anterior con evidencia, no con suposición)
+
+1. **El punto mínimo real cae casi exactamente sobre el borde del polígono del ambiente** (distancia calculada: 0.0004 m con las coordenadas de grilla mal reconstruidas en el primer intento de diagnóstico — ver más abajo, esto resultó ser un error del script de diagnóstico, no del motor).
+2. **`distanceToPolygonEdge` funciona correctamente** — probado directamente contra el polígono real del ambiente derivado (24-26 vértices, incluye el detalle de jamba de puerta que el editor guarda como parte del contorno del muro): devuelve exactamente `0` para el punto mal reconstruido, confirmando que la función en sí no tiene bug.
+3. **El propio script de diagnóstico tenía un bug**: reconstruía las coordenadas de un punto de grilla como `origin + col×cellWidth` en vez de `origin + (col+0.5)×cellWidth` — `buildGrid()` (`lightingEngineCore.ts`) coloca los puntos en el CENTRO de cada celda, no en su esquina. Corregido el script, el punto real queda a 0.1231 m del borde — apenas 0.0006 m por ENCIMA de la zona marginal reportada (0.1225 m). Una coincidencia de redondeo de grilla, no un bug de por sí.
+4. **La causa real**: esa zona marginal de 0.1225 m NO es la fórmula EN 12464-1 (`getRoomMarginalZone`, que da 0.105 m para este mismo ambiente y coincide casi exacto con el 0.105 m que declara DIALux evo) — es `spacingM / 2`, donde `spacingM` es el espaciado ADAPTATIVO (`computeAdaptiveGridSpacing`, una heurística de coeficiente de variación de iluminancia, calibrada para decidir resolución de cálculo, sin ninguna relación con la norma). `hooks/adaptiveGridSpacing.ts::resolveMeshSpacing` sobreescribía la zona marginal real con este valor cada vez que `meshPolicy.adaptive` estaba activo — que es SIEMPRE en producción (`buildProductionCalculationConfig`).
+
+### Verificación cuantitativa (recalculado con el motor real, no una fórmula a mano)
+
+Para el segundo ambiente del proyecto real ("Aula 2°"), comparando la zona marginal "mala" (0.1173 m, la que realmente se estaba usando) contra la correcta (0.2290 m, fórmula EN 12464-1, la misma que DIALux evo declara para este ambiente):
+
+| | Ē avg | Emin | Uo |
+|---|---:|---:|---:|
+| Zona marginal mala (bug, `spacingM/2`) | 604.2 | 181.4 | 0.300 |
+| Zona marginal correcta (`getRoomMarginalZone`) | 635.3 | **279.8** | **0.440** |
+| DIALux evo (referencia real) | 567 | 302 | 0.53 |
+
+Emin pasó de -40% de error a -7.4%; Uo de -43% a -17%. Mejora real y grande, en un proyecto sin ningún ajuste manual — no es un caso curado.
+
+### Corrección aplicada
+
+`resolveMeshSpacing` ya NO calcula ni devuelve `marginalZoneOverride` en la rama adaptativa — siempre `undefined`, igual que la rama de malla fija. `calculateLightingResult` ya caía a `getRoomMarginalZone(room)` cuando el override es `undefined` (línea `marginalZoneOverride ?? getRoomMarginalZone(room)`) — esa función YA maneja pasadizos (0 m) y overrides manuales (`room.marginalZone`) correctamente, así que no hacía falta ninguna rama nueva, solo dejar de pisar el valor correcto.
+
+**Efecto colateral honesto, no ocultado**: el fixture de benchmark `caseta-vs-guarderias` (que declara `room.marginalZone: 0.35` a mano, para igualar lo que DIALux evo declaró) pasó de 1.3% a **11.0%** de error — ese 1.3% dependía del mismo bug (el override manual de 0.35 m también estaba siendo ignorado en silencio y reemplazado por `spacingM/2`≈0.11-0.15 m). Con el bug corregido, el override real de 0.35 m sí se respeta, y el resultado empeora. No se revirtió el fix por esto — el criterio de este plan es corregir causas reales, no preservar un número que dependía de un bug. Ver doc-comment actualizado de `dialuxEvoParity.test.ts` para el detalle. Queda como brecha real SIN cerrar: por qué un margen de 0.35 m (coincide con lo que DIALux evo declara) da un resultado peor que uno más chico — posible pista para investigación futura, no resuelta aquí.
+
+**Verificado**: `npm run types` limpio, suite completa de `resources/js/pages/dialux` sin regresiones nuevas (1006/1041 tests, mismos 27 fallos preexistentes de siempre, ninguno nuevo), test dedicado actualizado en `runDirectPreviewEngine.adaptiveMesh.test.ts` para fijar el comportamiento correcto en vez del bug.
+
 ## -21l. Ronda 21l — se revirtió `occlusion: true` (activado en la Ronda anterior, el mismo día): bug real de geometría con muros de contorno cerrado, medido en un proyecto real
 
 El usuario probó el sistema contra un proyecto real ("Vinchos", id=1 en `dialux_projects`) con 2 "Aulas" comparadas contra un PDF de DIALux evo real (capturas de pantalla): DIALux evo reporta Ē=544/567 lx, Emin=276/302 lx, Emax=711/741 lx, Uo=0.51/0.53; el sistema propio (con `occlusion: true`, activado en la Ronda 21k del mismo día) reportó Ē=478.7/482.7, Emin=149.9/133.0, Emax=694.9/717.3, Uo=0.313/0.275 — **peor** en Emin y Uo que antes de activar oclusión, no mejor.

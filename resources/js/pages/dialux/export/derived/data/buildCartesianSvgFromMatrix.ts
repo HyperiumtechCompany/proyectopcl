@@ -28,18 +28,15 @@ const PLOT_H = HEIGHT - MARGIN_TOP - MARGIN_BOTTOM;
 /** Hasta 4 planos C superpuestos (C0/C90/C180/C270), igual criterio de color que el resto del export. */
 const PLANE_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#9333ea'];
 
-export function buildCartesianSvgFromMatrix(web: CartesianMatrixInput | null | undefined, title: string): string | null {
+export function buildCartesianSvgFromMatrix(web: CartesianMatrixInput | null | undefined, title: string, totalLumens?: number): string | null {
     const angles = web?.gamma_angles;
     const rawPlanes = web?.candela;
     if (!Array.isArray(angles) || !Array.isArray(rawPlanes) || rawPlanes.length === 0 || angles.length === 0) {
         return null;
     }
 
-    // Ronda 21m: cd/1000 lm, mismo convenio que `buildPolarSvgFromMatrix.ts`
-    // — ver su doc-comment para el porqué (antes mostraba cd absoluta al
-    // flujo del producto, distinto de lo que muestra DIALux evo/el LDT
-    // Editor, aunque la matriz almacenada fuera idéntica).
-    const klmScale = web?.reference_lumens && web.reference_lumens > 0 ? 1000 / web.reference_lumens : 1;
+    const reference = totalLumens ?? web?.reference_lumens;
+    const klmScale = reference && reference > 0 ? 1000 / reference : 1;
     const planes = rawPlanes.map((plane) => plane.map((v) => v * klmScale));
 
     const maxAngle = Math.max(...angles, 1);

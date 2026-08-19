@@ -94,6 +94,24 @@ export function computeAdaptiveGridSpacing(
  * Resuelve `spacingM`/`marginalZoneOverride` para `calculateLightingResult`
  * según `meshPolicy` — agrupa la rama "adaptativo vs fijo" en un solo lugar
  * (usado por `runDirectPreviewEngine.ts`) en vez de repetirla inline.
+ *
+ * `marginalZoneOverride` SIEMPRE queda `undefined`, tanto en malla fija como
+ * adaptativa — Ronda 21n, hallazgo real del usuario (proyecto "Vinchos"):
+ * antes, con malla adaptativa, se sobreescribía la zona marginal real
+ * (`getRoomMarginalZone`, fórmula EN 12464-1, ya verificada casi exacta
+ * contra los valores declarados por DIALux evo: 0.105/0.229 m medidos vs.
+ * 0.105/0.229 m del PDF real) con `spacingM / 2` — el espaciado ADAPTATIVO,
+ * una heurística de coeficiente de variación sin ninguna relación con la
+ * norma, calibrada para otro propósito (resolución de cálculo, no exclusión
+ * de borde). Para un ambiente real, esto encogió el margen de 0.229 a
+ * 0.117 m — casi la mitad — dejando puntos de una esquina oscura (junto a
+ * una jamba de puerta) DENTRO de las estadísticas cuando debían excluirse:
+ * Emin medido 181 lx (correcto: 280, DIALux evo: 302) y Uo 0.300 (correcto:
+ * 0.440, DIALux evo: 0.53). `calculateLightingResult` ya cae a
+ * `getRoomMarginalZone(room)` cuando `marginalZoneOverride` es `undefined`
+ * (línea `marginalZoneOverride ?? getRoomMarginalZone(room)`) — que YA
+ * maneja pasadizos (0 m) — así que no hace falta ninguna rama especial
+ * aquí, solo dejar de pisar ese valor.
  */
 export function resolveMeshSpacing(
     room: Room,
@@ -114,8 +132,5 @@ export function resolveMeshSpacing(
         meshPolicy.gridSpacingM,
     );
 
-    return {
-        spacingM,
-        marginalZoneOverride: isCorridorLikeRoom(room) ? 0 : spacingM / 2,
-    };
+    return { spacingM, marginalZoneOverride: undefined };
 }

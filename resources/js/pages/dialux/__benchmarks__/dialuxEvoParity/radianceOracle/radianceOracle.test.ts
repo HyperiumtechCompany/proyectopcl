@@ -80,7 +80,14 @@ function fixtureConfigs(): FixtureRadianceConfig[] {
     const casetaMesh = resolveRealMesh(caseta.room, caseta);
     return [
         { fixture: sshh, ...bboxSize(sshh.room), spacing: sshhMesh.spacingM, marginalZone: sshhMesh.marginalZone, knownFullReflectionLux: 164.0 },
-        { fixture: caseta, ...bboxSize(caseta.room), spacing: casetaMesh.spacingM, marginalZone: casetaMesh.marginalZone, knownFullReflectionLux: 163.9 },
+        // Re-medido 2026-08-19: el 163.9 de la Ronda 21b quedó obsoleto el
+        // 2026-08-18, cuando `caseta-vs-guarderias` pasó a usar fotometría
+        // real de fábrica (`GF19140_SUBSTITUTE_PHOTOMETRIC_WEB`, ver
+        // `fixtures.ts`) en vez de la aproximación Lambertiana con la que se
+        // midió 163.9 — el cambio de dato de entrada, no una inestabilidad
+        // del oráculo, explica la diferencia (confirmado: el chequeo de luz
+        // directa motor-vs-Radiance de ESTE mismo run coincidió al 0.5%).
+        { fixture: caseta, ...bboxSize(caseta.room), spacing: casetaMesh.spacingM, marginalZone: casetaMesh.marginalZone, knownFullReflectionLux: 275.6 },
     ];
 }
 

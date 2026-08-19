@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
     deriveAmbientSpaces,
     deriveSceneAmbientSpaces,
@@ -54,7 +54,7 @@ describe('ambientSpaces', () => {
     it('preserves a manually edited lux value when deriving the result ambient', () => {
         const room = {
             ...corridorRoom,
-            normativeStandard: 'en_12464',
+            normativeStandard: 'en_12464_1',
             normativeCategory: 'Educacion',
             normativeActivity: 'Aulas para clases nocturnas',
             illuminanceLux: 500,
@@ -62,7 +62,7 @@ describe('ambientSpaces', () => {
             ambientConfigs: {
                 'ambient-1': {
                     name: 'Aula Inicial 1',
-                    normativeStandard: 'en_12464',
+                    normativeStandard: 'en_12464_1',
                     normativeCategory: 'Educacion',
                     activity: 'Aulas para clases nocturnas',
                     illuminanceLux: 300,
@@ -75,7 +75,7 @@ describe('ambientSpaces', () => {
 
         expect(ambient?.room.illuminanceLux).toBe(300);
         expect(ambient?.room.norma).toBe(300);
-        expect(ambient?.room.normativeLabel).toContain('educación de adultos');
+        expect(ambient?.room.normativeLabel).toContain('educaciÃ³n de adultos');
         expect(calculation.illuminanceLux).toBe(300);
         expect(calculation.lumensRequired).toBeGreaterThan(0);
     });
@@ -99,17 +99,17 @@ describe('ambientSpaces', () => {
         expect(buildRoomLightingInputs(ambient!.room, []).illuminanceLux).toBe(300);
     });
 
-    // Regresión (comparación DIALux evo, Módulo 22): un recinto `roomType:
+    // RegresiÃ³n (comparaciÃ³n DIALux evo, MÃ³dulo 22): un recinto `roomType:
     // 'room'` subdividido por dos paredes internas en dos sub-ambientes
-    // ("Caseta de Control" / "SS.HH") necesitaba alturas de plano útil
-    // DISTINTAS (0.6 m vestíbulo vs 1.8 m lavabo), igual que DIALux evo real
-    // — antes de este fix, `ambientConfigs[key].usefulPlaneHeight` no existía
+    // ("Caseta de Control" / "SS.HH") necesitaba alturas de plano Ãºtil
+    // DISTINTAS (0.6 m vestÃ­bulo vs 1.8 m lavabo), igual que DIALux evo real
+    // â€” antes de este fix, `ambientConfigs[key].usefulPlaneHeight` no existÃ­a
     // como campo y `buildWallDefinedAmbientSpaces` nunca lo mezclaba en el
-    // `Room` derivado, así que las dos secciones de "Configuración de
-    // Terreno" del panel de propiedades (`WallProps.tsx`) no tenían dónde
-    // escribir ni el motor de dónde leer: ambos sub-ambientes quedaban
-    // pegados al mismo default (0.8 m), sin importar qué se configurara.
-    it('resolves a different useful plane height per wall-defined sub-ambient (Módulo 22 regression)', () => {
+    // `Room` derivado, asÃ­ que las dos secciones de "ConfiguraciÃ³n de
+    // Terreno" del panel de propiedades (`WallProps.tsx`) no tenÃ­an dÃ³nde
+    // escribir ni el motor de dÃ³nde leer: ambos sub-ambientes quedaban
+    // pegados al mismo default (0.8 m), sin importar quÃ© se configurara.
+    it('resolves a different useful plane height per wall-defined sub-ambient (MÃ³dulo 22 regression)', () => {
         const room = {
             id: 'modulo-22',
             name: 'Modulo 22',
@@ -163,15 +163,15 @@ describe('ambientSpaces', () => {
 
         expect(caseta?.room.usefulPlaneHeight).toBe(0.6);
         expect(bano?.room.usefulPlaneHeight).toBe(1.8);
-        // Ningún ambiente hereda la altura del otro (el bug hubiera dejado a
+        // NingÃºn ambiente hereda la altura del otro (el bug hubiera dejado a
         // ambos en el mismo valor, el default de `room.usefulPlaneHeight`).
         expect(caseta?.room.usefulPlaneHeight).not.toBe(bano?.room.usefulPlaneHeight);
     });
 
-    // Regresión: antes de este fix, `ambient-1`/`ambient-2` se asignaban
-    // SIEMPRE por orden de área descendente — si la geometría cambiaba de
-    // forma que la pared antes más grande pasaba a ser la más chica, la
-    // configuración guardada por el usuario (altura de plano útil,
+    // RegresiÃ³n: antes de este fix, `ambient-1`/`ambient-2` se asignaban
+    // SIEMPRE por orden de Ã¡rea descendente â€” si la geometrÃ­a cambiaba de
+    // forma que la pared antes mÃ¡s grande pasaba a ser la mÃ¡s chica, la
+    // configuraciÃ³n guardada por el usuario (altura de plano Ãºtil,
     // normativa) saltaba en silencio a la pared equivocada. `AmbientConfig.
     // wallId` (escrito por `WallProps.tsx` la primera vez que se guarda
     // algo de un sub-ambiente) ancla la clave a la pared real.
@@ -191,8 +191,8 @@ describe('ambientSpaces', () => {
             illuminanceLux: 200,
             norma: 200,
             ambientConfigs: {
-                // Simula un guardado previo: el usuario nombró/configuró
-                // "wall-a" cuando era la más grande y quedó en ambient-1.
+                // Simula un guardado previo: el usuario nombrÃ³/configurÃ³
+                // "wall-a" cuando era la mÃ¡s grande y quedÃ³ en ambient-1.
                 'ambient-1': { name: 'Ambiente A', wallId: 'wall-a' },
             },
         } satisfies Room;
@@ -212,7 +212,7 @@ describe('ambientSpaces', () => {
             } satisfies Wall;
         }
 
-        // Primera corrida: wall-a es la más grande (área mayor a wall-b).
+        // Primera corrida: wall-a es la mÃ¡s grande (Ã¡rea mayor a wall-b).
         const wallASmall = closedSquare('wall-a', 2, 0.5);
         const wallBBig = closedSquare('wall-b', 7, 1.5);
         const flippedAmbients = deriveAmbientSpaces(room, [wallASmall, wallBBig], []);
@@ -221,7 +221,7 @@ describe('ambientSpaces', () => {
         const b = flippedAmbients.find((ambient) => ambient.wallId === 'wall-b');
 
         // wall-a sigue en ambient-1 (su config guardada), aunque ahora sea
-        // la más CHICA — el bug lo hubiera movido a ambient-2.
+        // la mÃ¡s CHICA â€” el bug lo hubiera movido a ambient-2.
         expect(a?.configKey).toBe('ambient-1');
         expect(b?.configKey).toBe('ambient-2');
     });
@@ -293,3 +293,4 @@ describe('ambientSpaces', () => {
         },
     );
 });
+

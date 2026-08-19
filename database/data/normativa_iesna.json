@@ -1,0 +1,35 @@
+{
+  "requisitos_minimos_iluminacion": {
+    "1": {
+      "categoria": "IESNA LIGHTING HANDBOOK (NORTEAMÉRICA)",
+      "subcategorias": {
+        "1.1": {
+          "nombre": "Oficinas y Educación",
+          "areas": [
+            {"area": "Oficina: Plan abierto (Open Plan) - Tareas visuales", "Em_lux": 400, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": "El estándar IES suele usar FC (Footcandles). 400 lux = ~40 fc."},
+            {"area": "Oficina: Privada cerrada", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": "300 lux = ~30 fc."},
+            {"area": "Oficina: Salas de conferencias", "Em_lux": 300, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": null},
+            {"area": "Aulas de clase (General)", "Em_lux": 400, "UGRL": 19, "Uo": 0.60, "Ra": 80, "requisitos": "Se recomienda iluminación vertical en la pizarra de 400 lux."}
+          ]
+        },
+        "1.2": {
+          "nombre": "Salud y Comercio",
+          "areas": [
+            {"area": "Hospitales: Habitaciones de pacientes (General)", "Em_lux": 100, "UGRL": 19, "Uo": 0.50, "Ra": 80, "requisitos": "100 lux = ~10 fc."},
+            {"area": "Hospitales: Salas de examen", "Em_lux": 500, "UGRL": 19, "Uo": 0.60, "Ra": 90, "requisitos": "500 lux = ~50 fc."},
+            {"area": "Retail: Circulación general", "Em_lux": 200, "UGRL": 22, "Uo": 0.40, "Ra": 80, "requisitos": null},
+            {"area": "Retail: Mercancía destacada", "Em_lux": 1000, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": "Relación 5:1 o 10:1 sobre el nivel general."}
+          ]
+        },
+        "1.3": {
+          "nombre": "Industria y Circulación",
+          "areas": [
+            {"area": "Pasillos y escaleras", "Em_lux": 50, "UGRL": 25, "Uo": 0.40, "Ra": 80, "requisitos": "50 lux = ~5 fc."},
+            {"area": "Industria: Ensamblaje medio", "Em_lux": 500, "UGRL": 22, "Uo": 0.60, "Ra": 80, "requisitos": null},
+            {"area": "Industria: Tareas de alta precisión", "Em_lux": 1000, "UGRL": 19, "Uo": 0.70, "Ra": 80, "requisitos": null}
+          ]
+        }
+      }
+    }
+  }
+}

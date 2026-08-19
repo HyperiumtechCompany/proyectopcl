@@ -1,8 +1,8 @@
-/**
+﻿/**
  * NormativeCompliancePanel.tsx
  *
  * Dashboard de cumplimiento normativo global.
- * Muestra un semáforo visual por ambiente comparando resultados calculados
+ * Muestra un semÃ¡foro visual por ambiente comparando resultados calculados
  * vs umbrales normativos (Em, Uo, UGR, Ra).
  */
 
@@ -26,7 +26,7 @@ import type { LightingResult, Room } from '@/pages/dialux/hooks/types';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import { NormativeComparisonModal } from './NormativeComparisonModal';
 
-// ─── Tipos locales ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Tipos locales â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type FilterStatus = 'all' | ComplianceStatus;
 
@@ -39,7 +39,7 @@ interface RoomComplianceRow {
     activityLabel: string | null;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function statusIcon(status: ComplianceStatus, size = 13) {
     switch (status) {
@@ -69,8 +69,8 @@ function statusBadgeCls(status: ComplianceStatus): string {
 }
 
 function paramValueCell(param: ComplianceResult) {
-    const calc = param.calculatedValue !== null ? param.calculatedValue.toFixed(param.unit === 'lux' ? 0 : 3) : '—';
-    const req  = param.requiredValue !== null ? param.requiredValue.toFixed(param.unit === 'lux' ? 0 : 3) : '—';
+    const calc = param.calculatedValue !== null ? param.calculatedValue.toFixed(param.unit === 'lux' ? 0 : 3) : 'â€”';
+    const req  = param.requiredValue !== null ? param.requiredValue.toFixed(param.unit === 'lux' ? 0 : 3) : 'â€”';
     const colorCls = {
         compliant:    'text-emerald-400',
         warning:      'text-amber-400',
@@ -87,7 +87,7 @@ function paramValueCell(param: ComplianceResult) {
     );
 }
 
-// ─── KPI Cards ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ KPI Cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function KpiCards({ rows }: { rows: RoomComplianceRow[] }) {
     const total        = rows.length;
@@ -116,7 +116,7 @@ function KpiCards({ rows }: { rows: RoomComplianceRow[] }) {
     );
 }
 
-// ─── Expanded Room Detail ─────────────────────────────────────────────────────
+// â”€â”€â”€ Expanded Room Detail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function RoomParamDetails({ params }: { params: ComplianceResult[] }) {
     return (
@@ -126,7 +126,7 @@ function RoomParamDetails({ params }: { params: ComplianceResult[] }) {
                     {statusIcon(p.status, 11)}
                     <span className="w-36 text-[9px] text-slate-500">{p.parameterName}</span>
                     <span className="font-mono text-[9px] text-slate-700 dark:text-slate-300">
-                        {p.calculatedValue !== null ? p.calculatedValue.toFixed(p.unit === 'lux' ? 0 : 3) : '—'}
+                        {p.calculatedValue !== null ? p.calculatedValue.toFixed(p.unit === 'lux' ? 0 : 3) : 'â€”'}
                         {p.unit === 'lux' ? ' lx' : ''}
                         {p.requiredValue !== null ? (
                             <span className="text-slate-600">
@@ -140,7 +140,7 @@ function RoomParamDetails({ params }: { params: ComplianceResult[] }) {
     );
 }
 
-// ─── Panel principal ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Panel principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const NormativeCompliancePanel: React.FC = () => {
     const scene = useEditorStore((s) => s.activeScene());
@@ -162,7 +162,7 @@ export const NormativeCompliancePanel: React.FC = () => {
             let params: ComplianceResult[] = [];
 
             if (result && normLeaf) {
-                const standard = room.normativeStandard ?? 'en_12464';
+                const standard = room.normativeStandard ?? 'en_12464_1';
                 const meta = NORMATIVE_STANDARDS_META[standard] ?? undefined;
                 const roomFixtures = scene.fixtures.filter(
                     (fixture) => fixture.roomId === room.id,
@@ -264,7 +264,7 @@ export const NormativeCompliancePanel: React.FC = () => {
                                     </p>
                                     <p className="text-[9px] text-slate-600">
                                         {activityLabel ?? 'Sin actividad'}
-                                        {normativeName && <span className="text-slate-700"> · {normativeName}</span>}
+                                        {normativeName && <span className="text-slate-700"> Â· {normativeName}</span>}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -295,7 +295,7 @@ export const NormativeCompliancePanel: React.FC = () => {
                             {isExpanded && params.length === 0 && (
                                 <div className="px-3 pb-3">
                                     <p className="text-[9px] text-slate-600">
-                                        Ejecuta el cálculo lumínico y asigna una actividad normativa para ver el detalle.
+                                        Ejecuta el cÃ¡lculo lumÃ­nico y asigna una actividad normativa para ver el detalle.
                                     </p>
                                 </div>
                             )}
@@ -304,7 +304,7 @@ export const NormativeCompliancePanel: React.FC = () => {
                 })}
             </div>
 
-            {/* Modal de comparación */}
+            {/* Modal de comparaciÃ³n */}
             {comparisonActivity && (
                 <NormativeComparisonModal
                     activitySearchText={comparisonActivity}
@@ -316,11 +316,12 @@ export const NormativeCompliancePanel: React.FC = () => {
             <div className="rounded-lg border border-slate-300 dark:border-slate-800/50 bg-slate-200 dark:bg-slate-900/30 p-2.5">
                 <p className="text-[9px] leading-relaxed text-slate-600">
                     <span className="font-semibold text-slate-500">Nota: </span>
-                    Los valores de cumplimiento se calculan comparando los resultados del motor lumínico
+                    Los valores de cumplimiento se calculan comparando los resultados del motor lumÃ­nico
                     (Em calculado, Uo, UGR) con los umbrales normativos de la actividad asignada a cada recinto.
-                    La validación de Ra requiere especificar el IRC de la luminaria seleccionada.
+                    La validaciÃ³n de Ra requiere especificar el IRC de la luminaria seleccionada.
                 </p>
             </div>
         </div>
     );
 };
+

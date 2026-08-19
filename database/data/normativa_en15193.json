@@ -1,0 +1,34 @@
+{
+  "requisitos_minimos_iluminacion": {
+    "1": {
+      "categoria": "EN 15193 / ASHRAE 90.1 (Energía y Consumo)",
+      "subcategorias": {
+        "1.1": {
+          "nombre": "Oficinas y Educación",
+          "areas": [
+            {"area": "Oficina general / Abierta", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "lpd_wm2": 8.7, "hours_yr": 2500, "requisitos": "LPD = 8.7 W/m2. Horas base EN 15193 = 2500h/año"},
+            {"area": "Oficina privada / Cerrada", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "lpd_wm2": 10.0, "hours_yr": 2500, "requisitos": "LPD = 10.0 W/m2."},
+            {"area": "Salas de conferencia", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "lpd_wm2": 10.5, "hours_yr": 2000, "requisitos": null},
+            {"area": "Aula escolar / Universitaria", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "lpd_wm2": 7.6, "hours_yr": 2000, "requisitos": "Horas base educación EN 15193 = 2000h/año"}
+          ]
+        },
+        "1.2": {
+          "nombre": "Salud y Comercio",
+          "areas": [
+            {"area": "Hospitales: Habitaciones", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "lpd_wm2": 5.8, "hours_yr": 5000, "requisitos": "Horas continuas = 5000h/año"},
+            {"area": "Hospitales: Pasillos", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "lpd_wm2": 7.6, "hours_yr": 8760, "requisitos": "Uso 24/7 = 8760h/año"},
+            {"area": "Retail / Tienda general", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "lpd_wm2": 11.4, "hours_yr": 4000, "requisitos": "Retail comercial = 4000h/año"}
+          ]
+        },
+        "1.3": {
+          "nombre": "Industria y Circulación",
+          "areas": [
+            {"area": "Almacenes / Bodegas", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "lpd_wm2": 4.3, "hours_yr": 2500, "requisitos": null},
+            {"area": "Talleres y Manufactura Media", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "lpd_wm2": 8.0, "hours_yr": 4000, "requisitos": null},
+            {"area": "Pasillos generales / Escaleras", "Em_lux": null, "UGRL": null, "Uo": null, "Ra": null, "lpd_wm2": 5.0, "hours_yr": 4000, "requisitos": null}
+          ]
+        }
+      }
+    }
+  }
+}

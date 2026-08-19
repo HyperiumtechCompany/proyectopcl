@@ -11,6 +11,7 @@ import { computeEngineUgrTables } from '@/pages/dialux/export/derived/data/compu
 import type { ProductUgrTable } from '@/pages/dialux/export/domain/types';
 import type { ImportedLuminaireProduct, PreviewedLuminaireProduct } from './catalogApi';
 import { IntensityTable } from './IntensityTable';
+import { ZonalFluxCheck } from './ZonalFluxCheck';
 
 /**
  * Modal de previsualización/edición de una luminaria — estructura de
@@ -135,11 +136,11 @@ export function PhotometricPreviewModal({ open, onOpenChange, mode, preview, war
 
     const web = preview.photometric_web ?? null;
 
-    const polarSvg = useMemo(() => (web ? buildPolarSvgFromMatrix(web, name || 'Producto') : null), [web, name]);
-    const cartesianSvg = useMemo(() => (web ? buildCartesianSvgFromMatrix(web, name || 'Producto') : null), [web, name]);
-    const coneRows = useMemo<ConeDiagramRow[] | null>(() => computeConeDiagram(web, preview.beam_angle_50), [web, preview.beam_angle_50]);
-
     const editedLumens = Number(totalLumens);
+    const polarSvg = useMemo(() => (web ? buildPolarSvgFromMatrix(web, name || 'Producto', editedLumens) : null), [web, name, editedLumens]);
+    const cartesianSvg = useMemo(() => (web ? buildCartesianSvgFromMatrix(web, name || 'Producto', editedLumens) : null), [web, name, editedLumens]);
+    const coneRows = useMemo<ConeDiagramRow[] | null>(() => computeConeDiagram(web, preview.beam_angle_50, editedLumens), [web, preview.beam_angle_50, editedLumens]);
+
     const referenceLumens = web?.reference_lumens ?? null;
     const candelaScale = referenceLumens && referenceLumens > 0 && Number.isFinite(editedLumens) && editedLumens > 0 ? editedLumens / referenceLumens : 1;
 
@@ -333,7 +334,12 @@ export function PhotometricPreviewModal({ open, onOpenChange, mode, preview, war
                                 ))}
                             </div>
 
-                            {distributionTab === 'Tabla de intensidades' && <IntensityTable web={web} />}
+                            {distributionTab === 'Tabla de intensidades' && (
+                <div className="space-y-2">
+                    <ZonalFluxCheck web={web} metadata={preview.metadata} />
+                    <IntensityTable web={web} />
+                </div>
+            )}
 
                             {distributionTab === 'Curva polar' &&
                                 (polarSvg ? (

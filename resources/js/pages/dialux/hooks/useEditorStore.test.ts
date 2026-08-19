@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+﻿import { beforeEach, describe, expect, it } from 'vitest';
 import type { Project, Room, Scene } from './types';
 import { createScaleConfig, useEditorStore } from './useEditorStore';
 
@@ -73,7 +73,7 @@ describe('useEditorStore normative defaults', () => {
         useEditorStore.setState({
             project: null,
             activeSceneId: null,
-            defaultRoomNormativeStandard: 'en_12464',
+            defaultRoomNormativeStandard: 'en_12464_1',
         });
     });
 
@@ -84,7 +84,7 @@ describe('useEditorStore normative defaults', () => {
             created_at: '2026-01-01',
             updated_at: '2026-01-01',
             scenes: [
-                scene('scene-1', [baseRoom('room-1', 'en_12464')]),
+                scene('scene-1', [baseRoom('room-1', 'en_12464_1')]),
                 scene('scene-2', [baseRoom('room-2', 'ies_na')]),
             ],
         };
@@ -110,15 +110,15 @@ describe('useEditorStore normative defaults', () => {
 
     it('applyNormativeProfileToRooms with roomIds only touches the selected ambient, not every ambient in the project', () => {
         // Bug real reportado: configurar la norma de un segundo ambiente
-        // sobrescribía en silencio la del primero, porque el panel aplicaba
+        // sobrescribÃ­a en silencio la del primero, porque el panel aplicaba
         // el perfil a TODOS los ambientes en cada clic, sin scoping.
         const ambient1: Room = {
-            ...baseRoom('ambient-1', 'en_12464'),
+            ...baseRoom('ambient-1', 'en_12464_1'),
             roomType: 'ambient',
             illuminanceLux: 500,
         };
         const ambient2: Room = {
-            ...baseRoom('ambient-2', 'en_12464'),
+            ...baseRoom('ambient-2', 'en_12464_1'),
             roomType: 'ambient',
             illuminanceLux: 500,
         };
@@ -150,25 +150,25 @@ describe('useEditorStore normative defaults', () => {
         expect(updated1?.normativeActivity).toBeUndefined();
         expect(updated1?.normativeLabel).toBeUndefined();
         expect(useEditorStore.getState().defaultRoomNormativeStandard).toBe(
-            'en_12464',
+            'en_12464_1',
         );
         expect(
             useEditorStore.getState().project?.defaultRoomNormativeStandard,
         ).toBeUndefined();
-        // El segundo ambiente conserva su configuración previa intacta.
+        // El segundo ambiente conserva su configuraciÃ³n previa intacta.
         expect(untouched2?.illuminanceLux).toBe(500);
-        expect(untouched2?.normativeStandard).toBe('en_12464');
+        expect(untouched2?.normativeStandard).toBe('en_12464_1');
         expect(untouched2?.normativeCategory).toBe('Previous category');
     });
 
-    it('rechaza aplicar una misma clasificación global cuando no hay roomIds', () => {
+    it('rechaza aplicar una misma clasificaciÃ³n global cuando no hay roomIds', () => {
         const ambient1: Room = {
-            ...baseRoom('ambient-1', 'en_12464'),
+            ...baseRoom('ambient-1', 'en_12464_1'),
             roomType: 'ambient',
             illuminanceLux: 500,
         };
         const ambient2: Room = {
-            ...baseRoom('ambient-2', 'en_12464'),
+            ...baseRoom('ambient-2', 'en_12464_1'),
             roomType: 'ambient',
             illuminanceLux: 500,
         };
@@ -190,14 +190,14 @@ describe('useEditorStore normative defaults', () => {
 
         const rooms = useEditorStore.getState().project?.scenes[0].rooms ?? [];
         expect(rooms.every((r) => r.illuminanceLux === 500)).toBe(true);
-        expect(rooms.every((r) => r.normativeStandard === 'en_12464')).toBe(
+        expect(rooms.every((r) => r.normativeStandard === 'en_12464_1')).toBe(
             true,
         );
     });
 
     it('guarda la etiqueta del perfil nuevo sin conservar la actividad europea', () => {
         const ambient: Room = {
-            ...baseRoom('ambient-1', 'en_12464'),
+            ...baseRoom('ambient-1', 'en_12464_1'),
             roomType: 'ambient',
         };
         const project: Project = {
@@ -212,23 +212,23 @@ describe('useEditorStore normative defaults', () => {
         useEditorStore.getState().applyNormativeProfileToRooms({
             standard: 'rne_peru',
             normaLux: 300,
-            normativeLabel: 'Sala de juegos / Guardería',
+            normativeLabel: 'Sala de juegos / GuarderÃ­a',
             roomIds: ['ambient-1'],
         });
 
         const updated = useEditorStore.getState().project?.scenes[0].rooms[0];
-        expect(updated?.normativeLabel).toBe('Sala de juegos / Guardería');
+        expect(updated?.normativeLabel).toBe('Sala de juegos / GuarderÃ­a');
         expect(updated?.normativeActivity).toBeUndefined();
     });
 
     it('aplica globalmente la norma a recintos contenedores, ambientes derivados y paredes sin reconstruirlos', () => {
         const outerRoom: Room = {
-            ...baseRoom('recinto-1', 'en_12464'),
+            ...baseRoom('recinto-1', 'en_12464_1'),
             roomType: 'room',
             ambientConfigs: {
                 'ambient-1': {
-                    normativeStandard: 'en_12464',
-                    normativeCategory: 'Educación',
+                    normativeStandard: 'en_12464_1',
+                    normativeCategory: 'EducaciÃ³n',
                     activity: 'Aula europea',
                     illuminanceLux: 500,
                 },
@@ -244,7 +244,7 @@ describe('useEditorStore normative defaults', () => {
                 ],
                 height: 2.7,
                 thickness: 0.15,
-                normativeStandard: 'en_12464',
+                normativeStandard: 'en_12464_1',
             },
         ];
         const project: Project = {
@@ -273,15 +273,15 @@ describe('useEditorStore normative defaults', () => {
         expect(updatedScene.walls[0].illuminanceLux).toBeUndefined();
     });
 
-    it('al cambiar solo el estándar global no impone la misma aplicación ni los mismos lux a todos los ambientes', () => {
+    it('al cambiar solo el estÃ¡ndar global no impone la misma aplicaciÃ³n ni los mismos lux a todos los ambientes', () => {
         const bathroom: Room = {
-            ...baseRoom('bathroom', 'en_12464'),
+            ...baseRoom('bathroom', 'en_12464_1'),
             roomType: 'ambient',
-            normativeActivity: 'Baño',
+            normativeActivity: 'BaÃ±o',
             illuminanceLux: 200,
         };
         const bedroom: Room = {
-            ...baseRoom('bedroom', 'en_12464'),
+            ...baseRoom('bedroom', 'en_12464_1'),
             roomType: 'ambient',
             normativeActivity: 'Dormitorio',
             illuminanceLux: 100,
@@ -319,7 +319,7 @@ describe('useEditorStore.setProjectSiteSettings (panel "Terreno")', () => {
         scenes: [scene('scene-1', [])],
     });
 
-    it('crea siteSettings en el proyecto cuando no existía', () => {
+    it('crea siteSettings en el proyecto cuando no existÃ­a', () => {
         useEditorStore.getState().setProject(project());
         useEditorStore.getState().setProjectSiteSettings({ maintenanceFactor: 0.65 });
 
@@ -328,7 +328,7 @@ describe('useEditorStore.setProjectSiteSettings (panel "Terreno")', () => {
         });
     });
 
-    it('hace merge parcial — no pisa campos ya seteados de otras secciones', () => {
+    it('hace merge parcial â€” no pisa campos ya seteados de otras secciones', () => {
         useEditorStore.getState().setProject(project());
         useEditorStore.getState().setProjectSiteSettings({ maintenanceFactor: 0.65 });
         useEditorStore.getState().setProjectSiteSettings({ environmentalZone: 'E3' });
@@ -347,3 +347,4 @@ describe('useEditorStore.setProjectSiteSettings (panel "Terreno")', () => {
         expect(useEditorStore.getState().project).toBeNull();
     });
 });
+

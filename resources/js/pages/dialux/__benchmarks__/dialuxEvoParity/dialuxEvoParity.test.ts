@@ -60,9 +60,26 @@ import { buildAllDialuxEvoParityFixtures, type DialuxEvoParityFixture } from './
  *     "no sobreajustar a un solo caso" del plan) — pero queda registrado
  *     como evidencia a favor de revisar el umbral con más casos reales.
  *   - `caseta-vs-guarderias` (aspecto ~1.05:1 → auto-by-shape elige
- *     iterative): **1.3%** (antes 46.7%, y antes de eso etiquetado "no
- *     comparable" por falta de fotometría real). Dentro del objetivo de
- *     ±5% del usuario.
+ *     iterative): **11.0%** (antes 46.7%, y antes de eso etiquetado "no
+ *     comparable" por falta de fotometría real).
+ *
+ * ACTUALIZACIÓN (Ronda 21n, mismo día): el **1.3%** que esta sección citaba
+ * hasta hace un momento para `caseta-vs-guarderias` era un artefacto de OTRO
+ * bug, ya corregido (`hooks/adaptiveGridSpacing.ts::resolveMeshSpacing`,
+ * ver su doc-comment) — con malla adaptativa (`meshPolicy.adaptive`, el
+ * default de producción), la zona marginal REAL declarada por este fixture
+ * (`room.marginalZone: 0.35`, la misma que DIALux evo declara para este
+ * ambiente) quedaba SILENCIOSAMENTE ignorada y reemplazada por
+ * `spacingM/2` (≈0.11-0.15 m, sin relación con la norma) — el 1.3% medía el
+ * resultado con un margen equivocado, no el margen real. Corregido el bug,
+ * ahora SÍ se respeta `room.marginalZone: 0.35` — el 11.0% es la cifra
+ * honesta. Verificado en paralelo contra un proyecto real sin ningún
+ * override manual ("Vinchos"): la misma corrección mejoró Emin de 181 a
+ * 280 lx (DIALux evo: 302) y Uo de 0.30 a 0.44 (DIALux evo: 0.53) — el fix
+ * es correcto y ya demostró beneficio real; que ESTE fixture puntual quede
+ * peor no es motivo para revertirlo (no hay que "ajustar hacia atrás" un
+ * bug real solo porque un caso synthetic se veía mejor con él activo).
+ * Queda como brecha real sin cerrar, no oculta.
  *
  * `MAX_PLAUSIBLE_RELATIVE_ERROR` (cota floja, no de precisión) se mantiene
  * en 0.85 sin cambios — solo existe para atrapar una regresión grosera (ej.

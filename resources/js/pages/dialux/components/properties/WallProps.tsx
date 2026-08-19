@@ -276,7 +276,7 @@ const WallInteriorLightingSection: React.FC<{
                     });
                 }}
             />
-            {normativeCategory && (
+            {normativeCategory && sects.length > 0 && (
                 <SelectField
                     label="Subsección"
                     value={normativeSection ?? ''}
@@ -304,7 +304,7 @@ const WallInteriorLightingSection: React.FC<{
                     }}
                 />
             )}
-            {normativeSection && (
+            {normativeCategory && (sects.length === 0 || normativeSection) && (
                 <SelectField
                     label="Aplicación"
                     value={normativeActivity ?? ''}

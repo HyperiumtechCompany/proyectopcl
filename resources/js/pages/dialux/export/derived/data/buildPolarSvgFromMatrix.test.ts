@@ -12,7 +12,7 @@ describe('Fase 15 — buildPolarSvgFromMatrix', () => {
         expect(svg).toContain('<svg');
         expect(svg).toContain('CDL polar');
         expect(svg).toContain('Producto de prueba');
-        expect(svg).toContain('Imax 1,000 cd');
+        expect(svg).toContain('Imax 1,000 cd/klm');
     });
 
     it('es determinista: misma entrada produce el mismo SVG', () => {
@@ -41,6 +41,31 @@ describe('Fase 15 — buildPolarSvgFromMatrix', () => {
     it('devuelve null con entrada nula/indefinida', () => {
         expect(buildPolarSvgFromMatrix(null, 'X')).toBeNull();
         expect(buildPolarSvgFromMatrix(undefined, 'X')).toBeNull();
+    });
+
+    /**
+     * Ronda 21m: hallazgo real del usuario — comparó esta curva contra una
+     * captura de DIALux evo con "los mismos datos" (confirmado punto a punto
+     * con su propio lector LDT) y los números impresos no coincidían. Causa:
+     * este gráfico mostraba candela ABSOLUTA al flujo actual del producto
+     * (ej. 1857 cd a 1508 lm), mientras DIALux evo siempre muestra cd/1000 lm
+     * (ej. ~1231.4 cd/klm para el mismo dato). La FORMA de la curva no
+     * cambia (es un radio relativo, `valor/máximo`, unit-invariante) — este
+     * test fija el número impreso, que es lo que sí cambió.
+     */
+    it('Ronda 21m: candela se expresa en cd/1000 lm, no cd absoluta al flujo actual', () => {
+        // 1857 cd a 1508 lm de referencia → 1857 × 1000/1508 = 1231.43 cd/klm.
+        const svg = buildPolarSvgFromMatrix(
+            { gamma_angles: [0, 30], candela: [[1857, 800]], reference_lumens: 1508 },
+            'TEG18046',
+        );
+        expect(svg).toContain('Imax 1,231.4 cd/klm');
+        expect(svg).not.toContain('Imax 1,857');
+    });
+
+    it('sin reference_lumens: no hay factor de escala que aplicar, se muestra la candela tal cual (no inventa un flujo de referencia)', () => {
+        const svg = buildPolarSvgFromMatrix({ gamma_angles: [0, 30], candela: [[1857, 800]] }, 'X');
+        expect(svg).toContain('Imax 1,857 cd/klm');
     });
 
     it('escapa caracteres especiales del título', () => {

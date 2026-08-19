@@ -1110,7 +1110,8 @@ test('photometry repair restores legacy ldt data and synchronizes placed fixture
         ->and($product->power_watts)->toBe(18.0)
         ->and($product->max_candela)->toBe(500.0)
         ->and($imaxRow['value'])->toBe('500 cd')
-        ->and($product->report_assets['polar_svg'])->toContain('Imax 500 cd')
+        // Ronda 21m: cd/1000 lm, no cd absoluta — 500 cd a 2000 lm de referencia = 250.0 cd/klm.
+        ->and($product->report_assets['polar_svg'])->toContain('Imax 250.0 cd/klm')
         ->and($fixture['lumens'])->toBe(750)
         ->and($fixture['powerWatts'])->toBe(15)
         ->and($fixture['x'])->toBe(1.25)
@@ -1373,7 +1374,8 @@ test('buildPolarSvg muestra el flujo total y dibuja C0/C180 + C90/C270 cuando ha
 
     $svg = $method->invoke($service, $web, 'Luminaria de prueba');
 
-    expect($svg)->toContain('Imax 1,000 cd · Φ 2,014 lm')
+    // Ronda 21m: cd/1000 lm, no cd absoluta — 1000 cd a 2014 lm de referencia = 496.5 cd/klm.
+    expect($svg)->toContain('Imax 496.5 cd/klm · Φ 2,014 lm')
         ->and($svg)->toContain('C0/C180')
         ->and($svg)->toContain('C90/C270')
         ->and($svg)->toContain('#dc2626')
@@ -1394,7 +1396,8 @@ test('buildPolarSvg con un solo plano C mantiene la curva azul única, sin leyen
 
     $svg = $method->invoke($service, $web, 'Luminaria simétrica');
 
-    expect($svg)->toContain('Imax 802 cd · Φ 2,014 lm')
+    // Ronda 21m: cd/1000 lm, no cd absoluta — 802 cd a 2014 lm de referencia = 398.2 cd/klm.
+    expect($svg)->toContain('Imax 398.2 cd/klm · Φ 2,014 lm')
         ->and($svg)->not->toContain('C0/C180')
         ->and($svg)->not->toContain('#dc2626')
         ->and($svg)->toContain('#2563eb');

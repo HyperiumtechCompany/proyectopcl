@@ -143,7 +143,7 @@ export class House3DBuilder {
      */
     syncAllFloors(
         scenes: EditorScene[],
-        result: LightingResult | null = null,
+        results: LightingResult[] = [],
         showIsolux: boolean = false,
         isoluxMode: IsoluxMode = 'functional',
         showRoof: boolean = false,
@@ -180,7 +180,7 @@ export class House3DBuilder {
 
             this.syncScene(
                 floor,
-                isActive ? result : null,
+                isActive ? results : [],
                 isActive ? showIsolux : false,
                 isoluxMode,
                 showRoof,
@@ -304,7 +304,7 @@ export class House3DBuilder {
      */
     syncScene(
         editorScene: EditorScene,
-        result?: LightingResult | null,
+        results: LightingResult[] = [],
         showIsolux?: boolean,
         isoluxMode: IsoluxMode = 'functional',
         showRoof: boolean = false,
@@ -457,8 +457,8 @@ export class House3DBuilder {
             this.buildPartition(p, editorScene.doors || [], floorNode),
         );
 
-        if (showIsolux && result) {
-            this.buildIsolux(result, isoluxMode);
+        if (showIsolux && results.length > 0) {
+            this.buildIsolux(results, isoluxMode);
         }
 
         if (!sceneId) {
@@ -502,17 +502,39 @@ export class House3DBuilder {
     }
 
     // ── Isolux ────────────────────────────────────────────────────────────────
+    /**
+     * Antes solo recibía UN `LightingResult` (el ambiente actualmente
+     * seleccionado en el panel) — con 2+ ambientes calculados en el mismo
+     * piso (ej. Aula 1° y Aula 2°, proyecto real "Vinchos"), el isolux 3D
+     * solo mostraba uno de los dos aunque el panel 2D/la tabla de
+     * resultados (`resultsByRoom`, que YA tiene un resultado por ambiente)
+     * mostrara ambos correctamente — confirmado visualmente por el usuario.
+     * Ahora recibe la lista completa y dibuja un plano por ambiente.
+     */
     buildIsolux(
-        result: LightingResult,
+        results: LightingResult[],
         mode: IsoluxMode = 'functional',
     ) {
-        if (!result.grid_rows || !result.grid_cols || !result.max_lux) return;
-
         // El plano/material/textura de isolux se recrean en cada resync (cada
         // edición del usuario mientras el mapa isolux está activo) — hay que
-        // disponer la instancia anterior o cada resync deja un StandardMaterial
-        // y un DynamicTexture huérfanos en la GPU.
+        // disponer las instancias anteriores o cada resync deja
+        // StandardMaterial/DynamicTexture huérfanos en la GPU.
         this.disposeOwnedMeshes(this.meshMap.get('isolux'));
+
+        const planes = results
+            .map((result, index) => this.buildIsoluxPlane(result, mode, index))
+            .filter((plane): plane is Mesh => plane !== null);
+
+        this.meshMap.set('isolux', planes);
+    }
+
+    /** Un solo plano de isolux para UN ambiente — `index` solo para nombres de mesh/textura únicos (Babylon no exige unicidad, pero ayuda a depurar). */
+    private buildIsoluxPlane(
+        result: LightingResult,
+        mode: IsoluxMode,
+        index: number,
+    ): Mesh | null {
+        if (!result.grid_rows || !result.grid_cols || !result.max_lux) return null;
 
         // El grid puede empezar en cualquier punto de la escena (no solo el
         // origen 0,0): hay que anclar el plano a grid_origin_x/y, si no la
@@ -525,7 +547,7 @@ export class House3DBuilder {
         const width = result.grid_cols * cellW;
         const height = result.grid_rows * cellH;
         const plane = MeshBuilder.CreatePlane(
-            'isolux_plane',
+            `isolux_plane_${index}`,
             { width, height },
             this.scene,
         );
@@ -535,7 +557,7 @@ export class House3DBuilder {
         const texW = result.grid_cols * 10;
         const texH = result.grid_rows * 10;
         const texture = new DynamicTexture(
-            'isolux_tex',
+            `isolux_tex_${index}`,
             { width: texW, height: texH },
             this.scene,
             false,
@@ -593,14 +615,14 @@ export class House3DBuilder {
         }
         texture.update();
 
-        const mat = new StandardMaterial('isolux_mat', this.scene);
+        const mat = new StandardMaterial(`isolux_mat_${index}`, this.scene);
         mat.diffuseTexture = texture;
         mat.emissiveTexture = texture;
         mat.alpha = 0.6;
         mat.zOffset = -1; // evita z-fighting
         plane.material = mat;
 
-        this.meshMap.set('isolux', [plane]);
+        return plane;
     }
 
     colorForIsoluxCell(lux: number, maxLux: number, mode: IsoluxMode) {

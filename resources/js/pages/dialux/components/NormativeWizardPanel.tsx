@@ -1,13 +1,13 @@
-/**
+﻿/**
  * NormativeWizardPanel.tsx
  *
- * Panel lateral del módulo "Normativas del Proyecto" — Flujo guiado en 4 pasos:
- *  1. Ubicación (país)
- *  2. Tipo de instalación
+ * Panel lateral del mÃ³dulo "Normativas del Proyecto" â€” Flujo guiado en 4 pasos:
+ *  1. UbicaciÃ³n (paÃ­s)
+ *  2. Tipo de instalaciÃ³n
  *  3. Norma recomendada y aplicable
  *  4. Resumen por ambiente
  *
- * Sincroniza la configuración con el backend via useNormativeConfig hook.
+ * Sincroniza la configuraciÃ³n con el backend via useNormativeConfig hook.
  */
 
 import {
@@ -42,11 +42,11 @@ import { useNormativeConfig } from '@/pages/dialux/hooks/useNormativeConfig';
 import type { ProjectNormativeConfig } from '@/pages/dialux/hooks/types';
 import { NormativeCompliancePanel } from './NormativeCompliancePanel';
 
-// ─── Tipos locales ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Tipos locales â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type WizardStep = 1 | 2 | 3 | 4;
 
-// ─── Helpers de estilo ────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers de estilo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function statusColor(status: ComplianceStatus): string {
     switch (status) {
@@ -79,7 +79,7 @@ function legalBadge(status: 'mandatory' | 'recommended' | 'reference') {
     );
 }
 
-// ─── Componente Stepper ───────────────────────────────────────────────────────
+// â”€â”€â”€ Componente Stepper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function Stepper({ current, total }: { current: WizardStep; total: number }) {
     return (
@@ -98,7 +98,7 @@ function Stepper({ current, total }: { current: WizardStep; total: number }) {
                                 !active && !done ? 'bg-slate-200 dark:bg-slate-800 text-slate-500' : '',
                             ].join(' ')}
                         >
-                            {done ? '✓' : step}
+                            {done ? 'âœ“' : step}
                         </div>
                         {i < total - 1 && (
                             <div className={`h-px flex-1 transition-colors ${done ? 'bg-emerald-700' : 'bg-slate-200 dark:bg-slate-800'}`} />
@@ -110,7 +110,7 @@ function Stepper({ current, total }: { current: WizardStep; total: number }) {
     );
 }
 
-// ─── Paso 1: Ubicación ────────────────────────────────────────────────────────
+// â”€â”€â”€ Paso 1: UbicaciÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function StepLocation({
     selectedCountry,
@@ -123,10 +123,10 @@ function StepLocation({
         <div className="space-y-3">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
                 <Globe size={13} className="text-blue-400" />
-                Selecciona el país del proyecto
+                Selecciona el paÃ­s del proyecto
             </div>
             <p className="text-[10px] text-slate-500">
-                El sistema seleccionará automáticamente la norma obligatoria según la ubicación.
+                El sistema seleccionarÃ¡ automÃ¡ticamente la norma obligatoria segÃºn la ubicaciÃ³n.
             </p>
             {NORMATIVE_REGIONS.map((region) => (
                 <div key={region.id} className="space-y-1.5">
@@ -159,7 +159,7 @@ function StepLocation({
     );
 }
 
-// ─── Paso 2: Tipo de instalación ──────────────────────────────────────────────
+// â”€â”€â”€ Paso 2: Tipo de instalaciÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function StepInstallationType({
     selected,
@@ -173,10 +173,10 @@ function StepInstallationType({
         <div className="space-y-3">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
                 <Building2 size={13} className="text-blue-400" />
-                Tipo de instalación
+                Tipo de instalaciÃ³n
             </div>
             <p className="text-[10px] text-slate-500">
-                Define el uso del edificio para orientar la selección de categorías normativas.
+                Define el uso del edificio para orientar la selecciÃ³n de categorÃ­as normativas.
             </p>
             <div className="grid grid-cols-2 gap-1.5">
                 {types.map((t) => {
@@ -203,7 +203,7 @@ function StepInstallationType({
     );
 }
 
-// ─── Paso 3: Norma recomendada ────────────────────────────────────────────────
+// â”€â”€â”€ Paso 3: Norma recomendada â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function StepNormativeRecommendation({
     countryCode,
@@ -224,7 +224,7 @@ function StepNormativeRecommendation({
                 Normas aplicables
             </div>
             <p className="text-[10px] text-slate-500">
-                La norma local obligatoria se aplicará a todos los recintos. Puedes agregar normas de referencia adicionales.
+                La norma local obligatoria se aplicarÃ¡ a todos los recintos. Puedes agregar normas de referencia adicionales.
             </p>
             <div className="space-y-2">
                 {applicableStandards.map((std) => {
@@ -250,14 +250,14 @@ function StepNormativeRecommendation({
                                         {legalBadge(meta.legalStatus)}
                                         {isPrimary && (
                                             <span className="rounded-full bg-emerald-900/60 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-400">
-                                                Automática
+                                                AutomÃ¡tica
                                             </span>
                                         )}
                                     </div>
                                     <p className="mt-0.5 text-[10px] text-slate-500">{meta.fullName}</p>
                                     <div className="mt-1 flex flex-wrap gap-2 text-[9px] text-slate-600">
                                         <span>{meta.source}</span>
-                                        <span>·</span>
+                                        <span>Â·</span>
                                         <span>{meta.authority}</span>
                                     </div>
                                 </div>
@@ -281,7 +281,7 @@ function StepNormativeRecommendation({
     );
 }
 
-// ─── Paso 4: Resumen por ambiente ─────────────────────────────────────────────
+// â”€â”€â”€ Paso 4: Resumen por ambiente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function StepAmbientSummary({
     onSwitchToCompliance,
@@ -294,7 +294,7 @@ function StepAmbientSummary({
     const resultsByRoom = useEditorStore((s) => s.resultsByRoom);
     const rooms = scene?.rooms ?? [];
 
-    // Estados por ambiente (misma lógica que el render, memoizada para poder
+    // Estados por ambiente (misma lÃ³gica que el render, memoizada para poder
     // reportar el resumen al padre y persistirlo en el backend).
     const statuses = useMemo(() => {
         return rooms.map((room) => {
@@ -305,7 +305,7 @@ function StepAmbientSummary({
                 : null;
 
             if (result && normLeaf) {
-                const standard = room.normativeStandard ?? 'en_12464';
+                const standard = room.normativeStandard ?? 'en_12464_1';
                 const meta = NORMATIVE_STANDARDS_META[standard] ?? undefined;
                 const roomFixtures = (scene?.fixtures ?? []).filter(
                     (fixture) => fixture.roomId === room.id,
@@ -378,7 +378,7 @@ function StepAmbientSummary({
                                 <p className="text-[9px] text-slate-600">
                                     {normActivity ?? 'Sin actividad asignada'}
                                     {room.normativeStandard && (
-                                        <> · {NORMATIVE_STANDARDS_META[room.normativeStandard]?.name}</>
+                                        <> Â· {NORMATIVE_STANDARDS_META[room.normativeStandard]?.name}</>
                                     )}
                                 </p>
                             </div>
@@ -396,7 +396,7 @@ function StepAmbientSummary({
     );
 }
 
-// ─── Panel principal ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Panel principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const NormativeWizardPanel: React.FC = () => {
     const [step, setStep] = useState<WizardStep>(1);
@@ -409,8 +409,8 @@ export const NormativeWizardPanel: React.FC = () => {
     const applyDefaultNormativeStandardToRooms = useEditorStore((s) => s.applyDefaultNormativeStandardToRooms);
 
     // Al abrir el panel: rehidratar la config guardada en el backend (antes
-    // nunca se invocaba y el wizard siempre partía de defaults) y cargar el
-    // catálogo EM.010 completo desde la BD como fuente única de verdad.
+    // nunca se invocaba y el wizard siempre partÃ­a de defaults) y cargar el
+    // catÃ¡logo EM.010 completo desde la BD como fuente Ãºnica de verdad.
     const loadedProjectRef = React.useRef<string | null>(null);
     useEffect(() => {
         void ensureRneDataLoaded();
@@ -456,7 +456,7 @@ export const NormativeWizardPanel: React.FC = () => {
         }
     }, [config]);
 
-    // Auto-select norma cuando cambia el país
+    // Auto-select norma cuando cambia el paÃ­s
     useEffect(() => {
         const primary = resolvePrimaryStandard(selectedCountry);
         setSelectedStandard(primary);
@@ -496,7 +496,7 @@ export const NormativeWizardPanel: React.FC = () => {
                     onClick={() => setShowComplianceDetail(false)}
                     className="flex items-center gap-1.5 text-[10px] text-slate-500 hover:text-slate-700 dark:text-slate-300"
                 >
-                    ← Volver al wizard
+                    â† Volver al wizard
                 </button>
                 <NormativeCompliancePanel />
             </div>
@@ -510,7 +510,7 @@ export const NormativeWizardPanel: React.FC = () => {
                 <ScrollText size={14} className="text-blue-400" />
                 <div>
                     <h3 className="text-xs font-semibold text-white">Normativas del Proyecto</h3>
-                    <p className="text-[9px] text-slate-500">Configuración normativa guiada</p>
+                    <p className="text-[9px] text-slate-500">ConfiguraciÃ³n normativa guiada</p>
                 </div>
             </div>
 
@@ -553,14 +553,14 @@ export const NormativeWizardPanel: React.FC = () => {
                 )}
             </div>
 
-            {/* Navegación */}
+            {/* NavegaciÃ³n */}
             <div className="flex items-center justify-between border-t border-slate-300 dark:border-slate-800 pt-3">
                 <button
                     onClick={() => setStep((s) => Math.max(1, s - 1) as WizardStep)}
                     disabled={step === 1}
                     className="text-[10px] text-slate-500 hover:text-slate-700 dark:text-slate-300 disabled:opacity-30"
                 >
-                    ← Atrás
+                    â† AtrÃ¡s
                 </button>
 
                 {step < 3 ? (
@@ -576,7 +576,7 @@ export const NormativeWizardPanel: React.FC = () => {
                         disabled={isSaving}
                         className="flex items-center gap-1 rounded-lg bg-emerald-700/80 px-3 py-1.5 text-[10px] font-semibold text-white hover:bg-emerald-600/80 disabled:opacity-50"
                     >
-                        {isSaving ? 'Guardando...' : 'Aplicar norma ✓'}
+                        {isSaving ? 'Guardando...' : 'Aplicar norma âœ“'}
                     </button>
                 ) : (
                     <button
@@ -590,3 +590,4 @@ export const NormativeWizardPanel: React.FC = () => {
         </div>
     );
 };
+

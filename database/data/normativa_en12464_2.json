@@ -1,0 +1,83 @@
+{
+    "requisitos_minimos_iluminacion": {
+        "1": {
+            "subcategorias": {
+                "1.1": {
+                    "nombre": "Tráfico, estacionamiento y áreas de carga",
+                    "areas": [
+                        {
+                            "Em_lux": 5,
+                            "Uo": 0.25,
+                            "requisitos": "El valor UGRL corresponde al índice GR (Glare Rating) en exteriores",
+                            "UGRL": 55,
+                            "Ra": 20,
+                            "area": "Aparcamiento de vehículos (tráfico ligero)"
+                        },
+                        {
+                            "Em_lux": 20,
+                            "Uo": 0.25,
+                            "requisitos": null,
+                            "UGRL": 50,
+                            "Ra": 20,
+                            "area": "Aparcamiento de vehículos (tráfico intenso)"
+                        },
+                        {
+                            "Em_lux": 20,
+                            "Uo": 0.4,
+                            "requisitos": "Rango 5 - 20 lux según el uso",
+                            "UGRL": 50,
+                            "Ra": 20,
+                            "area": "Zonas peatonales \/ Vías de acceso"
+                        },
+                        {
+                            "Em_lux": 20,
+                            "Uo": 0.25,
+                            "requisitos": null,
+                            "UGRL": 50,
+                            "Ra": 40,
+                            "area": "Zonas de carga y descarga"
+                        }
+                    ]
+                },
+                "1.2": {
+                    "nombre": "Industria, Almacenamiento y Construcción",
+                    "areas": [
+                        {
+                            "Em_lux": 50,
+                            "Uo": 0.4,
+                            "requisitos": "Rango 20 - 50 lux",
+                            "UGRL": 50,
+                            "Ra": 40,
+                            "area": "Lugares de trabajo en el exterior \/ almacenamiento"
+                        },
+                        {
+                            "Em_lux": 200,
+                            "Uo": 0.6,
+                            "requisitos": "Rango 100 - 200 lux",
+                            "UGRL": 45,
+                            "Ra": 60,
+                            "area": "Emplazamientos industriales en exteriores (general)"
+                        },
+                        {
+                            "Em_lux": 200,
+                            "Uo": 0.6,
+                            "requisitos": "Rango 100 - 200 lux",
+                            "UGRL": 45,
+                            "Ra": 40,
+                            "area": "Obras de construcción (tareas generales)"
+                        },
+                        {
+                            "Em_lux": 200,
+                            "Uo": 0.5,
+                            "requisitos": null,
+                            "UGRL": 45,
+                            "Ra": 60,
+                            "area": "Mantenimiento de aeronaves"
+                        }
+                    ]
+                }
+            },
+            "categoria": "LUGARES DE TRABAJO EN EXTERIORES (EN 12464-2)"
+        }
+    }
+}

@@ -57,7 +57,7 @@ function findClosestCPlane(
     return bestDelta <= maxDeltaDeg ? bestIndex : null;
 }
 
-export function buildPolarSvgFromMatrix(web: PolarMatrixInput | null | undefined, title: string): string | null {
+export function buildPolarSvgFromMatrix(web: PolarMatrixInput | null | undefined, title: string, totalLumens?: number): string | null {
     const angles = web?.gamma_angles;
     const candela = web?.candela;
     const primaryIndex = findClosestCPlane(web?.c_angles, 0, new Set()) ?? 0;
@@ -66,19 +66,11 @@ export function buildPolarSvgFromMatrix(web: PolarMatrixInput | null | undefined
         return null;
     }
 
-    // Ronda 21m: candela expresada en cd/1000 lm (mismo convenio que
-    // `IntensityTable.tsx` y el LDT Editor de DIALux, "Dimension unit: cd /
-    // 1000 lm"), no cd absoluta — antes el usuario comparaba este gráfico
-    // (candela absoluta al flujo actual del producto) contra una captura de
-    // DIALux evo (siempre cd/klm) y los números impresos no coincidían,
-    // aunque la matriz almacenada fuera idéntica byte a byte (confirmado con
-    // el lector LDT independiente del usuario). La FORMA de la curva es
-    // matemáticamente invariante a este cambio (es un radio relativo,
-    // `valor/máximo`, el mismo factor de escala se cancela) — este cambio
-    // solo corrige las etiquetas numéricas impresas, no afecta ningún
-    // cálculo real (el motor de iluminancia usa `photometricWeb.candela`
-    // directamente, nunca este SVG de previsualización).
-    const klmScale = web?.reference_lumens && web.reference_lumens > 0 ? 1000 / web.reference_lumens : 1;
+    // Normalizar a cd/klm usando los lúmenes de la luminaria (totalLumens)
+    // para coincidir con el comportamiento de DIALux, que muestra el gráfico
+    // basado en el flujo de salida, no en el flujo de lámpara raw.
+    const reference = totalLumens ?? web?.reference_lumens;
+    const klmScale = reference && reference > 0 ? 1000 / reference : 1;
     const plane = rawPlane.map((v) => v * klmScale);
 
     const secondaryIndex = findClosestCPlane(web?.c_angles, 90, new Set([primaryIndex]), 30);

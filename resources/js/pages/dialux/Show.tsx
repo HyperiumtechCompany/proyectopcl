@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react';
+﻿import { Head } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { EditorLayout } from '@/pages/dialux/components/EditorLayout';
 import { ensureStandardDataLoaded } from '@/pages/dialux/hooks/normativeRemoteData';
@@ -52,10 +52,10 @@ function buildBlankProject(id: string, name: string): Project {
 }
 
 /**
- * pages/dialux/Show.tsx — Editor DIAlux de un proyecto concreto
+ * pages/dialux/Show.tsx â€” Editor DIAlux de un proyecto concreto
  *
  * Siembra el store Zustand con el proyecto cargado desde BD (o una
- * plantilla en blanco si aún no tiene dibujo) antes de montar EditorLayout,
+ * plantilla en blanco si aÃºn no tiene dibujo) antes de montar EditorLayout,
  * y mantiene el autosave activo mientras el usuario dibuja.
  */
 export default function DialuxShow({ project }: Props) {
@@ -77,7 +77,7 @@ export default function DialuxShow({ project }: Props) {
         }
 
         // Los proyectos nuevos persisten `defaultRoomNormativeStandard`. Para
-        // documentos antiguos inferimos la norma más usada por sus ambientes.
+        // documentos antiguos inferimos la norma mÃ¡s usada por sus ambientes.
         type RoomStandard = NonNullable<
             Project['scenes'][number]['rooms'][number]['normativeStandard']
         >;
@@ -107,23 +107,23 @@ export default function DialuxShow({ project }: Props) {
         setDefaultRoomNormativeStandard(
             initial.defaultRoomNormativeStandard ??
                 mostUsedStandard ??
-                'en_12464',
+                'en_12464_1',
         );
 
-        // La carga del proyecto desde BD no es una acción del usuario: el
-        // historial de undo/redo debe empezar vacío, no permitir "deshacer"
+        // La carga del proyecto desde BD no es una acciÃ³n del usuario: el
+        // historial de undo/redo debe empezar vacÃ­o, no permitir "deshacer"
         // de vuelta a un proyecto sin sembrar.
         resetHistory();
 
-        // Arranca la carga del catálogo BD (fuente única de verdad) apenas se
+        // Arranca la carga del catÃ¡logo BD (fuente Ãºnica de verdad) apenas se
         // abre el proyecto, para que los paneles de propiedades (pared,
-        // ambiente) no muestren la transcripción estática desactualizada
-        // mientras el usuario ya está trabajando.
+        // ambiente) no muestren la transcripciÃ³n estÃ¡tica desactualizada
+        // mientras el usuario ya estÃ¡ trabajando.
         void ensureStandardDataLoaded('rne_peru');
         void ensureStandardDataLoaded('en_1838');
 
         setReady(true);
-        // Solo debe re-sembrar si cambia el proyecto que se está viendo.
+        // Solo debe re-sembrar si cambia el proyecto que se estÃ¡ viendo.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [project.id]);
 
@@ -140,10 +140,11 @@ export default function DialuxShow({ project }: Props) {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`DIAlux — ${project.name}`} />
+            <Head title={`DIAlux â€” ${project.name}`} />
             <div className="h-[calc(100vh-4rem)] w-full overflow-hidden">
                 <EditorLayout />
             </div>
         </AppLayout>
     );
 }
+

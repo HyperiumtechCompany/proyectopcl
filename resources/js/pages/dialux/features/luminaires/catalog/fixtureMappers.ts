@@ -24,6 +24,7 @@ export function productToFixtureFields(product: ImportedLuminaireProduct): Parti
         lumens,
         power,
         efficiency: product.efficiency && product.efficiency > 0 ? Math.min(1, product.efficiency / 100) : 0.85,
+        cri: product.cri_ra ?? null,
         lightColor: product.cct?.startsWith('3') ? '#fff5e1' : '#f0f8ff',
         brand: product.manufacturer ?? undefined,
         articleNumber: product.catalog_number ?? undefined,

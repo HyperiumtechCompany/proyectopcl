@@ -62,6 +62,10 @@ Valores "como nuevo" (sin factor de mantenimiento). Los de `sshh-vs-bano` se cor
 
 **Conclusión de la Ronda 6, todavía vigente**: no hay un modo ganador universal — cuál de los dos (`first-bounce`/`iterative`) se acerca más a la física real depende de la geometría del ambiente. Ver el plan para el detalle y los próximos pasos (correr 3-5 formas de ambiente más antes de considerar cualquier cambio de configuración de producción).
 
+## Ronda 2026-08-19 — la altura NO es el factor de confusión (ver `heightSweepExperiment.test.ts`)
+
+El proyecto real "Módulo 22" (SS.HH, aspecto 2.40:1, altura 4.67 m) favorece `first-bounce` frente a lo que reportó DIALux evo; el benchmark `sshh-vs-bano` (aspecto 2.33:1, altura 3.5 m) favorece `iterative` frente al oráculo Radiance. Se corrió la MISMA geometría de `sshh-vs-bano` a las dos alturas para aislar la altura como variable — **`iterative` ganó en ambas** (7.6% de error a 3.5 m, 10.6% a 4.67 m, contra 26.8%/28.4% de `first-bounce`). La altura queda descartada como explicación; la contradicción con Módulo 22 sigue abierta — candidatos sin investigar: el patrón de haz real de la luminaria de Módulo 22 (distinto a TEG18046), o que comparar contra el PDF de DIALux evo no tiene el mismo rigor que comparar contra Radiance (no se sabe si DIALux evo se parece más a un modo u otro sin acceso a su código).
+
 ## Limitaciones declaradas
 
 - Solo ambientes rectangulares simples (`generateRoomScene.ts`), sin mobiliario ni aberturas.

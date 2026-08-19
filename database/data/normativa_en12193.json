@@ -1,0 +1,44 @@
+{
+  "requisitos_minimos_iluminacion": {
+    "1": {
+      "categoria": "INSTALACIONES DEPORTIVAS (EN 12193)",
+      "subcategorias": {
+        "1.1": {
+          "nombre": "Deportes en Exterior (Fútbol, Atletismo, Rugby)",
+          "areas": [
+            {"area": "Fútbol / Deportes de campo - Clase I (Competición Internacional/Nacional)", "Em_lux": 500, "UGRL": 50, "Uo": 0.70, "Ra": 60, "requisitos": "UGRL corresponde a GR (Glare Rating) para exteriores. Iluminación horizontal."},
+            {"area": "Fútbol / Deportes de campo - Clase II (Competición Regional)", "Em_lux": 200, "UGRL": 50, "Uo": 0.60, "Ra": 60, "requisitos": null},
+            {"area": "Fútbol / Deportes de campo - Clase III (Entrenamiento y Recreación)", "Em_lux": 75, "UGRL": 55, "Uo": 0.50, "Ra": 20, "requisitos": null},
+            {"area": "Atletismo - Clase I", "Em_lux": 500, "UGRL": 50, "Uo": 0.70, "Ra": 60, "requisitos": null},
+            {"area": "Atletismo - Clase II", "Em_lux": 200, "UGRL": 50, "Uo": 0.50, "Ra": 60, "requisitos": null},
+            {"area": "Atletismo - Clase III", "Em_lux": 100, "UGRL": 55, "Uo": 0.50, "Ra": 20, "requisitos": null}
+          ]
+        },
+        "1.2": {
+          "nombre": "Deportes de Raqueta en Exterior (Tenis)",
+          "areas": [
+            {"area": "Tenis (Exterior) - Clase I", "Em_lux": 500, "UGRL": 50, "Uo": 0.70, "Ra": 60, "requisitos": null},
+            {"area": "Tenis (Exterior) - Clase II", "Em_lux": 300, "UGRL": 50, "Uo": 0.70, "Ra": 60, "requisitos": null},
+            {"area": "Tenis (Exterior) - Clase III", "Em_lux": 200, "UGRL": 55, "Uo": 0.60, "Ra": 20, "requisitos": null}
+          ]
+        },
+        "1.3": {
+          "nombre": "Deportes en Interior (Pabellones, Baloncesto, Voleibol)",
+          "areas": [
+            {"area": "Pabellón Polideportivo - Clase I (Nivel Superior)", "Em_lux": 750, "UGRL": 22, "Uo": 0.70, "Ra": 60, "requisitos": null},
+            {"area": "Pabellón Polideportivo - Clase II (Nivel Medio)", "Em_lux": 500, "UGRL": 22, "Uo": 0.70, "Ra": 60, "requisitos": null},
+            {"area": "Pabellón Polideportivo - Clase III (Entrenamiento escolar)", "Em_lux": 200, "UGRL": 22, "Uo": 0.50, "Ra": 20, "requisitos": null}
+          ]
+        },
+        "1.4": {
+          "nombre": "Piscinas y Deportes Acuáticos",
+          "areas": [
+            {"area": "Piscina cubierta - Clase I", "Em_lux": 500, "UGRL": 22, "Uo": 0.70, "Ra": 60, "requisitos": "Especial atención a los reflejos en el agua."},
+            {"area": "Piscina cubierta - Clase II", "Em_lux": 300, "UGRL": 22, "Uo": 0.70, "Ra": 60, "requisitos": null},
+            {"area": "Piscina cubierta - Clase III", "Em_lux": 200, "UGRL": 28, "Uo": 0.50, "Ra": 20, "requisitos": null}
+          ]
+        }
+      }
+    }
+  }
+}

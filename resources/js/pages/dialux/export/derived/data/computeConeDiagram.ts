@@ -62,17 +62,20 @@ function integrateBeamFlux(gammaAngles: number[], candela: number[], beamAngle50
     return 2 * Math.PI * flux;
 }
 
-export function computeConeDiagram(web: ConeMatrixInput | null | undefined, beamAngle50Deg: number | null | undefined): ConeDiagramRow[] | null {
+export function computeConeDiagram(web: ConeMatrixInput & { reference_lumens?: number | null } | null | undefined, beamAngle50Deg: number | null | undefined, totalLumens?: number): ConeDiagramRow[] | null {
     const gammaAngles = web?.gamma_angles;
     const plane = web?.candela?.[0];
     if (!Array.isArray(gammaAngles) || !Array.isArray(plane) || plane.length === 0 || !beamAngle50Deg || beamAngle50Deg <= 0) {
         return null;
     }
 
-    const i0 = interpolateCandela(gammaAngles, plane, 0);
+    // Calcular escala si el usuario editó el flujo total de la luminaria
+    const candelaScale = web?.reference_lumens && web.reference_lumens > 0 && totalLumens !== undefined ? totalLumens / web.reference_lumens : 1;
+
+    const i0 = interpolateCandela(gammaAngles, plane, 0) * candelaScale;
     if (i0 <= 0) return null;
 
-    const beamFlux = integrateBeamFlux(gammaAngles, plane, beamAngle50Deg);
+    const beamFlux = integrateBeamFlux(gammaAngles, plane, beamAngle50Deg) * candelaScale;
     const halfAngleRad = (beamAngle50Deg * Math.PI) / 180;
     const tanHalfAngle = Math.tan(halfAngleRad);
 

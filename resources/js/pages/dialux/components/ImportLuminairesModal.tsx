@@ -69,23 +69,7 @@ export const ImportLuminairesModal: React.FC<ImportLuminairesModalProps> = ({
                             )}
                         </div>
 
-                        {/* Filtro de marca */}
-                        <div className="flex gap-1.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible">
-                            {LUMINAIRE_BRANDS.map((b) => (
-                                <button
-                                    key={b}
-                                    type="button"
-                                    onClick={() => setBrand(b)}
-                                    className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                                        brand === b
-                                            ? 'border-cyan-500 bg-cyan-50 text-cyan-700 dark:bg-cyan-950/70 dark:text-cyan-200'
-                                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200'
-                                    }`}
-                                >
-                                    {b}
-                                </button>
-                            ))}
-                        </div>
+
                     </div>
 
                     {/* Catálogo */}
@@ -93,7 +77,6 @@ export const ImportLuminairesModal: React.FC<ImportLuminairesModalProps> = ({
                         <div className="h-full overflow-y-auto pr-1 sm:pr-2">
                             <CatalogPanel
                                 filterCategory="luminaires"
-                                filterBrand={brand !== 'Todas' ? brand : undefined}
                                 search={search}
                                 onSelect={() => onOpenChange(false)}
                             />

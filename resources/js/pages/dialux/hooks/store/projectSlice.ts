@@ -1,4 +1,4 @@
-import type { NormativeStandard } from '../roomLighting';
+﻿import type { NormativeStandard } from '../roomLighting';
 import type { Project, ProjectNormativeConfig, ProjectSiteSettings } from '../types';
 import type { EditorSlice } from './sliceTypes';
 
@@ -14,7 +14,7 @@ export interface ProjectSlice {
         ugrLimit?: number;
         uniformityTarget?: number;
         colorRenderingRa?: number;
-        /** Altura del plano útil (m) verificada contra DIALux evo para la actividad elegida — ver `RawNormativeLeaf.workPlaneHeight`. `undefined` = no verificada, conserva la altura previa de cada ambiente. */
+        /** Altura del plano Ãºtil (m) verificada contra DIALux evo para la actividad elegida â€” ver `RawNormativeLeaf.workPlaneHeight`. `undefined` = no verificada, conserva la altura previa de cada ambiente. */
         usefulPlaneHeight?: number;
         normativeLabel?: string;
         normativeCategory?: string;
@@ -79,7 +79,7 @@ export const createProjectSlice: EditorSlice<ProjectSlice> = (set) => ({
             if (!state.project) return state;
 
             const defaultStandard =
-                state.defaultRoomNormativeStandard ?? 'en_12464';
+                state.defaultRoomNormativeStandard ?? 'en_12464_1';
 
             return {
                 ...state,
@@ -148,13 +148,13 @@ export const createProjectSlice: EditorSlice<ProjectSlice> = (set) => ({
         set((state) => {
             if (!state.project) return state;
             const scoped = opts.roomIds !== undefined;
-            // La clasificación (baño, dormitorio, aula, etc.) nunca es global.
-            // Exigir un alcance explícito evita imponer un único uso a todo el proyecto.
+            // La clasificaciÃ³n (baÃ±o, dormitorio, aula, etc.) nunca es global.
+            // Exigir un alcance explÃ­cito evita imponer un Ãºnico uso a todo el proyecto.
             if (!scoped || opts.roomIds!.length === 0) return state;
             return {
                 ...state,
                 // La norma elegida debe sobrevivir al desmontaje del panel y a
-                // la recarga. El alcance solo controla qué ambientes cambian.
+                // la recarga. El alcance solo controla quÃ© ambientes cambian.
                 defaultRoomNormativeStandard: scoped
                     ? state.defaultRoomNormativeStandard
                     : opts.standard,
@@ -166,7 +166,7 @@ export const createProjectSlice: EditorSlice<ProjectSlice> = (set) => ({
                     scenes: state.project.scenes.map((scene) => ({
                         ...scene,
                         rooms: scene.rooms.map((room) => {
-                            // Recintos (outer shells) and stairs have no lighting — skip them
+                            // Recintos (outer shells) and stairs have no lighting â€” skip them
                             if (scoped && !opts.roomIds!.includes(room.id))
                                 return room;
                             const standardChanged =
@@ -237,3 +237,4 @@ export const createProjectSlice: EditorSlice<ProjectSlice> = (set) => ({
             };
         }),
 });
+

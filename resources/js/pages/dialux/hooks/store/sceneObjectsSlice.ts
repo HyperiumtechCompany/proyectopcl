@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+﻿import { v4 as uuidv4 } from 'uuid';
 import { calculateCenteredOffsetOnWall, polygonBBox, suggestFixtureGridSize } from '../fixtureGrid';
 import {
     buildFixtureGridObjects,
@@ -127,7 +127,7 @@ export interface SceneObjectsSlice {
     addDoor: (door: Omit<Door, 'id'>) => string;
     addCanopy: (can: Omit<Canopy, 'id'>) => string;
     addFixture: (fix: Omit<Fixture, 'id'>) => string;
-    /** Genera una grilla de focos N×M centrada en el room indicado */
+    /** Genera una grilla de focos NÃ—M centrada en el room indicado */
     addFixtureGrid: (config: FixtureGridConfig) => string[];
     addPartition: (partition: Omit<Partition, 'id'>) => string;
     addLightSwitch: (lightSwitch: Omit<LightSwitch, 'id' | 'connectedFixtureIds'>) => string;
@@ -140,12 +140,12 @@ export interface SceneObjectsSlice {
      * `ambientId`: distingue el ambiente base del recinto (`undefined`) de
      * cada sub-ambiente delimitado por una pared interna (un `ambientId`
      * cada uno, normalmente el id de esa pared). Varios ambientes (ej.
-     * "Baño" y "Guarderías") pueden compartir el mismo `roomId` físico —
+     * "BaÃ±o" y "GuarderÃ­as") pueden compartir el mismo `roomId` fÃ­sico â€”
      * filtrar solo por `roomId` borraba los tomacorrientes de TODOS al
      * regenerar cualquiera de ellos. No confundir con `wallId` (pared
-     * física contra la que se orienta cada dispositivo individual en
-     * 2D/3D — un tomacorriente de este mismo ambiente puede estar pegado a
-     * cualquier pared de su perímetro, no solo a la que delimita el
+     * fÃ­sica contra la que se orienta cada dispositivo individual en
+     * 2D/3D â€” un tomacorriente de este mismo ambiente puede estar pegado a
+     * cualquier pared de su perÃ­metro, no solo a la que delimita el
      * ambiente).
      */
     replaceGeneratedOutletsForRoom: (roomId: string, devices: Array<Omit<ElectricalDevice, 'id'>>, ambientId?: string) => string[];
@@ -204,7 +204,7 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
                 normativeStandard:
                     roomData.normativeStandard ??
                     state.defaultRoomNormativeStandard ??
-                    'en_12464',
+                    'en_12464_1',
                 ...roomData,
                 id,
                 stairConfig,
@@ -235,7 +235,7 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
         set((state) => {
             if (!state.project || !state.activeSceneId) return state;
 
-            // Aplicar dimensiones predeterminadas de baño si corresponde
+            // Aplicar dimensiones predeterminadas de baÃ±o si corresponde
             let finalData = { ...winData };
             if (winData.windowType === 'bathroom') {
                 finalData = {
@@ -247,7 +247,7 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
             }
 
             let win = { id, ...finalData };
-            // Solo centramos si se especifica explicitamente (botón "Centrar en Pared")
+            // Solo centramos si se especifica explicitamente (botÃ³n "Centrar en Pared")
             if (win.centered === true) {
                 const scene = state.activeScene();
                 const wall = scene?.walls.find((w) => w.id === win.wallId);
@@ -275,7 +275,7 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
         set((state) => {
             if (!state.project || !state.activeSceneId) return state;
             let door = { id, ...doorData };
-            // Solo centramos si se especifica explicitamente (botón "Centrar en Pared")
+            // Solo centramos si se especifica explicitamente (botÃ³n "Centrar en Pared")
             if (door.centered === true) {
                 const scene = state.activeScene();
                 const wall = scene?.walls.find((w) => w.id === door.wallId);
@@ -359,7 +359,7 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
         return ids;
     },
 
-    // ── Updaters ──────────────────────────────────────────────────────────
+    // â”€â”€ Updaters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     updateRoom: (id, patch) =>
         set((s) =>
             mutateScene(s, (sc) => ({
@@ -705,7 +705,7 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
                 })),
             );
             // Recalcula tanto contra la posicion/tamano ANTERIOR (por si el
-            // obstaculo se achico/movio y liberó área que antes bloqueaba una
+            // obstaculo se achico/movio y liberÃ³ Ã¡rea que antes bloqueaba una
             // grilla) como la NUEVA (por si ahora invade una zona que antes
             // era libre).
             if (existing && blocksFixtureGrid(existing)) {
@@ -722,7 +722,7 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
     setElectricalDeviceTemplate: (type, label, properties) =>
         set((s) => ({ ui: { ...s.ui, electricalDeviceTemplate: { type, label, properties } } })),
 
-    // ── Remover ───────────────────────────────────────────────────────────
+    // â”€â”€ Remover â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     removeObject: (id) => {
         const removedObstacle = get().activeScene()?.structuralObstacles?.find((o) => o.id === id);
         get().beginHistoryGesture();
@@ -840,3 +840,4 @@ function removeObjectInternal(
             };
     });
 }
+

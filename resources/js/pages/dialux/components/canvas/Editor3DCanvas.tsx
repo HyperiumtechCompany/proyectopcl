@@ -169,7 +169,7 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
             (state) => ({
                 sceneId: state.activeSceneId,
                 scenes: state.project?.scenes,
-                result: state.result,
+                resultsByRoom: state.resultsByRoom,
                 showIsolux: state.ui.showIsolux,
                 isoluxMode: state.ui.isoluxMode,
                 showRoof: state.ui.showRoof,
@@ -194,9 +194,30 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
                     if (!builderRef.current || scene.isDisposed) return;
 
                     const freshState = useEditorStore.getState();
+                    // Antes se pasaba un único `state.result` (el ambiente
+                    // seleccionado) — con 2+ ambientes calculados en el mismo
+                    // piso (ej. Aula 1°/Aula 2°) el isolux 3D solo mostraba
+                    // uno. Ahora se pasan TODOS los resultados del piso
+                    // activo (`resultsByRoom`, la misma fuente que ya usa la
+                    // tabla de resultados 2D para mostrar ambos).
+                    const activeScene = (freshState.project?.scenes ?? []).find(
+                        (s) => s.id === freshState.activeSceneId,
+                    );
+                    const activeRoomIds = new Set(
+                        (activeScene?.rooms ?? []).map((r) => r.id),
+                    );
+                    const activeResults = Object.entries(
+                        freshState.resultsByRoom,
+                    )
+                        .filter(([roomId]) => {
+                            const baseId = roomId.split('::ambient-')[0]!;
+                            return activeRoomIds.has(baseId);
+                        })
+                        .map(([, result]) => result);
+
                     builderRef.current.syncAllFloors(
                         freshState.project?.scenes ?? [],
-                        freshState.result ?? null,
+                        activeResults,
                         freshState.ui.showIsolux,
                         freshState.ui.isoluxMode,
                         freshState.ui.showRoof,
