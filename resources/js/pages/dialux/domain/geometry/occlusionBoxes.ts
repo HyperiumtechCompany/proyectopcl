@@ -195,8 +195,28 @@ function decomposeClosedRing(vertices: Vertex[]): AxisRect[] {
  * muro de contorno cerrado, hace falta extender esto — por ahora ese muro
  * queda completamente opaco (más conservador que dejarlo sin oclusión, pero
  * no modela el vano).
+ *
+ * Ronda 24 (2026-08-19) — hallazgo real contra un SEGUNDO proyecto
+ * (Módulo 22, no solo Vinchos): el contorno reconstruye matemáticamente
+ * bien (el área del `decomposeClosedRing` coincide exacta con el área del
+ * polígono por la fórmula estándar — el algoritmo en sí no tiene bug), pero
+ * el propio contorno de ese muro real describe un área ~7 veces mayor que
+ * un muro delgado de 0.13 m debería tener para su longitud — el patrón de
+ * "el contorno guardado no representa un muro delgado real" no es un caso
+ * único de Vinchos, es recurrente en datos reales de este editor. Por eso
+ * el ESPESOR de cada caja NUNCA se toma del contorno (`r.y2-r.y1`, que
+ * hereda ese error) — se usa siempre `declaredThicknessM`, el escalar que
+ * el propio muro declara (`wall.thickness`), mucho menos propenso a estar
+ * corrupto que un polígono de 10+ vértices. El contorno solo aporta la
+ * LONGITUD/posición de cada tramo (giros, muescas) — ahí sí es información
+ * real que el `wall.thickness` por sí solo no puede dar.
  */
-function buildClosedRingOcclusionBoxes(vertices: Vertex[], zFrom: number, zTo: number): OcclusionBox[] | null {
+function buildClosedRingOcclusionBoxes(
+    vertices: Vertex[],
+    declaredThicknessM: number,
+    zFrom: number,
+    zTo: number,
+): OcclusionBox[] | null {
     const angle = dominantAngle(vertices);
     if (!isRectilinearInFrame(vertices, angle)) {
         return null;
@@ -212,7 +232,7 @@ function buildClosedRingOcclusionBoxes(vertices: Vertex[], zFrom: number, zTo: n
         // ángulo -angle (mundo→local); la inversa es +angle (local→mundo).
         const originX = r.x1 * cos - r.y1 * sin;
         const originY = r.x1 * sin + r.y1 * cos;
-        return { originX, originY, angleRad: angle, length: r.x2 - r.x1, thickness: r.y2 - r.y1, zMin: zFrom, zMax: zTo };
+        return { originX, originY, angleRad: angle, length: r.x2 - r.x1, thickness: declaredThicknessM, zMin: zFrom, zMax: zTo };
     });
 }
 
@@ -240,7 +260,7 @@ function buildLinearOcclusionBoxes(
     }
 
     if (isClosedRing(rawVertices)) {
-        const decomposed = buildClosedRingOcclusionBoxes(rawVertices, baseZFrom, baseZTo);
+        const decomposed = buildClosedRingOcclusionBoxes(rawVertices, thickness, baseZFrom, baseZTo);
         if (decomposed) {
             return decomposed;
         }

@@ -93,7 +93,18 @@ describe('buildWallOcclusionBoxes — muros de contorno cerrado (Ronda 21l→23,
 
         const boxes = buildWallOcclusionBoxes([closedOutlineWall], [], []);
 
-        expect(totalBoxArea(boxes)).toBeCloseTo(ringArea(closedOutlineWall.vertices), 6);
+        // Ronda 24: el espesor de CADA caja es siempre `wall.thickness`
+        // declarado (0.13), nunca el medido del contorno (`r.y2-r.y1`) — un
+        // hallazgo real contra un segundo proyecto (Módulo 22) mostró que el
+        // contorno guardado puede describir un área varias veces mayor que
+        // un muro delgado real, aunque la descomposición geométrica en sí
+        // sea correcta. El contorno solo decide LONGITUDES/posiciones (la
+        // muesca sí separa esta pared en varios tramos), nunca el espesor.
+        for (const box of boxes) {
+            expect(box.thickness).toBeCloseTo(0.13, 9);
+        }
+        const totalLength = boxes.reduce((sum, box) => sum + box.length, 0);
+        expect(totalBoxArea(boxes)).toBeCloseTo(totalLength * 0.13, 9);
         // Ninguna caja puede ser más grande que el propio muro (el bug
         // original generaba cajas ~10x más grandes que el muro real).
         for (const box of boxes) {
@@ -120,7 +131,14 @@ describe('buildWallOcclusionBoxes — muros de contorno cerrado (Ronda 21l→23,
 
         const boxes = buildWallOcclusionBoxes([lShapedWall], [], []);
 
-        expect(totalBoxArea(boxes)).toBeCloseTo(ringArea(lShapedWall.vertices), 6);
+        // Ver comentario de la Ronda 24 en el test de la muesca — el espesor
+        // siempre es el declarado (0.2), la huella real (área del polígono)
+        // ya no es el criterio de comparación.
+        for (const box of boxes) {
+            expect(box.thickness).toBeCloseTo(0.2, 9);
+        }
+        const totalLength = boxes.reduce((sum, box) => sum + box.length, 0);
+        expect(totalBoxArea(boxes)).toBeCloseTo(totalLength * 0.2, 9);
         expect(boxes.length).toBeGreaterThan(0);
     });
 

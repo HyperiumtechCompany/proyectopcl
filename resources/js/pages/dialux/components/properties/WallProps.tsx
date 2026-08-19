@@ -130,6 +130,15 @@ const WallInteriorLightingSection: React.FC<{
         wall.illuminanceLux ??
         ambientMatch?.room.illuminanceLux ??
         300;
+    // Horas de uso diarias de ESTE ambiente, para "Consumo (kWh/a)" del PDF
+    // — mismo mecanismo que `lux` arriba. `null` (no `8`) cuando nadie lo
+    // fijó, para no mostrar un valor inventado en el campo si el usuario
+    // todavía no decidió nada — el 8 h/día de respaldo se aplica recién en
+    // el PDF (`ambientDossier.ts`), no acá.
+    const dailyOperatingHours =
+        ambientConfig?.dailyOperatingHours ??
+        ambientMatch?.room.dailyOperatingHours ??
+        null;
     // Límite de UGR efectivo (tras el override de `ambientConfig.ugrLimit`,
     // ver `ambientSpaces.ts`) — `ambientRoom.ugrLimit` ya refleja esa
     // prioridad; solo hace falta un respaldo cuando todavía no hay ambiente
@@ -343,6 +352,18 @@ const WallInteriorLightingSection: React.FC<{
                 onChange={(val) => {
                     onUpdate({ illuminanceLux: val });
                     onUpdateAmbient({ illuminanceLux: val });
+                }}
+            />
+
+            <EditField
+                label="Uso diario (h/día) — para Consumo (kWh/a)"
+                value={dailyOperatingHours ?? 8}
+                min={0}
+                max={24}
+                step={0.5}
+                onChange={(val) => {
+                    onUpdate({ dailyOperatingHours: val });
+                    onUpdateAmbient({ dailyOperatingHours: val });
                 }}
             />
 

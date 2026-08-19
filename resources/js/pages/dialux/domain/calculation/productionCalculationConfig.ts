@@ -81,6 +81,22 @@ import { DEFAULT_DIRECT_PREVIEW_CONFIG, type CalculationConfig } from './types';
  *      la Ronda 22 aunque sigan siendo datos de mala calidad pendientes de
  *      corregir a mano en el editor.
  *
+ *   4. (24, mismo día) Verificado contra un SEGUNDO proyecto real
+ *      ("Módulo 22"): la descomposición de la Ronda 23 SÍ se activaba ahí
+ *      (contorno ortogonal, pasa `isRectilinearInFrame`) y reconstruía el
+ *      área EXACTA del polígono — pero ese polígono real describía un área
+ *      ~7 veces mayor que un muro delgado de 0.13 m para su longitud (el
+ *      promedio caía de 203 a 72 lx, -64.5%). El algoritmo de descomposición
+ *      no tenía bug — el dato de entrada (el contorno guardado) sí, y no es
+ *      exclusivo de Vinchos. Corrección: cada caja usa SIEMPRE el espesor
+ *      declarado del muro (`wall.thickness`), nunca el medido del contorno
+ *      — el contorno solo decide longitudes/posiciones de cada tramo
+ *      (giros, muescas), nunca el espesor. Re-verificado tras el fix:
+ *      Módulo 22 pasó de -64.5% a -2.2% en el ambiente más afectado (mejora
+ *      real, no solo "ya no truena”); Vinchos no cambió (sus 2 muros ya
+ *      caían en la salvaguarda no-ortogonal de la Ronda 23, nunca llegaban
+ *      a este código).
+ *
  * Reactivado a `true` con esta base. Sigue siendo una funcionalidad joven
  * — si un proyecto real muestra un resultado peor que con oclusión
  * desactivada, es evidencia real de un caso no cubierto, no una razón para

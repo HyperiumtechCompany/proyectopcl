@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { buildCartesianSvgFromMatrix } from '@/pages/dialux/export/derived/data/buildCartesianSvgFromMatrix';
 import { buildPolarSvgFromMatrix } from '@/pages/dialux/export/derived/data/buildPolarSvgFromMatrix';
 import { computeConeDiagram, type ConeDiagramRow } from '@/pages/dialux/export/derived/data/computeConeDiagram';
+import { buildConeSvgFromRows } from '@/pages/dialux/export/derived/data/buildConeSvgFromRows';
 import { computeEngineUgrTables } from '@/pages/dialux/export/derived/data/computeEngineUgrTable';
 import type { ProductUgrTable } from '@/pages/dialux/export/domain/types';
 import type { ImportedLuminaireProduct, PreviewedLuminaireProduct } from './catalogApi';
@@ -140,6 +141,7 @@ export function PhotometricPreviewModal({ open, onOpenChange, mode, preview, war
     const polarSvg = useMemo(() => (web ? buildPolarSvgFromMatrix(web, name || 'Producto', editedLumens) : null), [web, name, editedLumens]);
     const cartesianSvg = useMemo(() => (web ? buildCartesianSvgFromMatrix(web, name || 'Producto', editedLumens) : null), [web, name, editedLumens]);
     const coneRows = useMemo<ConeDiagramRow[] | null>(() => computeConeDiagram(web, preview.beam_angle_50, editedLumens), [web, preview.beam_angle_50, editedLumens]);
+    const coneSvg = useMemo(() => (coneRows && preview.beam_angle_50 ? buildConeSvgFromRows(coneRows, preview.beam_angle_50) : null), [coneRows, preview.beam_angle_50]);
 
     const referenceLumens = web?.reference_lumens ?? null;
     const candelaScale = referenceLumens && referenceLumens > 0 && Number.isFinite(editedLumens) && editedLumens > 0 ? editedLumens / referenceLumens : 1;
@@ -356,31 +358,12 @@ export function PhotometricPreviewModal({ open, onOpenChange, mode, preview, war
                                 ))}
 
                             {distributionTab === 'Diagrama de cono' &&
-                                (coneRows ? (
+                                (coneSvg ? (
                                     <div className="max-w-md space-y-2">
                                         <p className="text-[11px] text-muted-foreground">
                                             Proyección del haz (ángulo de apertura 50%) a distancias estándar bajo la luminaria — E0 en el centro, Eavg promedio dentro del círculo del haz.
                                         </p>
-                                        <table className="w-full text-xs">
-                                            <thead>
-                                                <tr className="border-b border-border text-left text-muted-foreground">
-                                                    <th className="py-1 pr-2 font-medium">Distancia</th>
-                                                    <th className="py-1 pr-2 font-medium">Ø haz</th>
-                                                    <th className="py-1 pr-2 font-medium">E0</th>
-                                                    <th className="py-1 font-medium">Eavg</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {coneRows.map((row) => (
-                                                    <tr key={row.distanceM} className="border-b border-border/50">
-                                                        <td className="py-1 pr-2">{row.distanceM} m</td>
-                                                        <td className="py-1 pr-2">{formatNumber(row.beamDiameterM, 2)} m</td>
-                                                        <td className="py-1 pr-2">{formatNumber(row.e0Lux, 0)} lx</td>
-                                                        <td className="py-1">{formatNumber(row.eAvgLux, 0)} lx</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                        <div className="w-fit rounded-md border border-border bg-white p-1" dangerouslySetInnerHTML={{ __html: coneSvg }} />
                                     </div>
                                 ) : (
                                     <p className="text-xs text-muted-foreground">Sin matriz fotométrica o ángulo de haz válido para proyectar el cono.</p>

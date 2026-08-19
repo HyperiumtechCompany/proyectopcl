@@ -81,6 +81,15 @@ export interface AmbientConfig {
     activity?: string;
     illuminanceLux?: number;
     /**
+     * Horas de uso diarias asumidas para "Consumo (kWh/a)" — mismo
+     * mecanismo que `illuminanceLux`: sin esto, cae al valor del proyecto
+     * (`ProjectSiteSettings.dailyOperatingHours`, panel "Terreno"), y sin
+     * ESE, a 8 h/día. Un aula y un pasillo del mismo proyecto no tienen el
+     * mismo uso real — pedido explícito del usuario para no fijar un solo
+     * valor a todo el proyecto (2026-08-19).
+     */
+    dailyOperatingHours?: number;
+    /**
      * Límite de UGR de ESTE sub-ambiente — mismo mecanismo que
      * `illuminanceLux` arriba: sin esto, `ugrLimit` SIEMPRE se re-deriva de
      * la actividad normativa elegida (`ambientSpaces.ts`), nunca se puede
@@ -341,6 +350,8 @@ export interface Room {
     height: number; // metros
     color: string;
     illuminanceLux?: number;
+    /** Ver `AmbientConfig.dailyOperatingHours` — mismo campo, valor propio de este Room cuando no hay sub-ambiente con su propio override. */
+    dailyOperatingHours?: number;
     fixtureLumens?: number;
     normativeStandard?: NormativeStandard;
     normativeCategory?: string;
@@ -437,6 +448,8 @@ export interface Wall {
     postSpacing?: number;
     /** Configuración de iluminación para paredes interiores */
     illuminanceLux?: number;
+    /** Ver `AmbientConfig.dailyOperatingHours` — mismo respaldo legado que `illuminanceLux` para este muro. */
+    dailyOperatingHours?: number;
     normativeStandard?: NormativeStandard;
     normativeCategory?: string;
     normativeSection?: string;

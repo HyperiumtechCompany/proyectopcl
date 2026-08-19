@@ -40,6 +40,10 @@ export function buildCartesianSvgFromMatrix(web: CartesianMatrixInput | null | u
     const planes = rawPlanes.map((plane) => plane.map((v) => v * klmScale));
 
     const maxAngle = Math.max(...angles, 1);
+    // `planes` (arriba) ya está escalado a cd/klm — usarlo directamente en
+    // vez de re-derivar del `candela` crudo evita repetir el escalado (y el
+    // `ReferenceError` real que había aquí: `candela` no existe en este
+    // scope, la variable desestructurada se llama `rawPlanes`).
     const maxCandela = Math.max(0, ...planes.flat());
     if (maxCandela <= 0) {
         return null;

@@ -78,7 +78,8 @@ export function buildPolarSvgFromMatrix(web: PolarMatrixInput | null | undefined
     const hasSecondPlane = Array.isArray(rawSecondaryPlane) && rawSecondaryPlane.length > 0;
     const secondaryPlane = hasSecondPlane ? rawSecondaryPlane!.map((v) => v * klmScale) : undefined;
 
-    const maxCandela = Math.max(0, ...plane, ...(hasSecondPlane ? secondaryPlane! : []));
+    const globalMaxRaw = Math.max(0, ...(candela ?? []).flat());
+    const maxCandela = globalMaxRaw * klmScale;
     if (maxCandela <= 0) {
         return null;
     }

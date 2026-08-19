@@ -187,6 +187,14 @@ export function RoomLightingSection({
                 }
             />
             <EditField
+                label="Uso diario (h/día) — para Consumo (kWh/a)"
+                value={room.dailyOperatingHours ?? 8}
+                min={0}
+                max={24}
+                step={0.5}
+                onChange={(value) => onUpdate({ dailyOperatingHours: value })}
+            />
+            <EditField
                 label="Altura plano útil (m)"
                 value={getRoomUsefulPlaneHeight(room)}
                 min={0}

@@ -213,12 +213,19 @@ export function buildAmbientDetails(
                     snapshot.project.siteSettings?.maintenanceFactor ??
                     projectPhotometricDefaults.maintenanceFactor ??
                     DEFAULT_MAINTENANCE_FACTOR,
-                // Mismo criterio que `maintenanceFactor` arriba — override real
-                // desde el panel "Terreno" (`ProjectSiteSettings.dailyOperatingHours`),
-                // con 8 h/día como default (el valor que estaba fijo antes de
-                // que este campo existiera, ver plan §-17).
+                // Pedido explícito del usuario (2026-08-19): un aula y un
+                // pasillo del mismo proyecto no tienen el mismo uso diario
+                // real — antes esto era UN SOLO valor para todo el proyecto
+                // (`ProjectSiteSettings.dailyOperatingHours`), ahora cada
+                // ambiente puede tener el suyo (`ambient.room.dailyOperatingHours`,
+                // resuelto en `ambientSpaces.ts` con el mismo mecanismo que
+                // `illuminanceLux`) — con el valor de proyecto como respaldo,
+                // y 8 h/día si tampoco existe (el valor que estaba fijo
+                // antes de que ninguno de los dos campos existiera).
                 dailyOperatingHours:
-                    snapshot.project.siteSettings?.dailyOperatingHours ?? 8,
+                    ambient.room.dailyOperatingHours ??
+                    snapshot.project.siteSettings?.dailyOperatingHours ??
+                    8,
                 // Fase B del cierre de brechas (`dialux-calc-reviewer`,
                 // hallazgo bloqueante "motor LENI/EN 15193 no existe"):
                 // `calculateLeni` devuelve `null` sin `leni.buildingType`

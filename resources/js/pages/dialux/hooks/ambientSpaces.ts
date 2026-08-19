@@ -664,6 +664,7 @@ function buildSingleAmbientSpace(
         normativeLabel: activityOption?.label ?? room.normativeLabel,
         illuminanceLux,
         norma: illuminanceLux,
+        dailyOperatingHours: ambientConfig?.dailyOperatingHours ?? room.dailyOperatingHours,
         ugrLimit: ambientConfig?.ugrLimit ?? activityOption?.ugr ?? room.ugrLimit,
         uniformityTarget:
             ambientConfig?.uniformityTarget ??
@@ -807,6 +808,7 @@ function buildWallDefinedAmbientSpaces(
             normativeLabel: activityOption?.label ?? room.normativeLabel,
             illuminanceLux,
             norma: illuminanceLux,
+            dailyOperatingHours: ambientConfig?.dailyOperatingHours ?? room.dailyOperatingHours,
             ugrLimit: ambientConfig?.ugrLimit ?? activityOption?.ugr ?? room.ugrLimit,
             uniformityTarget:
                 ambientConfig?.uniformityTarget ??
@@ -899,6 +901,7 @@ export function deriveAmbientSpaces(
             normativeLabel: activityOption?.label ?? room.normativeLabel,
             illuminanceLux,
             norma: illuminanceLux,
+            dailyOperatingHours: ambientConfig?.dailyOperatingHours ?? room.dailyOperatingHours,
             ugrLimit: ambientConfig?.ugrLimit ?? activityOption?.ugr ?? room.ugrLimit,
             uniformityTarget:
                 ambientConfig?.uniformityTarget ??
@@ -978,6 +981,7 @@ export function deriveAmbientSpaces(
             normativeLabel: activityOption?.label ?? room.normativeLabel,
             illuminanceLux,
             norma: illuminanceLux,
+            dailyOperatingHours: ambientConfig?.dailyOperatingHours ?? room.dailyOperatingHours,
             ugrLimit: ambientConfig?.ugrLimit ?? activityOption?.ugr ?? room.ugrLimit,
             uniformityTarget:
                 ambientConfig?.uniformityTarget ??
