@@ -1028,6 +1028,24 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
             circuit.fedPanelLabels.length > 0,
     );
 
+    // Ronda 2026-08-19 — fotografía DE SOLO LECTURA de cada circuito por su
+    // `rootConductorId`, tomada ANTES de que la Pasada 2 empiece a mutar
+    // `aliveCircuits` (splice/unshift más abajo). Un TG con más de un TD
+    // (o un TD con un Sub-TD de segundo piso) tiene varias salidas propias,
+    // cada una con su propia sección/longitud/ΔV ya calculados aquí en la
+    // Pasada 1 (`circuitOwnDropV` de la línea ~930) — bug real encontrado:
+    // cuando el tablero HIJO se procesaba primero (hojas→raíz) y usaba
+    // `aliveCircuits.splice(...)` para "reclamar" el conductor que lo
+    // alimenta, el tablero PADRE se quedaba sin poder leer los datos de ESE
+    // MISMO conductor al procesarse después — su fila de resumen caía al
+    // valor por defecto `panel.properties?.sectionMm2 ?? 0`, dando
+    // `circuitOwnDropV = 0` aunque el cable real tuviera una caída de
+    // tensión real y distinta de cero. Esta fotografía deja disponible el
+    // dato real para AMBOS lados de cada conductor, sin que ninguno se lo
+    // "robe" al otro.
+    const circuitByRootConductorId = new Map<string, PartialPanelCircuit>();
+    aliveCircuits.forEach((circuit) => circuitByRootConductorId.set(circuit.rootConductorId, circuit));
+
     // ─── Pasada 2: encadena la caída de tensión padre→hijo ─────────────────
     //
     // Arma el árbol de tableros a partir de `feederLinks` (una salida que
@@ -1137,38 +1155,57 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
         // En un TD/TG la R, S, T debe ser la sumatoria de las columnas de R, S, T.
         const maximumPhaseCurrent = Math.max(sumPhaseCurrentR, sumPhaseCurrentS, sumPhaseCurrentT);
         
-        // Si este tablero es un TD alimentado por un TG, tomamos las características del cable físico de ese alimentador
+        // Si este tablero es un TD (o Sub-TD de otro piso) alimentado por un
+        // padre, tomamos las características del cable físico de ESE
+        // alimentador específico — lectura de la fotografía de solo lectura
+        // (`circuitByRootConductorId`), nunca se elimina de `aliveCircuits`:
+        // el mismo conductor lo necesita también la fila del PADRE si el
+        // padre solo tiene esta única salida (ver `ownFeeder` más abajo).
         const parentLink = feederLinks.find((link) => link.childPanelId === panel.id);
-        let parentFeeder: PartialPanelCircuit | undefined;
-        
-        if (parentLink) {
-            const parentFeederIndex = aliveCircuits.findIndex((c) => c.rootConductorId === parentLink.rootConductorId);
-            if (parentFeederIndex !== -1) {
-                parentFeeder = aliveCircuits[parentFeederIndex];
-                aliveCircuits.splice(parentFeederIndex, 1);
-            }
-        }
-        
-        const sectionMm2 = parentFeeder?.sectionMm2 ?? Math.max(0, panel.properties?.sectionMm2 ?? 0);
-        const lengthM = parentFeeder?.lengthM ?? Math.max(0, panel.properties?.lengthM ?? 0);
-        const ambientTemperatureC = parentFeeder?.ambientTemperatureC ?? panel.properties?.ambientTemperatureC ?? 20;
+        const parentFeeder: PartialPanelCircuit | undefined = parentLink
+            ? circuitByRootConductorId.get(parentLink.rootConductorId)
+            : undefined;
+
+        // Un tablero (TG, o un TD que a su vez alimenta un Sub-TD de otro
+        // piso) puede tener VARIAS salidas propias hacia distintos tableros
+        // hijos — cada una es un cable físico distinto, con su propia
+        // longitud/sección/ΔV, y no hay una única respuesta correcta para
+        // "la" fila resumen de ese tablero en ese caso (queda fuera de
+        // alcance de este fix, documentado, no adivinado). Cuando el
+        // tablero tiene EXACTAMENTE una salida propia, sí hay una respuesta
+        // correcta: mostrar los datos reales de esa única salida en su
+        // propia fila resumen, en vez de caer a `panel.properties` vacío.
+        const ownFeederLinks = feederLinks.filter((link) => link.parentPanelId === panel.id);
+        const ownFeeder: PartialPanelCircuit | undefined =
+            ownFeederLinks.length === 1 ? circuitByRootConductorId.get(ownFeederLinks[0]!.rootConductorId) : undefined;
+
+        // Fuente de datos de cable real para esta fila: primero mi propio
+        // alimentador entrante (si soy un TD/Sub-TD), si no el mío propio
+        // saliente cuando soy el único (ver `ownFeeder` arriba) — nunca los
+        // dos a la vez (un tablero no puede ser hijo Y padre de la MISMA
+        // fila resumen).
+        const cableSource = parentFeeder ?? ownFeeder;
+
+        const sectionMm2 = cableSource?.sectionMm2 ?? Math.max(0, panel.properties?.sectionMm2 ?? 0);
+        const lengthM = cableSource?.lengthM ?? Math.max(0, panel.properties?.lengthM ?? 0);
+        const ambientTemperatureC = cableSource?.ambientTemperatureC ?? panel.properties?.ambientTemperatureC ?? 20;
         const workingTemperatureC = panel.properties?.workingTemperatureC ?? 40;
-        const copperResistivity = parentFeeder?.copperResistivity ?? Math.max(0, panel.properties?.copperResistivity ?? excelCopperResistivity(workingTemperatureC));
-        const conductorType = parentFeeder?.conductorType ?? panel.properties?.wireType ?? 'THW';
-        const nominalCableCurrentA = parentFeeder?.nominalCableCurrentA
+        const copperResistivity = cableSource?.copperResistivity ?? Math.max(0, panel.properties?.copperResistivity ?? excelCopperResistivity(workingTemperatureC));
+        const conductorType = cableSource?.conductorType ?? panel.properties?.wireType ?? 'THW';
+        const nominalCableCurrentA = cableSource?.nominalCableCurrentA
             ?? defaultNominalCableCurrent(sectionMm2, conductorType);
-        const groupedCircuitCount = parentFeeder?.groupedCircuitCount ?? panel.properties?.groupedCircuitCount ?? 1;
-        const groupingFactor = parentFeeder?.groupingFactor ?? panel.properties?.groupingFactor ?? excelGroupingFactor(groupedCircuitCount);
-        const temperatureFactor = parentFeeder?.temperatureFactor ?? panel.properties?.temperatureFactor ?? excelTemperatureFactor(ambientTemperatureC);
-        const admissibleCableCurrentA = parentFeeder?.admissibleCableCurrentA
+        const groupedCircuitCount = cableSource?.groupedCircuitCount ?? panel.properties?.groupedCircuitCount ?? 1;
+        const groupingFactor = cableSource?.groupingFactor ?? panel.properties?.groupingFactor ?? excelGroupingFactor(groupedCircuitCount);
+        const temperatureFactor = cableSource?.temperatureFactor ?? panel.properties?.temperatureFactor ?? excelTemperatureFactor(ambientTemperatureC);
+        const admissibleCableCurrentA = cableSource?.admissibleCableCurrentA
             ?? nominalCableCurrentA * groupingFactor * temperatureFactor;
-        
+
         const circuitOwnDropV = sectionMm2 > 0
             ? (phases === 1 ? 2 : Math.sqrt(3)) * maximumPhaseCurrent * copperResistivity * lengthM * powerFactor / sectionMm2
             : 0;
 
         panelSummaryCircuits.push({
-            ...(parentFeeder ?? {
+            ...(cableSource ?? {
                 levelId: scene.id,
                 levelName: scene.name,
                 levelIndex: scene.floorIndex ?? 0,
@@ -1176,7 +1213,7 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
                 conductorCount: 0,
                 horizontalLengthM: panel.properties?.horizontalLengthM ?? lengthM,
                 verticalLengthM: panel.properties?.verticalLengthM ?? 0,
-                lengthOverridden: !parentFeeder,
+                lengthOverridden: !cableSource,
                 lightingOutletCount: 0,
                 outletOutletCount: 0,
                 lightingPowerW: 0,
