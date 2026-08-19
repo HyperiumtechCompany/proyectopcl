@@ -158,7 +158,18 @@ export function calculateConductorLength(
     return conductorLengthComponents(scene, conductor, source, target);
 }
 
-/** Longitud de una línea conectada, sin repetir montantes en nodos compartidos. */
+/**
+ * Longitud de una línea conectada, sin repetir montantes en nodos
+ * compartidos: un interruptor/luminaria/tablero que es el destino de UN
+ * conductor del grupo y el origen del SIGUIENTE (ej. TD→interruptor→
+ * luminaria) tiene una sola bajada física — antes esta función sumaba
+ * `conductorLengthComponents()` de cada conductor de forma independiente,
+ * así que ese nodo compartido se contaba dos veces (una como destino del
+ * primer tramo, otra como origen del segundo), sobrestimando la longitud
+ * vertical del grupo completo. Se deduplica por `node.id`: cada nodo aporta
+ * su `nodeVerticalAllowance()` una sola vez, sin importar en cuántos
+ * conductores del grupo participe.
+ */
 export function calculateConductorGroupLength(
     scene: Scene,
     conductorIds: string[],
@@ -168,15 +179,19 @@ export function calculateConductorGroupLength(
     const devices = scene.electricalDevices ?? [];
     let horizontalLengthM = 0;
     let verticalLengthM = 0;
+    const countedNodeIds = new Set<string>();
 
     for (const conductor of (scene.conductors ?? []).filter((item) => conductorIds.includes(item.id))) {
         const source = resolveNode(conductor.sourceId, fixtures, switches, devices);
         const target = resolveNode(conductor.targetId, fixtures, switches, devices);
         if (!source || !target) continue;
 
-        const lengths = conductorLengthComponents(scene, conductor, source, target);
-        horizontalLengthM += lengths.horizontalLengthM;
-        verticalLengthM += lengths.verticalLengthM;
+        horizontalLengthM += conductorPlanLength(conductor, source, target);
+        for (const node of [source, target]) {
+            if (countedNodeIds.has(node.id)) continue;
+            countedNodeIds.add(node.id);
+            verticalLengthM += nodeVerticalAllowance(scene, node, conductor);
+        }
     }
 
     return {
@@ -1094,7 +1109,7 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
     reversedPanels.forEach((panelId) => {
         const panel = panels.find((p) => p.id === panelId)!;
         const isMainPanel = panel.type === 'main_panel';
-        
+
         // Buscamos los circuitos de este tablero (excluyendo el summary que estamos creando)
         const childCircuits = aliveCircuits.filter(c => c.panelId === panel.id);
         
@@ -1278,23 +1293,62 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
         });
     });
 
+    // Todo conductor que sea el alimentador de ALGÚN tablero (`feederLinks`,
+    // sin importar si terminó usado como `parentFeeder` o `ownFeeder` más
+    // arriba) ya quedó representado en la fila resumen del tablero que
+    // alimenta — se descarta aquí de la lista de circuitos genéricos para no
+    // duplicarlo como una fila más. A diferencia del `.splice()` que había
+    // antes (eliminaba UNO a la vez, mientras el bucle de arriba todavía
+    // podía necesitar leer ese mismo conductor para OTRO tablero), este
+    // filtro corre una sola vez, DESPUÉS de que todas las filas resumen ya
+    // leyeron lo que necesitaban de `circuitByRootConductorId` — ningún
+    // tablero se queda sin poder leer el conductor que lo alimenta.
+    const claimedConductorRootIds = new Set(feederLinks.map((link) => link.rootConductorId));
+    const genericCircuits = aliveCircuits.filter((circuit) => !claimedConductorRootIds.has(circuit.rootConductorId));
+
     // Los alimentadores entre tableros no consumen la numeración visible de
     // circuitos finales. Cada TD comienza siempre en C-1.
     const visibleCircuitNumberByPanel = new Map<string, number>();
-    aliveCircuits.forEach((circuit) => {
+    genericCircuits.forEach((circuit) => {
         const next = (visibleCircuitNumberByPanel.get(circuit.panelId) ?? 0) + 1;
         visibleCircuitNumberByPanel.set(circuit.panelId, next);
         circuit.code = `C-${next}`;
     });
 
-    aliveCircuits.unshift(...panelSummaryCircuits);
+    // `panelSummaryCircuits` se llenó para TODOS los tableros (hace falta
+    // completo para que un TG pueda sumar el `installedPowerW` de CADA uno
+    // de sus TD, tenga hijos propios o no — ver `tdSummaries` arriba). Para
+    // el resultado visible, una fila resumen solo aporta algo real cuando
+    // el tablero ALIMENTA a otro tablero (agrega lo que baja por sus
+    // hijos); un tablero hoja (fed por su padre, pero sin hijos-tablero
+    // propios) ya tiene su(s) propio(s) circuito(s) real(es) con los
+    // mismos datos (`rooms`, `installedPowerW`) y hereda el ΔV del padre
+    // directamente — mostrar TAMBIÉN una fila sintética ahí duplicaba el
+    // tablero sin agregar información nueva.
+    const visibleSummaryCircuits = panelSummaryCircuits.filter((summary) => {
+        if (feederLinks.some((link) => link.parentPanelId === summary.panelId)) return true;
+        // TG (main_panel) se muestra siempre, aunque en ESTA escena no
+        // tenga hijos-tablero: `calculateProjectPanelCircuitSummaries`
+        // (Pasada de vínculo lógico entre pisos, `properties.upstreamPanelId`)
+        // necesita encontrar su fila resumen para sumarle los TD de OTRA
+        // escena — un TG real casi siempre alimenta algo, aunque ese algo
+        // esté en otro piso sin conductor 2D que los una en el mismo plano.
+        if (summary.panelType === 'main_panel') return true;
+        // Un TD (sub_panel) declarado como alimentado por un TG de otra
+        // escena (`upstreamPanelId`) también necesita su fila resumen
+        // disponible para que esa misma Pasada lo encuentre — aunque en SU
+        // propia escena no tenga hijos ni padre conductor.
+        const ownPanel = panels.find((candidate) => candidate.id === summary.panelId);
+        return Boolean(ownPanel?.properties?.upstreamPanelId);
+    });
+    const aliveCircuitsFinal = [...visibleSummaryCircuits, ...genericCircuits];
 
     // parentOf, topologicalOrder ya calculados! Borramos eso de abajo.
 
 
     const resolvedDropByPanelId = new Map<string, number>();
     const circuitsByPanelId = new Map<string, PartialPanelCircuit[]>();
-    aliveCircuits.forEach((circuit) => {
+    aliveCircuitsFinal.forEach((circuit) => {
         circuitsByPanelId.set(circuit.panelId, [...(circuitsByPanelId.get(circuit.panelId) ?? []), circuit]);
     });
 
@@ -1461,13 +1515,32 @@ export function resolveConformingSectionMm2(circuit: PanelCircuitSummary): numbe
 
 /**
  * Recorre TODO el árbol de tableros de una escena (piso) y sube la sección
- * de cada salida no conforme (caída de tensión o capacidad), en orden
- * padre→hijo, hasta que todo cumpla o ya no haya calibre disponible que
+ * de cada ALIMENTADOR no conforme (caída de tensión o capacidad) — nunca
+ * una salida final (circuito C de alumbrado/tomacorriente) — en orden
+ * hijo→padre, hasta que todo cumpla o ya no haya calibre disponible que
  * ayude. Como `calculatePanelCircuitSummaries` encadena la caída de tensión
  * (padre→hijo — ver "Pasada 2"), aumentar la sección de un alimentador
  * (p.ej. TG→TD) puede hacer que sus hijos pasen a cumplir sin tocarlos: por
  * eso este ajuste se hace en un solo bucle sobre TODA la escena, no
  * tablero por tablero.
+ *
+ * Regla real del CNE-Utilización (pedido explícito del usuario, no una
+ * elección de diseño de este archivo): el calibre de una salida final de
+ * alumbrado es 2.5 mm² y el de tomacorriente 4 mm² — son valores FIJOS por
+ * norma, no una variable de ajuste. Si un circuito C no cumple caída de
+ * tensión, la corrección real de obra es acortar el recorrido o SUBIR EL
+ * ALIMENTADOR del tablero que lo agrupa (menos ΔV heredado aguas arriba),
+ * nunca engordar el conductor del circuito final. Por eso este corrector
+ * solo considera `circuitLoadType === 'feeder'` como candidato — un C no
+ * conforme nunca se toca directamente, se corrige subiendo el alimentador
+ * del TD específico que lo alimenta (el que agrupa ESE C, no cualquier
+ * TD del árbol — `calculatePanelCircuitSummaries` ya construye una fila de
+ * alimentador por cada tablero que agrega hijos reales, así que "el
+ * alimentador que sube" siempre es el del padre directo de la salida que
+ * falla). Si subir el alimentador del TD no alcanza (calibre agotado) o el
+ * TD no tiene fila de alimentador propia (no agrupa otros tableros), la
+ * búsqueda hijo→padre naturalmente prueba el siguiente alimentador aguas
+ * arriba (TG), replicando "si no cumple TD, corregimos TG".
  *
  * No toca salidas con `normativeViolation` (mezcla alumbrado/tomacorriente
  * en el mismo circuito) — eso no se arregla cambiando la sección, hay que
@@ -1501,8 +1574,13 @@ export function resolveTreeConformingSections(
 
     for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
         const circuits = calculatePanelCircuitSummaries(buildWorkingScene());
-        const violator = circuits.find(
+        // Orden hijo→padre (`circuits` viene padre→hijo, ver
+        // `topologicalOrder.flatMap` en `calculatePanelCircuitSummaries`):
+        // busca el alimentador no conforme más CERCANO a la salida que
+        // falla antes de escalar a uno más arriba en el árbol.
+        const violator = [...circuits].reverse().find(
             (circuit) =>
+                circuit.circuitLoadType === 'feeder' &&
                 !circuit.normativeViolation &&
                 !exhausted.has(circuit.rootConductorId) &&
                 (!circuit.voltageDropOk || !circuit.capacityConforms),
@@ -1537,7 +1615,12 @@ export function resolveProjectTreeConformingSections(
 
     for (let iteration = 0; iteration < 200; iteration += 1) {
         const circuits = calculateProjectPanelCircuitSummaries(workingScenes);
-        const violator = circuits.find((circuit) =>
+        // Mismo criterio que `resolveTreeConformingSections`: solo
+        // alimentadores (nunca una salida final C, calibre fijo por CNE), y
+        // el más cercano a la salida que falla antes de escalar aguas
+        // arriba (`.reverse()`, mismo orden hijo→padre).
+        const violator = [...circuits].reverse().find((circuit) =>
+            circuit.circuitLoadType === 'feeder' &&
             !circuit.normativeViolation &&
             !exhausted.has(circuit.rootConductorId) &&
             (!circuit.voltageDropOk || !circuit.capacityConforms),

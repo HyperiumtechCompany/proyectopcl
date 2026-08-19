@@ -154,6 +154,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         const showAllFloors = useEditorStore((s) => s.ui.showAllFloors);
         const allScenes = useEditorStore((s) => s.project?.scenes) ?? [];
         const projectId = useEditorStore((s) => s.project?.id ?? null);
+        const moduleId = useEditorStore((s) => s.project?.moduleId);
         const activeSceneId = useEditorStore((s) => s.activeSceneId);
         const engine = useMlightcadEngine();
         const { parseDxf } = useWasmEngine();
@@ -1371,6 +1372,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                             projectId,
                             activeSceneId,
                             storedPlan,
+                            moduleId,
                         );
                         markDialuxPlanSyncOk(activeSceneId);
                     } catch (error) {
@@ -1386,6 +1388,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         storedPlan = await loadDialuxPlanFromServer(
                             projectId,
                             activeSceneId,
+                            moduleId,
                         );
                         if (storedPlan) {
                             await saveDialuxPlanFile(
@@ -1475,6 +1478,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             activeSceneId,
             engine,
             engine.isReady,
+            moduleId,
             parseDxf,
             projectId,
             scene?.scaleConfig,

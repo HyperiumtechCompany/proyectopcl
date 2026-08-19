@@ -72,7 +72,7 @@ describe('normativeRemoteData — buildTreeFromRows (Ronda 21p, regresión real)
                 ugrl: 19,
                 uo: 0.6,
                 ra: 80,
-                requirements: null,
+                requirements: null, lpd_wm2: null, hours_yr: null,
             },
         ];
         setNormDataOverride('rne_peru', buildTreeFromRows(rows));
@@ -96,7 +96,7 @@ describe('normativeRemoteData — buildTreeFromRows (Ronda 21p, regresión real)
                 ugrl: 19,
                 uo: 0.6,
                 ra: 80,
-                requirements: null,
+                requirements: null, lpd_wm2: null, hours_yr: null,
             },
         ];
         setNormDataOverride('rne_peru', buildTreeFromRows(rows));
@@ -122,7 +122,7 @@ describe('normativeRemoteData — buildTreeFromRows (Ronda 21p, regresión real)
                 ugrl: 16,
                 uo: 0.7,
                 ra: 80,
-                requirements: null,
+                requirements: null, lpd_wm2: null, hours_yr: null,
             },
         ];
         setNormDataOverride('rne_peru', buildTreeFromRows(rows));
@@ -148,7 +148,7 @@ describe('normativeRemoteData — buildTreeFromRows (Ronda 21p, regresión real)
                 ugrl: 16,
                 uo: 0.7,
                 ra: 80,
-                requirements: null,
+                requirements: null, lpd_wm2: null, hours_yr: null,
             },
             {
                 id: 2,
@@ -162,7 +162,7 @@ describe('normativeRemoteData — buildTreeFromRows (Ronda 21p, regresión real)
                 ugrl: 19,
                 uo: 0.6,
                 ra: 80,
-                requirements: null,
+                requirements: null, lpd_wm2: null, hours_yr: null,
             },
         ];
         setNormDataOverride('rne_peru', buildTreeFromRows(rows));

@@ -273,11 +273,14 @@ describe('calculateConductorLength routeHeightM', () => {
             sectionMm2: 2.5, waypoints: [],
         };
 
-        expect(calculateConductorLength(base, conductor)?.verticalLengthM).toBeCloseTo(5.24, 8);
+        // +0.1 m (2 nodos × 0.05 m de holgura por caja, `SLACK_ALLOWANCE` en
+        // `nodeVerticalAllowance` — pedido real del ingeniero, no un ajuste
+        // de este test) sobre el valor geométrico puro (5.24/2.9).
+        expect(calculateConductorLength(base, conductor)?.verticalLengthM).toBeCloseTo(5.34, 8);
         expect(resolveConductorRouteHeight(base, conductor)).toBeCloseTo(4.67, 8);
         expect(resolveConductorRouteHeight(base, { ...conductor, routeHeightM: 3.5 })).toBeCloseTo(3.5, 8);
         expect(calculateConductorLength(base, { ...conductor, routeHeightM: 3.5 })?.verticalLengthM)
-            .toBeCloseTo(2.9, 8);
+            .toBeCloseTo(3.0, 8);
     });
 });
 
@@ -296,8 +299,11 @@ describe('calculateConductorGroupLength', () => {
 
         const result = calculateConductorGroupLength(scene, ['c1', 'c2']);
         expect(result.horizontalLengthM).toBeCloseTo(4, 8);
-        expect(result.verticalLengthM).toBeCloseTo(2.8, 8);
-        expect(result.totalLengthM).toBeCloseTo(6.8, 8);
+        // Nodo compartido (s1, destino de c1 y origen de c2): su bajada
+        // (|3-1.4|+0.05 = 1.65) cuenta UNA sola vez, no dos — td (1.25) +
+        // s1 (1.65, una vez) + l1 (0.05) = 2.95, no 2.8+algo ni 2×1.65+resto.
+        expect(result.verticalLengthM).toBeCloseTo(2.95, 8);
+        expect(result.totalLengthM).toBeCloseTo(6.95, 8);
     });
 });
 

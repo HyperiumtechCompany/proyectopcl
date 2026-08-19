@@ -103,16 +103,37 @@ function readXsrfTokenFromCookie(): string {
     return match ? decodeURIComponent(match[1]) : '';
 }
 
+/**
+ * DIALux v2 ("Módulos") vive aislado del editor v1 en un árbol de rutas
+ * propio (`/dialux-v2/projects/{project}/modules/{module}/plans/{scene}...`,
+ * `routes/web.php`) — un `DialuxModule` NO es un `DialuxProject`, así que
+ * las rutas de plano de v1 (`/dialux/{project}/plans/{scene}...`) resuelven
+ * contra el `DialuxProject` equivocado (o ninguno) cuando se les pasa un
+ * `moduleId`. `EditorLayout.tsx` es compartido entre v1 y v2 — antes de este
+ * fix, SIEMPRE armaba la URL de v1 sin importar el contexto, así que
+ * cualquier operación de plano dentro de un Módulo (heredar el plano de un
+ * piso nuevo, cargarlo en el canvas) fallaba en silencio contra el proyecto
+ * equivocado — un piso nuevo de un Módulo quedaba "sin plano" aunque el
+ * piso de origen sí lo tuviera. `moduleId` es opcional: `undefined` conserva
+ * el comportamiento de v1 exacto (mismo llamador, mismo resultado).
+ */
+function planFileUrl(projectId: string, sceneId: string, moduleId?: string): string {
+    return moduleId
+        ? `/dialux-v2/projects/${encodeURIComponent(projectId)}/modules/${encodeURIComponent(moduleId)}/plans/${encodeURIComponent(sceneId)}`
+        : `/dialux/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(sceneId)}`;
+}
+
 export async function uploadDialuxPlanFile(
     projectId: string,
     sceneId: string,
     file: File,
+    moduleId?: string,
 ): Promise<{ warning: string | null }> {
     const formData = new FormData();
     formData.append('plan', file);
 
     const response = await fetch(
-        `/dialux/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(sceneId)}`,
+        planFileUrl(projectId, sceneId, moduleId),
         {
             method: 'POST',
             headers: {
@@ -136,9 +157,10 @@ export async function uploadDialuxPlanFile(
 export async function loadDialuxPlanFromServer(
     projectId: string,
     sceneId: string,
+    moduleId?: string,
 ): Promise<StoredDialuxPlan | null> {
     const response = await fetch(
-        `/dialux/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(sceneId)}`,
+        planFileUrl(projectId, sceneId, moduleId),
         {
             headers: {
                 Accept: 'application/octet-stream',
@@ -170,8 +192,9 @@ export async function uploadLocalDialuxPlanIfMissing(
     projectId: string,
     sceneId: string,
     plan: StoredDialuxPlan,
+    moduleId?: string,
 ): Promise<void> {
-    const url = `/dialux/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(sceneId)}`;
+    const url = planFileUrl(projectId, sceneId, moduleId);
     const response = await fetch(url, {
         method: 'HEAD',
         headers: { 'X-Requested-With': 'XMLHttpRequest' },
@@ -183,7 +206,7 @@ export async function uploadLocalDialuxPlanIfMissing(
         throw new Error(`No se pudo verificar el plano remoto (HTTP ${response.status}).`);
     }
 
-    await uploadDialuxPlanFile(projectId, sceneId, storedDialuxPlanToFile(plan));
+    await uploadDialuxPlanFile(projectId, sceneId, storedDialuxPlanToFile(plan), moduleId);
 }
 
 /**
@@ -195,9 +218,10 @@ export async function linkDialuxPlanFile(
     projectId: string,
     sceneId: string,
     sourceSceneId: string,
+    moduleId?: string,
 ): Promise<boolean> {
     const response = await fetch(
-        `/dialux/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(sceneId)}/link`,
+        `${planFileUrl(projectId, sceneId, moduleId)}/link`,
         {
             method: 'POST',
             headers: {
@@ -225,8 +249,8 @@ export async function linkDialuxPlanFile(
 }
 
 /** Elimina el vínculo del plano de un piso (ej. al borrarlo). */
-export async function unlinkDialuxPlanFile(projectId: string, sceneId: string): Promise<void> {
-    await fetch(`/dialux/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(sceneId)}`, {
+export async function unlinkDialuxPlanFile(projectId: string, sceneId: string, moduleId?: string): Promise<void> {
+    await fetch(planFileUrl(projectId, sceneId, moduleId), {
         method: 'DELETE',
         headers: {
             Accept: 'application/json',

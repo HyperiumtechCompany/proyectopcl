@@ -360,13 +360,13 @@ export const EditorLayout = memo(function EditorLayout() {
         async (newSceneId: string, sourceSceneId: string | null): Promise<void> => {
             if (!project?.id || !sourceSceneId) return;
             try {
-                await linkDialuxPlanFile(project.id, newSceneId, sourceSceneId);
+                await linkDialuxPlanFile(project.id, newSceneId, sourceSceneId, project.moduleId);
             } catch (error) {
                 console.warn('No se pudo heredar el plano del piso de origen.', error);
                 markDialuxPlanSyncFailed(newSceneId);
             }
         },
-        [project?.id],
+        [project?.id, project?.moduleId],
     );
 
     // Se espera a que el vínculo del plano termine antes de cambiar de piso
@@ -402,9 +402,9 @@ export const EditorLayout = memo(function EditorLayout() {
         const removedSceneId = activeSceneId;
         removeFloor(removedSceneId);
         if (project?.id) {
-            void unlinkDialuxPlanFile(project.id, removedSceneId);
+            void unlinkDialuxPlanFile(project.id, removedSceneId, project.moduleId);
         }
-    }, [activeSceneId, floorsSorted.length, project?.id, removeFloor]);
+    }, [activeSceneId, floorsSorted.length, project?.id, project?.moduleId, removeFloor]);
 
     // Para pisos que ya existían antes de que se agregara la herencia
     // automática de plano (o si el usuario simplemente cambió de opinión),
@@ -415,7 +415,7 @@ export const EditorLayout = memo(function EditorLayout() {
             if (!activeSceneId || !project?.id || !sourceSceneId) return;
             setIsReusingFloorPlan(true);
             try {
-                await linkDialuxPlanFile(project.id, activeSceneId, sourceSceneId);
+                await linkDialuxPlanFile(project.id, activeSceneId, sourceSceneId, project.moduleId);
                 bumpPlanReloadTick();
             } catch (error) {
                 console.warn('No se pudo reutilizar el plano del piso seleccionado.', error);
@@ -424,7 +424,7 @@ export const EditorLayout = memo(function EditorLayout() {
                 setIsReusingFloorPlan(false);
             }
         },
-        [activeSceneId, project?.id, bumpPlanReloadTick],
+        [activeSceneId, project?.id, project?.moduleId, bumpPlanReloadTick],
     );
 
     const handleStartFloorNameEdit = useCallback(() => {

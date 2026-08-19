@@ -1,4 +1,4 @@
-﻿import { CheckCircle2, Scale } from 'lucide-react';
+import { CheckCircle2, Scale } from 'lucide-react';
 import React, { useState } from 'react';
 import type { NormativeStandard } from '@/pages/dialux/hooks/roomLighting';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
@@ -8,26 +8,26 @@ import { PanelCard } from '../primitives';
 const NORM_KEY_TO_STANDARD: Record<NormKey, NormativeStandard> = {
     EN_12464_1: 'en_12464_1',
     EN_12464_2: 'en_12464_1',
-    IESNA: 'ies_na',
+    IESNA: 'iesna_handbook',
     NTP_370: 'rne_peru',
     EN_1838: 'en_1838',
 };
 
-const STANDARD_TO_NORM_KEY: Record<NormativeStandard, NormKey> = {
-    en_12464: 'EN_12464_2',
-    ies_na: 'IESNA',
+const STANDARD_TO_NORM_KEY: Partial<Record<NormativeStandard, NormKey>> = {
+    en_12464_1: 'EN_12464_2',
+    iesna_handbook: 'IESNA',
     rne_peru: 'NTP_370',
     en_1838: 'EN_1838',
     nfpa101: 'EN_12464_2',
     ds024: 'EN_12464_2',
     // RNE A.130 (Fase 14) es una norma de alumbrado de EMERGENCIA (10 lx en
-    // rutas de evacuaciÃ³n, 50 lx en seÃ±alizaciÃ³n) â€” no un nivel de
+    // rutas de evacuación, 50 lx en señalización) — no un nivel de
     // iluminancia por actividad. Este panel aplica una norma "globalmente a
-    // todos los recintos" para diseÃ±o NORMAL; no tiene sentido ofrecer A.130
-    // aquÃ­ (aplicar 10 lx a todo ambiente serÃ­a incorrecto). Se mapea a un
+    // todos los recintos" para diseño NORMAL; no tiene sentido ofrecer A.130
+    // aquí (aplicar 10 lx a todo ambiente sería incorrecto). Se mapea a un
     // valor de relleno, igual que nfpa101/ds024, para no romper la
-    // exhaustividad del Record â€” A.130 se selecciona por recinto/ambiente
-    // vÃ­a NormativeWizardPanel.tsx, no desde este panel rÃ¡pido.
+    // exhaustividad del Record — A.130 se selecciona por recinto/ambiente
+    // vía NormativeWizardPanel.tsx, no desde este panel rápido.
     rne_a130: 'EN_12464_2',
 };
 
@@ -57,7 +57,7 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
 
     return (
         <div className="flex flex-col gap-2.5">
-            <PanelCard title="EstÃ¡ndar normativo del proyecto" tone="normativa">
+            <PanelCard title="Estándar normativo del proyecto" tone="normativa">
                 <div className="flex flex-col gap-1.5">
                     {ALL_STANDARDS.map((standard) => (
                         <button
@@ -97,8 +97,8 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
             </PanelCard>
 
             <div className="rounded-lg border border-blue-200 dark:border-blue-800/40 bg-blue-50 dark:bg-blue-950/20 px-2.5 py-2 text-[9.5px] leading-snug text-blue-800 dark:text-blue-200/80">
-                AquÃ­ se define Ãºnicamente la norma general. El Ã¡rea, la
-                subsecciÃ³n, la aplicaciÃ³n y los lux se configuran en las
+                Aquí se define únicamente la norma general. El área, la
+                subsección, la aplicación y los lux se configuran en las
                 propiedades de cada ambiente.
             </div>
 
@@ -109,11 +109,11 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
             >
                 {applied ? (
                     <>
-                        <CheckCircle2 size={13} /> EstÃ¡ndar actualizado
+                        <CheckCircle2 size={13} /> Estándar actualizado
                     </>
                 ) : (
                     <>
-                        <Scale size={13} /> Cambiar estÃ¡ndar del proyecto
+                        <Scale size={13} /> Cambiar estándar del proyecto
                     </>
                 )}
             </button>

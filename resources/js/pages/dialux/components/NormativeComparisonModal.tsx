@@ -1,4 +1,4 @@
-﻿/**
+/**
  * NormativeComparisonModal.tsx
  *
  * Modal que compara los requisitos para una misma actividad entre
@@ -24,7 +24,7 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
     onClose,
 }) => {
     const comparison = useMemo(
-        () => compareNormsForActivity(activitySearchText, ['rne_peru', 'en_12464_1', 'ies_na']),
+        () => compareNormsForActivity(activitySearchText, ['rne_peru', 'en_12464_1', 'iesna_handbook']),
         [activitySearchText],
     );
 
@@ -55,7 +55,7 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
                     <div className="flex items-center gap-2.5">
                         <Scale size={16} className="text-blue-400" />
                         <div>
-                            <h2 className="text-sm font-bold text-white">ComparaciÃ³n Normativa</h2>
+                            <h2 className="text-sm font-bold text-white">Comparación Normativa</h2>
                             <p className="text-[10px] text-slate-500">
                                 Actividad: <span className="text-slate-700 dark:text-slate-300">{activitySearchText}</span>
                             </p>
@@ -69,12 +69,12 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
                     </button>
                 </div>
 
-                {/* Tabla de comparaciÃ³n */}
+                {/* Tabla de comparación */}
                 <div className="overflow-x-auto p-5">
                     <table className="w-full text-left text-xs">
                         <thead>
                             <tr className="border-b border-slate-300 dark:border-slate-800">
-                                <th className="pb-3 pr-3 font-semibold text-slate-600 dark:text-slate-400">ParÃ¡metro</th>
+                                <th className="pb-3 pr-3 font-semibold text-slate-600 dark:text-slate-400">Parámetro</th>
                                 {comparison.map((entry) => (
                                     <th key={entry.standard} className="pb-3 px-2 text-center">
                                         {legalBadge(entry.legalStatus, entry.standard)}
@@ -99,17 +99,17 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
                                                 <span className="ml-0.5 text-[9px] font-normal text-slate-600">lx</span>
                                             </span>
                                         ) : (
-                                            <span className="text-slate-600">â€”</span>
+                                            <span className="text-slate-600">—</span>
                                         )}
                                     </td>
                                 ))}
                             </tr>
                             <tr>
-                                <td className="py-2.5 pr-3 text-slate-600 dark:text-slate-400">UGR mÃ¡ximo</td>
+                                <td className="py-2.5 pr-3 text-slate-600 dark:text-slate-400">UGR máximo</td>
                                 {comparison.map((entry) => (
                                     <td key={entry.standard} className="px-2 py-2.5 text-center font-mono">
                                         {entry.ugr !== null ? (
-                                            <span className="text-white">â‰¤ {entry.ugr}</span>
+                                            <span className="text-white">≤ {entry.ugr}</span>
                                         ) : (
                                             <span className="text-slate-600">No aplica</span>
                                         )}
@@ -121,7 +121,7 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
                                 {comparison.map((entry) => (
                                     <td key={entry.standard} className="px-2 py-2.5 text-center font-mono">
                                         {entry.uniformity !== null ? (
-                                            <span className="text-white">â‰¥ {entry.uniformity}</span>
+                                            <span className="text-white">≥ {entry.uniformity}</span>
                                         ) : (
                                             <span className="text-slate-600">No aplica</span>
                                         )}
@@ -133,7 +133,7 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
                                 {comparison.map((entry) => (
                                     <td key={entry.standard} className="px-2 py-2.5 text-center font-mono">
                                         {entry.ra !== null ? (
-                                            <span className="text-white">â‰¥ {entry.ra}</span>
+                                            <span className="text-white">≥ {entry.ra}</span>
                                         ) : (
                                             <span className="text-slate-600">No aplica</span>
                                         )}
@@ -147,7 +147,7 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
                                         {entry.specificRequirements ? (
                                             <span className="text-[9px] text-slate-500">{entry.specificRequirements}</span>
                                         ) : (
-                                            <span className="text-slate-700">â€”</span>
+                                            <span className="text-slate-700">—</span>
                                         )}
                                     </td>
                                 ))}
@@ -156,15 +156,15 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
                     </table>
                 </div>
 
-                {/* Nota de la norma mÃ¡s estricta */}
+                {/* Nota de la norma más estricta */}
                 {strictest && strictest.illuminanceLux > 0 && (
                     <div className="mx-5 mb-4 flex items-start gap-2 rounded-lg border border-amber-900/40 bg-amber-950/20 p-3">
                         <AlertCircle size={13} className="mt-0.5 shrink-0 text-amber-500" />
                         <p className="text-[10px] text-amber-600/90">
-                            <span className="font-semibold text-amber-500">Norma mÃ¡s exigente: </span>
+                            <span className="font-semibold text-amber-500">Norma más exigente: </span>
                             <strong>{NORMATIVE_STANDARDS_META[strictest.standard]?.name}</strong> requiere{' '}
                             <strong>{strictest.illuminanceLux} lx</strong> para esta actividad.
-                            Se recomienda diseÃ±ar cumpliendo el umbral mÃ¡s alto para asegurar conformidad multi-normativa.
+                            Se recomienda diseñar cumpliendo el umbral más alto para asegurar conformidad multi-normativa.
                         </p>
                     </div>
                 )}
@@ -172,9 +172,9 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
                 {/* Disclaimers */}
                 <div className="border-t border-slate-300 dark:border-slate-800/60 px-5 py-3">
                     <p className="text-[8.5px] leading-relaxed text-slate-700">
-                        Los valores mostrados son parÃ¡metros tÃ©cnicos fÃ¡cticos extraÃ­dos de normas de dominio pÃºblico.
-                        EN 12464-1:2021 (CEN/TC 169) Â· IES HB-10-17 (Illuminating Engineering Society) Â· RNE EM.010 (MVCS PerÃº).
-                        Para aplicaciÃ³n legal, consulte las publicaciones oficiales.
+                        Los valores mostrados son parámetros técnicos fácticos extraídos de normas de dominio público.
+                        EN 12464-1:2021 (CEN/TC 169) · IES HB-10-17 (Illuminating Engineering Society) · RNE EM.010 (MVCS Perú).
+                        Para aplicación legal, consulte las publicaciones oficiales.
                     </p>
                 </div>
             </div>

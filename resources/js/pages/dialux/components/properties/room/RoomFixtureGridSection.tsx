@@ -1,4 +1,4 @@
-import { Layers, Move, Zap } from 'lucide-react';
+import { Layers, Move, Zap, Search, X } from 'lucide-react';
 import React from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CatalogPanel } from '@/pages/dialux/components/CatalogPanel';
@@ -38,6 +38,7 @@ export function RoomFixtureGridSection({
     const [gridRows, setGridRows] = React.useState(store.ui.fixtureGridRows);
     const [gridCols, setGridCols] = React.useState(store.ui.fixtureGridCols);
     const [showGridFixturePicker, setShowGridFixturePicker] = React.useState(false);
+    const [searchTerm, setSearchTerm] = React.useState('');
     // Elegir un modelo en el picker de esta sección solo debe leer sus lúmenes
     // para el cálculo de la grilla — no debe dejar la herramienta activa en
     // "fixture" (eso es lo que hace CatalogPanel.setFixture normalmente, para
@@ -113,7 +114,10 @@ export function RoomFixtureGridSection({
                 <Layers size={12} className="shrink-0 text-purple-600 dark:text-purple-300" />
                 <span className="min-w-0 flex-1">
                     <span className="block truncate text-[10px] text-purple-900 dark:text-purple-200">{gridFixture.name ?? 'Foco genérico'}</span>
-                    <span className="block text-[9px] leading-none text-slate-500 dark:text-gray-500">{gridFixtureLumens.toLocaleString()} lm</span>
+                    <span className="block text-[9px] leading-none text-slate-500 dark:text-gray-500">
+                        {gridFixtureLumens.toLocaleString()} lm
+                        {gridFixture.power ? ` · ${gridFixture.power} W` : ''}
+                    </span>
                 </span>
                 <span className="shrink-0 text-[9px] text-purple-600 dark:text-purple-400">Cambiar</span>
             </button>
@@ -125,7 +129,7 @@ export function RoomFixtureGridSection({
                 <div className="mt-2 flex items-center justify-between gap-2 rounded bg-amber-50 dark:bg-amber-950/40 px-2 py-1.5">
                     <span className="text-[9px] leading-snug text-amber-700 dark:text-amber-400">
                         {gridRows}×{gridCols} = {gridRows * gridCols}; el cálculo recomienda {gridRoundedQuantity} con "
-                        {gridFixture.name ?? 'este foco'}" ({gridFixtureLumens.toLocaleString()} lm)
+                        {gridFixture.name ?? 'este foco'}" ({gridFixtureLumens.toLocaleString()} lm {gridFixture.power ? ` · ${gridFixture.power} W` : ''})
                     </span>
                     <button
                         type="button"
@@ -177,9 +181,31 @@ export function RoomFixtureGridSection({
                                 Se usará para calcular cuántas luminarias exige la normativa y para generar la grilla.
                             </DialogDescription>
                         </DialogHeader>
+                        <div className="mb-2 relative">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2">
+                                <Search size={12} className="text-slate-400" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Buscar luminarias..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full rounded border border-gray-300 bg-white py-1.5 pl-6 pr-2 text-[10px] text-slate-700 placeholder:text-slate-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder:text-gray-500 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+                            />
+                            {searchTerm && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchTerm('')}
+                                    className="absolute inset-y-0 right-0 flex items-center pr-2 text-slate-400 hover:text-slate-600 dark:hover:text-gray-300"
+                                >
+                                    <X size={10} />
+                                </button>
+                            )}
+                        </div>
                         <CatalogPanel
                             filterCategory="luminaires"
                             variant="compact-grid"
+                            search={searchTerm}
                             fixtureItemsPerPage={15}
                             onSelect={() => {
                                 store.setTool(toolBeforeGridPickerRef.current);

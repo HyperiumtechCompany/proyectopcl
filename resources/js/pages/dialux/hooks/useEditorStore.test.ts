@@ -1,4 +1,4 @@
-﻿import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Project, Room, Scene } from './types';
 import { createScaleConfig, useEditorStore } from './useEditorStore';
 
@@ -85,7 +85,7 @@ describe('useEditorStore normative defaults', () => {
             updated_at: '2026-01-01',
             scenes: [
                 scene('scene-1', [baseRoom('room-1', 'en_12464_1')]),
-                scene('scene-2', [baseRoom('room-2', 'ies_na')]),
+                scene('scene-2', [baseRoom('room-2', 'iesna_handbook')]),
             ],
         };
 
@@ -110,7 +110,7 @@ describe('useEditorStore normative defaults', () => {
 
     it('applyNormativeProfileToRooms with roomIds only touches the selected ambient, not every ambient in the project', () => {
         // Bug real reportado: configurar la norma de un segundo ambiente
-        // sobrescribÃ­a en silencio la del primero, porque el panel aplicaba
+        // sobrescribía en silencio la del primero, porque el panel aplicaba
         // el perfil a TODOS los ambientes en cada clic, sin scoping.
         const ambient1: Room = {
             ...baseRoom('ambient-1', 'en_12464_1'),
@@ -155,13 +155,13 @@ describe('useEditorStore normative defaults', () => {
         expect(
             useEditorStore.getState().project?.defaultRoomNormativeStandard,
         ).toBeUndefined();
-        // El segundo ambiente conserva su configuraciÃ³n previa intacta.
+        // El segundo ambiente conserva su configuración previa intacta.
         expect(untouched2?.illuminanceLux).toBe(500);
         expect(untouched2?.normativeStandard).toBe('en_12464_1');
         expect(untouched2?.normativeCategory).toBe('Previous category');
     });
 
-    it('rechaza aplicar una misma clasificaciÃ³n global cuando no hay roomIds', () => {
+    it('rechaza aplicar una misma clasificación global cuando no hay roomIds', () => {
         const ambient1: Room = {
             ...baseRoom('ambient-1', 'en_12464_1'),
             roomType: 'ambient',
@@ -212,12 +212,12 @@ describe('useEditorStore normative defaults', () => {
         useEditorStore.getState().applyNormativeProfileToRooms({
             standard: 'rne_peru',
             normaLux: 300,
-            normativeLabel: 'Sala de juegos / GuarderÃ­a',
+            normativeLabel: 'Sala de juegos / Guardería',
             roomIds: ['ambient-1'],
         });
 
         const updated = useEditorStore.getState().project?.scenes[0].rooms[0];
-        expect(updated?.normativeLabel).toBe('Sala de juegos / GuarderÃ­a');
+        expect(updated?.normativeLabel).toBe('Sala de juegos / Guardería');
         expect(updated?.normativeActivity).toBeUndefined();
     });
 
@@ -228,7 +228,7 @@ describe('useEditorStore normative defaults', () => {
             ambientConfigs: {
                 'ambient-1': {
                     normativeStandard: 'en_12464_1',
-                    normativeCategory: 'EducaciÃ³n',
+                    normativeCategory: 'Educación',
                     activity: 'Aula europea',
                     illuminanceLux: 500,
                 },
@@ -273,11 +273,11 @@ describe('useEditorStore normative defaults', () => {
         expect(updatedScene.walls[0].illuminanceLux).toBeUndefined();
     });
 
-    it('al cambiar solo el estÃ¡ndar global no impone la misma aplicaciÃ³n ni los mismos lux a todos los ambientes', () => {
+    it('al cambiar solo el estándar global no impone la misma aplicación ni los mismos lux a todos los ambientes', () => {
         const bathroom: Room = {
             ...baseRoom('bathroom', 'en_12464_1'),
             roomType: 'ambient',
-            normativeActivity: 'BaÃ±o',
+            normativeActivity: 'Baño',
             illuminanceLux: 200,
         };
         const bedroom: Room = {
@@ -319,7 +319,7 @@ describe('useEditorStore.setProjectSiteSettings (panel "Terreno")', () => {
         scenes: [scene('scene-1', [])],
     });
 
-    it('crea siteSettings en el proyecto cuando no existÃ­a', () => {
+    it('crea siteSettings en el proyecto cuando no existía', () => {
         useEditorStore.getState().setProject(project());
         useEditorStore.getState().setProjectSiteSettings({ maintenanceFactor: 0.65 });
 
@@ -328,7 +328,7 @@ describe('useEditorStore.setProjectSiteSettings (panel "Terreno")', () => {
         });
     });
 
-    it('hace merge parcial â€” no pisa campos ya seteados de otras secciones', () => {
+    it('hace merge parcial — no pisa campos ya seteados de otras secciones', () => {
         useEditorStore.getState().setProject(project());
         useEditorStore.getState().setProjectSiteSettings({ maintenanceFactor: 0.65 });
         useEditorStore.getState().setProjectSiteSettings({ environmentalZone: 'E3' });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Conductor, ElectricalDevice, Fixture, Room, Scene } from './types';
 import {
     calculatePanelCircuitSummaries,
+    excelCopperResistivity,
     resolveConformingSectionMm2,
     resolveTreeConformingSections,
 } from './wireLengthCalculations';
@@ -636,10 +637,19 @@ describe('calculatePanelCircuitSummaries', () => {
         // `result.phaseCurrentS` YA es corriente real (`circuitCurrent()` ya
         // dividió entre `powerFactor` para obtenerla) — multiplicarla otra
         // vez por 0.8 aquí contaba el factor de potencia dos veces.
+        //
+        // Resistividad: `1/58` (cobre a 20°C) era una aproximación de este
+        // test — la escena no declara `workingTemperatureC`, así que el
+        // cálculo real usa el default documentado de 40°C ("Excel AG5 usa
+        // AD5, temperatura de trabajo", `wireLengthCalculations.ts`), NO
+        // 20°C. `excelCopperResistivity(40)` ≈ 0.018596, no `1/58` ≈
+        // 0.017241 — la diferencia (~1.5%) se notaba como 0.06 V de
+        // discrepancia. Se usa la misma función que la implementación en
+        // vez de un literal aproximado, para no repetir el desajuste.
         const expectedDropV =
             (2 *
                 11.3636363636 *
-                (1 / 58) *
+                excelCopperResistivity(40) *
                 result.lengthM *
                 0.8) /
                 4 +
@@ -870,5 +880,58 @@ describe('caída de tensión en cascada (árbol de tableros)', () => {
         const feederAfter = after.find((c) => c.rootConductorId === 'feeder')!;
         expect(feederAfter.voltageDropOk).toBe(true);
         expect(feederAfter.capacityConforms).toBe(true);
+    });
+
+    it('resolveTreeConformingSections NUNCA sube el calibre de una salida final (C) — corrige el alimentador del TD que la agrupa, calibre fijo por CNE (2.5 mm² alumbrado)', () => {
+        const tg = { id: 'tg', type: 'main_panel', label: 'TG', x: 0, y: 0, properties: { voltage: '380V', phases: '3O' } } as ElectricalDevice;
+        const td = { id: 'td', type: 'sub_panel', label: 'TD', x: 0, y: 0, properties: { voltage: '220V', phases: '1O' } } as ElectricalDevice;
+        const load = fixture('load-1', 'room-a', 300);
+        const scene = {
+            id: 'level-1', name: 'Piso 1', floorIndex: 0,
+            fixtures: [load],
+            electricalDevices: [tg, td],
+            conductors: [
+                // Alimentador TG→TD muy largo (300 m a 2.5 mm²): por sí solo
+                // ya excede el ΔV admisible — arrastra a la salida final C
+                // (branch, corta, 3 m) a no cumplir su propio límite de 4%
+                // aunque ELLA sola nunca lo superaría.
+                conductor('feeder', 'tg', 'td', 300),
+                { ...conductor('branch', 'td', 'load-1', 3), sectionMm2: 2.5 },
+            ],
+            rooms: [{ id: 'room-a', name: 'Aula', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
+            walls: [], lightSwitches: [],
+        } as unknown as Scene;
+
+        const before = calculatePanelCircuitSummaries(scene);
+        const branchBefore = before.find((c) => c.rootConductorId === 'branch')!;
+        // Confirma la premisa del test: la salida final SÍ está fallando
+        // (por el ΔV heredado del alimentador), no es un caso trivial.
+        expect(branchBefore.voltageDropOk).toBe(false);
+        expect(branchBefore.sectionMm2).toBe(2.5);
+
+        const fixes = resolveTreeConformingSections(scene);
+
+        // La salida final NUNCA aparece entre los cambios — su calibre es
+        // fijo por CNE-Utilización, no una variable de ajuste.
+        expect(fixes.some((f) => f.conductorId === 'branch')).toBe(false);
+        // El alimentador del TD que agrupa esa salida sí se corrige.
+        const feederFix = fixes.find((f) => f.conductorId === 'feeder');
+        expect(feederFix?.sectionMm2).toBeGreaterThan(2.5);
+
+        const fixedScene: Scene = {
+            ...scene,
+            conductors: (scene.conductors ?? []).map((c) => {
+                const fix = fixes.find((f) => f.conductorId === c.id);
+                return fix
+                    ? { ...c, sectionMm2: fix.sectionMm2, ct: { ...(c.ct ?? {}), nominalCableCurrentA: undefined } }
+                    : c;
+            }),
+        };
+        const after = calculatePanelCircuitSummaries(fixedScene);
+        const branchAfter = after.find((c) => c.rootConductorId === 'branch')!;
+        // El circuito final sigue en 2.5 mm² (nunca se tocó) y AHORA cumple,
+        // gracias a que el alimentador aguas arriba bajó el ΔV heredado.
+        expect(branchAfter.sectionMm2).toBe(2.5);
+        expect(branchAfter.voltageDropOk).toBe(true);
     });
 });

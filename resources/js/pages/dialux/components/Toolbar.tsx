@@ -322,6 +322,7 @@ export const Toolbar: React.FC = () => {
                             projectId,
                             store.activeSceneId,
                             file,
+                            store.project?.moduleId,
                         );
                         markDialuxPlanSyncOk(store.activeSceneId);
                         // El backend detecta DWG R2010+ (código AC1024 o

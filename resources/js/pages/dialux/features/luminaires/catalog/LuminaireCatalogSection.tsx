@@ -262,6 +262,7 @@ export function LuminaireCatalogSection({ isCompactFixtureGrid, ...hookOptions }
                                     <p className="truncate text-xs leading-snug font-semibold">{product.name}</p>
                                     <p className="mt-1 truncate text-xs leading-snug text-slate-500 dark:text-slate-400">
                                         {product.total_lumens ?? '-'}lm
+                                        {product.power_watts ? ` · ${product.power_watts}W` : ''}
                                         {effLmW ? ` · ${effLmW}lm/W` : ''}
                                         {product.cct ? ` · ${product.cct}` : ''}
                                         {product.source_format ? ` · ${product.source_format.toUpperCase()}` : ''}
@@ -383,6 +384,7 @@ export function LuminaireCatalogSection({ isCompactFixtureGrid, ...hookOptions }
                                     <p className="truncate text-xs leading-snug font-semibold">{item.label}</p>
                                     <p className="mt-1 truncate text-xs leading-snug text-slate-500 dark:text-slate-400">
                                         {item.lumens}lm
+                                        {item.power ? ` · ${item.power}W` : ''}
                                         {effLmW ? ` · ${effLmW}lm/W` : ''}
                                         {item.cct ? ` · ${item.cct}` : ''}
                                     </p>

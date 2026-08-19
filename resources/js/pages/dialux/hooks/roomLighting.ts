@@ -1,4 +1,4 @@
-﻿import {
+import {
     calculateExactQuantity,
     calculateLumensRequired,
     calculatePolygonArea,
@@ -29,12 +29,12 @@ export const NORMATIVE_LABELS: Record<NormativeStandard, string> = {
     en_13201_2: 'EN 13201-2 (Vial)',
     en_12193: 'EN 12193 (Deportes)',
     iesna_handbook: 'IESNA / IES HB-10 (EE. UU.)',
-    en_15193: 'EN 15193 (Eficiencia EnergÃ©tica)',
-    rne_peru: 'RNE EM.010 / CNE (PerÃº)',
-    rne_a130: 'RNE A.130 - Alumbrado de emergencia (PerÃº, obligatoria)',
+    en_15193: 'EN 15193 (Eficiencia Energética)',
+    rne_peru: 'RNE EM.010 / CNE (Perú)',
+    rne_a130: 'RNE A.130 - Alumbrado de emergencia (Perú, obligatoria)',
     en_1838: 'EN 1838 - Alumbrado de emergencia (Europa, referencia)',
     nfpa101: 'NFPA 101 - Life Safety Code (EE. UU.)',
-    ds024: 'D.S. 024 - MinerÃ­a (PerÃº)',
+    ds024: 'D.S. 024 - Minería (Perú)',
 };
 
 export interface NormativeLeafOption {
@@ -48,7 +48,7 @@ export interface NormativeLeafOption {
     uniformity: number | null;
     ra: number | null;
     specificRequirements: string | null;
-    /** Altura del plano Ãºtil (m) verificada contra DIALux evo para esta actividad â€” `null` si aÃºn no se verificÃ³ (ver `RawNormativeLeaf.workPlaneHeight`). */
+    /** Altura del plano útil (m) verificada contra DIALux evo para esta actividad — `null` si aún no se verificó (ver `RawNormativeLeaf.workPlaneHeight`). */
     workPlaneHeight: number | null;
 }
 
@@ -111,13 +111,13 @@ function flattenNormativeTree(
 }
 
 /**
- * Se recalcula en cada llamada (no se cachea a nivel de mÃ³dulo) porque
- * `getNormData` puede devolver el catÃ¡logo sembrado en BD (fuente Ãºnica de
- * verdad, cargado en runtime vÃ­a ensureStandardDataLoaded) en vez del
- * dataset estÃ¡tico â€” cachear aquÃ­ habrÃ­a dejado esta funciÃ³n (y por tanto
+ * Se recalcula en cada llamada (no se cachea a nivel de módulo) porque
+ * `getNormData` puede devolver el catálogo sembrado en BD (fuente única de
+ * verdad, cargado en runtime vía ensureStandardDataLoaded) en vez del
+ * dataset estático — cachear aquí habría dejado esta función (y por tanto
  * los dropdowns de WallProps/RoomProps y findNormativeOption) mostrando
- * permanentemente la transcripciÃ³n estÃ¡tica aunque la BD ya hubiera
- * cargado un catÃ¡logo distinto.
+ * permanentemente la transcripción estática aunque la BD ya hubiera
+ * cargado un catálogo distinto.
  */
 export function getNormativeOptions(
     standard: NormativeStandard,
@@ -165,7 +165,7 @@ export function getActivityOptions(
 ): NormativeLeafOption[] {
     const hasStandard =
         first === 'en_12464_1' ||
-        first === 'ies_na' ||
+        first === 'iesna_handbook' ||
         first === 'rne_peru' ||
         first === 'en_1838' ||
         first === 'nfpa101' ||
@@ -298,13 +298,13 @@ export function getRoomUsefulPlaneHeight(room: Room): number {
 }
 
 /**
- * Zona marginal segÃºn malla EN 12464-1:2021: `p = 0.2 Ã— 5^log10(d)` (`d` =
- * dimensiÃ³n mayor si largo/ancho âˆˆ[0.5,2], si no la menor; `p`â‰¤10 m â€”
+ * Zona marginal según malla EN 12464-1:2021: `p = 0.2 × 5^log10(d)` (`d` =
+ * dimensión mayor si largo/ancho ∈[0.5,2], si no la menor; `p`≤10 m —
  * fuente: EN 12464-1, resumido en Fagerhult "Number of calculation points",
  * verif. 2026-08-06). `n=round(d/p)` puntos, espaciado real `p'=d/n`, borde
- * sin cubrir `p'/2` â€” reproduce los valores pequeÃ±os/no redondos que
+ * sin cubrir `p'/2` — reproduce los valores pequeños/no redondos que
  * reporta DIALux evo (0.135/0.201/0.209 m), a diferencia del 5% fijo sin
- * fuente que usaba antes. Pasadizos (`isCorridorLikeRoom`): 0 m â€”
+ * fuente que usaba antes. Pasadizos (`isCorridorLikeRoom`): 0 m —
  * verificado en dos exportaciones reales de DIALux evo ("Zona marginal: 0.000 m").
  */
 export function getRoomMarginalZone(room: Room): number {
@@ -345,9 +345,9 @@ export function getRoomMarginalZone(room: Room): number {
 }
 
 /**
- * UGR cargado a mano para este ambiente â€” ver el doc-comment de
- * `Room.manualUgr` (`types.ts`) para el porquÃ© (mÃ©todo analÃ­tico de
- * posiciÃ³n de Guth fuera de su rango de validez H/Râ‰¤2). `null` = sin
+ * UGR cargado a mano para este ambiente — ver el doc-comment de
+ * `Room.manualUgr` (`types.ts`) para el porqué (método analítico de
+ * posición de Guth fuera de su rango de validez H/R≤2). `null` = sin
  * override, se usa el UGR calculado tal cual.
  */
 export function getRoomManualUgr(room: Room): number | null {

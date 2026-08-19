@@ -75,7 +75,7 @@ describe('ambientSpaces', () => {
 
         expect(ambient?.room.illuminanceLux).toBe(300);
         expect(ambient?.room.norma).toBe(300);
-        expect(ambient?.room.normativeLabel).toContain('educaciÃ³n de adultos');
+        expect(ambient?.room.normativeLabel).toContain('educación de adultos');
         expect(calculation.illuminanceLux).toBe(300);
         expect(calculation.lumensRequired).toBeGreaterThan(0);
     });

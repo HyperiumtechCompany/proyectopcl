@@ -190,8 +190,8 @@ describe('buildDialuxExportSnapshot â€” Fase 11 (resultados profesionales: 
         const { provenance } = snapshot.ambients[0]!.metrics;
         expect(provenance.snapshotHash).toBe(run.snapshotHash);
         expect(provenance.engineVersion).toBe(run.engineVersion);
-        // interreflexiÃ³n 'first-bounce' es el default desde la Fase 16.
-        expect(provenance.configSummary).toBe('oclusiÃ³n: no Â· interreflexiÃ³n: first-bounce Â· UGR: guth-observers');
+        // interreflexión 'first-bounce' es el default desde la Fase 16.
+        expect(provenance.configSummary).toBe('oclusión: no · interreflexión: first-bounce · UGR: guth-observers');
     });
 
     it('un ambiente sin luminarias trae SU warning (`object-without-luminaires`) y no el de otros ambientes', async () => {

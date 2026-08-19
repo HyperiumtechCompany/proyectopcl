@@ -3,6 +3,7 @@ import {
     Grid,
     Link2,
     Pencil,
+    Search,
     ToggleLeft,
     Upload,
     X,
@@ -100,6 +101,7 @@ export const LuzPanel: React.FC<{
 }) => {
     const [activeSection, setActiveSection] =
         useState<InsertSection>('luminaires');
+    const [searchTerm, setSearchTerm] = useState('');
 
     const setElecTool = (tool: DrawTool, type: ElectricalDeviceType) => {
         onSetTool(tool);
@@ -312,9 +314,32 @@ export const LuzPanel: React.FC<{
                             Importar / crear / eliminar luminarias
                         </button>
 
+                        <div className="mb-2 relative">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2">
+                                <Search size={12} className="text-slate-400" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Buscar luminarias..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full rounded border border-gray-300 bg-white py-1.5 pl-6 pr-2 text-[10px] text-slate-700 placeholder:text-slate-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder:text-gray-500 dark:focus:border-cyan-400 dark:focus:ring-cyan-400"
+                            />
+                            {searchTerm && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchTerm('')}
+                                    className="absolute inset-y-0 right-0 flex items-center pr-2 text-slate-400 hover:text-slate-600 dark:hover:text-gray-300"
+                                >
+                                    <X size={10} />
+                                </button>
+                            )}
+                        </div>
+
                         <CatalogPanel
                             filterCategory="luminaires"
                             variant="compact-grid"
+                            search={searchTerm}
                             fixtureItemsPerPage={15}
                             onSelect={() => {
                                 if (activeTool === 'fixture-grid')
