@@ -132,10 +132,13 @@ export const RoomProps: React.FC<{
                     normActivities={normActivities}
                     inputs={inputs}
                     fixturesInRoom={fixturesInRoom}
+                    arrangementsList={
+                        scene?.fixtureArrangements?.filter(
+                            (a) => a.roomId === room.id,
+                        ) ?? []
+                    }
                 />
             )}
-
-    // RoomFixtureGridSection has been removed in favor of Fixture Arrangements
 
             {isAmbiente && (
                 <RoomOutletsSection

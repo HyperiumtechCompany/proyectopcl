@@ -49,6 +49,13 @@ export const DEFAULT_UGR_EYE_HEIGHT = 1.2;
  * "no evaluado" con el observador en el centroide).
  * Devuelve `[]` si el recinto no tiene un polígono válido — sin observadores
  * no hay UGR que evaluar, comportamiento seguro por defecto.
+ *
+ * NO se desplaza al observador hacia adentro para "sacarlo" del muro de
+ * oclusión (se intentó en la Ronda 25 y se revirtió el mismo día: acercarlo
+ * a las luminarias disparaba la exclusión H/R>2 en casos límite, cambiando
+ * el resultado por la puerta de atrás). El conflicto observador-dentro-del-
+ * muro se resuelve en `glareCalculation.ts`: el muro que CONTIENE al
+ * observador no puede ocluirle la vista.
  */
 export function buildDefaultObservers(room: Room, eyeHeight: number = DEFAULT_UGR_EYE_HEIGHT): GlareObserver[] {
     if (room.vertices.length < 3) {

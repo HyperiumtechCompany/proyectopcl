@@ -345,21 +345,32 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
             scene.structuralObstacles ?? [],
         );
         const ids: string[] = [];
+        const arrangementId = uuidv4();
 
         set((state) => {
             if (!state.project || !state.activeSceneId) return state;
             const newFixtures = fixtureData.map((fd) => {
                 const id = uuidv4();
                 ids.push(id);
-                return { id, ...fd };
+                return { id, ...fd, arrangementId, gridGroupId: arrangementId };
             });
+            const newArrangement: import('@/pages/dialux/hooks/types').FixtureArrangement = {
+                id: arrangementId,
+                roomId: config.roomId ?? null,
+                config,
+                fixtureIds: newFixtures.map(f => f.id),
+                rotation: 0,
+                createdAt: new Date().toISOString(),
+            };
             return mutateScene(state, (s) => ({
                 ...s,
                 fixtures: [...s.fixtures, ...newFixtures],
+                fixtureArrangements: [...(s.fixtureArrangements ?? []), newArrangement],
             }));
         });
         return ids;
     },
+
 
     // â”€â”€ Updaters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     updateRoom: (id, patch) =>

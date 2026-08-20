@@ -10,7 +10,7 @@ import {
     NORMATIVE_LABELS,
     type RoomLightingInputs,
 } from '@/pages/dialux/hooks/roomLighting';
-import type { Fixture, Room } from '@/pages/dialux/hooks/types';
+import type { Fixture, FixtureArrangement, Room } from '@/pages/dialux/hooks/types';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import {
     EditField,
@@ -32,6 +32,7 @@ export function RoomLightingSection({
     normActivities,
     inputs,
     fixturesInRoom,
+    arrangementsList = [],
 }: {
     room: Room;
     onUpdate: (patch: Partial<Omit<Room, 'id'>>) => void;
@@ -41,6 +42,7 @@ export function RoomLightingSection({
     normActivities: NormativeLeafOption[];
     inputs: RoomLightingInputs;
     fixturesInRoom: Fixture[];
+    arrangementsList?: FixtureArrangement[];
 }) {
     const store = useEditorStore();
     const manualUgr = getRoomManualUgr(room);
@@ -252,21 +254,37 @@ export function RoomLightingSection({
                     label="Luminarias"
                     value={`${fixturesInRoom.length}`}
                 />
-                {fixturesInRoom.length > 0 && (
-                    <button
-                        type="button"
-                        onClick={() => {
-                            store.setSelectedId(null);
-                            store.setSelectedFixtureIds(
-                                fixturesInRoom.map((f) => f.id),
-                            );
-                        }}
-                        className="ml-2 rounded bg-blue-600/20 px-2 py-0.5 text-[10px] text-blue-400 hover:bg-blue-600/40"
-                    >
-                        Seleccionar Todas
-                    </button>
-                )}
             </div>
+            {/* Proyecciones del ambiente */}
+            {arrangementsList.length > 0 && (
+                <div className="mt-1 space-y-1">
+                    <p className="text-[9px] font-semibold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
+                        Proyecciones ({arrangementsList.length})
+                    </p>
+                    {arrangementsList.map((arr, i) => {
+                        const firstFix = fixturesInRoom.find(f => (f as any).arrangementId === arr.id);
+                        const fixName = firstFix?.name ?? `Proyección ${i + 1}`;
+                        const count = arr.fixtureIds.length;
+                        return (
+                            <button
+                                key={arr.id}
+                                type="button"
+                                onClick={() => {
+                                    store.setSelectedId(arr.id);
+                                }}
+                                className="flex w-full items-center justify-between rounded border border-cyan-500/30 bg-cyan-50 dark:bg-cyan-900/20 px-2 py-1.5 text-left hover:bg-cyan-100 dark:hover:bg-cyan-900/40 transition-colors"
+                            >
+                                <span className="truncate text-[10px] font-medium text-cyan-700 dark:text-cyan-300">
+                                    {arr.config.columns}×{arr.config.rows} — {fixName}
+                                </span>
+                                <span className="ml-2 shrink-0 text-[9px] text-cyan-500">
+                                    {count} lum.
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
             <PropField
                 label="Lm detectados"
                 value={

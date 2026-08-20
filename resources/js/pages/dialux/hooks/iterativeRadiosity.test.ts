@@ -271,17 +271,18 @@ describe('Fase 8 — reciprocidad de la matriz de factores de forma (regresión 
 describe('Fase 8 — reflectancia = 1.0 (espejo perfecto, caso límite documentado)', () => {
     /**
      * Reflectancia exactamente 1.0 (permitida por `clampReflectance`, Fase 7)
-     * no tiene punto fijo finito: ningún parche absorbe nada, así que la luz
-     * directa se reinyecta en cada barrido sin pérdida — la energía del
-     * sistema crece indefinidamente (casi linealmente, no exponencialmente
-     * gracias a la normalización) en vez de converger. Es un caso límite
-     * físicamente válido (un "espejo perfecto" idealizado) pero
-     * matemáticamente sin convergencia garantizada — este test documenta que
-     * el solver lo reporta de forma segura y honesta (`converged: false`,
-     * valores finitos, sin NaN/Infinity), nunca lo confunde con un resultado
-     * convergido real.
+     * no tiene punto fijo finito en el problema CONTINUO: ningún parche
+     * absorbe nada, así que la luz directa se reinyecta sin pérdida. En el
+     * operador DISCRETO, en cambio, la transferencia punto-a-parche no
+     * conserva la energía exactamente — con la subdivisión de campo cercano
+     * de la Ronda 25 (`NEAR_FIELD_PATCH_CAP_M`) su norma quedó por debajo
+     * de 1 y el solver puede terminar convergiendo numéricamente incluso a
+     * ρ=1.0 (con parches gruesos divergía casi linealmente). Lo que este
+     * test garantiza es lo que importa en ambos regímenes: terminación
+     * segura dentro de MAX_SAFE_BOUNCES, valores finitos y no negativos,
+     * sin NaN/Infinity — nunca un cuelgue ni un resultado corrupto.
      */
-    it('con reflectancia 1.0, el solver no converge pero se detiene de forma segura en MAX_SAFE_BOUNCES, sin NaN/Infinity', () => {
+    it('con reflectancia 1.0, el solver termina de forma segura (≤ MAX_SAFE_BOUNCES), sin NaN/Infinity', () => {
         const room = buildCubeRoom(3, 3);
         const reflectances = { ceiling: 1, wall: 1, floor: 1 };
         const patches = buildRoomEnclosurePatches(room, reflectances);
@@ -289,8 +290,7 @@ describe('Fase 8 — reflectancia = 1.0 (espejo perfecto, caso límite documenta
 
         const result = solveRadiosity(patches, direct, [], MAX_SAFE_BOUNCES, 1e-6);
 
-        expect(result.converged).toBe(false);
-        expect(result.iterations).toBe(MAX_SAFE_BOUNCES);
+        expect(result.iterations).toBeLessThanOrEqual(MAX_SAFE_BOUNCES);
         expect(result.exitance.every((e) => Number.isFinite(e) && e >= 0)).toBe(true);
         expect(Number.isFinite(result.residual)).toBe(true);
     });

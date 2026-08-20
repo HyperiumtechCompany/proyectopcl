@@ -83,31 +83,64 @@ import { DEFAULT_DIRECT_PREVIEW_CONFIG, type CalculationConfig } from './types';
  *
  *   4. (24, mismo día) Verificado contra un SEGUNDO proyecto real
  *      ("Módulo 22"): la descomposición de la Ronda 23 SÍ se activaba ahí
- *      (contorno ortogonal, pasa `isRectilinearInFrame`) y reconstruía el
- *      área EXACTA del polígono — pero ese polígono real describía un área
- *      ~7 veces mayor que un muro delgado de 0.13 m para su longitud (el
- *      promedio caía de 203 a 72 lx, -64.5%). El algoritmo de descomposición
- *      no tenía bug — el dato de entrada (el contorno guardado) sí, y no es
- *      exclusivo de Vinchos. Corrección: cada caja usa SIEMPRE el espesor
- *      declarado del muro (`wall.thickness`), nunca el medido del contorno
- *      — el contorno solo decide longitudes/posiciones de cada tramo
- *      (giros, muescas), nunca el espesor. Re-verificado tras el fix:
- *      Módulo 22 pasó de -64.5% a -2.2% en el ambiente más afectado (mejora
- *      real, no solo "ya no truena”); Vinchos no cambió (sus 2 muros ya
- *      caían en la salvaguarda no-ortogonal de la Ronda 23, nunca llegaban
- *      a este código).
+ *      y reconstruía el área EXACTA del polígono — pero el promedio caía de
+ *      203 a 72 lx (-64.5%). Primer parche: espesor siempre el declarado
+ *      (`wall.thickness`), nunca el medido del contorno. Mejoraba los
+ *      números pero era CANCELACIÓN DE ERRORES, no física (ver Ronda 25).
+ *   5. (25, mismo día — la interpretación correcta) El anillo cerrado que
+ *      guarda el editor NO es la huella rellena de un muro grueso: es el
+ *      RECORRIDO PERIMETRAL del muro alrededor del ambiente (verificado
+ *      vértice a vértice contra el muro `31efa5ea` de Módulo 22: encierra
+ *      2.18 m² = el interior de SS.HH, con muescas de jamba de ~0.13 m).
+ *      Rellenarlo ponía cajas DENTRO del ambiente ocluyendo sus propias
+ *      luminarias. Corrección real (`occlusionBoxes.ts`): una caja por
+ *      arista del contorno, espesor declarado centrado en la arista — la
+ *      rama especial de anillos desapareció, todo contorno pasa por el
+ *      camino por-segmento. Dos correcciones acompañantes con causa física
+ *      (`roomPatches.ts`): los parches de pared se muestrean en la CARA
+ *      INTERIOR del muro (inset = espesor máx/2 + ε; en la línea central
+ *      caían dentro de la caja opaca y la interreflexión entera colapsaba a
+ *      0), y se subdividen también A LO LARGO de la arista con la misma
+ *      cota de campo cercano que `wallVerticalSegments` (sin eso, la
+ *      radiosidad iterativa en recintos angostos convergía al asíntota
+ *      1/(1-ρ̄) de cavidad zonal, +38% sobre evo).
  *
  * Reactivado a `true` con esta base. Sigue siendo una funcionalidad joven
  * — si un proyecto real muestra un resultado peor que con oclusión
  * desactivada, es evidencia real de un caso no cubierto, no una razón para
  * revertir en silencio: documentar la ronda nueva aquí primero.
+ *
+ * ## `interreflection: 'iterative'` (Ronda 25, 2026-08-19 — reemplaza a
+ * `'auto-by-shape'`)
+ *
+ * La heurística por forma (arriba) se calibró en rondas donde faltaban DOS
+ * causas físicas: la oclusión (la luz se filtraba entre ambientes y el
+ * subestimado de `first-bounce` lo compensaba por cancelación) y la
+ * subdivisión horizontal de parches (el sobreestimado de `iterative` en
+ * recintos angostos era un artefacto de campo cercano, no del método).
+ * Con ambas corregidas, la matriz occl×interreflexión sobre Módulo 22
+ * (2026-08-19) dio:
+ *
+ *   - `iterative`:    +12.9% / +10.5% / +8.6% vs DIALux evo (signo
+ *     consistente, los 3 ambientes CONFORMES igual que en evo), y por
+ *     DEBAJO del oráculo Radiance (-10.6% en el barrido de altura de
+ *     sshh) — acotado por física por arriba y por evo por abajo.
+ *   - `first-bounce`: -15.1% / -14.0% / -4.7% (subestimado sistemático —
+ *     es una truncación del transporte, no un modelo físico completo; los
+ *     ambientes quedaban "no conformes" que evo declara conformes).
+ *
+ * `'auto-by-shape'` mezclaba ambos signos en el mismo proyecto. Radiance
+ * (física independiente, sin evo de por medio) también favorece `iterative`
+ * en ambas alturas medidas (`heightSweepExperiment.test.ts`). La heurística
+ * sigue disponible como valor de config, pero producción usa el modelo
+ * convergido.
  */
 export function buildProductionCalculationConfig(project: Project): CalculationConfig {
     return {
         ...DEFAULT_DIRECT_PREVIEW_CONFIG,
         maintenanceFactor: project.siteSettings?.maintenanceFactor ?? DEFAULT_DIRECT_PREVIEW_CONFIG.maintenanceFactor,
         occlusion: true,
-        interreflection: 'auto-by-shape',
+        interreflection: 'iterative',
         maxBounces: 100,
         convergenceTolerance: 1e-5,
         meshPolicy: { ...DEFAULT_DIRECT_PREVIEW_CONFIG.meshPolicy, adaptive: true },

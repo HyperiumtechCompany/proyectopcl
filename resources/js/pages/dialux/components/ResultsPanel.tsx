@@ -1,11 +1,41 @@
-import { AlertTriangle, BadgeCheck, Building2, CheckCircle, Gauge, Layers3, Lightbulb, RotateCcw, TableProperties, XCircle } from 'lucide-react';
-import React, { useState } from 'react';
+import {
+    AlertTriangle,
+    BadgeCheck,
+    Building2,
+    Check,
+    CheckCircle,
+    Gauge,
+    Layers3,
+    Lightbulb,
+    RotateCcw,
+    TableProperties,
+    XCircle,
+    Zap,
+} from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { calculateAnnualConsumption } from '@/pages/dialux/domain/calculation/consumptionCalibration';
 import type { CalculationRun } from '@/pages/dialux/domain/calculation/types';
 import { determineCoverage } from '@/pages/dialux/hooks/lightingCalculations';
-import { buildRoomLightingInputs, getRoomManualUgr } from '@/pages/dialux/hooks/roomLighting';
-import type { Fixture, LightingResult, Room } from '@/pages/dialux/hooks/useEditorStore';
+import {
+    buildRoomLightingInputs,
+    getRoomManualUgr,
+} from '@/pages/dialux/hooks/roomLighting';
+import {
+    useEditorStore,
+    type Fixture,
+    type LightingResult,
+    type Room,
+} from '@/pages/dialux/hooks/useEditorStore';
 
-export interface RoomResultSummary { room: Room; fixtures: Fixture[]; result: LightingResult; sourceRoomName?: string; levelId: string; levelName: string; levelIndex: number; }
+export interface RoomResultSummary {
+    room: Room;
+    fixtures: Fixture[];
+    result: LightingResult;
+    sourceRoomName?: string;
+    levelId: string;
+    levelName: string;
+    levelIndex: number;
+}
 
 interface ResultsPanelProps {
     rooms: RoomResultSummary[];
@@ -49,6 +79,8 @@ interface RoomTableRow {
     ugrIsManual: boolean;
     hasNormativeSource: boolean;
     coverage: 'optimal' | 'insufficient' | 'excessive';
+    installedPowerWatts: number;
+    hasCompletePowerData: boolean;
 }
 
 type ComplianceValues = Pick<
@@ -77,15 +109,20 @@ export function isRoomCompliant(row: ComplianceValues): boolean {
     return (
         row.hasNormativeSource &&
         row.avgLux >= row.illuminanceLux &&
-        (row.uniformityTarget === null || row.uniformity >= row.uniformityTarget) &&
-        (row.ugrLimit === null || (!row.ugrNotEvaluated && row.ugr <= row.ugrLimit))
+        (row.uniformityTarget === null ||
+            row.uniformity >= row.uniformityTarget) &&
+        (row.ugrLimit === null ||
+            (!row.ugrNotEvaluated && row.ugr <= row.ugrLimit))
     );
 }
 
 const coverageStyles = {
-    optimal: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/70',
-    insufficient: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800/70',
-    excessive: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/70',
+    optimal:
+        'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/70',
+    insufficient:
+        'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800/70',
+    excessive:
+        'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/70',
 };
 
 const coverageLabels = {
@@ -95,45 +132,70 @@ const coverageLabels = {
 };
 
 export function buildTableRows(rooms: RoomResultSummary[]): RoomTableRow[] {
-    return rooms.map(({ room, fixtures, result, sourceRoomName, levelId, levelName, levelIndex }) => {
-        const inputs = buildRoomLightingInputs(room, fixtures);
-
-        return {
-            id: room.id,
-            sourceRoomName: sourceRoomName ?? null,
+    return rooms.map(
+        ({
+            room,
+            fixtures,
+            result,
+            sourceRoomName,
             levelId,
             levelName,
             levelIndex,
-            roomName: room.name,
-            activityName: room.normativeActivity ?? null,
-            area: inputs.area,
-            illuminanceLux: inputs.illuminanceLux,
-            normativeLabel: inputs.normative?.label ?? room.normativeLabel ?? null,
-            fixtureCount: inputs.fixtureCount,
-            fixtureLumens: inputs.fixtureLumens,
-            fixtureLumensSource: inputs.detectedFixtureLumens ? 'detected' : 'fallback',
-            lumensRequired: inputs.lumensRequired,
-            exactQuantity: inputs.exactQuantity,
-            roundedQuantity: inputs.roundedQuantity,
-            avgLux: result.avg_lux,
-            minLux: result.min_lux,
-            maxLux: result.max_lux,
-            uniformity: result.uniformity,
-            uniformityTarget: room.uniformityTarget ?? null,
-            estimatedUniformity: inputs.estimatedUniformity,
-            ugr: getRoomManualUgr(room) ?? result.ugr,
-            ugrLimit: room.ugrLimit ?? null,
-            ugrNotEvaluated: getRoomManualUgr(room) === null && (result.ugr_not_evaluated ?? false),
-            ugrIsManual: getRoomManualUgr(room) !== null,
-            hasNormativeSource: Boolean(
-                room.normativeStandard || room.normativeLabel || room.normativeCategory,
-            ),
-            coverage: determineCoverage(
-                inputs.exactQuantity,
-                inputs.fixtureCount || inputs.roundedQuantity,
-            ),
-        };
-    });
+        }) => {
+            const inputs = buildRoomLightingInputs(room, fixtures);
+
+            return {
+                id: room.id,
+                sourceRoomName: sourceRoomName ?? null,
+                levelId,
+                levelName,
+                levelIndex,
+                roomName: room.name,
+                activityName: room.normativeActivity ?? null,
+                area: inputs.area,
+                illuminanceLux: inputs.illuminanceLux,
+                normativeLabel:
+                    inputs.normative?.label ?? room.normativeLabel ?? null,
+                fixtureCount: inputs.fixtureCount,
+                fixtureLumens: inputs.fixtureLumens,
+                fixtureLumensSource: inputs.detectedFixtureLumens
+                    ? 'detected'
+                    : 'fallback',
+                lumensRequired: inputs.lumensRequired,
+                exactQuantity: inputs.exactQuantity,
+                roundedQuantity: inputs.roundedQuantity,
+                avgLux: result.avg_lux,
+                minLux: result.min_lux,
+                maxLux: result.max_lux,
+                uniformity: result.uniformity,
+                uniformityTarget: room.uniformityTarget ?? null,
+                estimatedUniformity: inputs.estimatedUniformity,
+                ugr: getRoomManualUgr(room) ?? result.ugr,
+                ugrLimit: room.ugrLimit ?? null,
+                ugrNotEvaluated:
+                    getRoomManualUgr(room) === null &&
+                    (result.ugr_not_evaluated ?? false),
+                ugrIsManual: getRoomManualUgr(room) !== null,
+                hasNormativeSource: Boolean(
+                    room.normativeStandard ||
+                    room.normativeLabel ||
+                    room.normativeCategory,
+                ),
+                coverage: determineCoverage(
+                    inputs.exactQuantity,
+                    inputs.fixtureCount || inputs.roundedQuantity,
+                ),
+                installedPowerWatts: fixtures.reduce(
+                    (sum, fixture) => sum + (fixture.power ?? 0),
+                    0,
+                ),
+                hasCompletePowerData: fixtures.every(
+                    (fixture) =>
+                        typeof fixture.power === 'number' && fixture.power >= 0,
+                ),
+            };
+        },
+    );
 }
 
 function statusIcon(ok: boolean, warn = false) {
@@ -142,7 +204,16 @@ function statusIcon(ok: boolean, warn = false) {
     return <XCircle size={14} className="text-red-400" />;
 }
 
-export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRun }) => {
+export const ResultsPanel: React.FC<ResultsPanelProps> = ({
+    rooms,
+    calculationRun,
+}) => {
+    const projectOperatingHours = useEditorStore(
+        (state) => state.project?.siteSettings?.dailyOperatingHours ?? 8,
+    );
+    const setProjectSiteSettings = useEditorStore(
+        (state) => state.setProjectSiteSettings,
+    );
     const rows = buildTableRows(rooms);
     const levels = Array.from(
         new Map(
@@ -150,15 +221,33 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                 .sort((a, b) => a.levelIndex - b.levelIndex)
                 .map((row) => [
                     row.levelId,
-                    { id: row.levelId, name: row.levelName, index: row.levelIndex },
+                    {
+                        id: row.levelId,
+                        name: row.levelName,
+                        index: row.levelIndex,
+                    },
                 ]),
         ).values(),
     );
     const [selectedLevelId, setSelectedLevelId] = useState('all');
     const [selectedRoomName, setSelectedRoomName] = useState('all');
     const [showWarnings, setShowWarnings] = useState(false);
+    const [minimumHours, setMinimumHours] = useState(
+        Math.max(0, projectOperatingHours - 2),
+    );
+    const [maximumHours, setMaximumHours] = useState(
+        Math.min(24, projectOperatingHours + 2),
+    );
+    const [calibratedHours, setCalibratedHours] = useState(
+        projectOperatingHours,
+    );
+
+    useEffect(() => {
+        setCalibratedHours(projectOperatingHours);
+    }, [projectOperatingHours]);
     const activeLevelId =
-        selectedLevelId === 'all' || levels.some((level) => level.id === selectedLevelId)
+        selectedLevelId === 'all' ||
+        levels.some((level) => level.id === selectedLevelId)
             ? selectedLevelId
             : 'all';
     const levelRows =
@@ -176,12 +265,57 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
         activeRoomName === 'all'
             ? levelRows
             : levelRows.filter(
-                (row) => (row.sourceRoomName ?? 'Sin recinto') === activeRoomName,
+                  (row) =>
+                      (row.sourceRoomName ?? 'Sin recinto') === activeRoomName,
+              );
+
+    const consumption = useMemo(() => {
+        const totalPowerWatts = filteredRows.reduce(
+            (sum, row) => sum + row.installedPowerWatts,
+            0,
+        );
+        const roomConsumptions = filteredRows
+            .filter(
+                (row) =>
+                    row.hasCompletePowerData && row.installedPowerWatts > 0,
+            )
+            .map((row) =>
+                calculateAnnualConsumption(
+                    row.installedPowerWatts,
+                    calibratedHours,
+                ),
             );
+
+        return {
+            totalPowerWatts,
+            calibrated: calculateAnnualConsumption(
+                totalPowerWatts,
+                calibratedHours,
+            ),
+            minimum: calculateAnnualConsumption(
+                totalPowerWatts,
+                Math.min(minimumHours, maximumHours),
+            ),
+            maximum: calculateAnnualConsumption(
+                totalPowerWatts,
+                Math.max(minimumHours, maximumHours),
+            ),
+            roomMinimum:
+                roomConsumptions.length > 0 ? Math.min(...roomConsumptions) : 0,
+            roomMaximum:
+                roomConsumptions.length > 0 ? Math.max(...roomConsumptions) : 0,
+            incompleteRooms: filteredRows.filter(
+                (row) => !row.hasCompletePowerData,
+            ).length,
+        };
+    }, [calibratedHours, filteredRows, maximumHours, minimumHours]);
+
+    const formatConsumption = (value: number) =>
+        `${value.toLocaleString('es-PE', { maximumFractionDigits: 1 })} kWh/a`;
 
     if (filteredRows.length === 0) {
         return (
-            <div className="rounded-xl border border-slate-300 dark:border-slate-800 bg-slate-300 dark:bg-slate-950/70 p-6 text-center">
+            <div className="rounded-xl border border-slate-300 bg-slate-300 p-6 text-center dark:border-slate-800 dark:bg-slate-950/70">
                 <p className="text-base text-slate-600 dark:text-slate-400">
                     No hay resultados disponibles para mostrar.
                 </p>
@@ -195,21 +329,23 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
         <div className="space-y-5 text-xs">
             <section
                 aria-label="Filtros e indicadores generales"
-                className="rounded-xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950/50 p-3"
+                className="rounded-xl border border-slate-300 bg-white p-3 dark:border-slate-800 dark:bg-slate-950/50"
             >
-                <div
-                    className=" grid gap-2 lg:grid-cols-4 xl:grid-cols-[1fr_1.25fr_auto_repeat(4,0.8fr)] xl:items-center">
+                <div className="grid gap-2 lg:grid-cols-4 xl:grid-cols-[1fr_1.25fr_auto_repeat(4,0.8fr)] xl:items-center">
                     {/* Piso */}
-                    <label className="flex h-14 flex-col justify-center rounded-lg border border-slate-300 dark:border-slate-800 bg-slate-200 dark:bg-slate-900/70 px-3">
-                        <span className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    <label className="flex h-14 flex-col justify-center rounded-lg border border-slate-300 bg-slate-200 px-3 dark:border-slate-800 dark:bg-slate-900/70">
+                        <span className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
                             <Layers3 size={13} className="text-cyan-400" />
                             Piso
                         </span>
 
                         <select
                             value={activeLevelId}
-                            onChange={(event) => setSelectedLevelId(event.target.value)}
-                            className="h-6 border-0 bg-transparent p-0 text-sm font-medium text-slate-900 dark:text-slate-100 outline-none focus:ring-0">
+                            onChange={(event) =>
+                                setSelectedLevelId(event.target.value)
+                            }
+                            className="h-6 border-0 bg-transparent p-0 text-sm font-medium text-slate-900 outline-none focus:ring-0 dark:text-slate-100"
+                        >
                             <option value="all">Todos los pisos</option>
 
                             {levels.map((level) => (
@@ -220,18 +356,20 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                         </select>
                     </label>
 
-
                     {/* Recinto */}
-                    <label className="flex h-14 flex-col justify-center rounded-lg border border-slate-300 dark:border-slate-800 bg-slate-200 dark:bg-slate-900/70 px-3">
-                        <span className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    <label className="flex h-14 flex-col justify-center rounded-lg border border-slate-300 bg-slate-200 px-3 dark:border-slate-800 dark:bg-slate-900/70">
+                        <span className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
                             <Building2 size={13} className="text-amber-400" />
                             Recinto
                         </span>
 
                         <select
                             value={activeRoomName}
-                            onChange={(event) => setSelectedRoomName(event.target.value)}
-                            className="h-6 border-0 bg-transparent p-0 text-sm font-medium text-slate-900 dark:text-slate-100 outline-none focus:ring-0">
+                            onChange={(event) =>
+                                setSelectedRoomName(event.target.value)
+                            }
+                            className="h-6 border-0 bg-transparent p-0 text-sm font-medium text-slate-900 outline-none focus:ring-0 dark:text-slate-100"
+                        >
                             <option value="all">Todos los recintos</option>
 
                             {roomNames.map((roomName) => (
@@ -242,7 +380,6 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                         </select>
                     </label>
 
-
                     {/* Limpiar */}
                     <button
                         type="button"
@@ -250,81 +387,92 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                             setSelectedLevelId('all');
                             setSelectedRoomName('all');
                         }}
-                        disabled={activeLevelId === 'all' && activeRoomName === 'all'}
-                        className=" flex h-14 items-center justify-center gap-2 rounded-lg border border-slate-300 dark:border-slate-800 bg-slate-200 dark:bg-slate-900/70 px-4 text-xs font-semibold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:bg-slate-800 disabled:pointer-events-none disabled:opacity-40">
+                        disabled={
+                            activeLevelId === 'all' && activeRoomName === 'all'
+                        }
+                        className="flex h-14 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-slate-200 px-4 text-xs font-semibold text-slate-700 transition hover:bg-slate-200 disabled:pointer-events-none disabled:opacity-40 dark:border-slate-800 dark:bg-slate-800 dark:bg-slate-900/70 dark:text-slate-300"
+                    >
                         <RotateCcw size={14} />
                         Limpiar
                     </button>
 
-
                     {/* Ambientes */}
-                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/70 px-3">
-                        <Building2 size={16} className="text-slate-500 dark:text-slate-400" />
+                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 dark:border-slate-800 dark:bg-slate-950/70">
+                        <Building2
+                            size={16}
+                            className="text-slate-500 dark:text-slate-400"
+                        />
 
                         <div>
-                            <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                            <p className="text-[10px] tracking-wider text-slate-400 uppercase dark:text-slate-500">
                                 Ambientes
                             </p>
 
-                            <p className="text-xl font-bold text-slate-800 dark:text-white tabular-nums">
+                            <p className="text-xl font-bold text-slate-800 tabular-nums dark:text-white">
                                 {filteredRows.length}
                             </p>
                         </div>
                     </div>
 
-
                     {/* Luminarias */}
-                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/70 px-3">
-                        <Lightbulb size={16} className="text-amber-500 dark:text-amber-400" />
+                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 dark:border-slate-800 dark:bg-slate-950/70">
+                        <Lightbulb
+                            size={16}
+                            className="text-amber-500 dark:text-amber-400"
+                        />
 
                         <div>
-                            <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                            <p className="text-[10px] tracking-wider text-slate-400 uppercase dark:text-slate-500">
                                 Luminarias
                             </p>
 
-                            <p className="text-xl font-bold text-amber-600 dark:text-amber-300 tabular-nums">
+                            <p className="text-xl font-bold text-amber-600 tabular-nums dark:text-amber-300">
                                 {filteredRows.reduce(
                                     (sum, row) => sum + row.fixtureCount,
-                                    0
+                                    0,
                                 )}
                             </p>
                         </div>
                     </div>
 
-
                     {/* Lux promedio */}
-                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/70 px-3">
-                        <Gauge size={16} className="text-cyan-500 dark:text-cyan-400" />
+                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 dark:border-slate-800 dark:bg-slate-950/70">
+                        <Gauge
+                            size={16}
+                            className="text-cyan-500 dark:text-cyan-400"
+                        />
 
                         <div>
-                            <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                            <p className="text-[10px] tracking-wider text-slate-400 uppercase dark:text-slate-500">
                                 Lux promedio
                             </p>
 
-                            <p className="text-xl font-bold text-cyan-700 dark:text-cyan-300 tabular-nums">
+                            <p className="text-xl font-bold text-cyan-700 tabular-nums dark:text-cyan-300">
                                 {filteredRows.length
                                     ? Math.round(
-                                        filteredRows.reduce(
-                                            (sum, row) => sum + row.avgLux,
-                                            0
-                                        ) / filteredRows.length
-                                    )
+                                          filteredRows.reduce(
+                                              (sum, row) => sum + row.avgLux,
+                                              0,
+                                          ) / filteredRows.length,
+                                      )
                                     : 0}
                             </p>
                         </div>
                     </div>
 
-
                     {/* Cumplen */}
-                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/70 px-3">
-                        <BadgeCheck size={16} className="text-emerald-500 dark:text-emerald-400" />
+                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 dark:border-slate-800 dark:bg-slate-950/70">
+                        <BadgeCheck
+                            size={16}
+                            className="text-emerald-500 dark:text-emerald-400"
+                        />
 
                         <div>
-                            <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                            <p className="text-[10px] tracking-wider text-slate-400 uppercase dark:text-slate-500">
                                 Cumplen
                             </p>
 
-                            <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">
+                            <p className="text-xl font-bold text-emerald-700 tabular-nums dark:text-emerald-300">
                                 {compliantRooms}/{filteredRows.length}
                             </p>
                         </div>
@@ -332,46 +480,205 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                 </div>
             </section>
 
+            <section
+                aria-label="Calibracion de consumo"
+                className="rounded-xl border border-cyan-200 bg-cyan-50/70 p-3 sm:p-4 dark:border-cyan-900/70 dark:bg-cyan-950/20"
+            >
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                    <div className="min-w-0 xl:max-w-md">
+                        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+                            <Zap
+                                size={16}
+                                className="text-cyan-600 dark:text-cyan-300"
+                            />
+                            Calibracion previa a la exportacion
+                        </h3>
+                        <p className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                            Ajusta las horas diarias globales y compara el rango
+                            anual. Los ambientes con horas propias conservan su
+                            ajuste al exportar.
+                        </p>
+                    </div>
 
-            <section className="overflow-hidden rounded-2xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950/70 shadow-sm dark:shadow-2xl">
-                <div className="flex items-start gap-3 border-b border-slate-300 dark:border-slate-800 px-4 py-3 sm:px-5 sm:py-4">
-                    <TableProperties size={17} className="mt-0.5 shrink-0 text-cyan-500 dark:text-cyan-300" />
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 xl:w-[31rem]">
+                        {[
+                            {
+                                label: 'Horas minimas',
+                                value: minimumHours,
+                                setter: setMinimumHours,
+                            },
+                            {
+                                label: 'Horas para exportar',
+                                value: calibratedHours,
+                                setter: setCalibratedHours,
+                            },
+                            {
+                                label: 'Horas maximas',
+                                value: maximumHours,
+                                setter: setMaximumHours,
+                            },
+                        ].map((field) => (
+                            <label
+                                key={field.label}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900/80"
+                            >
+                                <span className="block text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
+                                    {field.label}
+                                </span>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={24}
+                                    step={0.5}
+                                    value={field.value}
+                                    onChange={(event) =>
+                                        field.setter(
+                                            Math.min(
+                                                24,
+                                                Math.max(
+                                                    0,
+                                                    Number(event.target.value),
+                                                ),
+                                            ),
+                                        )
+                                    }
+                                    className="mt-1 w-full border-0 bg-transparent p-0 text-sm font-semibold text-slate-900 outline-none focus:ring-0 dark:text-white"
+                                />
+                            </label>
+                        ))}
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={() =>
+                            setProjectSiteSettings({
+                                dailyOperatingHours: calibratedHours,
+                            })
+                        }
+                        disabled={calibratedHours === projectOperatingHours}
+                        className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-cyan-700 px-4 text-xs font-semibold text-white transition hover:bg-cyan-600 disabled:cursor-default disabled:bg-emerald-700 disabled:opacity-90 dark:bg-cyan-600 dark:hover:bg-cyan-500 dark:disabled:bg-emerald-700"
+                    >
+                        <Check size={14} />
+                        {calibratedHours === projectOperatingHours
+                            ? 'Aplicado al proyecto'
+                            : 'Aplicar para exportar'}
+                    </button>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+                    {[
+                        [
+                            'Potencia instalada',
+                            `${consumption.totalPowerWatts.toLocaleString('es-PE', { maximumFractionDigits: 1 })} W`,
+                        ],
+                        [
+                            'Consumo calibrado',
+                            formatConsumption(consumption.calibrated),
+                        ],
+                        [
+                            'Minimo del rango',
+                            formatConsumption(consumption.minimum),
+                        ],
+                        [
+                            'Maximo del rango',
+                            formatConsumption(consumption.maximum),
+                        ],
+                        [
+                            'Ambiente minimo',
+                            formatConsumption(consumption.roomMinimum),
+                        ],
+                        [
+                            'Ambiente maximo',
+                            formatConsumption(consumption.roomMaximum),
+                        ],
+                    ].map(([label, value]) => (
+                        <div
+                            key={label}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-950/70"
+                        >
+                            <p className="text-[9px] font-semibold tracking-wider text-slate-500 uppercase">
+                                {label}
+                            </p>
+                            <p className="mt-1 font-mono text-sm font-bold text-slate-900 tabular-nums dark:text-slate-100">
+                                {value}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+
+                {consumption.incompleteRooms > 0 && (
+                    <p className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-700 dark:text-amber-300">
+                        <AlertTriangle size={12} />
+                        {consumption.incompleteRooms} ambiente(s) tienen
+                        luminarias sin potencia; el consumo mostrado es parcial.
+                    </p>
+                )}
+            </section>
+
+            <section className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70 dark:shadow-2xl">
+                <div className="flex items-start gap-3 border-b border-slate-300 px-4 py-3 sm:px-5 sm:py-4 dark:border-slate-800">
+                    <TableProperties
+                        size={17}
+                        className="mt-0.5 shrink-0 text-cyan-500 dark:text-cyan-300"
+                    />
                     <div className="min-w-0">
                         <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
                             Resultado por ambiente
                         </h3>
                         <p className="mt-0.5 max-w-4xl text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-                            El calculo de luminarias y el isolux se resuelven con
-                            el area del ambiente derivado, mientras que la normativa
-                            aplicada proviene del recinto.
+                            El calculo de luminarias y el isolux se resuelven
+                            con el area del ambiente derivado, mientras que la
+                            normativa aplicada proviene del recinto.
                         </p>
                         {calculationRun && (
                             <>
                                 <p className="mt-1.5 text-[11px] text-slate-500">
-                                    Motor {calculationRun.engineVersion} · calculado{' '}
-                                    {calculationRun.completedAt ? new Date(calculationRun.completedAt).toLocaleString('es-PE') : '—'}
+                                    Motor {calculationRun.engineVersion} ·
+                                    calculado{' '}
+                                    {calculationRun.completedAt
+                                        ? new Date(
+                                              calculationRun.completedAt,
+                                          ).toLocaleString('es-PE')
+                                        : '—'}
                                     {calculationRun.warnings.length > 0 && (
                                         <button
                                             type="button"
-                                            onClick={() => setShowWarnings((v) => !v)}
+                                            onClick={() =>
+                                                setShowWarnings((v) => !v)
+                                            }
                                             className="ml-1.5 text-amber-400 underline decoration-dotted underline-offset-2 hover:text-amber-300"
                                         >
-                                            · {calculationRun.warnings.length} advertencia
-                                            {calculationRun.warnings.length === 1 ? '' : 's'}
-                                            {' '}({showWarnings ? 'ocultar' : 'ver'})
+                                            · {calculationRun.warnings.length}{' '}
+                                            advertencia
+                                            {calculationRun.warnings.length ===
+                                            1
+                                                ? ''
+                                                : 's'}{' '}
+                                            ({showWarnings ? 'ocultar' : 'ver'})
                                         </button>
                                     )}
                                 </p>
-                                {showWarnings && calculationRun.warnings.length > 0 && (
-                                    <ul className="mt-2 max-w-4xl space-y-1 rounded-lg border border-amber-900/40 bg-amber-950/10 p-2.5">
-                                        {calculationRun.warnings.map((warning, index) => (
-                                            <li key={`${warning.code}-${warning.objectId ?? index}`} className="flex items-start gap-1.5 text-[11px] text-amber-200">
-                                                <AlertTriangle size={12} className="mt-0.5 shrink-0 text-amber-400" />
-                                                <span>{warning.message}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
+                                {showWarnings &&
+                                    calculationRun.warnings.length > 0 && (
+                                        <ul className="mt-2 max-w-4xl space-y-1 rounded-lg border border-amber-900/40 bg-amber-950/10 p-2.5">
+                                            {calculationRun.warnings.map(
+                                                (warning, index) => (
+                                                    <li
+                                                        key={`${warning.code}-${warning.objectId ?? index}`}
+                                                        className="flex items-start gap-1.5 text-[11px] text-amber-200"
+                                                    >
+                                                        <AlertTriangle
+                                                            size={12}
+                                                            className="mt-0.5 shrink-0 text-amber-400"
+                                                        />
+                                                        <span>
+                                                            {warning.message}
+                                                        </span>
+                                                    </li>
+                                                ),
+                                            )}
+                                        </ul>
+                                    )}
                             </>
                         )}
                     </div>
@@ -379,8 +686,8 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
 
                 <div className="max-h-[58vh] overflow-auto overscroll-contain">
                     <table className="w-full min-w-[1280px] table-fixed text-left text-xs">
-                        <thead className="sticky top-0 bg-slate-100 dark:bg-slate-950/95 text-center backdrop-blur">
-                            <tr className="border-b border-slate-300 dark:border-slate-800 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-600 dark:text-slate-500">
+                        <thead className="sticky top-0 bg-slate-100 text-center backdrop-blur dark:bg-slate-950/95">
+                            <tr className="border-b border-slate-300 text-[11px] font-semibold tracking-[0.1em] text-slate-600 uppercase dark:border-slate-800 dark:text-slate-500">
                                 <th className="w-56 px-3 py-3">Ambiente</th>
                                 <th className="w-20 px-2 py-3">Área</th>
                                 <th className="w-28 px-2 py-3">Aplicación</th>
@@ -394,7 +701,8 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                 <th className="w-16 px-2 py-3">E max</th>
                                 <th
                                     className="w-16 px-2 py-3"
-                                    title="Uniformidad calculada del grid real (Emin/Eavg del motor de cálculo)">
+                                    title="Uniformidad calculada del grid real (Emin/Eavg del motor de cálculo)"
+                                >
                                     Uo
                                 </th>
                                 <th className="w-16 px-2 py-3">UGR</th>
@@ -409,21 +717,26 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                     row.uniformity >= row.uniformityTarget;
                                 const ugrOk =
                                     row.ugrLimit === null ||
-                                    (!row.ugrNotEvaluated && row.ugr <= row.ugrLimit);
+                                    (!row.ugrNotEvaluated &&
+                                        row.ugr <= row.ugrLimit);
                                 const compliant = isRoomCompliant(row);
                                 const warn = luxOk && (!uniformityOk || !ugrOk);
                                 const showLevelHeader =
                                     activeLevelId === 'all' &&
                                     (index === 0 ||
-                                        filteredRows[index - 1]?.levelId !== row.levelId);
+                                        filteredRows[index - 1]?.levelId !==
+                                            row.levelId);
 
                                 return (
-                                    <React.Fragment key={`${row.levelId}-${row.id}`}>
+                                    <React.Fragment
+                                        key={`${row.levelId}-${row.id}`}
+                                    >
                                         {showLevelHeader && (
-                                            <tr className="border-y border-cyan-200 dark:border-cyan-900/50 bg-cyan-50 dark:bg-cyan-950/30">
+                                            <tr className="border-y border-cyan-200 bg-cyan-50 dark:border-cyan-900/50 dark:bg-cyan-950/30">
                                                 <td
                                                     colSpan={14}
-                                                    className="px-4 py-2 text-left text-xs font-semibold tracking-wide text-cyan-800 dark:text-cyan-200">
+                                                    className="px-4 py-2 text-left text-xs font-semibold tracking-wide text-cyan-800 dark:text-cyan-200"
+                                                >
                                                     <span className="inline-flex items-center gap-2">
                                                         <Layers3 size={13} />
                                                         {row.levelName}
@@ -431,7 +744,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                                 </td>
                                             </tr>
                                         )}
-                                        <tr className="border-b border-slate-200 dark:border-slate-800/70 text-center text-xs text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-50 dark:hover:bg-slate-900/60">
+                                        <tr className="border-b border-slate-200 text-center text-xs text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-800/70 dark:text-slate-200 dark:hover:bg-slate-900/60">
                                             <td className="px-3 py-3">
                                                 <div className="flex items-start gap-2 text-left">
                                                     <Lightbulb
@@ -445,14 +758,16 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                                         <p
                                                             className="mt-0.5 leading-snug text-slate-500"
                                                             title={
-                                                                row.sourceRoomName || row.normativeLabel
+                                                                row.sourceRoomName ||
+                                                                row.normativeLabel
                                                                     ? undefined
                                                                     : 'Estimación previa al cálculo (heurística por cantidad de luminarias), no el resultado real del motor — ver columna Uo'
-                                                            }>
+                                                            }
+                                                        >
                                                             {row.sourceRoomName
                                                                 ? `${row.levelName} · Recinto: ${row.sourceRoomName}`
-                                                                : row.normativeLabel ??
-                                                                `Uniformidad est.: ${(row.estimatedUniformity * 100).toFixed(0)}%`}
+                                                                : (row.normativeLabel ??
+                                                                  `Uniformidad est.: ${(row.estimatedUniformity * 100).toFixed(0)}%`)}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -471,10 +786,13 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                             </td>
                                             <td className="px-2 py-3 font-mono tabular-nums">
                                                 <div>
-                                                    {row.fixtureLumens.toLocaleString('es-PE')}
+                                                    {row.fixtureLumens.toLocaleString(
+                                                        'es-PE',
+                                                    )}
                                                 </div>
                                                 <div className="text-slate-500">
-                                                    {row.fixtureLumensSource === 'detected'
+                                                    {row.fixtureLumensSource ===
+                                                    'detected'
                                                         ? 'Detectado'
                                                         : 'Respaldo'}
                                                 </div>
@@ -483,9 +801,14 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                                 {row.lumensRequired.toFixed(0)}
                                             </td>
                                             <td className="px-2 py-3 font-mono tabular-nums">
-                                                <div>{row.fixtureCount} inst.</div>
+                                                <div>
+                                                    {row.fixtureCount} inst.
+                                                </div>
                                                 <div className="text-slate-500">
-                                                    {row.exactQuantity.toFixed(2)} calc. /{' '}
+                                                    {row.exactQuantity.toFixed(
+                                                        2,
+                                                    )}{' '}
+                                                    calc. /{' '}
                                                     {row.roundedQuantity} red.
                                                 </div>
                                             </td>
@@ -500,7 +823,8 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                             </td>
                                             <td
                                                 className="px-2 py-3 font-mono tabular-nums"
-                                                title="Uniformidad calculada del grid real (Emin/Eavg del motor de cálculo)">
+                                                title="Uniformidad calculada del grid real (Emin/Eavg del motor de cálculo)"
+                                            >
                                                 {row.uniformity.toFixed(3)}
                                             </td>
                                             <td className="px-2 py-3 font-mono tabular-nums">
@@ -521,43 +845,63 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                                         warn,
                                                     )}
                                                     <span
-                                                        className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${compliant
-                                                            ? coverageStyles.optimal
-                                                            : 'border-red-300 bg-red-50 text-red-700 dark:border-red-800/70 dark:bg-red-950/60 dark:text-red-300'
-                                                            }`}>
+                                                        className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                                                            compliant
+                                                                ? coverageStyles.optimal
+                                                                : 'border-red-300 bg-red-50 text-red-700 dark:border-red-800/70 dark:bg-red-950/60 dark:text-red-300'
+                                                        }`}
+                                                    >
                                                         {compliant
                                                             ? 'Conforme'
                                                             : row.hasNormativeSource
-                                                                ? 'No conforme'
-                                                                : 'Sin norma'}
+                                                              ? 'No conforme'
+                                                              : 'Sin norma'}
                                                     </span>
                                                 </div>
                                                 <p className="mt-1 text-[10px] text-slate-500">
-                                                    Cobertura: {coverageLabels[row.coverage]}
+                                                    Cobertura:{' '}
+                                                    {
+                                                        coverageLabels[
+                                                            row.coverage
+                                                        ]
+                                                    }
                                                 </p>
-                                                {row.fixtureCount < row.roundedQuantity && (
+                                                {row.fixtureCount <
+                                                    row.roundedQuantity && (
                                                     <p className="mt-1.5 leading-snug font-semibold text-amber-600 dark:text-amber-400">
-                                                        ≈{row.roundedQuantity - row.fixtureCount}{' '}
-                                                        luminaria(s) más (estimación método de
-                                                        lúmenes) — no es el resultado del cálculo
+                                                        ≈
+                                                        {row.roundedQuantity -
+                                                            row.fixtureCount}{' '}
+                                                        luminaria(s) más
+                                                        (estimación método de
+                                                        lúmenes) — no es el
+                                                        resultado del cálculo
                                                         punto a punto de arriba
                                                     </p>
                                                 )}
                                                 <p className="mt-1.5 leading-snug text-slate-500">
-                                                    {luxOk ? 'Lux OK' : 'Lux bajo'} ·{' '}
-                                                    {row.uniformityTarget === null
+                                                    {luxOk
+                                                        ? 'Lux OK'
+                                                        : 'Lux bajo'}{' '}
+                                                    ·{' '}
+                                                    {row.uniformityTarget ===
+                                                    null
                                                         ? 'Uo no regulado'
                                                         : uniformityOk
-                                                            ? 'Uo OK'
-                                                            : 'Uo bajo'}{' '}
+                                                          ? 'Uo OK'
+                                                          : 'Uo bajo'}{' '}
                                                     ·{' '}
                                                     {row.ugrLimit === null
                                                         ? 'UGR no regulado'
                                                         : row.ugrNotEvaluated
-                                                            ? 'UGR no evaluado'
-                                                            : ugrOk
-                                                                ? row.ugrIsManual ? 'UGR OK (manual)' : 'UGR OK'
-                                                                : row.ugrIsManual ? 'UGR alto (manual)' : 'UGR alto'}
+                                                          ? 'UGR no evaluado'
+                                                          : ugrOk
+                                                            ? row.ugrIsManual
+                                                                ? 'UGR OK (manual)'
+                                                                : 'UGR OK'
+                                                            : row.ugrIsManual
+                                                              ? 'UGR alto (manual)'
+                                                              : 'UGR alto'}
                                                 </p>
                                             </td>
                                         </tr>

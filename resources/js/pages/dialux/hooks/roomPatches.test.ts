@@ -39,11 +39,17 @@ describe('Fase 7 — clampReflectance', () => {
 });
 
 describe('Fase 7 — buildRoomEnclosurePatches', () => {
-    it('genera piso + techo + una pared por arista, con la reflectancia asignada por tipo de superficie', () => {
+    it('genera piso + techo + paredes subdivididas por campo cercano, con la reflectancia asignada por tipo de superficie', () => {
         const room = buildSquareRoom(4, 3);
         const patches = buildRoomEnclosurePatches(room, { ceiling: 0.7, wall: 0.5, floor: 0.2 });
 
-        expect(patches).toHaveLength(2 + 4); // piso, techo, 4 paredes de un cuadrado
+        // Ronda 25: cada pared se subdivide con la cota de campo cercano
+        // `NEAR_FIELD_PATCH_CAP_M` (0.6 m) — lado 4 m → ceil(4/0.6)=7 tramos,
+        // altura 3 m → ceil(3/0.6)=5 bandas. Ver el barrido de convergencia
+        // en `roomPatches.ts`.
+        const horizontal = Math.ceil(4 / 0.6);
+        const vertical = Math.ceil(3 / 0.6);
+        expect(patches).toHaveLength(2 + 4 * horizontal * vertical);
 
         const floor = patches[0]!;
         const ceiling = patches[1]!;
@@ -58,11 +64,16 @@ describe('Fase 7 — buildRoomEnclosurePatches', () => {
         expect(ceiling.reflectance).toBe(0.7);
 
         const walls = patches.slice(2);
+        let totalWallArea = 0;
         for (const wall of walls) {
-            expect(wall.area).toBeCloseTo(4 * 3, 9); // lado 4m x altura 3m
+            expect(wall.area).toBeCloseTo((4 / horizontal) * (3 / vertical), 9);
             expect(wall.reflectance).toBe(0.5);
-            expect(wall.z).toBeCloseTo(1.5, 9);
+            expect(wall.z).toBeGreaterThan(0);
+            expect(wall.z).toBeLessThan(3);
+            totalWallArea += wall.area;
         }
+        // La subdivisión reparte, nunca cambia, el área total de pared.
+        expect(totalWallArea).toBeCloseTo(4 * 4 * 3, 9);
     });
 
     it('la normal de cada pared apunta hacia el interior del recinto (hacia el centroide)', () => {

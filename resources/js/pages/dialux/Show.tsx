@@ -52,10 +52,10 @@ function buildBlankProject(id: string, name: string): Project {
 }
 
 /**
- * pages/dialux/Show.tsx â€” Editor DIAlux de un proyecto concreto
+ * pages/dialux/Show.tsx” Editor DIAlux de un proyecto concreto
  *
  * Siembra el store Zustand con el proyecto cargado desde BD (o una
- * plantilla en blanco si aÃºn no tiene dibujo) antes de montar EditorLayout,
+ * plantilla en blanco si aun no tiene dibujo) antes de montar EditorLayout,
  * y mantiene el autosave activo mientras el usuario dibuja.
  */
 export default function DialuxShow({ project }: Props) {
@@ -110,27 +110,27 @@ export default function DialuxShow({ project }: Props) {
                 'en_12464_1',
         );
 
-        // La carga del proyecto desde BD no es una acciÃ³n del usuario: el
+        // La carga del proyecto desde BD no es una acción del usuario: el
         // historial de undo/redo debe empezar vacÃ­o, no permitir "deshacer"
         // de vuelta a un proyecto sin sembrar.
         resetHistory();
 
         // Arranca la carga del catalogo BD (fuente unica de verdad) apenas se
         // abre el proyecto, para que los paneles de propiedades (pared,
-        // ambiente) no muestren la transcripciÃ³n estÃ¡tica desactualizada
-        // mientras el usuario ya estÃ¡ trabajando.
+        // ambiente) no muestren la transcripcion estatica desactualizada
+        // mientras el usuario ya esta¡ trabajando.
         void ensureStandardDataLoaded('rne_peru');
         void ensureStandardDataLoaded('en_1838');
 
         setReady(true);
-        // Solo debe re-sembrar si cambia el proyecto que se estÃ¡ viendo.
+        // Solo debe re-sembrar si cambia el proyecto que se esta¡ viendo.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [project.id]);
 
     useDialuxProjectSync(project.id, ready);
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'DIAlux', href: '/dialux' },
+        { title: 'HyperLux', href: '/dialux' },
         { title: project.name, href: `/dialux/${project.id}` },
     ];
 
@@ -140,7 +140,7 @@ export default function DialuxShow({ project }: Props) {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`DIAlux â€” ${project.name}`} />
+            <Head title={`HyperLux ” ${project.name}`} />
             <div className="h-[calc(100vh-4rem)] w-full overflow-hidden">
                 <EditorLayout />
             </div>

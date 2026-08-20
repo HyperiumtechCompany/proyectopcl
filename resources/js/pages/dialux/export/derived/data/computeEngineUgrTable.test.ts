@@ -86,7 +86,11 @@ describe('Ronda 21b — computeEngineUgrTables (grilla de reflectancia, modal de
         expect(computeEngineUgrTables({ photometricWeb: { ...manufacturerWeb(), provenance: 'synthetic' } }).available).toBe(false);
     });
 
-    it('produce 5 tablas (una por combinación de reflectancia habitual), cada una con 6 salas y el mismo SHR', () => {
+    // Timeout ampliado (Ronda 25): la subdivisión de campo cercano de
+    // `roomPatches.ts` multiplica los parches de las salas de referencia
+    // grandes (hasta 8H×12H) — medido ~6s en aislamiento, supera el timeout
+    // por defecto bajo carga paralela de la suite completa.
+    it('produce 5 tablas (una por combinación de reflectancia habitual), cada una con 6 salas y el mismo SHR', { timeout: 30000 }, () => {
         const result = computeEngineUgrTables({ photometricWeb: manufacturerWeb() });
         expect(result.available).toBe(true);
         if (!result.available) return;

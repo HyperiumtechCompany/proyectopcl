@@ -86,11 +86,36 @@ export function guthPositionIndex(tauDeg: number, sigmaDeg: number): number {
     return Math.exp(exponent);
 }
 
-function computeUgrForObserver(observer: GlareObserver, fixtures: Fixture[], obstacles: OcclusionBox[], lb: number): { ugr: number; excluded: number } {
+/**
+ * Ronda 25 (2026-08-19): los observadores por defecto viven en el punto
+ * medio de cada pared (convención CIE 117, `buildDefaultObservers`) — que
+ * coincide con la LÍNEA CENTRAL del muro de oclusión, así que el ojo queda
+ * geométricamente DENTRO de la caja opaca y todo segmento observador→
+ * luminaria "intersecta" esa caja, excluyendo todas las luminarias (UGR=0
+ * silencioso, visto contra Módulo 22 real al activar la oclusión). El muro
+ * a la espalda del observador no puede ocluirle la vista hacia el interior
+ * — se descarta del test de visibilidad solo la caja que lo contiene, las
+ * demás siguen ocluyendo con normalidad.
+ */
+function boxContainsObserverEye(box: OcclusionBox, observer: GlareObserver): boolean {
+    if (observer.eyeHeight < box.zMin || observer.eyeHeight > box.zMax) {
+        return false;
+    }
+    const dx = observer.x - box.originX;
+    const dy = observer.y - box.originY;
+    const cos = Math.cos(box.angleRad);
+    const sin = Math.sin(box.angleRad);
+    const localX = dx * cos + dy * sin;
+    const localY = -dx * sin + dy * cos;
+    return localX >= 0 && localX <= box.length && Math.abs(localY) <= box.thickness / 2;
+}
+
+function computeUgrForObserver(observer: GlareObserver, fixtures: Fixture[], allObstacles: OcclusionBox[], lb: number): { ugr: number; excluded: number } {
     if (lb <= 0) {
         return { ugr: 0, excluded: 0 };
     }
 
+    const obstacles = allObstacles.filter((box) => !boxContainsObserverEye(box, observer));
     const viewRad = (observer.viewDirectionDeg * MATH_PI) / 180;
     const view: Vector3 = { x: Math.cos(viewRad), y: Math.sin(viewRad), z: 0 };
     let sum = 0;

@@ -310,7 +310,13 @@ export function calculateLightingResult(
     let reflectedIlluminance: (point: SurfacePoint) => number = () => 0;
     let radiosityMeta: { iterations: number; converged: boolean; residual: number } | null = null;
 
-    const patches = surfaceReflectances ? buildRoomEnclosurePatches(room, surfaceReflectances) : [];
+    // Ronda 25: con oclusión activa, los parches de pared deben muestrearse
+    // en la cara interior del muro (no en su línea central, que cae dentro
+    // de la caja opaca y anula toda la interreflexión) — ver doc de
+    // `surfaceInsetM` en `roomPatches.ts`. Sin obstáculos, inset 0 = sin
+    // cambio de comportamiento.
+    const patchInsetM = obstacles.length > 0 ? Math.max(...obstacles.map((o) => o.thickness)) / 2 + 0.01 : 0;
+    const patches = surfaceReflectances ? buildRoomEnclosurePatches(room, surfaceReflectances, patchInsetM) : [];
     if (patches.length > 0) {
         const patchIlluminance = computePatchDirectIlluminance(patches, enriched, obstacles);
         if (iterativeConfig) {

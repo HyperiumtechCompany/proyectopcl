@@ -42,11 +42,6 @@ export function clampReflectance(value: number): number {
     return Math.min(1, Math.max(0, value));
 }
 
-/** Punto medio de una arista, en el marco XY del mundo. */
-function edgeMidpoint(a: Vertex, b: Vertex): Vertex {
-    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-}
-
 /**
  * Normal horizontal unitaria de una arista, apuntando HACIA DENTRO del
  * recinto — una pared solo puede reflejar luz hacia el interior que la
@@ -88,13 +83,31 @@ function inwardWallNormal(a: Vertex, b: Vertex, isCounterClockwise: boolean): Ve
  * recinto ya no se comporta como una fuente lejana para los puntos de malla
  * cercanos a esa pared.
  *
- * Cota elegida: ningún parche de pared debe ser más alto que la dimensión
- * horizontal más corta del recinto (`cap`) — un parche más alto que el
- * propio ancho del recinto garantiza que algún punto de malla quede en su
- * campo cercano. Para un recinto de proporciones normales (altura ≤ ancho
- * más corto, el caso típico) da `1` — sin subdividir, cero cambio de
- * comportamiento (verificado con los goldens existentes de Fase 7).
+ * Cota elegida: ningún parche de pared debe ser más alto que `cap` (la
+ * dimensión horizontal más corta del recinto, acotada además por
+ * `NEAR_FIELD_PATCH_CAP_M` — ver su doc).
  */
+/**
+ * Cota ABSOLUTA de campo cercano para el lado de un parche de pared (m) —
+ * Ronda 25 (2026-08-19). Acotar solo por la dimensión más corta del recinto
+ * no basta: en un aula real de 43 m² (Vinchos, 7.1×6.2 m) las paredes
+ * quedaban como parches de ~3.5×3 m y la radiosidad punto-a-parche
+ * sobre-transfería (+17%/+24% sobre DIALux evo), mientras que en recintos
+ * chicos (Módulo 22, cap≈0.8 m) el mismo solver clavaba +1-5%. Barrido de
+ * convergencia medido sobre AMBOS proyectos reales (promedio vs. evo):
+ *
+ *   cap→   ∞        2.0      1.5      1.0      0.6      0.5      0.4      0.3
+ *   VIN:   +17/+24  -5/0     -3/+1    -1/+4    +1/+4    -2/+3    0/+4     -1/+3
+ *   M22:   +13/+11  +13/+11  -7/+11   -4/+11   +1/+5    +3/+2    -3/+1    +1/+7
+ *
+ * De 0.6 hacia abajo solo oscila ±3% (ruido de muestreo, sin tendencia) —
+ * 0.6 m es la meseta de convergencia, del orden del espaciado de la malla
+ * de evaluación, con costo O(P²) todavía trivial. Los parches de piso/techo
+ * siguen siendo únicos (límite conocido — los resultados medidos convergen
+ * bien sin subdividirlos).
+ */
+const NEAR_FIELD_PATCH_CAP_M = 0.6;
+
 function wallVerticalSegments(height: number, cap: number): number {
     if (!(cap > 1e-6)) {
         return 1;
@@ -110,7 +123,24 @@ function wallVerticalSegments(height: number, cap: number): number {
  * altura no positiva — sin parches no hay primera reflexión, comportamiento
  * seguro por defecto.
  */
-export function buildRoomEnclosurePatches(room: Room, reflectances: EnclosureReflectances): EnclosurePatch[] {
+export function buildRoomEnclosurePatches(
+    room: Room,
+    reflectances: EnclosureReflectances,
+    /**
+     * Desplazamiento hacia el interior (m) del punto de muestreo de cada
+     * parche de PARED — Ronda 25 (2026-08-19): las aristas del polígono del
+     * ambiente coinciden con la línea central de los muros de oclusión, así
+     * que un parche muestreado exactamente en `mid` queda DENTRO de la caja
+     * opaca (`segmentOcclusion.ts` centra el espesor en esa línea) y recibe
+     * 0 lx directo → la interreflexión entera colapsaba a 0 con oclusión
+     * activa. El parche representa la CARA INTERIOR del muro, que
+     * físicamente está a espesor/2 hacia adentro — el llamador pasa
+     * `máx(espesor de obstáculo)/2 + ε` (0 sin oclusión → sin cambio de
+     * comportamiento). Se recorta a un cuarto de la dimensión horizontal
+     * más corta para no deformar recintos muy angostos.
+     */
+    surfaceInsetM = 0,
+): EnclosurePatch[] {
     const ring = sanitizePolygon(room.vertices);
     if (ring.length < 3 || !(room.height > 0)) {
         return [];
@@ -148,9 +178,10 @@ export function buildRoomEnclosurePatches(room: Room, reflectances: EnclosureRef
 
     const xs = ring.map((vertex) => vertex.x);
     const ys = ring.map((vertex) => vertex.y);
-    const cap = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+    const cap = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), NEAR_FIELD_PATCH_CAP_M);
     const segments = wallVerticalSegments(room.height, cap);
     const segmentHeight = room.height / segments;
+    const inset = Math.min(Math.max(0, surfaceInsetM), cap / 4);
 
     for (let i = 0; i < ring.length; i++) {
         const a = ring[i]!;
@@ -160,17 +191,32 @@ export function buildRoomEnclosurePatches(room: Room, reflectances: EnclosureRef
             continue;
         }
 
-        const mid = edgeMidpoint(a, b);
         const normal = inwardWallNormal(a, b, isCounterClockwise);
-        for (let k = 0; k < segments; k++) {
-            patches.push({
-                x: mid.x,
-                y: mid.y,
-                z: segmentHeight * (k + 0.5),
-                normal,
-                area: length * segmentHeight,
-                reflectance: wallReflectance,
-            });
+        // Ronda 25: misma cota de campo cercano que `wallVerticalSegments`,
+        // aplicada A LO LARGO de la arista — en un recinto angosto (SS.HH
+        // real: paredes de 2.21 m en un recinto de 0.83 m de ancho) un
+        // parche de pared más largo que el propio ancho del recinto queda en
+        // campo cercano de los puntos de malla y la radiosidad iterativa
+        // sobre-transfiere (convergía al asíntota 1/(1-ρ̄) de cavidad zonal,
+        // +38% sobre DIALux evo, verificado con la matriz de diagnóstico del
+        // 2026-08-19). Para recintos normales (aristas ≤ dimensión más
+        // corta) da 1 tramo — sin cambio de comportamiento.
+        const horizontalSegments = cap > 1e-6 ? Math.max(1, Math.ceil(length / cap)) : 1;
+        const segmentLength = length / horizontalSegments;
+        for (let h = 0; h < horizontalSegments; h++) {
+            const t = (h + 0.5) / horizontalSegments;
+            const px = a.x + (b.x - a.x) * t + normal.x * inset;
+            const py = a.y + (b.y - a.y) * t + normal.y * inset;
+            for (let k = 0; k < segments; k++) {
+                patches.push({
+                    x: px,
+                    y: py,
+                    z: segmentHeight * (k + 0.5),
+                    normal,
+                    area: segmentLength * segmentHeight,
+                    reflectance: wallReflectance,
+                });
+            }
         }
     }
 

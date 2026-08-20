@@ -94,19 +94,22 @@ describe('Benchmark de integración — UGR (Fase 9, motor de producción real)'
         // Actualizado en Ronda 21i (cambio deliberado documentado): la
         // luminancia de fondo de UGR usa Eind/π cuando hay interreflexión
         // activa (ver el warning `ugr-background-luminance-method-changed`
-        // en `runDirectPreviewEngine.ts`), y `buildProductionCalculationConfig`
-        // ahora resuelve `interreflection: 'auto-by-shape'` en vez de
-        // `'first-bounce'` fijo — para las 4 formas compactas de abajo
-        // (aspecto bounding-box < 2.0:1) eso activa `iterative`, bajando el
-        // UGR reportado (~13-15% menos) frente a los valores congelados con
-        // `first-bounce`. `long-corridor` (elongado, aspecto ≥ 2.0:1) sigue
-        // en `first-bounce` y su valor no cambió.
+        // en `runDirectPreviewEngine.ts`).
+        //
+        // Actualizado en Ronda 25 (2026-08-19, cambio deliberado): producción
+        // pasó de `'auto-by-shape'` a `'iterative'` y los parches de pared se
+        // subdividen por la cota ABSOLUTA de campo cercano
+        // (`NEAR_FIELD_PATCH_CAP_M = 0.6`, `roomPatches.ts` — elegida por
+        // barrido de convergencia contra DIALux evo en 2 proyectos reales,
+        // Vinchos y Módulo 22, ambos a ±5%). Eso cambia Eind (y por tanto
+        // Lb y el UGR reportado) en TODAS las formas — valores re-congelados
+        // con el motor verificado.
         const knownUgr: Record<string, number> = {
-            'long-corridor': 11.58,
-            'large-square': 11.17,
-            'l-shape': 13.36,
-            'chamfered-pentagon': 12.62,
-            trapezoid: 13.32,
+            'long-corridor': 11.0,
+            'large-square': 11.73,
+            'l-shape': 14.5,
+            'chamfered-pentagon': 13.81,
+            trapezoid: 14.25,
         };
 
         const cases = [

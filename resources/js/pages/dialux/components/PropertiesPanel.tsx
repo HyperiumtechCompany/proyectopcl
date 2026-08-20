@@ -1,4 +1,5 @@
 import React from 'react';
+import { Grid } from 'lucide-react';
 import { deriveSceneAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
 import {
     connectedCircuitConductorIds,
@@ -278,7 +279,23 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
     }
 
     if (arrangement) {
-        return <ArrangementProps arrangement={arrangement} />;
+        const firstFix = scene?.fixtures.find(f => f.arrangementId === arrangement.id);
+        return (
+            <div className="px-2 py-2">
+                <div className="mb-3 flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 pb-2">
+                    <Grid size={14} className="text-cyan-400" />
+                    <div className="flex-1">
+                        <p className="text-[11px] font-semibold text-slate-800 dark:text-gray-100">
+                            {arrangement.config.columns}×{arrangement.config.rows} — {firstFix?.name ?? 'Proyección'}
+                        </p>
+                        <p className="text-[9px] text-slate-400 dark:text-gray-500">
+                            {arrangement.fixtureIds.length} luminarias · Proyección
+                        </p>
+                    </div>
+                </div>
+                <ArrangementProps arrangement={arrangement} />
+            </div>
+        );
     }
 
     if (fixture) {

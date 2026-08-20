@@ -3,13 +3,14 @@ import type { Project } from '@/pages/dialux/hooks/types';
 import { buildProductionCalculationConfig } from './productionCalculationConfig';
 
 /**
- * Ronda 21l→23: `config.occlusion` se activó, se revirtió el mismo día por
- * un bug real de geometría (`wall.vertices` como contorno cerrado tratado
- * como polilínea-centro), y quedó reactivado el 2026-08-19 tras corregir
- * `buildLinearOcclusionBoxes()` con una descomposición geométrica exacta
- * (`decomposeClosedRing`) verificada contra 5 formas sintéticas y los 2
- * muros reales de Vinchos — ver el doc-comment de
- * `buildProductionCalculationConfig` para la historia completa.
+ * Rondas 21l→25 (2026-08-19): oclusión reactivada tras corregir la
+ * interpretación de los contornos cerrados (anillo = recorrido perimetral
+ * del muro, una caja por arista con espesor declarado), e interreflexión
+ * cambiada de `'auto-by-shape'` a `'iterative'` tras corregir las dos
+ * causas físicas que hacían parecer mejor a `first-bounce` (falta de
+ * oclusión + parches de pared sin subdivisión horizontal de campo cercano)
+ * — ver el doc-comment de `buildProductionCalculationConfig` para la
+ * historia completa con la matriz de verificación.
  */
 function buildMinimalProject(): Project {
     return {
@@ -20,14 +21,14 @@ function buildMinimalProject(): Project {
 }
 
 describe('buildProductionCalculationConfig — flags de producción', () => {
-    it('oclusión activada por defecto — ver doc-comment (Ronda 21l→23, historia completa)', () => {
+    it('oclusión activada por defecto — ver doc-comment (Rondas 21l→25, historia completa)', () => {
         const config = buildProductionCalculationConfig(buildMinimalProject());
         expect(config.occlusion).toBe(true);
     });
 
     it('mantiene los demás defaults de producción ya establecidos', () => {
         const config = buildProductionCalculationConfig(buildMinimalProject());
-        expect(config.interreflection).toBe('auto-by-shape');
+        expect(config.interreflection).toBe('iterative');
         expect(config.meshPolicy.adaptive).toBe(true);
         expect(config.excludeMarginalZoneFromStats).toBe(true);
     });
