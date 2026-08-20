@@ -1252,6 +1252,49 @@ test('preview endpoint parses a real LDT file and returns full data WITHOUT crea
     expect(LuminaireProduct::query()->count())->toBe(0);
 });
 
+test('preview normalizes legacy Windows-1252 metadata before encoding it as JSON', function () {
+    Storage::fake();
+    $user = User::factory()->create();
+
+    $lines = array_fill(0, 32, '0');
+    $lines[0] = "Iluminaci\xf3n T\xe9cnica";
+    $lines[1] = '1';
+    $lines[2] = '1';
+    $lines[3] = '1';
+    $lines[4] = '0';
+    $lines[5] = '5';
+    $lines[6] = '22.5';
+    $lines[8] = "Luminaria de exposici\xf3n";
+    $lines[9] = 'LATIN1-PREVIEW';
+    $lines[12] = '180';
+    $lines[13] = '180';
+    $lines[14] = '90';
+    $lines[21] = '62.5';
+    $lines[26] = '1';
+    $lines[27] = 'LED';
+    $lines[28] = '1000';
+    $lines[29] = '4000';
+    $lines[30] = '80';
+    $lines[31] = '10';
+    $lines = array_merge($lines, ['0.51', '0.62', '0.70', '0.78', '0.82', '0.86', '0.90', '0.93', '0.95', '0.97']);
+    $lines[] = '0';
+    $lines = array_merge($lines, ['0', '22.5', '45', '67.5', '90']);
+    $lines = array_merge($lines, ['100', '250', '300', '150', '50']);
+
+    $response = $this
+        ->actingAs($user)
+        ->post(route('dialux.products.preview'), [
+            'file' => UploadedFile::fake()->createWithContent('latin1.ldt', implode("\n", $lines)),
+            'normative_standard' => 'universal',
+        ]);
+
+    $response->assertOk()
+        ->assertJsonPath('product.manufacturer', 'Iluminación Técnica')
+        ->assertJsonPath('product.name', 'Luminaria de exposición');
+
+    expect(LuminaireProduct::query()->count())->toBe(0);
+});
+
 test('users can override total_lumens/power_watts/cct/cri_ra from the preview modal before confirming import', function () {
     Storage::fake();
     $user = User::factory()->create();

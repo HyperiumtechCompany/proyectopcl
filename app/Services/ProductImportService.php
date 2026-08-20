@@ -1334,6 +1334,15 @@ class ProductImportService
      */
     private function withReportPayload(array $data, array $warnings): array
     {
+        // Los archivos IES/LDT antiguos suelen declarar fabricante, producto y
+        // comentarios en Windows-1252 en vez de UTF-8. El parser Rust entrega
+        // JSON normalizado, pero el fallback PHP conserva esos bytes tal cual;
+        // al asignarlos a los casts JSON de Eloquent (metadata/report_data),
+        // Laravel lanza JsonEncodingException. Normalizar aquí mantiene ambos
+        // parsers equivalentes y cubre también estructuras JSON anidadas.
+        $data = $this->normalizeUtf8($data);
+        $warnings = $this->normalizeUtf8($warnings);
+
         $summary = is_array($data['photometric_summary'] ?? null)
             ? $data['photometric_summary']
             : [];
@@ -1392,6 +1401,27 @@ class ProductImportService
         }
 
         return $data;
+    }
+
+    private function normalizeUtf8(mixed $value): mixed
+    {
+        if (is_string($value)) {
+            return mb_check_encoding($value, 'UTF-8')
+                ? $value
+                : mb_convert_encoding($value, 'UTF-8', 'Windows-1252');
+        }
+
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        $normalized = [];
+        foreach ($value as $key => $item) {
+            $normalizedKey = is_string($key) ? $this->normalizeUtf8($key) : $key;
+            $normalized[$normalizedKey] = $this->normalizeUtf8($item);
+        }
+
+        return $normalized;
     }
 
     /** @param array<string, mixed> $web */
