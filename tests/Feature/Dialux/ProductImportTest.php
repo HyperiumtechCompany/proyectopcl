@@ -1285,14 +1285,18 @@ test('preview normalizes legacy Windows-1252 metadata before encoding it as JSON
         ->actingAs($user)
         ->post(route('dialux.products.preview'), [
             'file' => UploadedFile::fake()->createWithContent('latin1.ldt', implode("\n", $lines)),
+            'name' => 'Nombre revisado',
             'normative_standard' => 'universal',
         ]);
 
     $response->assertOk()
         ->assertJsonPath('product.manufacturer', 'Iluminación Técnica')
-        ->assertJsonPath('product.name', 'Luminaria de exposición');
+        ->assertJsonPath('product.name', 'Nombre revisado');
 
-    expect(LuminaireProduct::query()->count())->toBe(0);
+    expect(collect($response->json('warnings'))->contains(
+        fn (string $warning): bool => str_contains($warning, 'Luminaria de exposición'),
+    ))->toBeTrue()
+        ->and(LuminaireProduct::query()->count())->toBe(0);
 });
 
 test('users can override total_lumens/power_watts/cct/cri_ra from the preview modal before confirming import', function () {

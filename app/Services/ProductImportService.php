@@ -278,6 +278,10 @@ class ProductImportService
                 'source_internal_name' => $parsedName,
             ]);
         }
+        $warnings = array_map(
+            fn (string $warning): string => (string) $this->normalizeUtf8($warning),
+            $warnings,
+        );
         $data = $this->withReportPayload($data, $warnings);
 
         $product = $persist

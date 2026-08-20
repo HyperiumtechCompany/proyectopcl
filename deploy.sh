@@ -32,11 +32,7 @@ php artisan migrate --force
 echo "[DB] Reconciliando insumos huerfanos de todos los proyectos de Costos..."
 php artisan costos:reconcile-insumos --force
 
-echo "[DB] Sincronizando catalogo fotometrico real..."
-php artisan db:seed --class=RealPhotometryLuminaireSeeder --force
-
-echo "[DB] Importando luminarias de emergencia..."
-SEEDER_FORCE_UPDATE=true php artisan db:seed --class=EmergencyLuminaireSeeder --force
+echo "[DB] Catalogo de luminarias omitido; su carga se realiza manualmente."
 
 echo "[STORAGE] Verificando enlace publico..."
 php artisan storage:link --force
