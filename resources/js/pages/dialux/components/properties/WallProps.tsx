@@ -12,7 +12,6 @@ import {
     pointInPolygon,
 } from '@/pages/dialux/hooks/ambientSpaces';
 import type { DerivedAmbientSpace } from '@/pages/dialux/hooks/ambientSpaces';
-import { RoomFixtureGridSection } from './room/RoomFixtureGridSection';
 import {
     polygonBBox,
     suggestFixtureGridSize,
@@ -914,35 +913,46 @@ export const WallProps: React.FC<{
                             label="Luminarias en el ambiente"
                             value={`${ambientMatch.fixtures.length}`}
                         />
-                        {ambientMatch.fixtures.length > 0 && (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    store.setSelectedId(null);
-                                    store.setSelectedFixtureIds(
-                                        ambientMatch.fixtures.map((f) => f.id),
-                                    );
-                                }}
-                                className="ml-2 rounded bg-blue-600/20 px-2 py-0.5 text-[10px] text-blue-400 hover:bg-blue-600/40"
-                            >
-                                Seleccionar Todas
-                            </button>
-                        )}
                     </div>
+                    {/* Proyecciones del ambiente — reemplaza GENERAR GRILLA y Seleccionar Todas */}
                     {(() => {
-                        const ambientConfig = ambientMatch.sourceRoom.ambientConfigs?.[ambientMatch.configKey];
-                        const lux = ambientConfig?.illuminanceLux ?? wall.illuminanceLux ?? ambientMatch.room.illuminanceLux ?? 300;
-                        const ceilingInputs = buildRoomLightingInputs(ambientMatch.room, ambientMatch.fixtures);
+                        const arrangements = (scene?.fixtureArrangements ?? []).filter(
+                            (a) => a.roomId === ambientMatch.sourceRoom.id ||
+                                ambientMatch.fixtures.some((f: any) => f.arrangementId === a.id)
+                        );
+                        if (arrangements.length === 0) {
+                            return (
+                                <p className="text-[9px] text-gray-500 dark:text-gray-600 mt-1">
+                                    Sin proyecciones. Usa la herramienta de grilla en la barra superior para proyectar luminarias.
+                                </p>
+                            );
+                        }
                         return (
-                            <RoomFixtureGridSection
-                                room={ambientMatch.sourceRoom}
-                                calculationVertices={ambientMatch.room.vertices}
-                                lumensRequired={ceilingInputs.lumensRequired}
-                                fixtureLumensFallback={ceilingInputs.fixtureLumens}
-                                fixturesInRoom={ambientMatch.fixtures}
-                                calculationRoomId={ambientMatch.room.id}
-                                targetLux={lux}
-                            />
+                            <div className="mt-1 space-y-1">
+                                <p className="text-[9px] font-semibold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
+                                    Proyecciones ({arrangements.length})
+                                </p>
+                                {arrangements.map((arr, i) => {
+                                    const firstFix = ambientMatch.fixtures.find((f: any) => f.arrangementId === arr.id);
+                                    const fixName = firstFix?.name ?? `Proyección ${i + 1}`;
+                                    return (
+                                        <button
+                                            key={arr.id}
+                                            type="button"
+                                            onClick={() => store.setSelectedId(arr.id)}
+                                            className="flex w-full items-center justify-between rounded border border-cyan-500/30 bg-cyan-50 dark:bg-cyan-900/20 px-2 py-1.5 text-left hover:bg-cyan-100 dark:hover:bg-cyan-900/40 transition-colors"
+                                        >
+                                            <span className="flex items-center gap-1.5 truncate text-[10px] font-medium text-cyan-700 dark:text-cyan-300">
+                                                <Grid size={10} />
+                                                {arr.config.columns}×{arr.config.rows} — {fixName}
+                                            </span>
+                                            <span className="ml-2 shrink-0 text-[9px] text-cyan-500">
+                                                {arr.fixtureIds.length} lum.
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         );
                     })()}
 
