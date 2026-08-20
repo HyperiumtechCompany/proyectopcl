@@ -1,4 +1,4 @@
-import { Grid, Layers, Move, Target, Trash2, Ungroup, Zap, Search, X } from 'lucide-react';
+import { Box, Grid, Info, Layers, Move, Target, Trash2, Ungroup, Zap, Search, X } from 'lucide-react';
 import React, { useState } from 'react';
 import {
     Dialog,
@@ -75,9 +75,10 @@ export const FixtureProps: React.FC<{
     };
 
     return (
+        <div className="space-y-2.5">
         <SectionWrapper
-            icon={<Zap size={12} className="text-amber-400" />}
-            label={multiple ? `Luminarias múltiples (${count})` : "Luminaria"}
+            icon={<Info size={12} className="text-blue-500" />}
+            label={multiple ? `Identificación (${count})` : 'Identificación'}
         >
             <div className="mb-2 flex items-start gap-2 rounded border border-amber-300 bg-amber-50 dark:border-amber-700/50 dark:bg-amber-900/20 p-2">
                 <Move
@@ -133,6 +134,13 @@ export const FixtureProps: React.FC<{
                 value={fixture.name}
                 onChange={(value) => onUpdate({ name: value })}
             />
+        </SectionWrapper>
+
+        <SectionWrapper
+            icon={<Zap size={12} className="text-amber-500" />}
+            label="Fotometría y consumo"
+            defaultOpen={false}
+        >
             <EditField
                 label="Lúmenes (lm)"
                 value={fixture.lumens}
@@ -173,7 +181,13 @@ export const FixtureProps: React.FC<{
                 step={1}
                 onChange={(value) => onUpdate({ cri: value || null })}
             />
+        </SectionWrapper>
 
+        <SectionWrapper
+            icon={<Move size={12} className="text-purple-500" />}
+            label="Posición y montaje"
+            defaultOpen={false}
+        >
             <EditField
                 label="X (m)"
                 value={fixture.x}
@@ -229,6 +243,13 @@ export const FixtureProps: React.FC<{
                     </p>
                 </>
             )}
+        </SectionWrapper>
+
+        <SectionWrapper
+            icon={<Box size={12} className="text-cyan-500" />}
+            label="Forma y dimensiones"
+            defaultOpen={false}
+        >
             <SelectField
                 label="Tipo"
                 value={fixture.fixtureType ?? 'recessed'}
@@ -337,7 +358,13 @@ export const FixtureProps: React.FC<{
                     className="h-5 w-8 cursor-pointer rounded border border-gray-300 dark:border-gray-700/50 bg-transparent"
                 />
             </div>
+        </SectionWrapper>
 
+        <SectionWrapper
+            icon={<Target size={12} className="text-emerald-500" />}
+            label="Acciones y organización"
+            defaultOpen={false}
+        >
             <div className="mt-3 flex gap-2">
                 <button
                     type="button"
@@ -472,5 +499,6 @@ export const FixtureProps: React.FC<{
                 </Dialog>
             )}
         </SectionWrapper>
+        </div>
     );
 };

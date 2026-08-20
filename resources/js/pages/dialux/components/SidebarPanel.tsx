@@ -18,7 +18,7 @@ export const SidebarPanel: React.FC = () => {
     return (
         <aside
             id="dialux-sidebar-right"
-            className="flex w-52 min-w-0 shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-slate-50 text-slate-900 dark:border-gray-800/50 dark:bg-[#13141a] dark:text-slate-100 md:w-60 lg:w-72"
+            className="flex min-h-0 w-[clamp(14rem,22vw,19rem)] min-w-0 shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-slate-50 font-sans text-[11px] text-slate-900 dark:border-slate-800 dark:bg-[#13141a] dark:text-slate-100"
         >
             {/* ── Tabs ─────────────────────────────────────────────────── */}
             <div className="flex shrink-0 items-stretch border-b border-slate-200 bg-white dark:border-gray-800/50 dark:bg-[#0f1014]">
@@ -30,13 +30,13 @@ export const SidebarPanel: React.FC = () => {
                             id={`dialux-tab-${key}`}
                             onClick={() => store.setSidebarTab(key)}
                             className={[
-                                'relative flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[10px] font-medium tracking-wide transition-colors duration-150',
+                                'relative flex min-h-10 flex-1 items-center justify-center gap-1.5 px-1 py-2.5 text-[11px] font-medium tracking-wide transition-colors duration-150',
                                 isActive
                                     ? 'text-blue-600 dark:text-blue-400'
                                     : 'text-slate-500 hover:text-slate-800 dark:text-gray-500 dark:hover:text-gray-200',
                             ].join(' ')}
                         >
-                            <Icon size={10} />
+                            <Icon size={12} />
                             {label}
                             {/* active indicator */}
                             {isActive && (
@@ -48,7 +48,7 @@ export const SidebarPanel: React.FC = () => {
             </div>
 
             {/* ── Content ──────────────────────────────────────────────── */}
-            <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2.5 text-xs">
+            <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-2.5 text-[11px] [scrollbar-gutter:stable]">
                 {activeTab === 'objects'    && <ObjectsPanel />}
                 {activeTab === 'properties' && <PropertiesPanel />}
                 {activeTab === 'legend'     && <LegendPanel />}

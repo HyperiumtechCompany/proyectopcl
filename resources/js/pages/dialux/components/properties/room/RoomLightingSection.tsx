@@ -1,4 +1,4 @@
-import { Zap } from 'lucide-react';
+import { Gauge, Lightbulb, Zap } from 'lucide-react';
 import type {
     NormativeLeafOption,
     NormativeStandard,
@@ -48,18 +48,15 @@ export function RoomLightingSection({
     const manualUgr = getRoomManualUgr(room);
 
     return (
+        <>
         <SectionWrapper
             icon={<Zap size={12} className="text-yellow-400" />}
-            label="Iluminación"
+            label="Normativa y verificación"
+            defaultOpen={false}
         >
             <PropField
                 label="Estándar"
                 value={NORMATIVE_LABELS[standard]}
-                mono={false}
-            />
-            <PropField
-                label="Cable luminarias"
-                value="2.5 mm² · AWG 14"
                 mono={false}
             />
             <SelectField
@@ -188,6 +185,13 @@ export function RoomLightingSection({
                     onUpdate({ illuminanceLux: value, norma: value })
                 }
             />
+        </SectionWrapper>
+
+        <SectionWrapper
+            icon={<Gauge size={12} className="text-cyan-500" />}
+            label="Consumo y operación"
+            defaultOpen={false}
+        >
             <EditField
                 label="Uso diario (h/día) — para Consumo (kWh/a)"
                 value={room.dailyOperatingHours ?? 8}
@@ -195,6 +199,21 @@ export function RoomLightingSection({
                 max={24}
                 step={0.5}
                 onChange={(value) => onUpdate({ dailyOperatingHours: value })}
+            />
+            <p className="text-[10px] leading-relaxed text-slate-500 dark:text-slate-400">
+                Este valor se usa para estimar el consumo anual del ambiente y su exportación.
+            </p>
+        </SectionWrapper>
+
+        <SectionWrapper
+            icon={<Lightbulb size={12} className="text-amber-500" />}
+            label="Instalación de luminarias"
+            defaultOpen={false}
+        >
+            <PropField
+                label="Cable luminarias"
+                value="2.5 mm² · AWG 14"
+                mono={false}
             />
             <EditField
                 label="Altura plano útil (m)"
@@ -325,5 +344,6 @@ export function RoomLightingSection({
                 Calcular) cuando este ambiente está seleccionado.
             </p>
         </SectionWrapper>
+        </>
     );
 }

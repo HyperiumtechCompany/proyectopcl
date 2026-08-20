@@ -1,4 +1,4 @@
-import { Square, Zap, Trash2, Minus, AppWindow, Umbrella, DoorOpen, Plug, Cable, ToggleLeft, Boxes } from 'lucide-react';
+import { Square, Zap, Trash2, Minus, AppWindow, Umbrella, DoorOpen, Plug, Cable, ToggleLeft, Boxes, ChevronDown } from 'lucide-react';
 import React from 'react';
 import { isOutletDeviceType } from '@/pages/dialux/hooks/types';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
@@ -363,16 +363,18 @@ const ObjectSection: React.FC<ObjectSectionProps> = ({
 }) => {
     if (items.length === 0) return null;
     return (
-        <div className="mb-2">
-            <div className="mb-1 flex items-center gap-1 px-1">
+        <details className="group mb-1 overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/40" open>
+            <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 bg-slate-50 px-2.5 py-2 transition-colors hover:bg-slate-100 dark:bg-slate-900/70 dark:hover:bg-slate-800/80">
                 {icon}
-                <p className="text-[9px] font-medium tracking-wider text-slate-500 dark:text-gray-400 uppercase">
+                <span className="text-[11px] font-semibold tracking-wide text-slate-700 uppercase dark:text-slate-300">
                     {label}
-                </p>
-                <span className="ml-auto font-mono text-[9px] text-slate-400 dark:text-gray-500">
+                </span>
+                <span className="ml-auto rounded-full bg-slate-200 px-1.5 font-mono text-[9px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                     {items.length}
                 </span>
-            </div>
+                <ChevronDown size={12} className="text-slate-400 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="space-y-0.5 border-t border-slate-200 p-1 dark:border-slate-800">
             {items.map((item) => {
                 const acc = accentClasses[item.accent];
                 const isSelected = selectedId === item.id;
@@ -405,6 +407,7 @@ const ObjectSection: React.FC<ObjectSectionProps> = ({
                     </div>
                 );
             })}
-        </div>
+            </div>
+        </details>
     );
 };

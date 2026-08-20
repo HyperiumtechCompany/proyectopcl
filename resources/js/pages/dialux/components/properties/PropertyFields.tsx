@@ -5,21 +5,39 @@ export const SectionWrapper: React.FC<{
     icon: React.ReactNode;
     label: string;
     children: React.ReactNode;
-}> = ({ icon, label, children }) => (
-    <div className="space-y-2.5">
-        <div className="mb-1 flex items-center gap-2">
-            {icon}
-            <p className="text-[10px] font-semibold tracking-widest text-slate-600 uppercase dark:text-gray-500">
-                {label}
-            </p>
-        </div>
-        {children}
-    </div>
-);
+    defaultOpen?: boolean;
+}> = ({ icon, label, children, defaultOpen = true }) => {
+    const [open, setOpen] = useState(defaultOpen);
+
+    return (
+        <section className="relative rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/40">
+            <button
+                type="button"
+                aria-expanded={open}
+                onClick={() => setOpen((value) => !value)}
+                className="flex min-h-9 w-full items-center gap-2 bg-slate-50 px-2.5 py-2 text-left transition-colors hover:bg-slate-100 dark:bg-slate-900/70 dark:hover:bg-slate-800/80"
+            >
+                <span className="shrink-0">{icon}</span>
+                <span className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-wide text-slate-700 uppercase dark:text-slate-300">
+                    {label}
+                </span>
+                <ChevronDown
+                    size={13}
+                    className={`shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+                />
+            </button>
+            {open && (
+                <div className="space-y-2.5 border-t border-slate-200 p-2.5 dark:border-slate-800">
+                    {children}
+                </div>
+            )}
+        </section>
+    );
+};
 
 export const PropField: React.FC<{ label: string; value: string; mono?: boolean }> = ({ label, value, mono = true }) => (
     <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-1.5 dark:border-gray-800/40">
-        <span className="text-[10px] text-slate-500 dark:text-gray-500">{label}</span>
+        <span className="text-[11px] leading-snug text-slate-500 dark:text-slate-400">{label}</span>
         <span className={`text-right text-[11px] text-slate-800 dark:text-gray-200 ${mono ? 'font-mono' : 'font-medium'}`}>
             {value}
         </span>
@@ -28,21 +46,21 @@ export const PropField: React.FC<{ label: string; value: string; mono?: boolean 
 
 export const EditField: React.FC<{ label: string; value: number; min?: number; max?: number; step?: number; onChange: (value: number) => void;}> = ({ label, value, min, max, step = 0.1, onChange }) => (
     <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(5rem,auto)] items-center gap-2 border-b border-slate-200 pb-1.5 dark:border-gray-800/40">
-        <span className="min-w-0 break-words text-[10px] leading-snug text-slate-500 dark:text-gray-500">{label}</span>
+        <span className="min-w-0 break-words text-[11px] leading-snug text-slate-500 dark:text-slate-400">{label}</span>
         <input type="number" value={value} min={min} max={max} step={step}
             onChange={(event) => {
                 const nextValue = parseFloat(event.target.value);
                 if (!Number.isNaN(nextValue)) onChange(nextValue);
             }}
-            className="w-20 max-w-full min-w-0 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-right font-mono text-[11px] text-slate-900 focus:border-blue-500 focus:outline-none dark:border-gray-700/50 dark:bg-gray-800/80 dark:text-gray-200 dark:focus:border-blue-600/50"
+            className="min-h-7 w-20 max-w-full min-w-0 rounded-md border border-slate-300 bg-white px-2 py-1 text-right font-mono text-[11px] text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
         />
     </div>
 );
 
 export const TextField: React.FC<{ label: string; value: string; onChange: (value: string) => void;}> = ({ label, value, onChange }) => (
     <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(8rem,1.35fr)] items-center gap-2 border-b border-slate-200 pb-1.5 dark:border-gray-800/40">
-        <span className="min-w-0 break-words text-[10px] leading-snug text-slate-500 dark:text-gray-500">{label}</span>
-        <input type="text" value={value} onChange={(event) => onChange(event.target.value)} className="w-full min-w-0 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-right text-[11px] text-slate-900 focus:border-blue-500 focus:outline-none dark:border-gray-700/50 dark:bg-gray-800/80 dark:text-gray-200 dark:focus:border-blue-600/50"/>
+        <span className="min-w-0 break-words text-[11px] leading-snug text-slate-500 dark:text-slate-400">{label}</span>
+        <input type="text" value={value} onChange={(event) => onChange(event.target.value)} className="min-h-7 w-full min-w-0 rounded-md border border-slate-300 bg-white px-2 py-1 text-right text-[11px] text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"/>
     </div>
 );
 

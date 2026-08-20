@@ -20,7 +20,7 @@ export function RoomConstructionSection({
     const constructionPreset = getPeruWallPreset(roomMaterial, roomUse);
 
     return (
-        <SectionWrapper icon={<Square size={12} className="text-orange-400" />} label="Construcción">
+        <SectionWrapper icon={<Square size={12} className="text-orange-400" />} label="Construcción" defaultOpen={false}>
             <SelectField
                 label="Material estruct."
                 value={roomMaterial}

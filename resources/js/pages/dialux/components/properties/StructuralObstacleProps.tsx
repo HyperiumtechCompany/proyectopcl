@@ -1,4 +1,4 @@
-import { Box } from 'lucide-react';
+import { Box, Gauge, Ruler } from 'lucide-react';
 import {
     calculatePolygonArea,
     calculatePolygonPerimeter,
@@ -57,9 +57,10 @@ export function StructuralObstacleProps({
     const normativeSlopeLimit = obstacle.rampType === 'vehicular' ? 15 : obstacle.rampType === 'transition' ? 10 : 8.33;
 
     return (
+        <div className="space-y-2.5">
         <SectionWrapper
             icon={<Box size={12} className="text-red-400" />}
-            label="Obstaculo estructural"
+            label="Identificación y geometría"
         >
             <TextField label="Nombre" value={obstacle.name} onChange={(value) => onUpdate({ name: value })} />
             <SelectField
@@ -96,7 +97,8 @@ export function StructuralObstacleProps({
                 step={0.1}
                 onChange={(value) => onUpdate({ height: value })}
             />
-            {isRoof && <>
+        </SectionWrapper>
+            {isRoof && <SectionWrapper icon={<Ruler size={12} className="text-amber-500" />} label="Cubierta y materiales" defaultOpen={false}>
                 <SelectField label="Tipo de techo" value={obstacle.roofType ?? (obstacle.obstacleType === 'ceiling' ? 'full' : 'flat')} options={ROOF_TYPE_OPTIONS} onChange={(value) => {
                     const roofType = value as StructuralObstacle['roofType'];
                     const pitched = roofType && ['shed', 'gable', 'mansard', 'hip', 'butterfly'].includes(roofType);
@@ -111,8 +113,8 @@ export function StructuralObstacleProps({
                 <EditField label="Reflectancia interior" value={obstacle.interiorReflectance ?? 0.7} min={0} max={1} step={0.05} onChange={(value) => onUpdate({ interiorReflectance: value })} />
                 <EditField label="Reflectancia exterior" value={obstacle.exteriorReflectance ?? 0.3} min={0} max={1} step={0.05} onChange={(value) => onUpdate({ exteriorReflectance: value })} />
                 <EditField label="Voladizo (m)" value={obstacle.overhang ?? 0} min={0} max={5} step={0.05} onChange={(value) => onUpdate({ overhang: value })} />
-            </>}
-            {isRamp && <>
+            </SectionWrapper>}
+            {isRamp && <SectionWrapper icon={<Gauge size={12} className="text-cyan-500" />} label="Rampa y normativa" defaultOpen={false}>
                 <SelectField label="Uso de rampa" value={obstacle.rampType ?? 'pedestrian'} options={RAMP_TYPE_OPTIONS} onChange={(value) => onUpdate({ rampType: value as StructuralObstacle['rampType'] })} />
                 <EditField label="Nivel inicial (m)" value={obstacle.startLevel ?? 0} min={-20} max={30} step={0.05} onChange={(value) => onUpdate({ startLevel: value, elevation: value })} />
                 <EditField label="Nivel final (m)" value={obstacle.endLevel ?? 0.5} min={-20} max={30} step={0.05} onChange={(value) => onUpdate({ endLevel: value })} />
@@ -122,12 +124,12 @@ export function StructuralObstacleProps({
                 <EditField label="Uniformidad mínima" value={obstacle.uniformityTarget ?? 0.4} min={0} max={1} step={0.05} onChange={(value) => onUpdate({ uniformityTarget: value })} />
                 <PropField label="Pendiente calculada" value={`${rampSlope.toFixed(2)} %`} />
                 <PropField label="Control normativo" value={Math.abs(rampSlope) <= normativeSlopeLimit ? `Conforme (≤ ${normativeSlopeLimit}%)` : `No conforme (> ${normativeSlopeLimit}%)`} />
-            </>}
-            <p className="mt-1 text-[9.5px] leading-snug text-gray-600 dark:text-gray-600">
+            </SectionWrapper>}
+            <p className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[10px] leading-relaxed text-slate-500 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-400">
                 {obstacle.obstacleType === 'restricted_area' && obstacle.height <= 0
                     ? 'Sin altura definida: bloquea la instalacion de luminarias a cualquier altura de montaje.'
                     : `Bloquea el plano de montaje entre ${obstacle.elevation.toFixed(2)}m y ${(obstacle.elevation + obstacle.height).toFixed(2)}m desde el piso.`}
             </p>
-        </SectionWrapper>
+        </div>
     );
 }

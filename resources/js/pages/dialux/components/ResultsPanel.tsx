@@ -211,6 +211,16 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
     const projectOperatingHours = useEditorStore(
         (state) => state.project?.siteSettings?.dailyOperatingHours ?? 8,
     );
+    const projectMinimumHours = useEditorStore(
+        (state) =>
+            state.project?.siteSettings?.minimumDailyOperatingHours ??
+            Math.max(0, (state.project?.siteSettings?.dailyOperatingHours ?? 8) - 2),
+    );
+    const projectMaximumHours = useEditorStore(
+        (state) =>
+            state.project?.siteSettings?.maximumDailyOperatingHours ??
+            Math.min(24, (state.project?.siteSettings?.dailyOperatingHours ?? 8) + 2),
+    );
     const setProjectSiteSettings = useEditorStore(
         (state) => state.setProjectSiteSettings,
     );
@@ -233,10 +243,10 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
     const [selectedRoomName, setSelectedRoomName] = useState('all');
     const [showWarnings, setShowWarnings] = useState(false);
     const [minimumHours, setMinimumHours] = useState(
-        Math.max(0, projectOperatingHours - 2),
+        projectMinimumHours,
     );
     const [maximumHours, setMaximumHours] = useState(
-        Math.min(24, projectOperatingHours + 2),
+        projectMaximumHours,
     );
     const [calibratedHours, setCalibratedHours] = useState(
         projectOperatingHours,
@@ -553,13 +563,31 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                         onClick={() =>
                             setProjectSiteSettings({
                                 dailyOperatingHours: calibratedHours,
+                                minimumDailyOperatingHours: Math.min(
+                                    minimumHours,
+                                    maximumHours,
+                                ),
+                                maximumDailyOperatingHours: Math.max(
+                                    minimumHours,
+                                    maximumHours,
+                                ),
                             })
                         }
-                        disabled={calibratedHours === projectOperatingHours}
+                        disabled={
+                            calibratedHours === projectOperatingHours &&
+                            Math.min(minimumHours, maximumHours) ===
+                                projectMinimumHours &&
+                            Math.max(minimumHours, maximumHours) ===
+                                projectMaximumHours
+                        }
                         className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-cyan-700 px-4 text-xs font-semibold text-white transition hover:bg-cyan-600 disabled:cursor-default disabled:bg-emerald-700 disabled:opacity-90 dark:bg-cyan-600 dark:hover:bg-cyan-500 dark:disabled:bg-emerald-700"
                     >
                         <Check size={14} />
-                        {calibratedHours === projectOperatingHours
+                            {calibratedHours === projectOperatingHours &&
+                            Math.min(minimumHours, maximumHours) ===
+                                projectMinimumHours &&
+                            Math.max(minimumHours, maximumHours) ===
+                                projectMaximumHours
                             ? 'Aplicado al proyecto'
                             : 'Aplicar para exportar'}
                     </button>
@@ -613,6 +641,10 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                         luminarias sin potencia; el consumo mostrado es parcial.
                     </p>
                 )}
+                <div className="mt-3 rounded-lg border border-cyan-200 bg-white/80 px-3 py-2 text-[10px] leading-relaxed text-slate-600 dark:border-cyan-900/60 dark:bg-slate-950/60 dark:text-slate-300">
+                    <strong className="text-slate-800 dark:text-slate-100">Fórmula:</strong>{' '}
+                    Consumo anual (kWh/a) = Potencia instalada (W) × horas de operación diarias × 365 ÷ 1000. El mínimo, calibrado y máximo usan respectivamente las tres jornadas indicadas arriba.
+                </div>
             </section>
 
             <section className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70 dark:shadow-2xl">

@@ -519,9 +519,19 @@
                     ? $usefulPowerDensity / ((float) $referenceLux / 100)
                     : null;
             $dailyOperatingHours = (float) ($detail['dailyOperatingHours'] ?? 8);
+            $minimumDailyOperatingHours = (float) ($detail['minimumDailyOperatingHours'] ?? $dailyOperatingHours);
+            $maximumDailyOperatingHours = (float) ($detail['maximumDailyOperatingHours'] ?? $dailyOperatingHours);
             $consumption =
                 ($detail['totalPowerWatts'] ?? null) !== null
                     ? ((float) $detail['totalPowerWatts'] * $dailyOperatingHours * 365) / 1000
+                    : null;
+            $minimumConsumption =
+                ($detail['totalPowerWatts'] ?? null) !== null
+                    ? ((float) $detail['totalPowerWatts'] * min($minimumDailyOperatingHours, $maximumDailyOperatingHours) * 365) / 1000
+                    : null;
+            $maximumConsumption =
+                ($detail['totalPowerWatts'] ?? null) !== null
+                    ? ((float) $detail['totalPowerWatts'] * max($minimumDailyOperatingHours, $maximumDailyOperatingHours) * 365) / 1000
                     : null;
             // Ronda 21h: este renglón ANTES fabricaba un "límite" de consumo
             // copiando literalmente el lux normativo del ambiente (`targetLux`,
@@ -657,15 +667,39 @@
                     <td></td>
                 </tr>
                 <tr>
-                    <td><strong>Valores de consumo</strong></td>
-                    <td>Consumo</td>
+                    <td rowspan="3"><strong>Valores de consumo</strong></td>
+                    <td>M&iacute;nimo</td>
+                    <td class="result-number">' .
+                $formatNumber($minimumConsumption, 0, ' kWh/a') .
+                '</td>
+                    <td class="result-number">' .
+                $formatNumber(min($minimumDailyOperatingHours, $maximumDailyOperatingHours), 1, ' h/d&iacute;a') .
+                '</td>
+                    <td class="result-check"><span class="verification-status status-not-regulated">Escenario</span></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>Calibrado</td>
                     <td class="result-number">' .
                 $formatNumber($consumption, 0, ' kWh/a') .
                 '</td>
-                    <td class="result-number">-</td>
+                    <td class="result-number">' .
+                $formatNumber($dailyOperatingHours, 1, ' h/d&iacute;a') .
+                '</td>
                     <td class="result-check">' .
                 '<span class="verification-status status-not-regulated">No regulado</span>' .
                 '</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>M&aacute;ximo</td>
+                    <td class="result-number">' .
+                $formatNumber($maximumConsumption, 0, ' kWh/a') .
+                '</td>
+                    <td class="result-number">' .
+                $formatNumber(max($minimumDailyOperatingHours, $maximumDailyOperatingHours), 1, ' h/d&iacute;a') .
+                '</td>
+                    <td class="result-check"><span class="verification-status status-not-regulated">Escenario</span></td>
                     <td></td>
                 </tr>' .
                 (($detail['leni'] ?? null) !== null
@@ -706,9 +740,14 @@
         <div class="ambient-note">
             (1)
 Valores calculados desde los resultados almacenados del ambiente.<br>
-            (2) Consumo estimado para una jornada referencial de ' .
+            (2) Consumo estimado con la f&oacute;rmula: Consumo anual (kWh/a) = Potencia instalada (W)
+            &times; horas de operaci&oacute;n diarias &times; 365 &divide; 1000. Jornada calibrada: ' .
                 rtrim(rtrim(number_format($dailyOperatingHours, 1, '.', ''), '0'), '.') .
-                ' h/d&iacute;a (promedio simple P&times;horas&times;365 &mdash; no reproduce la evaluaci&oacute;n
+                ' h/d&iacute;a; rango: ' .
+                rtrim(rtrim(number_format(min($minimumDailyOperatingHours, $maximumDailyOperatingHours), 1, '.', ''), '0'), '.') .
+                '&ndash;' .
+                rtrim(rtrim(number_format(max($minimumDailyOperatingHours, $maximumDailyOperatingHours), 1, '.', ''), '0'), '.') .
+                ' h/d&iacute;a. Es un promedio simple y no reproduce la evaluaci&oacute;n
             energ&eacute;tica horaria de DIALux evo, que considera autonom&iacute;a de luz diurna, orientaci&oacute;n
             real y atenuaci&oacute;n por escena).' .
                 (($detail['leni'] ?? null) !== null

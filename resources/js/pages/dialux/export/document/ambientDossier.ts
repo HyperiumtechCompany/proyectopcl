@@ -226,6 +226,16 @@ export function buildAmbientDetails(
                     ambient.room.dailyOperatingHours ??
                     snapshot.project.siteSettings?.dailyOperatingHours ??
                     8,
+                minimumDailyOperatingHours:
+                    snapshot.project.siteSettings?.minimumDailyOperatingHours ??
+                    ambient.room.dailyOperatingHours ??
+                    snapshot.project.siteSettings?.dailyOperatingHours ??
+                    8,
+                maximumDailyOperatingHours:
+                    snapshot.project.siteSettings?.maximumDailyOperatingHours ??
+                    ambient.room.dailyOperatingHours ??
+                    snapshot.project.siteSettings?.dailyOperatingHours ??
+                    8,
                 // Fase B del cierre de brechas (`dialux-calc-reviewer`,
                 // hallazgo bloqueante "motor LENI/EN 15193 no existe"):
                 // `calculateLeni` devuelve `null` sin `leni.buildingType`

@@ -444,6 +444,10 @@ export interface DialuxAmbientDetail {
     maintenanceFactor: number;
     /** Horas de operación diarias asumidas para "Consumo (kWh/a)" — ver `ProjectSiteSettings.dailyOperatingHours`. Default 8. */
     dailyOperatingHours: number;
+    /** Jornada mínima configurada para el rango de consumo. */
+    minimumDailyOperatingHours: number;
+    /** Jornada máxima configurada para el rango de consumo. */
+    maximumDailyOperatingHours: number;
     /**
      * Resultado LENI (EN 15193-1, método simplificado) — `null` cuando
      * `ProjectSiteSettings.leni.buildingType` no está definido, en cuyo

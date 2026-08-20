@@ -10,10 +10,10 @@ export const PartitionProps: React.FC<{
 }> = ({ partition, onUpdate }) => {
     const length = calculatePolygonPerimeter(partition.vertices, false);
     return (
-        <div className="max-h-[600px] space-y-3 overflow-y-auto">
+        <div className="space-y-2.5">
             <SectionWrapper
                 icon={<Minus size={12} className="text-orange-400" />}
-                label="Partición / Separador"
+                label="Geometría · Separador"
             >
                 <PropField label="Longitud" value={`${length.toFixed(4)} m`} />
                 <SelectField

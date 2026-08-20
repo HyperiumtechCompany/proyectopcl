@@ -1422,6 +1422,8 @@ test('formal dialux blade Consumo uses siteSettings.dailyOperatingHours when the
                     'fixtureCount' => 1,
                     'totalPowerWatts' => 40,
                     'dailyOperatingHours' => 4,
+                    'minimumDailyOperatingHours' => 2,
+                    'maximumDailyOperatingHours' => 6,
                     'lumensRequired' => 2072.9,
                     'fixtureLumens' => 4000,
                     'exactQuantity' => 0.52,
@@ -1441,9 +1443,12 @@ test('formal dialux blade Consumo uses siteSettings.dailyOperatingHours when the
         'tocChunks' => [],
     ]);
 
-    // Consumo = 40 W * 4 h/dia * 365 / 1000 = 58.4 kWh/a (NO el resultado con el default de 8h, que sería 116.8).
+    // Consumo = 40 W * horas/dia * 365 / 1000: mínimo 29.2, calibrado 58.4 y máximo 87.6 kWh/a.
+    $view->assertSee('29 kWh/a', false);
     $view->assertSee('58 kWh/a', false);
-    $view->assertSee('jornada referencial de 4 h', false);
+    $view->assertSee('88 kWh/a', false);
+    $view->assertSee('Potencia instalada (W)', false);
+    $view->assertSee('Jornada calibrada: 4 h/d&iacute;a; rango: 2&ndash;6 h/d&iacute;a', false);
     $view->assertDontSee('117 kWh/a');
     // Ronda 21h: sin una fuente normativa real de límite de consumo anual,
     // el renglón es informativo — nunca "Conforme"/"No conforme" (antes

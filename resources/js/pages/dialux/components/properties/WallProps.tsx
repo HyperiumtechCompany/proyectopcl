@@ -1,4 +1,4 @@
-import { Grid, Layers, Minus, PlugZap, Trash2, Zap } from 'lucide-react';
+import { Box, Grid, Layers, Minus, PlugZap, Trash2, Zap } from 'lucide-react';
 import React from 'react';
 import {
     Dialog,
@@ -235,13 +235,11 @@ const WallInteriorLightingSection: React.FC<{
     };
 
     return (
-        <div className="mt-3 space-y-2.5 border-t border-gray-300 dark:border-gray-700/50 pt-3">
-            <div className="flex items-center gap-2">
-                <Zap size={12} className="text-yellow-400" />
-                <p className="text-[10px] font-semibold tracking-widest text-gray-500 dark:text-gray-500 uppercase">
-                    Normativa del ambiente
-                </p>
-            </div>
+        <SectionWrapper
+            icon={<Zap size={12} className="text-yellow-400" />}
+            label="Normativa e iluminación"
+            defaultOpen={false}
+        >
             <p className="text-[9px] leading-snug text-gray-600 dark:text-gray-600">
                 Parámetros y verificación normativa del ambiente seleccionado.
             </p>
@@ -641,7 +639,7 @@ const WallInteriorLightingSection: React.FC<{
                     </p>
                 </div>
             )}
-        </div>
+        </SectionWrapper>
     );
 };
 
@@ -805,9 +803,10 @@ export const WallProps: React.FC<{
     };
 
     return (
+        <div className="space-y-2.5">
         <SectionWrapper
-            icon={<Minus size={12} className="text-slate-600 dark:text-slate-400" />}
-            label={ambientMatch ? 'Ambiente • Pared' : 'Pared'}
+            icon={<Box size={12} className="text-blue-500" />}
+            label="Geometría y construcción"
         >
             {/* Orden solicitado: área (del ambiente que delimita esta pared,
                 si aplica) → longitud → alto, para que lo primero que se vea
@@ -888,15 +887,15 @@ export const WallProps: React.FC<{
                 }
                 mono={false}
             />
+        </SectionWrapper>
 
             {/* Sección de ambiente (grilla de focos) */}
             {ambientMatch && (
-                <>
-                    <div className="my-1 border-t border-gray-300 dark:border-gray-700/50 pt-1">
-                        <p className="mb-1 text-[10px] font-semibold text-cyan-500">
-                            Ambiente: {ambientMatch.name}
-                        </p>
-                    </div>
+                <SectionWrapper
+                    icon={<Layers size={12} className="text-cyan-500" />}
+                    label="Ambiente asociado"
+                    defaultOpen={false}
+                >
                     <TextField
                         label="Nombre"
                         value={
@@ -956,13 +955,15 @@ export const WallProps: React.FC<{
                         );
                     })()}
 
-                    <div className="my-2 space-y-2 border-t border-gray-300 dark:border-gray-800/80 pt-3">
-                        <div className="flex items-center gap-2 text-emerald-400">
-                            <PlugZap size={12} />
-                            <p className="text-[10px] font-semibold uppercase">
-                                Tomacorrientes del ambiente
-                            </p>
-                        </div>
+                </SectionWrapper>
+            )}
+
+            {ambientMatch && (
+                <SectionWrapper
+                    icon={<PlugZap size={12} className="text-emerald-500" />}
+                    label="Tomacorrientes del ambiente"
+                    defaultOpen={false}
+                >
                         <SelectField
                             label="Uso"
                             value={outletUse}
@@ -1107,8 +1108,7 @@ export const WallProps: React.FC<{
                             Los puntos generados aparecerán sobre el perímetro
                             del ambiente en la vista 2D.
                         </p>
-                    </div>
-                </>
+                </SectionWrapper>
             )}
             {wall.wallType === 'interior' && (
                 <WallInteriorLightingSection
@@ -1119,6 +1119,6 @@ export const WallProps: React.FC<{
                     onUpdateAmbient={updateAmbientConfig}
                 />
             )}
-        </SectionWrapper>
+        </div>
     );
 };

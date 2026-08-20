@@ -101,7 +101,7 @@ export const RoomProps: React.FC<{
     }, [inheritedHeight, room.height, onUpdate]);
 
     return (
-        <div className="max-h-[600px] space-y-3 overflow-y-auto">
+        <div className="space-y-2.5">
             <RoomGeometrySection
                 room={room}
                 onUpdate={onUpdate}

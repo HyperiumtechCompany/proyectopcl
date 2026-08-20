@@ -1368,6 +1368,10 @@ export interface ProjectSiteSettings {
      * informe de referencia al comparar.
      */
     dailyOperatingHours?: number;
+    /** Límite inferior de horas/día usado para el escenario mínimo de consumo en resultados y PDF. */
+    minimumDailyOperatingHours?: number;
+    /** Límite superior de horas/día usado para el escenario máximo de consumo en resultados y PDF. */
+    maximumDailyOperatingHours?: number;
     /** Metadata sin consumidor de cálculo hoy (ver comentario de la interfaz). */
     latitude?: number;
     longitude?: number;

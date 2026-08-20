@@ -79,7 +79,7 @@ export function RoomSurfaceMaterialsSection({
     onUpdate: (patch: Partial<Omit<Room, 'id'>>) => void;
 }) {
     return (
-        <SectionWrapper icon={<Palette size={12} className="text-orange-400" />} label="Materiales fotométricos">
+        <SectionWrapper icon={<Palette size={12} className="text-orange-400" />} label="Materiales fotométricos" defaultOpen={false}>
             <SurfaceReflectanceField
                 label="Reflectancia techo"
                 value={room.ceilingReflectance}

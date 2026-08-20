@@ -63,7 +63,7 @@ export const WindowProps: React.FC<{
 }> = ({ win, onUpdate, onCenter }) => (
     <SectionWrapper
         icon={<AppWindow size={12} className="text-sky-400" />}
-        label="Ventana"
+        label="Geometría · Ventana"
     >
         <div className="mb-2 flex items-start gap-2 rounded border border-sky-700/50 bg-sky-900/20 p-2">
             <Move size={14} className="mt-0.5 flex-shrink-0 text-sky-400" />
@@ -152,7 +152,7 @@ export const DoorProps: React.FC<{
 }> = ({ door, onUpdate, onCenter }) => (
     <SectionWrapper
         icon={<DoorOpen size={12} className="text-emerald-400" />}
-        label="Puerta"
+        label="Geometría · Puerta"
     >
         <div className="mb-2 flex items-start gap-2 rounded border border-emerald-300 bg-emerald-50 dark:border-emerald-700/50 dark:bg-emerald-900/20 p-2">
             <Move size={14} className="mt-0.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -273,7 +273,7 @@ export const CanopyProps: React.FC<{
     return (
         <SectionWrapper
             icon={<Umbrella size={12} className="text-amber-400" />}
-            label="Voladizo"
+            label="Geometría · Voladizo"
         >
             <PropField label="Profundidad" value={`${depth.toFixed(2)} m`} />
             <EditField

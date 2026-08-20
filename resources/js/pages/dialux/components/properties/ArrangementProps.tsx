@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, Grid, Search, Trash2, X, Zap, Move, AlignCenter } from 'lucide-react';
+import { Grid, Search, Trash2, X, Zap, Move, AlignCenter } from 'lucide-react';
 import {
     Dialog,
     DialogContent,
@@ -10,39 +10,7 @@ import {
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import type { FixtureArrangement, Fixture } from '@/pages/dialux/hooks/types';
 import { CatalogPanel } from '../CatalogPanel';
-import { EditField, PropField } from './PropertyFields';
-
-// ── Acordeón simple sin dependencia de shadcn/ui ──────────────────────────────
-function Accordion({
-    title,
-    icon,
-    defaultOpen = true,
-    children,
-}: {
-    title: string;
-    icon?: React.ReactNode;
-    defaultOpen?: boolean;
-    children: React.ReactNode;
-}) {
-    const [open, setOpen] = useState(defaultOpen);
-    return (
-        <div className="border-b border-gray-200 dark:border-gray-800 last:border-0">
-            <button
-                type="button"
-                onClick={() => setOpen((o) => !o)}
-                className="flex w-full items-center gap-1.5 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-gray-400 hover:text-slate-800 dark:hover:text-gray-200"
-            >
-                {icon}
-                <span className="flex-1">{title}</span>
-                <ChevronDown
-                    size={12}
-                    className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-                />
-            </button>
-            {open && <div className="pb-3 pt-1 space-y-2">{children}</div>}
-        </div>
-    );
-}
+import { EditField, PropField, SectionWrapper } from './PropertyFields';
 
 // ── Componente principal ──────────────────────────────────────────────────────
 export const ArrangementProps: React.FC<{
@@ -123,8 +91,8 @@ export const ArrangementProps: React.FC<{
             </div>
 
             {/* ── Acordeón: Organización (Distribución) ── */}
-            <Accordion
-                title="Organización"
+            <SectionWrapper
+                label="Organización"
                 icon={<Grid size={11} className="text-cyan-400" />}
                 defaultOpen={true}
             >
@@ -174,12 +142,12 @@ export const ArrangementProps: React.FC<{
                     <Grid size={12} />
                     Reorganizar {cols}×{rows}
                 </button>
-            </Accordion>
+            </SectionWrapper>
 
             {/* ── Acordeón: Posición (altura de montaje) ── */}
             {firstFixture && (
-                <Accordion
-                    title="Posición"
+                <SectionWrapper
+                    label="Posición"
                     icon={<Move size={11} className="text-purple-400" />}
                     defaultOpen={false}
                 >
@@ -208,13 +176,13 @@ export const ArrangementProps: React.FC<{
                             });
                         }}
                     />
-                </Accordion>
+                </SectionWrapper>
             )}
 
             {/* ── Acordeón: Propiedades fotométricas ── */}
             {firstFixture && (
-                <Accordion
-                    title="Propiedades"
+                <SectionWrapper
+                    label="Propiedades fotométricas"
                     icon={<Zap size={11} className="text-yellow-400" />}
                     defaultOpen={false}
                 >
@@ -254,7 +222,7 @@ export const ArrangementProps: React.FC<{
                             });
                         }}
                     />
-                </Accordion>
+                </SectionWrapper>
             )}
 
             {/* ── Eliminar proyección ── */}

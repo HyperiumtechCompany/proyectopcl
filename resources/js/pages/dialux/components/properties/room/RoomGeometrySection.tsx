@@ -70,10 +70,10 @@ export function RoomGeometrySection({
             icon={<Square size={12} className="text-blue-400" />}
             label={
                 isCorridorAmbient
-                    ? 'Pasadizo'
+                    ? 'Propiedades · Pasadizo'
                     : room.roomType === 'ambient'
-                      ? 'Ambiente'
-                      : 'Recinto'
+                      ? 'Propiedades · Ambiente'
+                      : 'Propiedades · Recinto'
             }
         >
             <TextField
