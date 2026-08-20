@@ -1291,13 +1291,30 @@ test('preview normalizes legacy Windows-1252 metadata before encoding it as JSON
 
     $response->assertOk()
         ->assertJsonPath('product.manufacturer', 'Iluminación Técnica')
-        ->assertJsonPath('product.name', 'Nombre revisado');
+        ->assertJsonPath('product.name', 'Nombre revisado')
+        ->assertJsonPath('product.fixture_shape', 'round');
 
     expect(collect($response->json('warnings'))->contains(
         fn (string $warning): bool => str_contains($warning, 'Luminaria de exposición'),
     ))->toBeTrue()
         ->and(LuminaireProduct::query()->count())->toBe(0);
 });
+
+test('EULUMDAT fixture shape respects Ityp and physical proportions', function (int $ityp, array $dimensions, string $expected) {
+    $shape = app(ProductImportService::class)->resolveFixtureShape(
+        null,
+        'ldt',
+        ['luminaire_type' => $ityp],
+        $dimensions,
+    );
+
+    expect($shape)->toBe($expected);
+})->with([
+    'rotational point luminaire is circular' => [1, ['length' => 0.32, 'width' => 0.32], 'round'],
+    'linear luminaire is rectangular' => [2, ['length' => 0.60, 'width' => 0.60], 'rectangular'],
+    'area luminaire with equal sides is square' => [3, ['length' => 0.60, 'width' => 0.60], 'square'],
+    'area luminaire with unequal sides is rectangular' => [3, ['length' => 1.20, 'width' => 0.30], 'rectangular'],
+]);
 
 test('users can override total_lumens/power_watts/cct/cri_ra from the preview modal before confirming import', function () {
     Storage::fake();

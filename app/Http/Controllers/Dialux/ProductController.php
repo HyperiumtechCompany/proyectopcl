@@ -339,7 +339,12 @@ class ProductController extends Controller
             'beam_angle_10' => $product->beam_angle_10,
             'max_candela' => $product->max_candela,
             'fixture_type' => $product->fixture_type,
-            'fixture_shape' => $product->fixture_shape,
+            'fixture_shape' => $this->importService->resolveFixtureShape(
+                $product->fixture_shape,
+                $product->source_format,
+                $product->metadata,
+                $product->dimensions,
+            ),
             'normative_standard' => $product->normative_standard,
             'is_global' => $product->is_global,
             'is_owner' => $userId !== null && $product->user_id === $userId,

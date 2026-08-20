@@ -268,6 +268,12 @@ class ProductImportService
         $data['source_file_name'] = $originalName;
         $data['user_id'] = $userId;
         $data['name'] = $data['name'] ?? pathinfo($originalName, PATHINFO_FILENAME);
+        $data['fixture_shape'] = $this->resolveFixtureShape(
+            is_string($data['fixture_shape'] ?? null) ? $data['fixture_shape'] : null,
+            $sourceFormat,
+            is_array($data['metadata'] ?? null) ? $data['metadata'] : null,
+            is_array($data['dimensions'] ?? null) ? $data['dimensions'] : null,
+        );
         // Se conserva el nombre TAL COMO lo declara el archivo (independiente
         // de un override posterior) para poder avisar más adelante si el
         // producto se renombra (`update()`) de forma que ya no corresponda
@@ -289,6 +295,48 @@ class ProductImportService
             : LuminaireProduct::make($data);
 
         return ['product' => $product, 'warnings' => $warnings];
+    }
+
+    /**
+     * Resuelve la forma física en planta sin alterar la fotometría.
+     *
+     * EULUMDAT Ityp: 1=puntual rotacional (circular), 2=lineal
+     * (rectangular), 3=luminaria de área. En el tipo 3 las dimensiones
+     * distinguen cuadrada de rectangular.
+     *
+     * @param  array<string, mixed>|null  $metadata
+     * @param  array<string, mixed>|null  $dimensions
+     */
+    public function resolveFixtureShape(?string $explicitShape, ?string $sourceFormat, ?array $metadata, ?array $dimensions): ?string
+    {
+        if (in_array($explicitShape, ['round', 'square', 'rectangular', 'cylindrical'], true)) {
+            return $explicitShape;
+        }
+
+        if (strtolower((string) $sourceFormat) !== 'ldt') {
+            return null;
+        }
+
+        $luminaireType = (int) ($metadata['luminaire_type'] ?? 0);
+        if ($luminaireType === 1) {
+            return 'round';
+        }
+        if ($luminaireType === 2) {
+            return 'rectangular';
+        }
+        if ($luminaireType !== 3) {
+            return null;
+        }
+
+        $length = (float) ($dimensions['length'] ?? 0);
+        $width = (float) ($dimensions['width'] ?? 0);
+        if ($length <= 0 || $width <= 0) {
+            return 'rectangular';
+        }
+
+        $relativeDifference = abs($length - $width) / max($length, $width);
+
+        return $relativeDifference <= 0.02 ? 'square' : 'rectangular';
     }
 
     /**
