@@ -103,6 +103,14 @@ class CronogramaV2Controller extends Controller
                     }
 
                     $row = [
+                        // Siempre presente (aunque sea null para tareas nuevas): un INSERT
+                        // masivo de Laravel arma la lista de columnas a partir de las claves
+                        // de la PRIMERA fila del chunk y luego solo toma array_values() de
+                        // cada fila — si una fila no tiene esta clave le faltará un valor y
+                        // el INSERT completo del chunk falla con "Column count doesn't match
+                        // value count" (SQLSTATE 21S01). NULL en una columna AUTO_INCREMENT
+                        // simplemente hace que MySQL genere el id, igual que omitir la columna.
+                        'id' => $taskId,
                         'presupuesto_id' => $presupuestoId,
                         'item_order' => (int) ($task['item_order'] ?? 0),
                         // Se guarda tal cual (sin zero-padding): presupuesto_general.partida
@@ -123,10 +131,6 @@ class CronogramaV2Controller extends Controller
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];
-
-                    if ($taskId !== null) {
-                        $row['id'] = $taskId;
-                    }
 
                     $insertData[] = $row;
                 }
