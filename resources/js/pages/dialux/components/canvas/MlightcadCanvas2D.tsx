@@ -35,6 +35,7 @@ import {
 } from '@/pages/dialux/hooks/types';
 import {
     useCanvasInteraction,
+    type AlignmentGuide,
     type CanvasPoint,
 } from '@/pages/dialux/hooks/useCanvasInteraction';
 import {
@@ -71,6 +72,65 @@ import {
 } from '@/pages/dialux/hooks/wireLegacySync';
 
 import { createCanvasTransforms } from '@/pages/dialux/geometry/coordinateTransform';
+import { autoDetectClosedRegion, segmentsFromVertexRing, type Segment } from '@/pages/dialux/geometry/autoDetectClosedRegion';
+import type { DxfEntity } from '@/pages/dialux/hooks/types';
+
+/**
+ * Segmentos de barrera para `autoDetectClosedRegion` (Ronda 28) — mismo
+ * alcance de tipos DXF que `findNearestGuideSegment` (`hooks/useSnap.ts`):
+ * line/polyline/polygon/solid. HATCH/SPLINE/ELLIPSE quedan fuera a
+ * propósito (mismo límite ya aceptado por el snap existente) — si el
+ * contorno de un ambiente depende solo de esos tipos, la auto-detección
+ * simplemente no encuentra nada y el trazo manual sigue funcionando igual
+ * que siempre.
+ */
+/** Segmentos-cuerda que aproximan un arco DXF (`start_angle`/`end_angle` en grados, sentido antihorario, convención DXF estándar). */
+function arcToSegments(cx: number, cy: number, r: number, startDeg: number, endDeg: number): Segment[] {
+    const STEPS = 16;
+    let sweep = endDeg - startDeg;
+    if (sweep <= 0) sweep += 360;
+    const segments: Segment[] = [];
+    let prev = {
+        x: cx + r * Math.cos((startDeg * Math.PI) / 180),
+        y: cy + r * Math.sin((startDeg * Math.PI) / 180),
+    };
+    for (let i = 1; i <= STEPS; i++) {
+        const angleDeg = startDeg + (sweep * i) / STEPS;
+        const point = {
+            x: cx + r * Math.cos((angleDeg * Math.PI) / 180),
+            y: cy + r * Math.sin((angleDeg * Math.PI) / 180),
+        };
+        segments.push({ start: prev, end: point });
+        prev = point;
+    }
+    return segments;
+}
+
+/**
+ * Ronda 30: los arcos NO estaban incluidos como barrera (mismo alcance que
+ * `findNearestGuideSegment`, `hooks/useSnap.ts`) — pero en un plano
+ * arquitectónico real, el barrido de una puerta se dibuja casi siempre
+ * como un ARC, así que cada vano de puerta quedaba como una brecha abierta
+ * en el contorno: la auto-detección se escapaba por ahí hacia el resto del
+ * edificio y nunca cerraba. Confirmado en el DXF real de Vinchos: 330 arcos
+ * en el plano, 0 tratados como barrera antes de este fix — ningún ambiente
+ * con puerta lograba auto-detectarse, solo los espacios sin ninguna puerta
+ * (ej. un clóset) funcionaban por casualidad.
+ */
+function dxfEntityToAutoDetectSegments(ent: DxfEntity): Segment[] {
+    if (ent.type === 'line') {
+        return [{ start: { x: ent.x1, y: ent.y1 }, end: { x: ent.x2, y: ent.y2 } }];
+    }
+    if (ent.type === 'polyline' || ent.type === 'polygon' || ent.type === 'solid') {
+        const vertices = ent.vertices.map(([x, y]) => ({ x, y }));
+        const closed = 'closed' in ent && ent.closed;
+        return segmentsFromVertexRing(vertices, Boolean(closed));
+    }
+    if (ent.type === 'arc') {
+        return arcToSegments(ent.cx, ent.cy, ent.r, ent.start_angle, ent.end_angle);
+    }
+    return [];
+}
 import { CalibrationDialog } from '../CalibrationDialog';
 import { CadStatusOverlays } from './CadStatusOverlays';
 import { CalibrationOverlay } from './CalibrationOverlay';
@@ -181,6 +241,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             endpoint: 'source' | 'target';
             point: CanvasPoint;
         } | null>(null);
+        /** Ronda 30: guía de alineación visible mientras se arrastra un vértice de Room/Wall (metros de escena, ver `AlignmentGuide`). */
+        const [alignmentGuide, setAlignmentGuide] = useState<AlignmentGuide | null>(null);
         const [calibrationLine, setCalibrationLine] = useState<{
             start: CanvasPoint;
             end: CanvasPoint;
@@ -343,6 +405,117 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             },
             [cadView, effectiveScale, engine, hasCadView, worldPoint],
         );
+
+        // Extraído como función nombrada (Ronda 28) para que tanto el cierre
+        // manual de un trazo (`onAddRoom`) como la auto-detección de un
+        // contorno cerrado del plano DXF (`onAutoDetectRoom`, más abajo)
+        // creen el recinto/pasadizo/escalera con exactamente la misma
+        // lógica de nombre/color/tipo — sin duplicarla.
+        const handleAddRoom = (verticesM: CanvasPoint[]) => {
+            const isCorridor = ui.activeTool === 'corridor';
+            const isStair = ui.activeTool === 'stair';
+            // Fase 16 (panel de Emergencia): 'evacuation-route'/'antipanic-area'
+            // se dibujan como un polígono único, igual que un pasadizo —
+            // ver `hooks/ambientSpaces.ts` (tratados como un solo espacio,
+            // sin subdivisión por muros).
+            const isEvacuationRoute = ui.activeTool === 'evacuation-route';
+            const isAntipanicArea = ui.activeTool === 'antipanic-area';
+            const effectiveRoomType = isStair
+                ? 'stair'
+                : isCorridor
+                  ? 'corridor'
+                  : isEvacuationRoute
+                    ? 'evacuation-route'
+                    : isAntipanicArea
+                      ? 'antipanic-area'
+                      : (ui.roomTypeTemplate ?? 'room');
+            const stairCount =
+                scene?.rooms.filter((r) => r.roomType === 'stair').length ??
+                0;
+            const corridorCount =
+                scene?.rooms.filter((r) => r.roomType === 'corridor')
+                    .length ?? 0;
+            const ambientCount =
+                scene?.rooms.filter((r) => r.roomType === 'ambient')
+                    .length ?? 0;
+            const roomCount =
+                scene?.rooms.filter(
+                    (r) => !r.roomType || r.roomType === 'room',
+                ).length ?? 0;
+            const evacuationRouteCount =
+                scene?.rooms.filter(
+                    (r) => r.roomType === 'evacuation-route',
+                ).length ?? 0;
+            const antipanicAreaCount =
+                scene?.rooms.filter((r) => r.roomType === 'antipanic-area')
+                    .length ?? 0;
+            const id = store.addRoom({
+                name: isStair
+                    ? `Escalera ${stairCount + 1}`
+                    : isCorridor
+                      ? `Pasadizo ${corridorCount + 1}`
+                      : isEvacuationRoute
+                        ? `Ruta de evacuación ${evacuationRouteCount + 1}`
+                        : isAntipanicArea
+                          ? `Área antipánico ${antipanicAreaCount + 1}`
+                          : effectiveRoomType === 'ambient'
+                            ? `Ambiente ${ambientCount + 1}`
+                            : `Recinto ${roomCount + 1}`,
+                vertices: verticesM,
+                height: 2.7,
+                roomType: effectiveRoomType,
+                color: isStair
+                    ? 'rgba(251, 146, 60, 0.35)'
+                    : isCorridor
+                      ? 'rgba(59, 130, 246, 0.4)'
+                      : isEvacuationRoute || isAntipanicArea
+                        ? 'rgba(220, 38, 38, 0.3)'
+                        : effectiveRoomType === 'ambient'
+                          ? 'rgba(34, 197, 94, 0.25)'
+                          : 'rgba(56,189,248,0.25)',
+                stairConfig: isStair
+                    ? {
+                          normativeUse: 'generic',
+                          orientation: 'north',
+                          riserHeight: 0.175,
+                          treadDepth: 0.28,
+                          stairWidth: 1.2,
+                          flightGap: 0.4,
+                          showRailings: false,
+                          stepCount: 20,
+                          flights: [
+                              {
+                                  id: `flight-${Date.now()}-1`,
+                                  stepCount: 10,
+                                  direction: 'north',
+                                  hasLanding: true,
+                                  landingDepth: 1.2,
+                              },
+                              {
+                                  id: `flight-${Date.now()}-2`,
+                                  stepCount: 10,
+                                  direction: 'south',
+                                  hasLanding: false,
+                                  landingDepth: 0,
+                              },
+                          ],
+                      }
+                    : undefined,
+                corridorConfig: isCorridor
+                    ? {
+                          ...(ui.corridorTemplate || {}),
+                          type: ui.corridorTemplate?.type ?? 'roof_only',
+                          slabThickness:
+                              ui.corridorTemplate?.slabThickness ?? 0.2,
+                          railingHeight:
+                              ui.corridorTemplate?.railingHeight ?? 1.05,
+                      }
+                    : undefined,
+            });
+            store.setSelectedId(id);
+            setRoomVertices([]);
+            setRoomPreviewPt(null);
+        };
 
         // ── Interacción ───────────────────────────────────────────────────────────
         // IMPORTANT: useCanvasInteraction MUST be declared before the RAF useEffect
@@ -610,110 +783,16 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     store,
                 );
             },
-            onAddRoom: (verticesM) => {
-                const isCorridor = ui.activeTool === 'corridor';
-                const isStair = ui.activeTool === 'stair';
-                // Fase 16 (panel de Emergencia): 'evacuation-route'/'antipanic-area'
-                // se dibujan como un polígono único, igual que un pasadizo —
-                // ver `hooks/ambientSpaces.ts` (tratados como un solo espacio,
-                // sin subdivisión por muros).
-                const isEvacuationRoute = ui.activeTool === 'evacuation-route';
-                const isAntipanicArea = ui.activeTool === 'antipanic-area';
-                const effectiveRoomType = isStair
-                    ? 'stair'
-                    : isCorridor
-                      ? 'corridor'
-                      : isEvacuationRoute
-                        ? 'evacuation-route'
-                        : isAntipanicArea
-                          ? 'antipanic-area'
-                          : (ui.roomTypeTemplate ?? 'room');
-                const stairCount =
-                    scene?.rooms.filter((r) => r.roomType === 'stair').length ??
-                    0;
-                const corridorCount =
-                    scene?.rooms.filter((r) => r.roomType === 'corridor')
-                        .length ?? 0;
-                const ambientCount =
-                    scene?.rooms.filter((r) => r.roomType === 'ambient')
-                        .length ?? 0;
-                const roomCount =
-                    scene?.rooms.filter(
-                        (r) => !r.roomType || r.roomType === 'room',
-                    ).length ?? 0;
-                const evacuationRouteCount =
-                    scene?.rooms.filter(
-                        (r) => r.roomType === 'evacuation-route',
-                    ).length ?? 0;
-                const antipanicAreaCount =
-                    scene?.rooms.filter((r) => r.roomType === 'antipanic-area')
-                        .length ?? 0;
-                const id = store.addRoom({
-                    name: isStair
-                        ? `Escalera ${stairCount + 1}`
-                        : isCorridor
-                          ? `Pasadizo ${corridorCount + 1}`
-                          : isEvacuationRoute
-                            ? `Ruta de evacuación ${evacuationRouteCount + 1}`
-                            : isAntipanicArea
-                              ? `Área antipánico ${antipanicAreaCount + 1}`
-                              : effectiveRoomType === 'ambient'
-                                ? `Ambiente ${ambientCount + 1}`
-                                : `Recinto ${roomCount + 1}`,
-                    vertices: verticesM,
-                    height: 2.7,
-                    roomType: effectiveRoomType,
-                    color: isStair
-                        ? 'rgba(251, 146, 60, 0.35)'
-                        : isCorridor
-                          ? 'rgba(59, 130, 246, 0.4)'
-                          : isEvacuationRoute || isAntipanicArea
-                            ? 'rgba(220, 38, 38, 0.3)'
-                            : effectiveRoomType === 'ambient'
-                              ? 'rgba(34, 197, 94, 0.25)'
-                              : 'rgba(56,189,248,0.25)',
-                    stairConfig: isStair
-                        ? {
-                              normativeUse: 'generic',
-                              orientation: 'north',
-                              riserHeight: 0.175,
-                              treadDepth: 0.28,
-                              stairWidth: 1.2,
-                              flightGap: 0.4,
-                              showRailings: false,
-                              stepCount: 20,
-                              flights: [
-                                  {
-                                      id: `flight-${Date.now()}-1`,
-                                      stepCount: 10,
-                                      direction: 'north',
-                                      hasLanding: true,
-                                      landingDepth: 1.2,
-                                  },
-                                  {
-                                      id: `flight-${Date.now()}-2`,
-                                      stepCount: 10,
-                                      direction: 'south',
-                                      hasLanding: false,
-                                      landingDepth: 0,
-                                  },
-                              ],
-                          }
-                        : undefined,
-                    corridorConfig: isCorridor
-                        ? {
-                              ...(ui.corridorTemplate || {}),
-                              type: ui.corridorTemplate?.type ?? 'roof_only',
-                              slabThickness:
-                                  ui.corridorTemplate?.slabThickness ?? 0.2,
-                              railingHeight:
-                                  ui.corridorTemplate?.railingHeight ?? 1.05,
-                          }
-                        : undefined,
-                });
-                store.setSelectedId(id);
-                setRoomVertices([]);
-                setRoomPreviewPt(null);
+            onAddRoom: handleAddRoom,
+            onAutoDetectRoom: (seedPoint) => {
+                const segments: Segment[] = [
+                    ...(store.dxfEntities ?? []).flatMap(dxfEntityToAutoDetectSegments),
+                    ...(scene?.walls ?? []).flatMap((wall) => segmentsFromVertexRing(wall.vertices, false)),
+                ];
+                const result = autoDetectClosedRegion(seedPoint, segments);
+                if (!result.ok) return false;
+                handleAddRoom(result.vertices);
+                return true;
             },
             onAddStructuralObstacle: (verticesM) => {
                 const obstacleCount = scene?.structuralObstacles?.length ?? 0;
@@ -769,6 +848,22 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     height: preset.recommendedHeight,
                     mortarJointMin: preset.mortarJointMin,
                     mortarJointMax: preset.mortarJointMax,
+                });
+                store.setSelectedId(id);
+                setWallPreview(null);
+            },
+            onAddPartition: (vertices) => {
+                // Valores por defecto de un cubículo de SS.HH con soporte
+                // (melamina, altura estándar, elevado del piso) — el usuario
+                // ajusta material/grosor/altura después en PartitionProps.tsx,
+                // igual que un muro nuevo arranca con el preset por defecto.
+                const id = store.addPartition({
+                    vertices,
+                    thickness: 0.02,
+                    height: 2.1,
+                    partitionType: 'melamine',
+                    isPartialHeight: true,
+                    bottomGap: 0.15,
                 });
                 store.setSelectedId(id);
                 setWallPreview(null);
@@ -1013,6 +1108,12 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             },
             onUpdateRoomVertices: (id, vertices) => {
                 store.updateRoom(id, { vertices });
+            },
+            onUpdateWallVertices: (id, vertices) => {
+                store.updateWall(id, { vertices });
+            },
+            onUpdatePartitionVertices: (id, vertices) => {
+                store.updatePartition(id, { vertices });
             },
             onMoveCanopy: (id, x1, y1, x2, y2) =>
                 store.updateCanopy(id, { x1, y1, x2, y2 }),
@@ -1743,6 +1844,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                                 setCalibrationLine,
                                 setCalibrationSnapPoint,
                                 setTempElectricalDevice,
+                                setAlignmentGuide,
                                 setWireReconnectPreview,
                             );
                     }}
@@ -1751,6 +1853,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                             onMouseUp(
                                 e,
                                 setCanopyPreview,
+                                setAlignmentGuide,
                                 setWireReconnectPreview,
                             );
                     }}
@@ -2152,6 +2255,59 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                                     const p2 = screenPoint({
                                         x: 500,
                                         y: fixtureAlignmentGuides.y,
+                                    });
+                                    return (
+                                        <line
+                                            x1={p1.x}
+                                            y1={p1.y}
+                                            x2={p2.x}
+                                            y2={p2.y}
+                                            stroke="#ec4899"
+                                            strokeWidth={1.5}
+                                            strokeDasharray="4 3"
+                                            opacity={0.9}
+                                        />
+                                    );
+                                })()}
+                        </g>
+                    )}
+                    {alignmentGuide && (
+                        <g
+                            className="overlay-vertex-alignment-guides"
+                            style={{ pointerEvents: 'none' }}
+                        >
+                            {alignmentGuide.x !== null &&
+                                (() => {
+                                    const p1 = screenPoint({
+                                        x: alignmentGuide.x,
+                                        y: -500,
+                                    });
+                                    const p2 = screenPoint({
+                                        x: alignmentGuide.x,
+                                        y: 500,
+                                    });
+                                    return (
+                                        <line
+                                            x1={p1.x}
+                                            y1={p1.y}
+                                            x2={p2.x}
+                                            y2={p2.y}
+                                            stroke="#ec4899"
+                                            strokeWidth={1.5}
+                                            strokeDasharray="4 3"
+                                            opacity={0.9}
+                                        />
+                                    );
+                                })()}
+                            {alignmentGuide.y !== null &&
+                                (() => {
+                                    const p1 = screenPoint({
+                                        x: -500,
+                                        y: alignmentGuide.y,
+                                    });
+                                    const p2 = screenPoint({
+                                        x: 500,
+                                        y: alignmentGuide.y,
                                     });
                                     return (
                                         <line

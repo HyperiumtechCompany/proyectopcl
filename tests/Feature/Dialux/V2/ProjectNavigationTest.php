@@ -36,8 +36,9 @@ test('creating a v2 project also creates its first module', function () {
 
     $project = DialuxProject::query()->where('user_id', $user->id)->sole();
     $response->assertRedirect(route('dialux-v2.projects.show', $project));
-    expect($project->modules()->count())->toBe(1)
-        ->and($project->modules()->firstOrFail()->name)->toBe('Módulo 1')
+    expect($project->modules()->count())->toBe(2)
+        ->and($project->modules()->where('kind', 'general')->sole()->name)->toBe('Módulo General')
+        ->and($project->modules()->where('kind', 'building')->sole()->name)->toBe('Módulo 1')
         ->and($project->data)->toBeNull();
 });
 
@@ -57,12 +58,14 @@ test('the project dashboard and module editor expose isolated inertia pages', fu
             ->where('modules.0.rooms_count', 1));
 
     $this->actingAs($user)
-        ->get(route('dialux-v2.modules.show', [$project, $module]))
+        ->get(route('dialux-v2.modules.show', [$project, $module], false).'?view=3d')
         ->assertSuccessful()
         ->assertInertia(fn ($page) => $page
             ->component('dialux/v2/Module')
             ->where('project.id', $project->id)
             ->where('module.id', $module->id)
+            ->where('module.kind', $module->kind)
+            ->where('initialView', '3d')
             ->has('modules', 1));
 
     $this->actingAs($user)

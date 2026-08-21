@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from 'vitest';
 import type { Fixture, Room } from '@/pages/dialux/hooks/useEditorStore';
-import { buildRequirementEvaluations, resolveRaCalculated, resolveRaRequired } from './requirementEvaluations';
+import { buildRequirementEvaluations, requirementsComply, resolveRaCalculated, resolveRaRequired } from './requirementEvaluations';
 
 /**
  * Hallazgo bloqueante (planes/plan_cierre_brecha_paridad_dialux_evo.md Â§-9.4):
@@ -72,6 +72,22 @@ describe('resolveRaCalculated', () => {
             buildFixture({ id: 'f2', cri: 70 }),
         ];
         expect(resolveRaCalculated(fixtures)).toBe(70);
+    });
+});
+
+describe('requirementsComply', () => {
+    it('ignora criterios no evaluados y cuenta el recinto cuando los criterios aplicables cumplen', () => {
+        expect(requirementsComply([
+            { metric: 'illuminance', calculatedValue: 550, operator: '>=', requiredValue: 500, unit: 'lx', status: 'pass' },
+            { metric: 'ugr', calculatedValue: null, operator: '<=', requiredValue: 19, unit: 'UGR', status: 'not-evaluated' },
+        ])).toBe(true);
+    });
+
+    it('no cuenta el recinto si algún criterio evaluado falla', () => {
+        expect(requirementsComply([
+            { metric: 'illuminance', calculatedValue: 450, operator: '>=', requiredValue: 500, unit: 'lx', status: 'fail' },
+            { metric: 'ugr', calculatedValue: null, operator: '<=', requiredValue: 19, unit: 'UGR', status: 'not-evaluated' },
+        ])).toBe(false);
     });
 });
 

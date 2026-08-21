@@ -1,6 +1,14 @@
 import { polygonAreaM2, polygonCentroid, polygonSignedArea, sanitizePolygon } from '@/pages/dialux/geometry/polygonGeometry';
 import type { Room, Vertex } from './types';
 
+/** Entrada mínima para `buildPartitionEnclosurePatches` — un subconjunto de `Partition` (ver `hooks/types.ts`) para no acoplar `roomPatches.ts` a la capa de snapshot de cálculo. */
+export interface PartitionPatchInput {
+    vertices: Vertex[];
+    thickness: number;
+    height: number;
+    bottomGap: number;
+}
+
 /**
  * Fase 7 del plan maestro ("Materiales e interreflexión inicial", §11).
  * Discretiza la envolvente de un `Room` (piso, techo y un tramo de pared por
@@ -115,6 +123,7 @@ function wallVerticalSegments(height: number, cap: number): number {
     return Math.max(1, Math.ceil(height / cap));
 }
 
+
 /**
  * Construye los parches de la envolvente de `room` (piso, techo, una pared
  * por arista — subdividida en bandas verticales cuando el recinto es
@@ -216,6 +225,101 @@ export function buildRoomEnclosurePatches(
                     area: segmentLength * segmentHeight,
                     reflectance: wallReflectance,
                 });
+            }
+        }
+    }
+
+    return patches;
+}
+
+/**
+ * Parches de las DOS caras de cada partición (Tabique/separador) como
+ * superficies reflectantes de la interreflexión.
+ *
+ * Antes de esto, `buildRoomEnclosurePatches` solo generaba parches para el
+ * PERÍMETRO del ambiente (piso/techo/pared por arista del polígono) —
+ * las particiones interiores (divisores de cubículo de ducha/SS.HH) solo
+ * existían como cajas opacas en `obstacles` (`buildPartitionOcclusionBoxes`),
+ * es decir, absorbían el 100% de la luz que las tocaba en vez de reflejar
+ * como el material real (melamina/drywall/mampostería, reflectancia
+ * comparable a una pared). En un ambiente subdividido en cubículos por
+ * particiones, el lado de cada cubículo más lejano de las luminarias pierde
+ * tanto la luz DIRECTA (correctamente, la bloquea la partición) como
+ * cualquier rebote de relleno de la propia partición (incorrectamente —
+ * hallazgo real verificado contra "Módulo VII", proyecto con 3 particiones:
+ * Uo=0.089/Emin=22 lx propio vs Uo≈0.41/Emin≈102 lx de DIALux evo para el
+ * mismo ambiente y disposición de luminarias).
+ *
+ * Una partición no tiene "adentro"/"afuera" como una pared perimetral (no
+ * encierra nada) — ambas caras son superficies reales, así que se genera un
+ * parche por cada cara con normales opuestas. La reflectancia reutiliza la
+ * misma `reflectances.wall` del ambiente (no existe un campo de reflectancia
+ * propio en `Partition` todavía — el material declarado, melamina/drywall/
+ * mampostería, es ópticamente comparable a una pared; el vidrio ya se
+ * excluye antes de llamar aquí, igual que en `buildPartitionOcclusionBoxes`).
+ *
+ * `surfaceInsetM` es EL MISMO parámetro que ya usa `buildRoomEnclosurePatches`
+ * para las paredes perimetrales (Ronda 25): la caja opaca de
+ * `buildPartitionOcclusionBoxes` también centra el espesor en la línea de
+ * `vertices`, así que muestrear justo en esa línea cae DENTRO de la caja y
+ * ese parche nunca recibe luz directa ni transfiere nada. Se desplaza
+ * `espesor partición/2 + ε` hacia cada lado, igual que una pared.
+ */
+export function buildPartitionEnclosurePatches(
+    partitions: PartitionPatchInput[],
+    reflectance: number,
+    surfaceInsetM = 0,
+): EnclosurePatch[] {
+    const patches: EnclosurePatch[] = [];
+    const clampedReflectance = clampReflectance(reflectance);
+
+    for (const partition of partitions) {
+        const vertices = partition.vertices;
+        if (vertices.length < 2 || !(partition.height > partition.bottomGap)) {
+            continue;
+        }
+
+        const cap = NEAR_FIELD_PATCH_CAP_M;
+        const inset = Math.max(0, surfaceInsetM);
+        const zFrom = Math.max(0, partition.bottomGap);
+        const zTo = partition.height;
+        const verticalSegments = wallVerticalSegments(zTo - zFrom, cap);
+        const segmentHeight = (zTo - zFrom) / verticalSegments;
+
+        for (let i = 0; i < vertices.length - 1; i++) {
+            const a = vertices[i]!;
+            const b = vertices[i + 1]!;
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const length = Math.hypot(dx, dy);
+            if (length < 1e-6) {
+                continue;
+            }
+            // Dos normales opuestas (perpendiculares a la arista) — una por cada cara.
+            const normals: Vector3[] = [
+                { x: -dy / length, y: dx / length, z: 0 },
+                { x: dy / length, y: -dx / length, z: 0 },
+            ];
+
+            const horizontalSegments = cap > 1e-6 ? Math.max(1, Math.ceil(length / cap)) : 1;
+            const segmentLength = length / horizontalSegments;
+
+            for (const normal of normals) {
+                for (let h = 0; h < horizontalSegments; h++) {
+                    const t = (h + 0.5) / horizontalSegments;
+                    const px = a.x + dx * t + normal.x * inset;
+                    const py = a.y + dy * t + normal.y * inset;
+                    for (let k = 0; k < verticalSegments; k++) {
+                        patches.push({
+                            x: px,
+                            y: py,
+                            z: zFrom + segmentHeight * (k + 0.5),
+                            normal,
+                            area: segmentLength * segmentHeight,
+                            reflectance: clampedReflectance,
+                        });
+                    }
+                }
             }
         }
     }

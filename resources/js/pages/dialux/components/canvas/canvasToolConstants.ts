@@ -46,6 +46,7 @@ export const DRAWING_TOOLS = new Set([
     'room',
     'wall',
     'education-wall',
+    'partition',
     'window',
     'door',
     'canopy',

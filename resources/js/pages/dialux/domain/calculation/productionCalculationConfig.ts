@@ -134,6 +134,39 @@ import { DEFAULT_DIRECT_PREVIEW_CONFIG, type CalculationConfig } from './types';
  * en ambas alturas medidas (`heightSweepExperiment.test.ts`). La heurística
  * sigue disponible como valor de config, pero producción usa el modelo
  * convergido.
+ *
+ * ## Ronda 31 (2026-08-21) — tercer proyecto real ("Módulo VII"), sin cambio
+ * de default
+ *
+ * El usuario reportó variación grande de Uo/Emin entre proyectos usando las
+ * mismas luminarias. Verificado con datos reales de "Módulo VII" (2
+ * ambientes de duchas, mismo patrón de muro-jamba que Vinchos/Módulo 22):
+ *
+ *   - `iterative` (producción): "Ducha A.A universal" avg +50% vs evo,
+ *     "Ducha para mujeres" avg +20% — mismo sesgo POSITIVO consistente que
+ *     documenta la Ronda 25 arriba, no un caso nuevo.
+ *   - `auto-by-shape` habría mejorado "A.A universal" (aspecto 2.25:1 →
+ *     first-bounce, +26% en vez de +50%) pero AL MISMO TIEMPO regresa
+ *     "SS.HH" de Módulo 22 (aspecto 2.40:1 — el mismo umbral) de +4.8% a
+ *     -13% vs evo, confirmado corriendo `modulo22GoldenCase` con
+ *     `auto-by-shape` antes de descartar el cambio. Dos ambientes con
+ *     aspecto casi idéntico (2.25 vs 2.40:1) prefieren modos OPUESTOS — la
+ *     heurística por forma no tiene una frontera estable, sigue sin
+ *     evidencia suficiente para reemplazar `iterative`. No se cambia el
+ *     default con un solo proyecto nuevo — exactamente lo que esta sección
+ *     pide no repetir.
+ *
+ * La causa real y dominante de la brecha de Uo/Emin en "Ducha para
+ * mujeres" NO fue el modo de interreflexión: con oclusión desactivada,
+ * Uo pasó de 0.11 a 0.61 y Emin de 33 a 224 lx (mismo ambiente, mismas
+ * luminarias). El muro tiene una muesca de jamba (el hueco de una puerta
+ * real) pero el proyecto no tiene ningún objeto `Door` registrado ahí —
+ * `buildWallOcclusionBoxes` no tiene por dónde recortar el vano y trata la
+ * muesca como pared 100% sólida piso-a-techo, oscureciendo la franja bajo
+ * el dintel mucho más que la puerta real. Acción: no es un bug de cálculo,
+ * es un dato de proyecto incompleto — colocar el objeto `Door` real en la
+ * abertura (Vinchos y Módulo VII comparten el mismo patrón sin puertas
+ * registradas) corrige la oclusión ahí sin tocar código.
  */
 export function buildProductionCalculationConfig(project: Project): CalculationConfig {
     return {

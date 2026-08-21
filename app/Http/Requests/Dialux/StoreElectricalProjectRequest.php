@@ -28,6 +28,21 @@ class StoreElectricalProjectRequest extends FormRequest
             'total_outlets' => ['sometimes', 'integer', 'min:0'],
             'total_panels' => ['sometimes', 'integer', 'min:0'],
             'installed_power_w' => ['sometimes', 'numeric', 'min:0'],
+            'demand_power_w' => ['sometimes', 'numeric', 'min:0'],
+            'derived_summary' => ['sometimes', 'nullable', 'array'],
+            'derived_summary.version' => ['required_with:derived_summary', 'integer', 'in:1'],
+            'derived_summary.panels' => ['required_with:derived_summary', 'array', 'max:500'],
+            'derived_summary.panels.*.panelId' => ['required', 'string', 'max:100'],
+            'derived_summary.panels.*.panelLabel' => ['nullable', 'string', 'max:150'],
+            'derived_summary.panels.*.parentPanelId' => ['nullable', 'string', 'max:100'],
+            'derived_summary.panels.*.feederLengthM' => ['nullable', 'numeric', 'min:0'],
+            'derived_summary.panels.*.circuitCount' => ['nullable', 'integer', 'min:0'],
+            'derived_summary.panels.*.installedPowerW' => ['required', 'numeric', 'min:0'],
+            'derived_summary.panels.*.demandPowerW' => ['required', 'numeric', 'min:0'],
+            'derived_summary.panels.*.ownInstalledPowerW' => ['sometimes', 'numeric', 'min:0'],
+            'derived_summary.panels.*.ownDemandPowerW' => ['sometimes', 'numeric', 'min:0'],
+            'derived_summary.panels.*.currentA' => ['required', 'numeric', 'min:0'],
+            'derived_summary.panels.*.mainBreakerA' => ['required', 'numeric', 'min:0'],
         ];
     }
 

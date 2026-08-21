@@ -1,6 +1,5 @@
 import type { OcclusionBox } from '@/pages/dialux/domain/geometry/occlusionBoxes';
-import { isSegmentOccluded } from '@/pages/dialux/domain/geometry/segmentOcclusion';
-import { luminousArea } from './directIlluminance';
+import { fixtureVisibilityFraction, luminousArea } from './directIlluminance';
 import type { GlareObserver } from './glareObserver';
 import { candela } from './photometricInterpolation';
 import type { Fixture } from './types';
@@ -175,10 +174,14 @@ function computeUgrForObserver(observer: GlareObserver, fixtures: Fixture[], all
         }
 
         // Una luminaria oculta al observador tampoco puede deslumbrarlo.
-        if (
-            obstacles.length > 0 &&
-            isSegmentOccluded({ x: observer.x, y: observer.y, z: observer.eyeHeight }, { x: fixture.x, y: fixture.y, z: fixture.z }, obstacles)
-        ) {
+        // Mismo muestreo de área que `illuminanceFromFixture` (Ronda "sombra
+        // dura", 2026-08-21) — sin esto, el UGR tenía el MISMO corte binario
+        // que producía Emin inestable: una luminaria parcialmente oculta
+        // pasaba de contar 100% o 0% al deslumbramiento según de qué lado del
+        // borde de sombra caía el observador, en vez de una contribución
+        // proporcional a cuánta área realmente ve.
+        const visibility = fixtureVisibilityFraction({ x: observer.x, y: observer.y, z: observer.eyeHeight }, fixture, obstacles);
+        if (visibility <= 0) {
             continue;
         }
 
@@ -224,7 +227,11 @@ function computeUgrForObserver(observer: GlareObserver, fixtures: Fixture[], all
         // aparente") — la fórmula CIE completa: `ω = A·cosγ/d²`. El
         // `calculateUGR` heredado omitía este escorzo por completo
         // (`area/dist2` sin corrección).
-        const apparentSolidAngle = (area * cosGammaObserver) / dist2;
+        // `visibility` escala el ángulo sólido aparente, no la luminancia: la
+        // luminancia es una propiedad intrínseca por-unidad-de-área de la
+        // fuente (no cambia si se ve menos área), mientras que el ángulo
+        // sólido SÍ es proporcional a cuánta área de la fuente es visible.
+        const apparentSolidAngle = ((area * cosGammaObserver) / dist2) * visibility;
         sum += (luminance * luminance * apparentSolidAngle) / (positionIndex * positionIndex);
     }
 

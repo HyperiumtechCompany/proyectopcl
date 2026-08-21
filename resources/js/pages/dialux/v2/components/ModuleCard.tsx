@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { show } from '@/actions/App/Http/Controllers/Dialux/V2/ModuleController';
+import { show as showElectricalNetwork } from '@/actions/App/Http/Controllers/Dialux/V2/ElectricalNetworkController';
 import type { DialuxV2Module, ModuleStatus } from '../types';
 
 const statusLabels: Record<ModuleStatus, string> = {
@@ -63,7 +64,11 @@ export function ModuleCard({
             }`}
         >
             <Link
-                href={show([projectId, module.id])}
+                href={
+                    module.kind === 'general'
+                        ? showElectricalNetwork(projectId)
+                        : show([projectId, module.id])
+                }
                 prefetch
                 className={`block ${compact ? 'px-3 py-2.5' : 'p-4 pr-12'}`}
             >
@@ -82,17 +87,19 @@ export function ModuleCard({
                 </p>
             </Link>
 
-            <button
-                type="button"
-                disabled={disabled}
-                aria-label={`Acciones de ${module.name}`}
-                onClick={() => setMenuOpen((open) => !open)}
-                className="absolute top-2 right-2 rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-white"
-            >
-                <MoreVertical className="h-4 w-4" />
-            </button>
+            {module.kind !== 'general' && (
+                <button
+                    type="button"
+                    disabled={disabled}
+                    aria-label={`Acciones de ${module.name}`}
+                    onClick={() => setMenuOpen((open) => !open)}
+                    className="absolute top-2 right-2 rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-white"
+                >
+                    <MoreVertical className="h-4 w-4" />
+                </button>
+            )}
 
-            {menuOpen && (
+            {module.kind !== 'general' && menuOpen && (
                 <div className="absolute top-11 right-2 z-30 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#101218]">
                     <MenuButton
                         icon={Pencil}

@@ -95,6 +95,11 @@ export function ImportPhotometryForm({ isLoadingProducts, onImported, initialNam
         if (overrides.cct.trim()) formData.append('cct', overrides.cct.trim());
         if (overrides.cri_ra.trim()) formData.append('cri_ra', overrides.cri_ra.trim());
         if (overrides.lamp_type.trim()) formData.append('lamp_type', overrides.lamp_type.trim());
+        if (overrides.fixture_shape) formData.append('fixture_shape', overrides.fixture_shape);
+        if (overrides.dimension_length.trim()) formData.append('dimensions[length]', overrides.dimension_length.trim());
+        if (overrides.dimension_width.trim()) formData.append('dimensions[width]', overrides.dimension_width.trim());
+        if (overrides.dimension_height.trim()) formData.append('dimensions[height]', overrides.dimension_height.trim());
+        if (overrides.dimension_radius.trim()) formData.append('dimensions[radius]', overrides.dimension_radius.trim());
         if (overrides.productImage) formData.append('product_image', overrides.productImage);
         if (overrides.brandLogo) formData.append('brand_logo', overrides.brandLogo);
 

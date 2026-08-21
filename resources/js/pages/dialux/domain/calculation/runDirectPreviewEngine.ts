@@ -8,6 +8,7 @@ import { hashCalculationSnapshot } from './hashSnapshot';
 import { AUTO_INTERREFLECTION_ASPECT_THRESHOLD, resolveAutoInterreflectionMode } from './interreflectionModeHeuristic';
 import {
     groupObstaclesByLevel,
+    groupPartitionPatchesByLevel,
     resolveSurfaceReflectances,
     toEngineFixture,
     toEngineRoom,
@@ -121,6 +122,11 @@ export async function runDirectPreviewEngine(
     const obstaclesByLevel = config.occlusion
         ? groupObstaclesByLevel(snapshot.obstacles)
         : new Map<string, OcclusionBox[]>();
+
+    // Particiones como parches reflectantes (`buildPartitionEnclosurePatches`)
+    // — independiente de `config.occlusion`: son una fuente de interreflexión
+    // (afecta a `surfaceReflectances`), no un obstáculo de oclusión.
+    const partitionsByLevel = groupPartitionPatchesByLevel(snapshot.partitionPatches);
 
     // Fase 8: `config.interreflection === 'iterative'` ahora tiene efecto
     // real (antes de esta fase, solo advertía y calculaba luz directa).
@@ -293,6 +299,7 @@ export async function runDirectPreviewEngine(
         // adaptativo por recinto (`hooks/adaptiveGridSpacing.ts`) — sin
         // `meshPolicy.adaptive`, idéntico al comportamiento de siempre.
         const levelObstacles = obstaclesByLevel.get(object.levelId) ?? [];
+        const levelPartitions = partitionsByLevel.get(object.levelId) ?? [];
         const { spacingM, marginalZoneOverride } = resolveMeshSpacing(
             room,
             fixtures,
@@ -312,6 +319,7 @@ export async function runDirectPreviewEngine(
             config.maintenanceFactor ?? 0.8,
             marginalZoneOverride,
             config.excludeMarginalZoneFromStats,
+            levelPartitions,
         );
 
         if (iterativeConfig && result.interreflection_converged === false) {

@@ -16,6 +16,8 @@ class DialuxModule extends Model
 
     public const STATUSES = ['draft', 'in_progress', 'completed', 'archived'];
 
+    public const KINDS = ['general', 'building', 'exterior', 'custom'];
+
     /** @use HasFactory<DialuxModuleFactory> */
     use HasFactory;
 
@@ -25,6 +27,7 @@ class DialuxModule extends Model
         'description',
         'sort_order',
         'status',
+        'kind',
         'data',
     ];
 

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class DialuxProject extends Model
 {
@@ -56,5 +57,10 @@ class DialuxProject extends Model
     public function modules(): HasMany
     {
         return $this->hasMany(DialuxModule::class)->orderBy('sort_order');
+    }
+
+    public function electricalNetwork(): HasOne
+    {
+        return $this->hasOne(DialuxElectricalNetwork::class);
     }
 }

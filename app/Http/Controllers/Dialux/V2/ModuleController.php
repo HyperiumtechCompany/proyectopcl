@@ -51,13 +51,16 @@ class ModuleController extends Controller
                     'id' => $dialuxModule->id,
                     'name' => $dialuxModule->name,
                     'status' => $dialuxModule->status,
+                    'kind' => $dialuxModule->kind,
                     'data' => $dialuxModule->data,
                 ],
+                'initialView' => request()->query('view') === '3d' ? '3d' : '2d',
                 'modules' => $dialuxProject->modules()->get([
                     'id',
                     'name',
                     'description',
                     'status',
+                    'kind',
                     'sort_order',
                 ]),
             ]);
@@ -83,6 +86,7 @@ class ModuleController extends Controller
     public function destroy(DialuxProject $dialuxProject, DialuxModule $dialuxModule): JsonResponse
     {
         $this->authorizeModule($dialuxProject, $dialuxModule);
+        abort_if($dialuxModule->kind === 'general', 422, 'El módulo General no puede eliminarse.');
         Storage::disk('local')->deleteDirectory("dialux/v2/modules/{$dialuxModule->id}");
         $dialuxModule->delete();
 
@@ -95,6 +99,7 @@ class ModuleController extends Controller
         DialuxModule $dialuxModule,
     ): JsonResponse {
         $this->authorizeModule($dialuxProject, $dialuxModule);
+        abort_if($dialuxModule->kind === 'general', 422, 'El módulo General no puede duplicarse.');
         $module = $this->modules->duplicate($dialuxProject, $dialuxModule, $request->validated('name'));
 
         return response()->json(['module' => $module], 201);

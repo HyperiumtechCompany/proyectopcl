@@ -1,9 +1,67 @@
 import type { OcclusionBox } from '@/pages/dialux/domain/geometry/occlusionBoxes';
 import { isSegmentOccluded } from '@/pages/dialux/domain/geometry/segmentOcclusion';
 import type { SurfacePoint } from './directIlluminance';
-import type { EnclosurePatch } from './roomPatches';
+import type { EnclosurePatch, Vector3 } from './roomPatches';
 
 const MATH_PI = Math.PI;
+
+/**
+ * Dos tangentes unitarias perpendiculares a `normal`, para muestrear el
+ * footprint real de un parche (Ronda "sombra dura", 2026-08-21) — mismo
+ * motivo físico que `fixtureVisibilityFraction` (`directIlluminance.ts`):
+ * un solo rayo al centroide trata el parche como fuente puntual y produce un
+ * borde de sombra afilado, inestable frente a cambios mínimos de geometría.
+ * `roomPatches.ts` solo genera dos formas de normal: piso/techo (±Z puro) y
+ * pared/partición (horizontal, Z=0) — cubrir esos dos casos basta, no hace
+ * falta una base ortonormal general (Gram-Schmidt) para un normal arbitrario.
+ */
+function patchTangents(normal: Vector3): [Vector3, Vector3] {
+    if (Math.abs(normal.z) > 0.99) {
+        return [
+            { x: 1, y: 0, z: 0 },
+            { x: 0, y: 1, z: 0 },
+        ];
+    }
+    const horizLen = Math.hypot(normal.x, normal.y) || 1;
+    return [
+        { x: -normal.y / horizLen, y: normal.x / horizLen, z: 0 },
+        { x: 0, y: 0, z: 1 },
+    ];
+}
+
+const PATCH_SAMPLE_OFFSETS: ReadonlyArray<{ fu: number; fv: number }> = [
+    { fu: 0, fv: 0 },
+    { fu: 1, fv: 1 },
+    { fu: -1, fv: 1 },
+    { fu: 1, fv: -1 },
+    { fu: -1, fv: -1 },
+];
+
+/**
+ * Fracción de visibilidad [0,1] de `patch` desde `receiver`, muestreando su
+ * footprint real (lado = `√área`, la misma aproximación cuadrada que ya usa
+ * `roomPatches.ts` para subdividir parches) en vez de un único rayo al
+ * centroide — ver doc de `patchTangents` arriba.
+ */
+function patchVisibilityFraction(receiver: SurfacePoint, patch: EnclosurePatch, obstacles: OcclusionBox[]): number {
+    if (obstacles.length === 0) {
+        return 1;
+    }
+    const halfExtent = Math.sqrt(patch.area) / 2;
+    const [tu, tv] = patchTangents(patch.normal);
+    let visibleCount = 0;
+    for (const sample of PATCH_SAMPLE_OFFSETS) {
+        const samplePoint = {
+            x: patch.x + (tu.x * sample.fu + tv.x * sample.fv) * halfExtent,
+            y: patch.y + (tu.y * sample.fu + tv.y * sample.fv) * halfExtent,
+            z: patch.z + (tu.z * sample.fu + tv.z * sample.fv) * halfExtent,
+        };
+        if (!isSegmentOccluded(receiver, samplePoint, obstacles)) {
+            visibleCount += 1;
+        }
+    }
+    return visibleCount / PATCH_SAMPLE_OFFSETS.length;
+}
 
 /**
  * Factor de forma punto-a-parche SIN acotar (Fase 7/8, plan maestro §11):
@@ -47,11 +105,12 @@ export function computeFormFactor(patch: EnclosurePatch, receiver: SurfacePoint,
         return 0;
     }
 
-    if (obstacles.length > 0 && isSegmentOccluded(receiver, patch, obstacles)) {
+    const visibility = patchVisibilityFraction(receiver, patch, obstacles);
+    if (visibility <= 0) {
         return 0;
     }
 
-    return (patch.area * cosPatch * cosReceiver) / (MATH_PI * dist2);
+    return (patch.area * cosPatch * cosReceiver * visibility) / (MATH_PI * dist2);
 }
 
 /**

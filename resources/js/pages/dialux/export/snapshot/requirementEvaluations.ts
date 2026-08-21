@@ -74,6 +74,13 @@ export function resolveRaCalculated(fixtures: Fixture[]): number | null {
     return criValues.length > 0 ? Math.min(...criValues) : null;
 }
 
+/** Un recinto cumple cuando todos los requisitos que sí pudieron evaluarse pasan. */
+export function requirementsComply(evaluations: RequirementEvaluation[]): boolean {
+    const evaluated = evaluations.filter((evaluation) => evaluation.status !== 'not-evaluated');
+
+    return evaluated.length > 0 && evaluated.every((evaluation) => evaluation.status === 'pass');
+}
+
 /**
  * `uniformityTarget`/`ugrLimit` en `null` significa que la actividad
  * normativa seleccionada NO regula ese parámetro (ej. UGR en

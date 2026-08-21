@@ -124,10 +124,66 @@ const WallItem = memo(function WallItem({
 
 // ─── Contenedor principal ─────────────────────────────────────────────────────
 
+/**
+ * Handles de edición de forma (Ronda 26) — mismo patrón que
+ * `OverlayRooms.tsx`: círculo verde = arrastrar vértice existente, cuadrado
+ * celeste en el punto medio de un tramo = insertar un vértice nuevo ahí. A
+ * diferencia de un Room, un muro es una polilínea ABIERTA: solo hay
+ * cuadrado de punto medio ENTRE vértices consecutivos, nunca envolviendo del
+ * último vértice de vuelta al primero.
+ */
+const WallEditHandles = memo(function WallEditHandles({
+    wall, screenPoint,
+}: {
+    wall: Wall;
+    screenPoint: ScreenFn;
+}) {
+    const vertices = wall.vertices.map(screenPoint);
+    return (
+        <g className="wall-polyline-handles">
+            {vertices.map((vertex, index) => {
+                const next = vertices[index + 1];
+                return (
+                    <g key={`${wall.id}-vertex-${index}`}>
+                        {next && (
+                            <rect
+                                data-wall-edge-id={wall.id}
+                                data-wall-edge-index={index}
+                                x={safeNum((vertex.x + next.x) / 2 - 6)}
+                                y={safeNum((vertex.y + next.y) / 2 - 6)}
+                                width={12}
+                                height={12}
+                                rx={2}
+                                fill="#22d3ee"
+                                stroke="#083344"
+                                strokeWidth={1.5}
+                                opacity={0.9}
+                                style={{ cursor: 'copy', pointerEvents: 'all' }}
+                            />
+                        )}
+                        <circle
+                            data-wall-vertex-id={wall.id}
+                            data-wall-vertex-index={index}
+                            cx={safeNum(vertex.x)}
+                            cy={safeNum(vertex.y)}
+                            r={8}
+                            fill="#22c55e"
+                            stroke="#052e16"
+                            strokeWidth={2}
+                            style={{ cursor: 'move', pointerEvents: 'all' }}
+                        />
+                    </g>
+                );
+            })}
+        </g>
+    );
+});
+
 export const OverlayWalls = memo(function OverlayWalls({
     walls, selectedId, zoom, onSelect, screenPoint, screenDistance,
 }: Props) {
     if (!walls.length) return null;
+    const selectedWall = walls.find((w) => w.id === selectedId);
     return (
         <g className="overlay-walls">
             {walls.map(w => (
@@ -141,6 +197,9 @@ export const OverlayWalls = memo(function OverlayWalls({
                     screenDistance={screenDistance}
                 />
             ))}
+            {selectedWall && (
+                <WallEditHandles wall={selectedWall} screenPoint={screenPoint} />
+            )}
         </g>
     );
 });

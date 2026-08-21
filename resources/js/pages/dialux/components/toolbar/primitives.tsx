@@ -9,7 +9,7 @@ export const PanelSep = ({ label }: { label?: string }) => (
     <div className="my-2 flex items-center gap-1.5 px-0.5">
         <div className="flex-1 border-t border-slate-200 dark:border-gray-700/40" />
         {label && (
-            <span className="shrink-0 text-[9px] font-semibold tracking-[0.15em] text-slate-400 dark:text-gray-500 uppercase">
+            <span className="shrink-0 text-[9px] font-semibold tracking-[0.15em] text-slate-400 uppercase dark:text-gray-500">
                 {label}
             </span>
         )}
@@ -28,10 +28,14 @@ export const SectionBand = ({
     className?: string;
 }) => (
     <div
-        className={`mb-1.5 flex items-center gap-1.5 rounded bg-slate-100 dark:bg-gray-800/60 px-2 py-1.5 ${className ?? ''}`}
+        className={`mb-1.5 flex items-center gap-1.5 rounded bg-slate-100 px-2 py-1.5 dark:bg-gray-800/60 ${className ?? ''}`}
     >
-        {icon && <span className="shrink-0 text-slate-400 dark:text-gray-500">{icon}</span>}
-        <span className="text-[10px] font-bold tracking-widest text-slate-600 dark:text-gray-400 uppercase">
+        {icon && (
+            <span className="shrink-0 text-slate-400 dark:text-gray-500">
+                {icon}
+            </span>
+        )}
+        <span className="text-[10px] font-bold tracking-widest text-slate-600 uppercase dark:text-gray-400">
             {label}
         </span>
     </div>
@@ -50,15 +54,19 @@ export const MetricRow = ({
     highlight?: boolean;
 }) => (
     <div
-        className={`flex items-baseline justify-between rounded px-1 py-[3px] ${highlight ? 'bg-cyan-950/20 dark:bg-cyan-950/20 bg-cyan-50' : ''}`}
+        className={`flex items-baseline justify-between rounded px-1 py-[3px] ${highlight ? 'bg-cyan-50 bg-cyan-950/20 dark:bg-cyan-950/20' : ''}`}
     >
-        <span className="text-[10px] leading-tight text-slate-500 dark:text-gray-500">{label}</span>
+        <span className="text-[10px] leading-tight text-slate-500 dark:text-gray-500">
+            {label}
+        </span>
         <span
             className={`font-mono text-[11px] leading-tight tabular-nums ${highlight ? 'font-semibold text-cyan-600 dark:text-cyan-300' : 'text-slate-800 dark:text-gray-200'}`}
         >
             {value}
             {unit && (
-                <span className="ml-0.5 text-[9px] text-slate-400 dark:text-gray-500">{unit}</span>
+                <span className="ml-0.5 text-[9px] text-slate-400 dark:text-gray-500">
+                    {unit}
+                </span>
             )}
         </span>
     </div>
@@ -85,8 +93,8 @@ export const ToolBtn: React.FC<ToolBtnProps> = ({
         title={tip}
         className={`flex h-9 w-9 items-center justify-center rounded transition-all duration-100 ${
             active === tool
-                ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-600/30 dark:text-cyan-300 ring-1 ring-cyan-400 dark:ring-cyan-500/50'
-                : 'text-slate-500 dark:text-gray-500 hover:bg-slate-200 dark:hover:bg-gray-700/50 hover:text-slate-800 dark:hover:text-gray-200'
+                ? 'bg-cyan-100 text-cyan-700 ring-1 ring-cyan-400 dark:bg-cyan-600/30 dark:text-cyan-300 dark:ring-cyan-500/50'
+                : 'text-slate-500 hover:bg-slate-200 hover:text-slate-800 dark:text-gray-500 dark:hover:bg-gray-700/50 dark:hover:text-gray-200'
         }`}
     >
         {icon}
@@ -118,10 +126,10 @@ export const GroupBtn: React.FC<GroupBtnProps> = ({
         title={label}
         className={`relative flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded transition-all duration-100 ${
             isOpen
-                ? 'bg-slate-200 dark:bg-gray-700/80 text-slate-700 dark:text-gray-100 shadow-sm ring-1 ring-slate-400/50 dark:ring-gray-600/50'
+                ? 'bg-slate-200 text-slate-700 shadow-sm ring-1 ring-slate-400/50 dark:bg-gray-700/80 dark:text-gray-100 dark:ring-gray-600/50'
                 : hasActive
                   ? `${accentColor} hover:bg-slate-200 dark:hover:bg-gray-700/40`
-                  : 'text-slate-500 dark:text-gray-500 hover:bg-slate-200 dark:hover:bg-gray-700/40 hover:text-slate-700 dark:hover:text-gray-300'
+                  : 'text-slate-500 hover:bg-slate-200 hover:text-slate-700 dark:text-gray-500 dark:hover:bg-gray-700/40 dark:hover:text-gray-300'
         }`}
     >
         <span className="text-[15px]">{icon}</span>
@@ -152,11 +160,13 @@ export const PanelToolBtn: React.FC<PanelToolBtnProps> = ({
         title={tip}
         className={`flex h-9 w-full items-center gap-2.5 rounded px-2 text-left transition-all duration-100 ${
             active === tool
-                ? 'bg-cyan-100 dark:bg-cyan-600/25 text-cyan-700 dark:text-cyan-200 ring-1 ring-cyan-400 dark:ring-cyan-600/30'
-                : 'text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-700/50 hover:text-slate-900 dark:hover:text-gray-100'
+                ? 'bg-cyan-100 text-cyan-700 ring-1 ring-cyan-400 dark:bg-cyan-600/25 dark:text-cyan-200 dark:ring-cyan-600/30'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-gray-100'
         }`}
     >
-        <span className="shrink-0 text-slate-400 dark:text-gray-500">{icon}</span>
+        <span className="shrink-0 text-slate-400 dark:text-gray-500">
+            {icon}
+        </span>
         <div className="min-w-0">
             <p className="truncate text-[11px] leading-snug">
                 {tip.split(' (')[0]}
@@ -195,11 +205,13 @@ export const PanelCadBtn: React.FC<PanelCadBtnProps> = ({
             disabled={!isReady}
             className={`flex h-9 w-full items-center gap-2.5 rounded px-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
                 active
-                    ? 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300'
-                    : 'text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-700/50 hover:text-slate-900 dark:hover:text-gray-100'
+                    ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-gray-100'
             }`}
         >
-            <span className="shrink-0 text-slate-400 dark:text-gray-500">{icon}</span>
+            <span className="shrink-0 text-slate-400 dark:text-gray-500">
+                {icon}
+            </span>
             <div className="min-w-0">
                 <p className="truncate text-[11px] leading-snug">{label}</p>
                 {sublabel && (
@@ -223,16 +235,19 @@ export const PanelCard: React.FC<PanelCardProps> = ({
     tone = 'default',
 }) => {
     const toneClass = {
-        default:   'border-slate-200 dark:border-gray-700/40 bg-slate-50 dark:bg-gray-900/40',
-        accent:    'border-cyan-300/50 dark:border-cyan-800/30 bg-cyan-50/50 dark:bg-cyan-950/10',
-        warning:   'border-amber-300/50 dark:border-amber-700/30 bg-amber-50/50 dark:bg-amber-950/10',
-        normativa: 'border-emerald-300/50 dark:border-emerald-800/30 bg-emerald-50/50 dark:bg-emerald-950/10',
+        default:
+            'border-slate-200 dark:border-gray-700/40 bg-slate-50 dark:bg-gray-900/40',
+        accent: 'border-cyan-300/50 dark:border-cyan-800/30 bg-cyan-50/50 dark:bg-cyan-950/10',
+        warning:
+            'border-amber-300/50 dark:border-amber-700/30 bg-amber-50/50 dark:bg-amber-950/10',
+        normativa:
+            'border-emerald-300/50 dark:border-emerald-800/30 bg-emerald-50/50 dark:bg-emerald-950/10',
     } satisfies Record<NonNullable<PanelCardProps['tone']>, string>;
 
     return (
         <div className={`rounded-md border p-2.5 ${toneClass[tone]}`}>
             {title && (
-                <p className="mb-2 text-[9px] font-bold tracking-[0.15em] text-slate-500 dark:text-gray-500 uppercase">
+                <p className="mb-2 text-[9px] font-bold tracking-[0.15em] text-slate-500 uppercase dark:text-gray-500">
                     {title}
                 </p>
             )}
@@ -252,18 +267,22 @@ export function PanelTabs<T extends string>({
 }) {
     return (
         <div
-            className="mb-2.5 grid gap-1 rounded-md border border-slate-200 dark:border-gray-700/50 bg-slate-100 dark:bg-[#12151f] p-1"
+            role="tablist"
+            aria-label="Secciones del panel"
+            className="mb-2.5 grid gap-1 rounded-md border border-slate-200 bg-slate-100 p-1 dark:border-gray-700/50 dark:bg-[#12151f]"
             style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}
         >
             {tabs.map((tab) => (
                 <button
                     key={tab.id}
                     type="button"
+                    role="tab"
+                    aria-selected={activeTab === tab.id}
                     onClick={() => onChange(tab.id)}
                     className={`flex items-center justify-center gap-1 rounded px-1.5 py-1.5 text-[10px] font-semibold tracking-wide transition-colors ${
                         activeTab === tab.id
-                            ? 'bg-white shadow-sm dark:bg-cyan-700/40 text-cyan-700 dark:text-cyan-100 ring-1 ring-slate-200 dark:ring-cyan-500/40'
-                            : 'text-slate-500 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-800/70 hover:text-slate-800 dark:hover:text-gray-200'
+                            ? 'bg-white text-cyan-700 shadow-sm ring-1 ring-slate-200 dark:bg-cyan-700/40 dark:text-cyan-100 dark:ring-cyan-500/40'
+                            : 'text-slate-500 hover:bg-white hover:text-slate-800 dark:text-gray-500 dark:hover:bg-gray-800/70 dark:hover:text-gray-200'
                     }`}
                 >
                     <span>{tab.label}</span>
@@ -271,10 +290,52 @@ export function PanelTabs<T extends string>({
                         <span
                             className={`rounded px-1 text-[9px] ${
                                 activeTab === tab.id
-                                    ? 'bg-cyan-100 dark:bg-cyan-950/70 text-cyan-700 dark:text-cyan-300'
-                                    : 'bg-slate-200 dark:bg-gray-800 text-slate-500 dark:text-gray-500'
+                                    ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950/70 dark:text-cyan-300'
+                                    : 'bg-slate-200 text-slate-500 dark:bg-gray-800 dark:text-gray-500'
                             }`}
                         >
+                            {tab.count}
+                        </span>
+                    )}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+export function PanelSubTabs<T extends string>({
+    tabs,
+    activeTab,
+    onChange,
+    label = 'Opciones de la sección',
+}: {
+    tabs: Array<{ id: T; label: string; count?: number }>;
+    activeTab: T;
+    onChange: (tab: T) => void;
+    label?: string;
+}) {
+    return (
+        <div
+            role="tablist"
+            aria-label={label}
+            className="mb-2 flex min-w-0 gap-1 overflow-x-auto rounded-md bg-slate-100/80 p-1 dark:bg-gray-950/40"
+        >
+            {tabs.map((tab) => (
+                <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === tab.id}
+                    onClick={() => onChange(tab.id)}
+                    className={`flex min-w-fit flex-1 items-center justify-center gap-1 rounded px-2 py-1 text-[9.5px] font-medium transition-colors ${
+                        activeTab === tab.id
+                            ? 'bg-white text-cyan-700 shadow-sm ring-1 ring-slate-200 dark:bg-gray-700/80 dark:text-cyan-200 dark:ring-gray-600/70'
+                            : 'text-slate-500 hover:bg-white/70 hover:text-slate-800 dark:text-gray-500 dark:hover:bg-gray-800/70 dark:hover:text-gray-200'
+                    }`}
+                >
+                    {tab.label}
+                    {tab.count !== undefined && (
+                        <span className="rounded bg-slate-200 px-1 font-mono text-[8px] text-slate-500 dark:bg-gray-900/70 dark:text-gray-400">
                             {tab.count}
                         </span>
                     )}

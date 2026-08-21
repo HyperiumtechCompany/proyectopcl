@@ -98,6 +98,21 @@ export interface CalculationObstacle extends OcclusionBox {
     levelId: string;
 }
 
+/**
+ * Geometría mínima de una partición (Tabique/separador) para generar sus
+ * parches reflectantes de interreflexión (`hooks/roomPatches.ts::buildPartitionEnclosurePatches`)
+ * — mismo patrón de agregación plana + `levelId` que `CalculationObstacle`.
+ * Ya excluye particiones de vidrio (`partitionType === 'glass'`), igual que
+ * `buildPartitionOcclusionBoxes` excluye sus cajas de oclusión.
+ */
+export interface CalculationPartitionPatch {
+    levelId: string;
+    vertices: { x: number; y: number }[];
+    thickness: number;
+    height: number;
+    bottomGap: number;
+}
+
 export interface LuminaireState {
     luminaireId: string;
     on: boolean;
@@ -161,6 +176,8 @@ export interface CalculationSnapshot {
     calculationObjects: CalculationObject[];
     /** Cajas opacas para oclusión (Fase 6). Vacío para proyectos sin muros/particiones derivables o para snapshots de fases anteriores a Fase 6. */
     obstacles: CalculationObstacle[];
+    /** Particiones como superficies reflectantes de interreflexión — ver `CalculationPartitionPatch`. */
+    partitionPatches: CalculationPartitionPatch[];
 }
 
 // ── Configuración y ejecución ────────────────────────────────────────────────

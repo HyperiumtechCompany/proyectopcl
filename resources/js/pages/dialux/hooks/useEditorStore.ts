@@ -113,7 +113,10 @@ import {
 import { createFloorSlice, type FloorSlice } from './store/floorSlice';
 import { createScaleDxfSlice, type ScaleDxfSlice } from './store/scaleDxfSlice';
 import { createProjectSlice, type ProjectSlice } from './store/projectSlice';
-import { createSceneObjectsSlice, type SceneObjectsSlice } from './store/sceneObjectsSlice';
+import {
+    createSceneObjectsSlice,
+    type SceneObjectsSlice,
+} from './store/sceneObjectsSlice';
 import { createUiSlice, type UiSlice } from './store/uiSlice';
 import { createDeletionSlice, type DeletionSlice } from './store/deletionSlice';
 import {
@@ -225,7 +228,15 @@ export interface FixtureGridGuideEditorState {
 
 // â”€â”€â”€ Estado global â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSlice, FloorSlice, ScaleDxfSlice, ProjectSlice, UiSlice {
+export interface EditorState
+    extends
+        DeletionSlice,
+        HistorySlice,
+        SceneObjectsSlice,
+        FloorSlice,
+        ScaleDxfSlice,
+        ProjectSlice,
+        UiSlice {
     project: Project | null;
     activeSceneId: string | null;
     isCalculating: boolean;
@@ -369,6 +380,7 @@ export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSl
     setZoom: (zoom: number) => void;
     setPan: (x: number, y: number) => void;
     toggle3DView: () => void;
+    set3DView: (visible: boolean) => void;
     toggleRoof: () => void;
     toggleGrid: () => void;
     toggleIsolux: () => void;
@@ -426,7 +438,9 @@ export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSl
     /** Actualiza propiedades del piso (name, floorHeight, etc.) */
     updateFloor: (
         sceneId: string,
-        patch: Partial<Pick<Scene, 'name' | 'floorHeight' | 'floorIndex' | 'ifcGlobalId'>>,
+        patch: Partial<
+            Pick<Scene, 'name' | 'floorHeight' | 'floorIndex' | 'ifcGlobalId'>
+        >,
     ) => void;
     /**
      * Recalcula `floorElevation` de todos los pisos basÃ¡ndose en su
@@ -538,7 +552,8 @@ export const useEditorStore = create<EditorState>()(
         setCalculating: (val) => set({ isCalculating: val }),
         setResult: (result) => set({ result }),
         setResultsByRoom: (resultsByRoom) => set({ resultsByRoom }),
-        setLastCalculationRun: (lastCalculationRun) => set({ lastCalculationRun }),
+        setLastCalculationRun: (lastCalculationRun) =>
+            set({ lastCalculationRun }),
         bumpPlanReloadTick: () =>
             set((s) => ({
                 ui: { ...s.ui, planReloadTick: s.ui.planReloadTick + 1 },
@@ -602,4 +617,3 @@ export const useViewport = () =>
             panY: s.ui.panY,
         })),
     );
-

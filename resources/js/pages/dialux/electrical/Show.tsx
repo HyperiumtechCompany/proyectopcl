@@ -5,7 +5,14 @@
  */
 
 import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, Check, CloudOff, FileSpreadsheet, Loader2, Zap } from 'lucide-react';
+import {
+    ArrowLeft,
+    Check,
+    CloudOff,
+    FileSpreadsheet,
+    Loader2,
+    Zap,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
@@ -17,9 +24,16 @@ import PanelsTab from './components/PanelsTab';
 import RoomsTab from './components/RoomsTab';
 import TakeoffTab from './components/TakeoffTab';
 import { NumCell, SelectCell, fmt } from './components/primitives';
-import type { ElectricalCatalogs, ElectricalDocument, NormativeRequirementRow } from './engine/types';
+import type {
+    ElectricalCatalogs,
+    ElectricalDocument,
+    NormativeRequirementRow,
+} from './engine/types';
 import { exportElectricalExcel } from './export/electricalExcelExport';
-import { useElectricalDocument, type CadProjectData } from './useElectricalDocument';
+import {
+    useElectricalDocument,
+    type CadProjectData,
+} from './useElectricalDocument';
 
 interface ElectricalRecord {
     id: number;
@@ -32,9 +46,17 @@ interface PageProps {
     electrical: ElectricalRecord | null;
     catalogs: ElectricalCatalogs;
     normativeRequirements: NormativeRequirementRow[];
+    saveUrl?: string;
 }
 
-type TabKey = 'rooms' | 'luminaires' | 'outlets' | 'circuits' | 'panels' | 'takeoff' | 'catalog';
+type TabKey =
+    | 'rooms'
+    | 'luminaires'
+    | 'outlets'
+    | 'circuits'
+    | 'panels'
+    | 'takeoff'
+    | 'catalog';
 
 const TABS: { key: TabKey; label: string }[] = [
     { key: 'rooms', label: 'Ambientes' },
@@ -46,9 +68,16 @@ const TABS: { key: TabKey; label: string }[] = [
     { key: 'catalog', label: 'Catálogos' },
 ];
 
-export default function ElectricalShow({ project, electrical, catalogs: initialCatalogs, normativeRequirements }: PageProps) {
+export default function ElectricalShow({
+    project,
+    electrical,
+    catalogs: initialCatalogs,
+    normativeRequirements,
+    saveUrl,
+}: PageProps) {
     const [tab, setTab] = useState<TabKey>('rooms');
-    const [catalogs, setCatalogsState] = useState<ElectricalCatalogs>(initialCatalogs);
+    const [catalogs, setCatalogsState] =
+        useState<ElectricalCatalogs>(initialCatalogs);
     const [exporting, setExporting] = useState(false);
 
     const api = useElectricalDocument({
@@ -56,6 +85,7 @@ export default function ElectricalShow({ project, electrical, catalogs: initialC
         initialDocument: electrical?.data ?? null,
         catalogs,
         cadData: project.data,
+        saveUrl,
     });
 
     const { doc, derived, saveStatus, update } = api;
@@ -64,7 +94,10 @@ export default function ElectricalShow({ project, electrical, catalogs: initialC
         () => [
             { title: 'DIAlux', href: '/dialux' },
             { title: project.name, href: `/dialux/${project.id}` },
-            { title: 'Módulo Eléctrico', href: `/dialux/${project.id}/electrico` },
+            {
+                title: 'Módulo Eléctrico',
+                href: `/dialux/${project.id}/electrico`,
+            },
         ],
         [project.id, project.name],
     );
@@ -72,7 +105,12 @@ export default function ElectricalShow({ project, electrical, catalogs: initialC
     const handleExport = async () => {
         setExporting(true);
         try {
-            await exportElectricalExcel({ projectName: project.name, doc, derived, catalogs });
+            await exportElectricalExcel({
+                projectName: project.name,
+                doc,
+                derived,
+                catalogs,
+            });
         } finally {
             setExporting(false);
         }
@@ -82,23 +120,29 @@ export default function ElectricalShow({ project, electrical, catalogs: initialC
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Eléctrico — ${project.name}`} />
 
-            <div className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-slate-300 dark:bg-slate-950 px-4 py-5 text-slate-900 dark:text-slate-100 sm:px-6">
-                <div className="mx-auto w-full max-w-8xl">
+            <div className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-slate-300 px-4 py-5 text-slate-900 sm:px-6 dark:bg-slate-950 dark:text-slate-100">
+                <div className="max-w-8xl mx-auto w-full">
                     {/* Header */}
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                             <Link
                                 href={`/dialux/${project.id}`}
                                 className="rounded-lg border border-white/10 p-2 text-zinc-400 transition hover:bg-white/5 hover:text-zinc-100"
-                                aria-label="Volver al editor">
+                                aria-label="Volver al editor"
+                            >
                                 <ArrowLeft className="h-4 w-4" />
                             </Link>
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-600 shadow-lg shadow-amber-950/40">
                                 <Zap className="h-5 w-5 text-white" />
                             </div>
                             <div>
-                                <h1 className="text-lg font-bold text-white">Módulo Eléctrico</h1>
-                                <p className="text-xs text-zinc-400">{project.name} · {doc.settings.referenceStandard}</p>
+                                <h1 className="text-lg font-bold text-white">
+                                    Módulo Eléctrico
+                                </h1>
+                                <p className="text-xs text-zinc-400">
+                                    {project.name} ·{' '}
+                                    {doc.settings.referenceStandard}
+                                </p>
                             </div>
                         </div>
 
@@ -109,7 +153,15 @@ export default function ElectricalShow({ project, electrical, catalogs: initialC
                                     Tensión
                                     <NumCell
                                         value={doc.settings.voltageV}
-                                        onChange={(v) => update((d) => ({ ...d, settings: { ...d.settings, voltageV: v ?? 220 } }))}
+                                        onChange={(v) =>
+                                            update((d) => ({
+                                                ...d,
+                                                settings: {
+                                                    ...d.settings,
+                                                    voltageV: v ?? 220,
+                                                },
+                                            }))
+                                        }
                                         step={10}
                                         width={56}
                                     />
@@ -118,7 +170,17 @@ export default function ElectricalShow({ project, electrical, catalogs: initialC
                                 <span className="text-zinc-700">|</span>
                                 <SelectCell
                                     value={String(doc.settings.phases)}
-                                    onChange={(v) => update((d) => ({ ...d, settings: { ...d.settings, phases: (Number(v) === 3 ? 3 : 1) as 1 | 3 } }))}
+                                    onChange={(v) =>
+                                        update((d) => ({
+                                            ...d,
+                                            settings: {
+                                                ...d.settings,
+                                                phases: (Number(v) === 3
+                                                    ? 3
+                                                    : 1) as 1 | 3,
+                                            },
+                                        }))
+                                    }
                                     options={[
                                         { value: '1', label: 'Monofásico' },
                                         { value: '3', label: 'Trifásico' },
@@ -129,26 +191,52 @@ export default function ElectricalShow({ project, electrical, catalogs: initialC
                                     cos φ
                                     <NumCell
                                         value={doc.settings.powerFactor}
-                                        onChange={(v) => update((d) => ({ ...d, settings: { ...d.settings, powerFactor: v ?? 0.9 } }))}
+                                        onChange={(v) =>
+                                            update((d) => ({
+                                                ...d,
+                                                settings: {
+                                                    ...d.settings,
+                                                    powerFactor: v ?? 0.9,
+                                                },
+                                            }))
+                                        }
                                         step={0.05}
                                         width={50}
                                     />
                                 </label>
                                 <span className="text-zinc-700">|</span>
-                                <label className="flex items-center gap-1" title="Determina las secciones mínimas y caída de tensión admisible (RN-05, pestaña Catálogos).">
+                                <label
+                                    className="flex items-center gap-1"
+                                    title="Determina las secciones mínimas y caída de tensión admisible (RN-05, pestaña Catálogos)."
+                                >
                                     Instalación
                                     <SelectCell
-                                        value={doc.settings.installationCategory}
+                                        value={
+                                            doc.settings.installationCategory
+                                        }
                                         onChange={(v) =>
                                             update((d) => ({
                                                 ...d,
-                                                settings: { ...d.settings, installationCategory: v as ElectricalDocument['settings']['installationCategory'] },
+                                                settings: {
+                                                    ...d.settings,
+                                                    installationCategory:
+                                                        v as ElectricalDocument['settings']['installationCategory'],
+                                                },
                                             }))
                                         }
                                         options={[
-                                            { value: 'residencial', label: 'Residencial (casas)' },
-                                            { value: 'educativa', label: 'Educativa (colegios)' },
-                                            { value: 'industrial', label: 'Industrial' },
+                                            {
+                                                value: 'residencial',
+                                                label: 'Residencial (casas)',
+                                            },
+                                            {
+                                                value: 'educativa',
+                                                label: 'Educativa (colegios)',
+                                            },
+                                            {
+                                                value: 'industrial',
+                                                label: 'Industrial',
+                                            },
                                         ]}
                                     />
                                 </label>
@@ -159,8 +247,18 @@ export default function ElectricalShow({ project, electrical, catalogs: initialC
                                 >
                                     ΔV acum. máx.
                                     <NumCell
-                                        value={doc.settings.maxTotalVoltageDropPct}
-                                        onChange={(v) => update((d) => ({ ...d, settings: { ...d.settings, maxTotalVoltageDropPct: v } }))}
+                                        value={
+                                            doc.settings.maxTotalVoltageDropPct
+                                        }
+                                        onChange={(v) =>
+                                            update((d) => ({
+                                                ...d,
+                                                settings: {
+                                                    ...d.settings,
+                                                    maxTotalVoltageDropPct: v,
+                                                },
+                                            }))
+                                        }
                                         step={0.5}
                                         width={50}
                                         placeholder="—"
@@ -173,17 +271,20 @@ export default function ElectricalShow({ project, electrical, catalogs: initialC
                             <span className="inline-flex items-center gap-1.5 text-xs text-zinc-400">
                                 {saveStatus === 'saving' && (
                                     <>
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> Guardando…
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />{' '}
+                                        Guardando…
                                     </>
                                 )}
                                 {saveStatus === 'saved' && (
                                     <>
-                                        <Check className="h-3.5 w-3.5 text-emerald-400" /> Guardado
+                                        <Check className="h-3.5 w-3.5 text-emerald-400" />{' '}
+                                        Guardado
                                     </>
                                 )}
                                 {saveStatus === 'error' && (
                                     <>
-                                        <CloudOff className="h-3.5 w-3.5 text-rose-400" /> Error al guardar
+                                        <CloudOff className="h-3.5 w-3.5 text-rose-400" />{' '}
+                                        Error al guardar
                                     </>
                                 )}
                             </span>
@@ -191,8 +292,13 @@ export default function ElectricalShow({ project, electrical, catalogs: initialC
                             <button
                                 onClick={() => void handleExport()}
                                 disabled={exporting}
-                                className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-semibold text-white shadow-md transition hover:bg-emerald-600 disabled:opacity-50">
-                                {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                                className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-semibold text-white shadow-md transition hover:bg-emerald-600 disabled:opacity-50"
+                            >
+                                {exporting ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <FileSpreadsheet className="h-4 w-4" />
+                                )}
                                 Exportar Excel
                             </button>
                         </div>
@@ -205,8 +311,14 @@ export default function ElectricalShow({ project, electrical, catalogs: initialC
                         <span>{derived.totals.outlets} tomacorrientes</span>
                         <span>{doc.circuits.length} circuitos</span>
                         <span>{derived.totals.panels} tableros</span>
-                        <span className="text-amber-500">{fmt(derived.totals.installedPowerW / 1000, 2)} kW instalados</span>
-                        <span>{fmt(derived.totals.demandPowerW / 1000, 2)} kW demanda</span>
+                        <span className="text-amber-500">
+                            {fmt(derived.totals.installedPowerW / 1000, 2)} kW
+                            instalados
+                        </span>
+                        <span>
+                            {fmt(derived.totals.demandPowerW / 1000, 2)} kW
+                            demanda
+                        </span>
                     </div>
 
                     {/* Tabs */}
@@ -216,22 +328,41 @@ export default function ElectricalShow({ project, electrical, catalogs: initialC
                                 key={t.key}
                                 onClick={() => setTab(t.key)}
                                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                                    tab === t.key ? 'bg-amber-600 text-white shadow' : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
-                                }`}>
+                                    tab === t.key
+                                        ? 'bg-amber-600 text-white shadow'
+                                        : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                                }`}
+                            >
                                 {t.label}
                             </button>
                         ))}
                     </div>
 
                     {tab === 'rooms' && (
-                        <RoomsTab api={api} cadData={project.data} outletRules={catalogs.outletRules} normativeRequirements={normativeRequirements} />
+                        <RoomsTab
+                            api={api}
+                            cadData={project.data}
+                            outletRules={catalogs.outletRules}
+                            normativeRequirements={normativeRequirements}
+                        />
                     )}
                     {tab === 'luminaires' && <LuminairesTab api={api} />}
-                    {tab === 'outlets' && <OutletsTab api={api} outletRules={catalogs.outletRules} outletTypes={catalogs.outletTypes} />}
+                    {tab === 'outlets' && (
+                        <OutletsTab
+                            api={api}
+                            outletRules={catalogs.outletRules}
+                            outletTypes={catalogs.outletTypes}
+                        />
+                    )}
                     {tab === 'circuits' && <CircuitsTab api={api} />}
                     {tab === 'panels' && <PanelsTab api={api} />}
                     {tab === 'takeoff' && <TakeoffTab api={api} />}
-                    {tab === 'catalog' && <CatalogTab catalogs={catalogs} setCatalogs={setCatalogsState} />}
+                    {tab === 'catalog' && (
+                        <CatalogTab
+                            catalogs={catalogs}
+                            setCatalogs={setCatalogsState}
+                        />
+                    )}
                 </div>
             </div>
         </AppLayout>

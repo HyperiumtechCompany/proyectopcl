@@ -133,7 +133,7 @@ export function createAcuComponentFromResource(
         recursos,
         precio_unitario: isEquipment ? 0 : precio,
         precio_hora: isEquipment ? precio : 0,
-        factor_desperdicio: targetType === 'materiales' ? 1.05 : 1,
+        factor_desperdicio: 1,
     };
 }
 

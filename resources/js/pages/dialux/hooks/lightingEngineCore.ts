@@ -9,7 +9,7 @@ import { gatherRadiosityIlluminance, solveRadiosity } from './iterativeRadiosity
 import { filterPointsOutsideMarginalZone } from './marginalZoneFilter';
 import { candela } from './photometricInterpolation';
 import { getRoomMarginalZone, getRoomUsefulPlaneHeight } from './roomLighting';
-import { buildRoomEnclosurePatches, type EnclosureReflectances } from './roomPatches';
+import { buildPartitionEnclosurePatches, buildRoomEnclosurePatches, type EnclosureReflectances, type PartitionPatchInput } from './roomPatches';
 import type { Fixture, LightingResult, Room } from './useEditorStore';
 
 /**
@@ -297,6 +297,15 @@ export function calculateLightingResult(
      * existente sobre `interreflection` cambiando el método de `Lb`.
      */
     excludeMarginalZoneFromStats?: boolean,
+    /**
+     * Particiones (Tabiques/separadores) del mismo nivel — sus DOS caras se
+     * suman como parches reflectantes de la interreflexión, no solo como
+     * obstáculo opaco en `obstacles`. Default `[]` conserva el comportamiento
+     * de siempre para todo llamador que no las pase explícitamente (mismo
+     * patrón no disruptivo del resto de parámetros de esta función). Ver el
+     * porqué en el doc de `buildPartitionEnclosurePatches` (`roomPatches.ts`).
+     */
+    partitions: PartitionPatchInput[] = [],
 ): LightingResult {
     const bbox = roomBBox(room);
     const usefulPlaneHeight = getRoomUsefulPlaneHeight(room);
@@ -316,7 +325,12 @@ export function calculateLightingResult(
     // `surfaceInsetM` en `roomPatches.ts`. Sin obstáculos, inset 0 = sin
     // cambio de comportamiento.
     const patchInsetM = obstacles.length > 0 ? Math.max(...obstacles.map((o) => o.thickness)) / 2 + 0.01 : 0;
-    const patches = surfaceReflectances ? buildRoomEnclosurePatches(room, surfaceReflectances, patchInsetM) : [];
+    const patches = surfaceReflectances
+        ? [
+              ...buildRoomEnclosurePatches(room, surfaceReflectances, patchInsetM),
+              ...buildPartitionEnclosurePatches(partitions, surfaceReflectances.wall, patchInsetM),
+          ]
+        : [];
     if (patches.length > 0) {
         const patchIlluminance = computePatchDirectIlluminance(patches, enriched, obstacles);
         if (iterativeConfig) {

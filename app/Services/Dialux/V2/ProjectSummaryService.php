@@ -22,7 +22,7 @@ class ProjectSummaryService
             'modules.planFiles',
         ]);
 
-        $modules = $project->modules->map(function (DialuxModule $module): array {
+        $modules = $project->modules->where('kind', '!=', 'general')->map(function (DialuxModule $module): array {
             $scenes = collect($module->data['scenes'] ?? []);
             $rooms = $scenes->sum(fn (array $scene): int => count($scene['rooms'] ?? []));
             $cadLuminaires = $scenes->sum(fn (array $scene): int => count($scene['fixtures'] ?? []));

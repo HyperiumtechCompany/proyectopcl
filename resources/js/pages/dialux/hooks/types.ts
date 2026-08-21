@@ -548,7 +548,13 @@ export interface Partition {
      *   'glass'    Ã¢â€ â€™ mampara de vidrio
      *   'masonry'  Ã¢â€ â€™ tabique de ladrillo ligero
      */
-    partitionType: 'melamine' | 'drywall' | 'glass' | 'masonry';
+    partitionType: 'melamine' | 'drywall' | 'glass' | 'masonry' | 'reinforced_plastic';
+    /**
+     * 'reinforced_plastic' (Ronda 27, 2026-08-20, a pedido explicito del
+     * usuario): plastico reforzado (PRFV) para paneles de ducha/SS.HH -
+     * grosor tipico 0.02-0.035m. Opaco a la luz (a diferencia de 'glass'),
+     * ver la exclusion por partitionType en occlusionBoxes.ts.
+     */
     /**
      * Si true, la particiÃƒÂ³n NO llega al techo (ej: cubÃƒÂ­culo de baÃƒÂ±o).
      * La altura efectiva estÃƒÂ¡ dada por `height`.

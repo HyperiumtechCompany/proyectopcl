@@ -8,6 +8,7 @@ import {
     type CalculationMaterial,
     type CalculationObject,
     type CalculationObstacle,
+    type CalculationPartitionPatch,
     type CalculationSnapshot,
     type LightingSceneState,
     type LuminaireState,
@@ -34,6 +35,7 @@ export function buildCalculationSnapshot(project: Project): CalculationSnapshot 
     const scenes: LightingSceneState[] = [];
     const calculationObjects: CalculationObject[] = [];
     const obstacles: CalculationObstacle[] = [];
+    const partitionPatches: CalculationPartitionPatch[] = [];
 
     for (const scene of project.scenes) {
         levels.push({
@@ -95,6 +97,19 @@ export function buildCalculationSnapshot(project: Project): CalculationSnapshot 
         for (const box of sceneBoxes) {
             obstacles.push({ ...box, levelId: scene.id });
         }
+
+        for (const partition of scene.partitions) {
+            if (partition.partitionType === 'glass') {
+                continue;
+            }
+            partitionPatches.push({
+                levelId: scene.id,
+                vertices: partition.vertices.map((v) => ({ x: v.x, y: v.y })),
+                thickness: partition.thickness,
+                height: partition.height,
+                bottomGap: partition.bottomGap,
+            });
+        }
     }
 
     return {
@@ -107,6 +122,7 @@ export function buildCalculationSnapshot(project: Project): CalculationSnapshot 
         scenes,
         calculationObjects,
         obstacles,
+        partitionPatches,
     };
 }
 

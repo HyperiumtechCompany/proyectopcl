@@ -9,6 +9,7 @@ import {
 } from '@/pages/dialux/hooks/useEditorStore';
 import type { BreadcrumbItem } from '@/types';
 import { ModuleSidebar } from './components/ModuleSidebar';
+import { GeneralWorkspaceTabs } from './components/GeneralWorkspaceTabs';
 import { useDialuxModuleSync } from './hooks/useDialuxModuleSync';
 import { useModuleActions } from './hooks/useModuleActions';
 import { createBlankModuleProject } from './lib/createBlankModuleProject';
@@ -22,15 +23,22 @@ interface Props {
     project: Pick<DialuxV2Project, 'id' | 'name'>;
     module: DialuxV2EditorModule;
     modules: DialuxV2Module[];
+    initialView?: '2d' | '3d';
 }
 
-export default function DialuxV2Module({ project, module, modules }: Props) {
+export default function DialuxV2Module({
+    project,
+    module,
+    modules,
+    initialView = '2d',
+}: Props) {
     const setProject = useEditorStore((state) => state.setProject);
     const setActiveScene = useEditorStore((state) => state.setActiveScene);
     const setDefaultStandard = useEditorStore(
         (state) => state.setDefaultRoomNormativeStandard,
     );
     const resetHistory = useEditorStore((state) => state.resetHistory);
+    const set3DView = useEditorStore((state) => state.set3DView);
     const [ready, setReady] = useState(false);
     const actions = useModuleActions({
         projectId: project.id,
@@ -50,7 +58,10 @@ export default function DialuxV2Module({ project, module, modules }: Props) {
 
         setProject(initial);
         if (initial.scenes[0]) setActiveScene(initial.scenes[0].id);
-        setDefaultStandard(initial.defaultRoomNormativeStandard ?? 'en_12464_1');
+        setDefaultStandard(
+            initial.defaultRoomNormativeStandard ?? 'en_12464_1',
+        );
+        set3DView(module.kind === 'general' && initialView === '3d');
         resetHistory();
         void ensureStandardDataLoaded('rne_peru');
         void ensureStandardDataLoaded('en_1838');
@@ -64,7 +75,7 @@ export default function DialuxV2Module({ project, module, modules }: Props) {
         };
         // El cambio de mÃ³dulo debe reinicializar todo el editor; las acciones del store son estables.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [module.id]);
+    }, [module.id, initialView]);
 
     useDialuxModuleSync(project.id, module.id, ready);
 
@@ -90,10 +101,22 @@ export default function DialuxV2Module({ project, module, modules }: Props) {
                     actions={actions}
                 />
                 <div className="min-w-0 flex-1 overflow-hidden">
-                    <EditorLayout />
+                    <div className="flex h-full min-h-0 flex-col">
+                        {module.kind === 'general' && (
+                            <div className="shrink-0 border-b border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-[#0d0f14]">
+                                <GeneralWorkspaceTabs
+                                    projectId={project.id}
+                                    moduleId={module.id}
+                                    active={initialView}
+                                />
+                            </div>
+                        )}
+                        <div className="min-h-0 flex-1 overflow-hidden">
+                            <EditorLayout />
+                        </div>
+                    </div>
                 </div>
             </div>
         </AppLayout>
     );
 }
-

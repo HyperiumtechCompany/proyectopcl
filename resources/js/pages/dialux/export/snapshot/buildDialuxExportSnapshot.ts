@@ -20,6 +20,7 @@ import type {
 import {
     buildRequirementEvaluations,
     buildRequirementSource,
+    requirementsComply,
     resolveRaCalculated,
     resolveRaRequired,
 } from './requirementEvaluations';
@@ -95,11 +96,7 @@ function buildAmbientMetrics(
         raRequired,
         raCalculated,
     );
-    const complies =
-        requirementEvaluations.length > 0 &&
-        requirementEvaluations.every(
-            (evaluation) => evaluation.status === 'pass',
-        );
+    const complies = requirementsComply(requirementEvaluations);
     const provenance: CalculationProvenance = {
         engine: LIGHTING_ENGINE_NAME,
         engineVersion: calculationRun?.engineVersion ?? LIGHTING_ENGINE_VERSION,

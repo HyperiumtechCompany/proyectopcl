@@ -171,6 +171,7 @@ export async function enrichProducts(snapshot: DialuxExportSnapshot): Promise<En
                 fixture.description = fixture.description ?? product.description;
                 fixture.reportData = fixture.reportData ?? product.report_data ?? null;
                 fixture.reportAssets = fixture.reportAssets ?? product.report_assets ?? null;
+                fixture.photometricWeb = fixture.photometricWeb ?? product.photometric_web ?? null;
             }
         }
 

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AcCalculationController;
 use App\Http\Controllers\AguaCalculationController;
+use App\Http\Controllers\BackupController;
 use App\Http\Controllers\CaidaTensionController;
 use App\Http\Controllers\CostoModuleController;
 use App\Http\Controllers\CostoProjectController;
@@ -20,6 +21,7 @@ use App\Http\Controllers\Dialux\OutletProductController as DialuxOutletProductCo
 use App\Http\Controllers\Dialux\PlanFileController as DialuxPlanFileController;
 use App\Http\Controllers\Dialux\ProductController as DialuxProductController;
 use App\Http\Controllers\Dialux\ProjectController as DialuxProjectController;
+use App\Http\Controllers\Dialux\V2\ElectricalNetworkController as DialuxV2ElectricalNetworkController;
 use App\Http\Controllers\Dialux\V2\ElectricalProjectController as DialuxV2ElectricalProjectController;
 use App\Http\Controllers\Dialux\V2\ModuleController as DialuxV2ModuleController;
 use App\Http\Controllers\Dialux\V2\NormativeConfigController as DialuxV2NormativeConfigController;
@@ -136,6 +138,8 @@ Route::middleware(['auth', 'verified'])->prefix('dialux-v2')->name('dialux-v2.')
     Route::get('/projects/{dialuxProject}', [DialuxV2ProjectController::class, 'show'])->name('projects.show');
     Route::get('/projects/{dialuxProject}/summary', [DialuxV2ProjectSummaryController::class, 'show'])->name('projects.summary');
     Route::get('/projects/{dialuxProject}/formal-export', [DialuxV2ProjectSummaryController::class, 'export'])->name('projects.formal-export');
+    Route::get('/projects/{dialuxProject}/electrical-network', [DialuxV2ElectricalNetworkController::class, 'show'])->name('projects.electrical-network.show');
+    Route::put('/projects/{dialuxProject}/electrical-network', [DialuxV2ElectricalNetworkController::class, 'update'])->name('projects.electrical-network.update');
 
     Route::prefix('projects/{dialuxProject}/modules')->name('modules.')->group(function () {
         Route::get('/', [DialuxV2ModuleController::class, 'index'])->name('index');
@@ -168,10 +172,10 @@ Route::middleware(['auth', 'verified', 'role:root|gerencia|administracion'])->gr
     Route::post('/solicitudes/{planRequest}/reject', [PlanRequestController::class, 'reject'])->name('plan-requests.reject');
 
     // Backups
-    Route::get('/backups', [\App\Http\Controllers\BackupController::class, 'index'])->name('backups.index');
-    Route::post('/backups', [\App\Http\Controllers\BackupController::class, 'store'])->name('backups.store');
-    Route::get('/backups/{file}', [\App\Http\Controllers\BackupController::class, 'download'])->name('backups.download');
-    Route::delete('/backups/{file}', [\App\Http\Controllers\BackupController::class, 'destroy'])->name('backups.destroy');
+    Route::get('/backups', [BackupController::class, 'index'])->name('backups.index');
+    Route::post('/backups', [BackupController::class, 'store'])->name('backups.store');
+    Route::get('/backups/{file}', [BackupController::class, 'download'])->name('backups.download');
+    Route::delete('/backups/{file}', [BackupController::class, 'destroy'])->name('backups.destroy');
 });
 
 // ─── Caída de Tensión ──────────────────────────────────────────────────────────

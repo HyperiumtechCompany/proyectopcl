@@ -22,7 +22,8 @@ interface Props {
 
 export default function DialuxV2Project({ project, modules }: Props) {
     const actions = useModuleActions({ projectId: project.id, modules });
-    const totals = modules.reduce(
+    const designModules = modules.filter((module) => module.kind !== 'general');
+    const totals = designModules.reduce(
         (summary, module) => ({
             rooms: summary.rooms + (module.rooms_count ?? 0),
             luminaires: summary.luminaires + (module.luminaires_count ?? 0),
@@ -71,7 +72,7 @@ export default function DialuxV2Project({ project, modules }: Props) {
                                     consolidado
                                 </Link>
                                 <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
-                                    {modules.length} / 25 módulos
+                                    {designModules.length} / 25 módulos
                                 </span>
                             </div>
                         </header>
@@ -80,7 +81,7 @@ export default function DialuxV2Project({ project, modules }: Props) {
                             <SummaryCard
                                 icon={Boxes}
                                 label="Módulos"
-                                value={modules.length.toString()}
+                                value={designModules.length.toString()}
                             />
                             <SummaryCard
                                 icon={Activity}

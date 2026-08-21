@@ -531,6 +531,30 @@ test('authenticated users can list their imported products', function () {
         ->assertJsonPath('products.0.brand_logo_url', null);
 });
 
+test('catalog returns public URLs for stored product and brand images', function () {
+    $user = User::factory()->create();
+    $imagePath = 'dialux/product-catalog/user_'.$user->id.'/images/panel.png';
+    $logoPath = 'dialux/product-catalog/user_'.$user->id.'/logos/logo.png';
+    $publicDisk = Mockery::mock();
+    $publicDisk->shouldReceive('exists')->with($imagePath)->once()->andReturnTrue();
+    $publicDisk->shouldReceive('exists')->with($logoPath)->once()->andReturnTrue();
+    Storage::shouldReceive('disk')->with('public')->twice()->andReturn($publicDisk);
+
+    LuminaireProduct::query()->create([
+        'user_id' => $user->id,
+        'name' => 'Panel con recursos',
+        'source_format' => 'ies',
+        'product_image_path' => $imagePath,
+        'brand_logo_path' => $logoPath,
+    ]);
+
+    $this->actingAs($user)
+        ->getJson(route('dialux.products.index'))
+        ->assertSuccessful()
+        ->assertJsonPath('products.0.product_image_url', fn ($url) => is_string($url) && str_ends_with($url, '/storage/'.$imagePath))
+        ->assertJsonPath('products.0.brand_logo_url', fn ($url) => is_string($url) && str_ends_with($url, '/storage/'.$logoPath));
+});
+
 test('authenticated users can show enriched products they can access', function () {
     $user = User::factory()->create();
     $otherUser = User::factory()->create();
@@ -1352,13 +1376,18 @@ test('users can override total_lumens/power_watts/cct/cri_ra from the preview mo
             'power_watts' => 12,
             'cct' => '3000K',
             'cri_ra' => 90,
+            'fixture_shape' => 'square',
+            'dimensions' => ['length' => 0.6, 'width' => 0.6, 'height' => 0.05],
         ]);
 
     $response->assertCreated()
         ->assertJsonPath('product.total_lumens', 1250)
         ->assertJsonPath('product.power_watts', 12)
         ->assertJsonPath('product.cct', '3000K')
-        ->assertJsonPath('product.cri_ra', 90);
+        ->assertJsonPath('product.cri_ra', 90)
+        ->assertJsonPath('product.fixture_shape', 'square')
+        ->assertJsonPath('product.dimensions.length', 0.6)
+        ->assertJsonPath('product.dimensions.width', 0.6);
 
     // La matriz de candela cruda queda a la escala del archivo original
     // (reference_lumens=1000) — el override de flujo es metadata, no

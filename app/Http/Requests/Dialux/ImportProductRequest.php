@@ -22,6 +22,11 @@ class ImportProductRequest extends FormRequest
             'normative_standard' => ['nullable', 'in:en_12464,ies_na,universal'],
             'fixture_type' => ['nullable', 'in:recessed,pendant,surface,spot,strip,panel,tube,other'],
             'fixture_shape' => ['nullable', 'in:round,square,rectangular,cylindrical'],
+            'dimensions' => ['nullable', 'array'],
+            'dimensions.length' => ['nullable', 'numeric', 'min:0'],
+            'dimensions.width' => ['nullable', 'numeric', 'min:0'],
+            'dimensions.height' => ['nullable', 'numeric', 'min:0'],
+            'dimensions.radius' => ['nullable', 'numeric', 'min:0'],
             // Correcciones del usuario en el modal de previsualización
             // (Ronda 21, `plan_ldt_ies_lector_editor.md`) — un archivo real
             // puede declarar un flujo/potencia distinto al de la ficha

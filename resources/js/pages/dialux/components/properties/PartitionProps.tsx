@@ -24,6 +24,7 @@ export const PartitionProps: React.FC<{
                         { value: 'drywall', label: 'Drywall' },
                         { value: 'glass', label: 'Vidrio' },
                         { value: 'masonry', label: 'Ladrillo' },
+                        { value: 'reinforced_plastic', label: 'Plástico reforzado (PRFV)' },
                     ]}
                     onChange={(val) => onUpdate({ partitionType: val as any })}
                 />

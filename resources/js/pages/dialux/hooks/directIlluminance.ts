@@ -38,6 +38,84 @@ export interface SurfacePoint {
 export type DirectIlluminanceBatchKernel = (points: SurfacePoint[], fixtures: Fixture[], obstacles: OcclusionBox[]) => number[];
 
 /**
+ * Media longitud/ancho reales de la luminaria (m), para el muestreo de
+ * oclusión de área (`OCCLUSION_SAMPLE_OFFSETS`, abajo). Reutiliza
+ * `fixture.dimensions` cuando existe; si no, deriva un cuadrado equivalente
+ * de `luminousArea` (el mismo fallback que ya usa esa función para UGR) — así
+ * ninguna luminaria real queda tratada como un punto de tamaño cero.
+ */
+function fixtureLuminousHalfExtent(fixture: Fixture): { halfX: number; halfY: number } {
+    const dims = fixture.dimensions;
+    const length = dims ? Number(dims.length) : NaN;
+    const width = dims ? Number(dims.width) : NaN;
+    if (Number.isFinite(length) && length > 0 && Number.isFinite(width) && width > 0) {
+        return { halfX: length / 2, halfY: width / 2 };
+    }
+    const halfSide = Math.sqrt(luminousArea(fixture)) / 2;
+    return { halfX: halfSide, halfY: halfSide };
+}
+
+/**
+ * Centro + 4 esquinas del rectángulo luminoso, como fracción de la media
+ * longitud/ancho — CADA UNA se prueba de forma independiente contra
+ * `obstacles` (ver `illuminanceFromFixture`) para producir una fracción de
+ * visibilidad continua (0, 0.2, 0.4, 0.6, 0.8, 1) en vez de un corte binario
+ * 0/1. No se orienta por `fixture.rotation` (mantener el muestreo simple y
+ * barato) — para una luminaria aproximadamente cuadrada (el caso típico) el
+ * error de orientación es despreciable frente al problema que resuelve.
+ */
+const OCCLUSION_SAMPLE_OFFSETS: ReadonlyArray<{ fx: number; fy: number }> = [
+    { fx: 0, fy: 0 },
+    { fx: 1, fy: 1 },
+    { fx: -1, fy: 1 },
+    { fx: 1, fy: -1 },
+    { fx: -1, fy: -1 },
+];
+
+/**
+ * Fracción de visibilidad [0,1] de `fixture` desde `point`, muestreando
+ * `OCCLUSION_SAMPLE_OFFSETS` sobre su extensión luminosa real en vez de un
+ * único rayo al centro (Ronda "sombra dura", 2026-08-21).
+ *
+ * Motivo físico: `isSegmentOccluded` con UN solo rayo centro→punto trata la
+ * luminaria como una fuente puntual — el borde de cualquier sombra queda
+ * matemáticamente afilado (un lado del corte 0 lx, el otro lado el valor
+ * pleno), algo que ninguna luminaria real produce (siempre tiene área). En
+ * un ambiente con oclusores cercanos al plano de trabajo (particiones,
+ * columnas, muescas de muro) esto hace que el estadístico Emin sea
+ * inestable frente a cambios de fracción de milímetro en la geometría: un
+ * punto de malla que cae justo en ese borde matemático puede pasar de 0 lx a
+ * su valor pleno con un desplazamiento mínimo — verificado empíricamente en
+ * "Módulo VII" (proyecto real con particiones): variar solo el espaciado de
+ * malla (0.1 → 0.5 m, sin tocar geometría) hizo que Emin oscilara de forma
+ * NO monótona entre 27.9 y 58.3 lx para el mismo ambiente, evidencia de un
+ * artefacto de muestreo, no de un valor físico estable. El muestreo de área
+ * (5 rayos repartidos en el rectángulo luminoso real) reemplaza ese corte
+ * binario por una rampa de penumbra continua — el mismo principio que usa
+ * cualquier motor de render/lumínico profesional para sombras suaves de
+ * fuentes de área, aplicado aquí a CUALQUIER proyecto con oclusión activa,
+ * no una corrección puntual para este caso.
+ */
+export function fixtureVisibilityFraction(point: { x: number; y: number; z: number }, fixture: Fixture, obstacles: OcclusionBox[]): number {
+    if (obstacles.length === 0) {
+        return 1;
+    }
+    const { halfX, halfY } = fixtureLuminousHalfExtent(fixture);
+    let visibleCount = 0;
+    for (const sample of OCCLUSION_SAMPLE_OFFSETS) {
+        const samplePoint = {
+            x: fixture.x + sample.fx * halfX,
+            y: fixture.y + sample.fy * halfY,
+            z: fixture.z,
+        };
+        if (!isSegmentOccluded(point, samplePoint, obstacles)) {
+            visibleCount += 1;
+        }
+    }
+    return visibleCount / OCCLUSION_SAMPLE_OFFSETS.length;
+}
+
+/**
  * Iluminancia directa (lux) que aporta `fixture` sobre `point`, según su
  * matriz fotométrica, la ley del inverso del cuadrado y el coseno de
  * incidencia (Lambert) respecto a `point.normal`. Compartida entre
@@ -54,12 +132,17 @@ export function illuminanceFromFixture(point: SurfacePoint, fixture: Fixture, ob
         return 0;
     }
 
-    // Fase 6: oclusión — sin línea de vista directa, la luminaria no aporta
-    // nada a este punto. `obstacles` viene vacío por defecto (ver
+    // Fase 6: oclusión — `obstacles` viene vacío por defecto (ver
     // `calculateLightingResult`), así que este chequeo no tiene costo ni
     // efecto para ningún llamador que no pase obstáculos explícitamente.
-    if (obstacles.length > 0 && isSegmentOccluded(point, { x: fixture.x, y: fixture.y, z: fixture.z }, obstacles)) {
-        return 0;
+    // Con obstáculos, `fixtureVisibilityFraction` reemplaza el corte binario
+    // original por una fracción de visibilidad de área — ver su doc arriba.
+    let visibility = 1;
+    if (obstacles.length > 0) {
+        visibility = fixtureVisibilityFraction(point, fixture, obstacles);
+        if (visibility <= 0) {
+            return 0;
+        }
     }
 
     const dist = Math.sqrt(dist2);
@@ -80,7 +163,7 @@ export function illuminanceFromFixture(point: SurfacePoint, fixture: Fixture, ob
     const rawAzimuthDeg = (Math.atan2(dy, dx) * 180) / MATH_PI;
     const azimuthDeg = rawAzimuthDeg - (fixture.rotation ?? 0);
 
-    return (candela(fixture, gammaDeg, azimuthDeg) * cosIncident) / dist2;
+    return (candela(fixture, gammaDeg, azimuthDeg) * cosIncident * visibility) / dist2;
 }
 
 /** Área luminosa real (m²) de la luminaria, para el cálculo de luminancia (UGR, Fase 9). Fallback conservador si no hay dimensiones. */

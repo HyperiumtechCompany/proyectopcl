@@ -22,6 +22,7 @@ export interface DialuxV2Module {
     name: string;
     description: string | null;
     status: ModuleStatus;
+    kind: 'general' | 'building' | 'exterior' | 'custom';
     sort_order: number;
     rooms_count?: number;
     luminaires_count?: number;

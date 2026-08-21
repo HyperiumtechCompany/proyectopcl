@@ -60,6 +60,7 @@ export async function hashCalculationSnapshot(snapshot: CalculationSnapshot): Pr
         scenes: snapshot.scenes,
         calculationObjects: snapshot.calculationObjects,
         obstacles: snapshot.obstacles,
+        partitionPatches: snapshot.partitionPatches,
     };
     return sha256Hex(canonicalStringify(hashable));
 }
@@ -82,6 +83,7 @@ export async function hashCalculationGeometry(snapshot: CalculationSnapshot): Pr
             roomType: object.roomType,
         })),
         obstacles: snapshot.obstacles,
+        partitionPatches: snapshot.partitionPatches,
     };
     return sha256Hex(canonicalStringify(geometryOnly));
 }

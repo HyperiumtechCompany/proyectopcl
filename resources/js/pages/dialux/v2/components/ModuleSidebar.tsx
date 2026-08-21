@@ -28,6 +28,9 @@ export function ModuleSidebar({
     activeModuleId,
 }: Props) {
     const [collapsed, setCollapsed] = useState(false);
+    const designModulesCount = modules.filter(
+        (module) => module.kind !== 'general',
+    ).length;
 
     return (
         <aside
@@ -69,7 +72,7 @@ export function ModuleSidebar({
                     <button
                         type="button"
                         title="Nuevo módulo"
-                        disabled={actions.busy || modules.length >= 25}
+                        disabled={actions.busy || designModulesCount >= 25}
                         onClick={actions.create}
                         className="rounded-lg p-2 text-amber-600 hover:bg-amber-500/10 disabled:opacity-30"
                     >
@@ -99,7 +102,7 @@ export function ModuleSidebar({
                     <div className="grid gap-2 border-t border-slate-200 p-3 dark:border-white/10">
                         <button
                             type="button"
-                            disabled={actions.busy || modules.length >= 25}
+                            disabled={actions.busy || designModulesCount >= 25}
                             onClick={actions.create}
                             className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-500 disabled:opacity-40"
                         >

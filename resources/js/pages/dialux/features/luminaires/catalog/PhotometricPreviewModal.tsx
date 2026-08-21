@@ -45,6 +45,11 @@ export interface PhotometricPreviewOverrides {
     cct: string;
     cri_ra: string;
     lamp_type: string;
+    fixture_shape: string;
+    dimension_length: string;
+    dimension_width: string;
+    dimension_height: string;
+    dimension_radius: string;
     /** Ronda 21f: imágenes editables en el mismo modal, en ambos modos — antes el formulario de subida (create) y este modal (edit) tenían estados de imagen separados y duplicados, y el usuario reportó que no podía adjuntarlas al crear. */
     productImage: File | null;
     brandLogo: File | null;
@@ -119,6 +124,17 @@ export function PhotometricPreviewModal({ open, onOpenChange, mode, preview, war
     const [cct, setCct] = useState(preview.cct ?? '');
     const [criRa, setCriRa] = useState(preview.cri_ra != null ? String(preview.cri_ra) : '');
     const [lampType, setLampType] = useState(preview.metadata?.lamp_type ?? '');
+    const [fixtureShape, setFixtureShape] = useState(preview.fixture_shape ?? '');
+    const [dimensionLength, setDimensionLength] = useState(preview.dimensions?.length != null ? String(preview.dimensions.length) : '');
+    const [dimensionWidth, setDimensionWidth] = useState(preview.dimensions?.width != null ? String(preview.dimensions.width) : '');
+    const [dimensionHeight, setDimensionHeight] = useState(preview.dimensions?.height != null ? String(preview.dimensions.height) : '');
+    const [dimensionRadius, setDimensionRadius] = useState(
+        preview.dimensions?.radius != null
+            ? String(preview.dimensions.radius)
+            : preview.fixture_shape === 'round' && preview.dimensions
+              ? String(Math.max(preview.dimensions.length ?? 0, preview.dimensions.width ?? 0) / 2)
+              : '',
+    );
     const [ugrTables, setUgrTables] = useState<ProductUgrTable[] | null>(null);
     const [ugrUnavailableReason, setUgrUnavailableReason] = useState<string | null>(null);
     const [isRecalculating, setIsRecalculating] = useState(false);
@@ -172,7 +188,6 @@ export function PhotometricPreviewModal({ open, onOpenChange, mode, preview, war
     };
 
     const luminaireType = preview.metadata?.luminaire_type;
-    const dimensions = preview.dimensions;
     const opening = preview.luminous_opening;
     const efficiency = Number.isFinite(editedLumens) && Number(powerWatts) > 0 ? editedLumens / Number(powerWatts) : null;
 
@@ -274,24 +289,56 @@ export function PhotometricPreviewModal({ open, onOpenChange, mode, preview, war
                     )}
 
                     {mainTab === 'Luminaria' && (
-                        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs md:grid-cols-3">
-                            <ReadOnlyField label="Forma (Ityp)" value={luminaireType != null ? (LUMINAIRE_TYPE_LABELS[luminaireType] ?? `Código ${luminaireType}`) : '—'} />
-                            <ReadOnlyField
-                                label="Dimensiones de la luminaria (L×A×H)"
-                                value={dimensions ? `${formatNumber(dimensions.length, 3)} × ${formatNumber(dimensions.width, 3)} × ${formatNumber(dimensions.height, 3)} m` : '—'}
-                            />
-                            <ReadOnlyField
-                                label="Área luminosa (L×A)"
-                                value={opening ? `${formatNumber(opening.length, 3)} × ${formatNumber(opening.width, 3)} m` : '—'}
-                            />
-                            <ReadOnlyField label="DFF — flujo hacia abajo" value={preview.metadata?.downward_flux_fraction_pct != null ? `${formatNumber(preview.metadata.downward_flux_fraction_pct)}%` : '—'} />
-                            <ReadOnlyField label="LORL — rendimiento de la luminaria" value={preview.metadata?.light_output_ratio_pct != null ? `${formatNumber(preview.metadata.light_output_ratio_pct)}%` : '—'} />
-                            <ReadOnlyField label="Factor de conversión" value={preview.metadata?.conversion_factor != null ? formatNumber(preview.metadata.conversion_factor, 3) : '—'} />
-                            <ReadOnlyField label="Inclinación (tilt)" value={preview.metadata?.tilt_deg != null ? `${formatNumber(preview.metadata.tilt_deg)}°` : '—'} />
-                            <ReadOnlyField label="Ángulo de haz (50%)" value={preview.beam_angle_50 != null ? `${formatNumber(preview.beam_angle_50)}°` : '—'} />
-                            <ReadOnlyField label="Ángulo de campo (10%)" value={preview.beam_angle_10 != null ? `${formatNumber(preview.beam_angle_10)}°` : '—'} />
-                            <ReadOnlyField label="Candela máxima" value={preview.max_candela != null ? `${formatNumber(preview.max_candela, 0)} cd` : '—'} />
-                        </dl>
+                        <div className="space-y-4">
+                            <div className="rounded-md border border-border bg-muted/30 p-3 text-xs">
+                                <ReadOnlyField label="Tipo EULUMDAT (Ityp, declarado por el LDT)" value={luminaireType != null ? (LUMINAIRE_TYPE_LABELS[luminaireType] ?? `Código ${luminaireType}`) : '—'} />
+                                <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+                                    Ityp clasifica la luminaria como puntual, lineal o de área; no garantiza por sí solo la silueta física. La forma visual y las dimensiones siguientes controlan su representación 2D/3D y pueden corregirse sin modificar la fotometría.
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                                <div>
+                                    <Label htmlFor="preview-fixture-shape" className="text-xs">Forma geométrica 2D/3D</Label>
+                                    <select id="preview-fixture-shape" value={fixtureShape} onChange={(event) => setFixtureShape(event.target.value)} className="mt-1 h-8 w-full rounded-md border border-input bg-background px-2 text-xs">
+                                        <option value="">Sin determinar</option>
+                                        <option value="round">Circular</option>
+                                        <option value="square">Cuadrada</option>
+                                        <option value="rectangular">Rectangular</option>
+                                        <option value="cylindrical">Cilíndrica / tubular</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <Label htmlFor="preview-dimension-length" className="text-xs">Largo (m)</Label>
+                                    <Input id="preview-dimension-length" type="number" min="0" step="0.001" value={dimensionLength} onChange={(event) => setDimensionLength(event.target.value)} className="mt-1 h-8 text-xs" />
+                                </div>
+                                <div>
+                                    <Label htmlFor="preview-dimension-width" className="text-xs">Ancho (m)</Label>
+                                    <Input id="preview-dimension-width" type="number" min="0" step="0.001" value={dimensionWidth} onChange={(event) => setDimensionWidth(event.target.value)} className="mt-1 h-8 text-xs" />
+                                </div>
+                                <div>
+                                    <Label htmlFor="preview-dimension-height" className="text-xs">Alto (m)</Label>
+                                    <Input id="preview-dimension-height" type="number" min="0" step="0.001" value={dimensionHeight} onChange={(event) => setDimensionHeight(event.target.value)} className="mt-1 h-8 text-xs" />
+                                </div>
+                                {(fixtureShape === 'round' || fixtureShape === 'cylindrical') && (
+                                    <div>
+                                        <Label htmlFor="preview-dimension-radius" className="text-xs">Radio (m)</Label>
+                                        <Input id="preview-dimension-radius" type="number" min="0" step="0.001" value={dimensionRadius} onChange={(event) => setDimensionRadius(event.target.value)} className="mt-1 h-8 text-xs" />
+                                    </div>
+                                )}
+                            </div>
+
+                            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs md:grid-cols-3">
+                                <ReadOnlyField label="Área luminosa (L×A)" value={opening ? `${formatNumber(opening.length, 3)} × ${formatNumber(opening.width, 3)} m` : '—'} />
+                                <ReadOnlyField label="DFF — flujo hacia abajo" value={preview.metadata?.downward_flux_fraction_pct != null ? `${formatNumber(preview.metadata.downward_flux_fraction_pct)}%` : '—'} />
+                                <ReadOnlyField label="LORL — rendimiento de la luminaria" value={preview.metadata?.light_output_ratio_pct != null ? `${formatNumber(preview.metadata.light_output_ratio_pct)}%` : '—'} />
+                                <ReadOnlyField label="Factor de conversión" value={preview.metadata?.conversion_factor != null ? formatNumber(preview.metadata.conversion_factor, 3) : '—'} />
+                                <ReadOnlyField label="Inclinación (tilt)" value={preview.metadata?.tilt_deg != null ? `${formatNumber(preview.metadata.tilt_deg)}°` : '—'} />
+                                <ReadOnlyField label="Ángulo de haz (50%)" value={preview.beam_angle_50 != null ? `${formatNumber(preview.beam_angle_50)}°` : '—'} />
+                                <ReadOnlyField label="Ángulo de campo (10%)" value={preview.beam_angle_10 != null ? `${formatNumber(preview.beam_angle_10)}°` : '—'} />
+                                <ReadOnlyField label="Candela máxima" value={preview.max_candela != null ? `${formatNumber(preview.max_candela, 0)} cd` : '—'} />
+                            </dl>
+                        </div>
                     )}
 
                     {mainTab === 'Lámparas' && (
@@ -452,6 +499,11 @@ export function PhotometricPreviewModal({ open, onOpenChange, mode, preview, war
                                 cct,
                                 cri_ra: criRa,
                                 lamp_type: lampType,
+                                fixture_shape: fixtureShape,
+                                dimension_length: dimensionLength,
+                                dimension_width: dimensionWidth,
+                                dimension_height: dimensionHeight,
+                                dimension_radius: dimensionRadius,
                                 productImage,
                                 brandLogo,
                                 clearProductImage,

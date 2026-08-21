@@ -24,21 +24,80 @@ interface Point3 {
  */
 const PARAMETRIC_BIAS = 1e-6;
 
-function toLocalFrame(box: OcclusionBox, p: Point3): Point3 {
-    const dx = p.x - box.originX;
-    const dy = p.y - box.originY;
-    const cos = Math.cos(box.angleRad);
-    const sin = Math.sin(box.angleRad);
+interface PreparedBox {
+    box: OcclusionBox;
+    cos: number;
+    sin: number;
+    // AABB mundial de la caja — filtro barato antes del test de slabs completo.
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+}
+
+/**
+ * `cos`/`sin` de `box.angleRad` y el AABB mundial de cada caja, cacheados
+ * por identidad del array `obstacles` (Ronda "rendimiento del muestreo de
+ * área", 2026-08-21): con el muestreo de área de `directIlluminance.ts`/
+ * `radiosityTransfer.ts`/`glareCalculation.ts` (5 rayos en vez de 1 por
+ * fuente), el mismo `obstacles` se prueba contra MUCHOS más segmentos dentro
+ * de un solo cálculo — recalcular trigonometría y reconstruir el AABB de
+ * cada caja en cada llamada (antes: una vez por caja por llamada; con 5x
+ * rayos, 5 veces más) fue el costo dominante medido (proyecto real
+ * "Vinchos": ~5s por cálculo). El cache no cambia ningún resultado (`cos`/
+ * `sin` son funciones puras de `box.angleRad`, que no cambia entre llamadas
+ * dentro de un mismo cálculo) — es una optimización pura, verificada contra
+ * los mismos tests de `segmentOcclusion.test.ts` sin tocar ninguno.
+ */
+const preparedCache = new WeakMap<OcclusionBox[], PreparedBox[]>();
+
+function prepareObstacles(obstacles: OcclusionBox[]): PreparedBox[] {
+    const cached = preparedCache.get(obstacles);
+    if (cached) {
+        return cached;
+    }
+    const prepared = obstacles.map((box): PreparedBox => {
+        const cos = Math.cos(box.angleRad);
+        const sin = Math.sin(box.angleRad);
+        const halfThickness = box.thickness / 2;
+        const localCorners = [
+            { x: 0, y: -halfThickness },
+            { x: box.length, y: -halfThickness },
+            { x: 0, y: halfThickness },
+            { x: box.length, y: halfThickness },
+        ];
+        let minX = Infinity;
+        let maxX = -Infinity;
+        let minY = Infinity;
+        let maxY = -Infinity;
+        for (const corner of localCorners) {
+            const worldX = box.originX + corner.x * cos - corner.y * sin;
+            const worldY = box.originY + corner.x * sin + corner.y * cos;
+            minX = Math.min(minX, worldX);
+            maxX = Math.max(maxX, worldX);
+            minY = Math.min(minY, worldY);
+            maxY = Math.max(maxY, worldY);
+        }
+        return { box, cos, sin, minX, maxX, minY, maxY };
+    });
+    preparedCache.set(obstacles, prepared);
+    return prepared;
+}
+
+function toLocalFrame(prepared: PreparedBox, p: Point3): Point3 {
+    const dx = p.x - prepared.box.originX;
+    const dy = p.y - prepared.box.originY;
     return {
-        x: dx * cos + dy * sin,
-        y: -dx * sin + dy * cos,
+        x: dx * prepared.cos + dy * prepared.sin,
+        y: -dx * prepared.sin + dy * prepared.cos,
         z: p.z,
     };
 }
 
-function segmentIntersectsBox(p0: Point3, p1: Point3, box: OcclusionBox): boolean {
-    const a = toLocalFrame(box, p0);
-    const b = toLocalFrame(box, p1);
+function segmentIntersectsBox(p0: Point3, p1: Point3, prepared: PreparedBox): boolean {
+    const box = prepared.box;
+    const a = toLocalFrame(prepared, p0);
+    const b = toLocalFrame(prepared, p1);
     const dir = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z };
 
     const mins = [0, -box.thickness / 2, box.zMin];
@@ -75,8 +134,34 @@ function segmentIntersectsBox(p0: Point3, p1: Point3, box: OcclusionBox): boolea
 
 /** `true` si algún obstáculo bloquea la línea de vista directa entre `p0` y `p1`. */
 export function isSegmentOccluded(p0: Point3, p1: Point3, obstacles: OcclusionBox[]): boolean {
-    for (const box of obstacles) {
-        if (segmentIntersectsBox(p0, p1, box)) {
+    if (obstacles.length === 0) {
+        return false;
+    }
+
+    const segMinX = Math.min(p0.x, p1.x);
+    const segMaxX = Math.max(p0.x, p1.x);
+    const segMinY = Math.min(p0.y, p1.y);
+    const segMaxY = Math.max(p0.y, p1.y);
+    const segMinZ = Math.min(p0.z, p1.z);
+    const segMaxZ = Math.max(p0.z, p1.z);
+
+    for (const prepared of prepareObstacles(obstacles)) {
+        // Rechazo barato por AABB antes del test de slabs completo — nunca
+        // descarta una intersección real (el AABB de la caja rotada SIEMPRE
+        // contiene la caja), solo evita el trabajo trigonométrico para pares
+        // rayo↔caja que claramente no se tocan (la mayoría, en una escena
+        // real con varios obstáculos).
+        if (
+            segMaxX < prepared.minX ||
+            segMinX > prepared.maxX ||
+            segMaxY < prepared.minY ||
+            segMinY > prepared.maxY ||
+            segMaxZ < prepared.box.zMin ||
+            segMinZ > prepared.box.zMax
+        ) {
+            continue;
+        }
+        if (segmentIntersectsBox(p0, p1, prepared)) {
             return true;
         }
     }

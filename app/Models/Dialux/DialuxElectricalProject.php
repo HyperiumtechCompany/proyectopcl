@@ -48,6 +48,8 @@ class DialuxElectricalProject extends Model
         'total_outlets',
         'total_panels',
         'installed_power_w',
+        'demand_power_w',
+        'derived_summary',
     ];
 
     /**
@@ -65,6 +67,8 @@ class DialuxElectricalProject extends Model
             'total_outlets' => 'integer',
             'total_panels' => 'integer',
             'installed_power_w' => 'float',
+            'demand_power_w' => 'float',
+            'derived_summary' => 'array',
         ];
     }
 

@@ -27,7 +27,7 @@ class ProjectController extends Controller
         $projects = DialuxProject::query()
             ->where('user_id', auth()->id())
             ->has('modules')
-            ->withCount('modules')
+            ->withCount(['modules as modules_count' => fn ($query) => $query->where('kind', '!=', 'general')])
             ->orderByDesc('updated_at')
             ->get()
             ->map(fn (DialuxProject $project): array => [
@@ -56,6 +56,7 @@ class ProjectController extends Controller
                 ...$this->quota->demoAttributesFor($request->user()),
             ]);
 
+            $this->modules->createGeneral($project);
             $this->modules->create($project, ['name' => 'Módulo 1']);
 
             return $project;
@@ -80,6 +81,7 @@ class ProjectController extends Controller
                 'name' => $module->name,
                 'description' => $module->description,
                 'status' => $module->status,
+                'kind' => $module->kind,
                 'sort_order' => $module->sort_order,
                 'rooms_count' => collect($module->data['scenes'] ?? [])->sum(
                     fn (array $scene): int => count($scene['rooms'] ?? []),

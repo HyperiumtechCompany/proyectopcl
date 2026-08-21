@@ -48,6 +48,20 @@ class DialuxModuleService
         }, attempts: 3);
     }
 
+    public function createGeneral(DialuxProject $project): DialuxModule
+    {
+        return $project->modules()->firstOrCreate(
+            ['kind' => 'general'],
+            [
+                'name' => 'Módulo General',
+                'description' => 'Red eléctrica general del proyecto',
+                'sort_order' => 0,
+                'status' => 'draft',
+                'data' => null,
+            ],
+        );
+    }
+
     /**
      * @param  array<int, array{id: int, sort_order: int}>  $positions
      * @return Collection<int, DialuxModule>
@@ -67,6 +81,7 @@ class DialuxModuleService
             foreach ($positions as $position) {
                 $project->modules()
                     ->whereKey($position['id'])
+                    ->where('kind', '!=', 'general')
                     ->update(['sort_order' => $position['sort_order']]);
             }
 
@@ -78,7 +93,7 @@ class DialuxModuleService
 
     private function ensureCapacity(DialuxProject $project): void
     {
-        if ($project->modules()->count() >= DialuxModule::MAX_PER_PROJECT) {
+        if ($project->modules()->where('kind', '!=', 'general')->count() >= DialuxModule::MAX_PER_PROJECT) {
             throw ValidationException::withMessages([
                 'name' => 'El proyecto ya alcanzó el límite de 25 módulos.',
             ]);

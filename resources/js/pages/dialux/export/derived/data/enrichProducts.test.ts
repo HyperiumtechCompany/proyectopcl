@@ -104,4 +104,29 @@ describe('Fase 15 — enrichProducts (Parte A: CDL polar sin dependencia de red)
         const asset = result.assets.find((a) => a.id === fixture.polarDiagramAssetId);
         expect(asset && 'svg' in asset ? asset.svg : null).toBe('<svg>local</svg>');
     });
+
+    it('copia la matriz remota al fixture para generar CDL polar y tabla UGR del PDF', async () => {
+        vi.mocked(axios.get).mockResolvedValue({
+            data: {
+                product: {
+                    name: 'Producto fotométrico',
+                    photometric_web: {
+                        c_angles: [0],
+                        gamma_angles: [0, 30, 60, 90],
+                        candela: [[1000, 800, 400, 0]],
+                        provenance: 'manufacturer',
+                        reference_lumens: 3000,
+                    },
+                },
+            },
+        });
+        const fixture = buildFixture({ productId: 14 });
+
+        const result = await enrichProducts(buildSnapshot([fixture]));
+
+        expect(fixture.photometricWeb).toBeTruthy();
+        expect(fixture.polarDiagramAssetId).toBe('fixture-fx-1-polar-generated');
+        expect(result.assets.some((asset) => asset.id === fixture.polarDiagramAssetId)).toBe(true);
+        expect(fixture.reportData?.ugrTablesComputed).toBeTruthy();
+    });
 });

@@ -29,9 +29,12 @@ export const OverlayPartitions: React.FC<OverlayPartitionsProps> = ({
             case 'drywall': return '#808080';  // grey
             case 'glass': return '#add8e6';    // lightblue
             case 'masonry': return '#d2691e';  // chocolate
+            case 'reinforced_plastic': return '#e5e7eb'; // gris muy claro (PRFV)
             default: return '#555555';
         }
     };
+
+    const selectedPartition = partitions.find((p) => p.id === selectedId);
 
     return (
         <g id="overlay-partitions" opacity={opacity}>
@@ -76,6 +79,46 @@ export const OverlayPartitions: React.FC<OverlayPartitionsProps> = ({
                     </g>
                 );
             })}
+            {selectedPartition && (
+                <g className="partition-polyline-handles">
+                    {selectedPartition.vertices.map((vertex, index) => {
+                        const point = { x: scaleX(vertex.x), y: scaleY(vertex.y) };
+                        const nextVertex = selectedPartition.vertices[index + 1];
+                        const next = nextVertex ? { x: scaleX(nextVertex.x), y: scaleY(nextVertex.y) } : null;
+                        return (
+                            <g key={`${selectedPartition.id}-vertex-${index}`}>
+                                {next && (
+                                    <rect
+                                        data-partition-edge-id={selectedPartition.id}
+                                        data-partition-edge-index={index}
+                                        x={(point.x + next.x) / 2 - 6}
+                                        y={(point.y + next.y) / 2 - 6}
+                                        width={12}
+                                        height={12}
+                                        rx={2}
+                                        fill="#22d3ee"
+                                        stroke="#083344"
+                                        strokeWidth={1.5}
+                                        opacity={0.9}
+                                        style={{ cursor: 'copy', pointerEvents: 'all' }}
+                                    />
+                                )}
+                                <circle
+                                    data-partition-vertex-id={selectedPartition.id}
+                                    data-partition-vertex-index={index}
+                                    cx={point.x}
+                                    cy={point.y}
+                                    r={8}
+                                    fill="#22c55e"
+                                    stroke="#052e16"
+                                    strokeWidth={2}
+                                    style={{ cursor: 'move', pointerEvents: 'all' }}
+                                />
+                            </g>
+                        );
+                    })}
+                </g>
+            )}
         </g>
     );
 };

@@ -14,6 +14,7 @@ import {
     insertPolygonEdgeMidpoint,
     movePolygonVertex,
 } from '@/pages/dialux/geometry/editablePolyline';
+import { resolveVertexAlignmentSnap } from '@/pages/dialux/geometry/vertexAlignmentSnap';
 import type {
     AngleSnapMode,
     DrawTool,
@@ -46,6 +47,16 @@ export interface CanvasPoint {
     y: number;
 }
 
+/**
+ * Ronda 30: guía de alineación visible mientras se arrastra un vértice de
+ * Room/Wall — `x`/`y` en metros de escena (no píxeles), cada uno `null`
+ * cuando ese eje no encontró ningún otro vértice de la misma forma cerca.
+ */
+export interface AlignmentGuide {
+    x: number | null;
+    y: number | null;
+}
+
 interface InteractionOptions {
     activeTool: DrawTool;
     angleSnapMode: AngleSnapMode;
@@ -61,6 +72,8 @@ interface InteractionOptions {
     /** Cierra el trazo de un StructuralObstacle (columna/viga/zona restringida) -- mismo mecanismo de dibujo que room/corridor/stair */
     onAddStructuralObstacle?: (verticesM: CanvasPoint[]) => void;
     onAddWall: (vertices: CanvasPoint[]) => void;
+    /** Ronda 28: intenta auto-detectar un contorno cerrado del plano DXF bajo `seedPoint` (metros de escena) y crear el recinto/pasadizo/escalera ahí mismo. Devuelve `true` si lo logró (el clic queda consumido, sin arrancar un trazo manual). */
+    onAutoDetectRoom?: (seedPoint: CanvasPoint) => boolean;
     onAddWindow: (wallId: string, offsetAlongWall: number) => void;
     onAddDoor: (
         wallId: string,
@@ -119,6 +132,12 @@ interface InteractionOptions {
     onMoveFixtures: (ids: string[], dx: number, dy: number) => void;
     onMoveRoom: (id: string, dx: number, dy: number) => void;
     onUpdateRoomVertices?: (id: string, vertices: CanvasPoint[]) => void;
+    /** Ronda 26: mismo mecanismo que `onUpdateRoomVertices`, para reformar muros (arrastrar vértices / insertar en el punto medio de un tramo) — así un ambiente delimitado por muros puede pasar de rectángulo a L/U sin depurar coordenadas a mano. */
+    onUpdateWallVertices?: (id: string, vertices: CanvasPoint[]) => void;
+    /** Ronda 27: trazo de 'partition' (comparte mecánica con 'wall', ver `isWallTool`) — entrega la polilínea terminada, igual que `onAddWall`. */
+    onAddPartition?: (vertices: CanvasPoint[]) => void;
+    /** Ronda 32: mismo mecanismo que `onUpdateWallVertices` (Ronda 26), para reformar un tabique/separador ya dibujado — antes solo se podía borrar y volver a trazar. */
+    onUpdatePartitionVertices?: (id: string, vertices: CanvasPoint[]) => void;
     onMoveCanopy: (
         id: string,
         x1: number,
@@ -201,15 +220,45 @@ interface DrawState {
         | 'conductor-endpoint'
         | 'conductor-curve'
         | 'room-vertex'
+        | 'wall-vertex'
+        | 'partition-vertex'
         | null;
     /** Extremo del conductor que se está arrastrando (solo cuando dragObjectType === 'conductor-endpoint') */
     dragConductorEndpoint: 'source' | 'target' | null;
     dragVertexIndex: number | null;
     dragRoomVertices: CanvasPoint[] | null;
+    /**
+     * Ronda 26: algunos muros guardan un anillo CERRADO con el primer y
+     * último vértice literalmente duplicados (trazado de contorno completo
+     * con jambas — ver `occlusionBoxes.ts`), a diferencia del muro simple de
+     * 2+ puntos que traza la herramienta "wall". Si se arrastra ese
+     * extremo, hay que mover AMBAS copias juntas o el anillo queda con una
+     * grieta de 1 punto. `true` solo cuando el vértice arrastrado (índice 0
+     * o el último) tenía su par duplicado exacto al iniciar el arrastre.
+     */
+    dragWallRingJoin: boolean;
 }
 
+/**
+ * Herramientas que comparten el mismo trazo de polilínea abierta (clic a
+ * clic, cierre automático si se vuelve cerca del primer punto, doble-clic
+ * para terminar) y por lo tanto el mismo estado de arrastre (`s.wallVertices`
+ * etc.). Ronda 27 (2026-08-20): `'partition'` (tabique/separador de SS.HH —
+ * melamina, drywall, vidrio, ladrillo, PRFV) se agregó aquí en vez de
+ * duplicar todo el mecanismo de trazo, porque geométricamente es idéntico a
+ * un muro (polilínea + grosor + altura) — solo cambia a qué callback
+ * (`onAddWall` vs `onAddPartition`) se entrega el resultado al confirmar.
+ */
 function isWallTool(tool: string): boolean {
-    return tool === 'wall' || tool === 'education-wall';
+    return tool === 'wall' || tool === 'education-wall' || tool === 'partition';
+}
+
+/** Ronda 26: `true` cuando `vertices[index]` es un extremo (0 o el último) Y coincide exactamente con el otro extremo — ver doc de `dragWallRingJoin`. */
+function isWallRingJoinVertex(vertices: CanvasPoint[], index: number): boolean {
+    if (vertices.length < 2) return false;
+    const last = vertices.length - 1;
+    if (index !== 0 && index !== last) return false;
+    return vertices[0]!.x === vertices[last]!.x && vertices[0]!.y === vertices[last]!.y;
 }
 
 export function useCanvasInteraction(opts: InteractionOptions) {
@@ -223,6 +272,8 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         onAddRoom,
         onAddStructuralObstacle,
         onAddWall,
+        onAddPartition,
+        onAutoDetectRoom,
         onAddWindow,
         onAddDoor,
         onAddCanopy,
@@ -251,6 +302,8 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         onMoveFixtures,
         onMoveRoom,
         onUpdateRoomVertices,
+        onUpdateWallVertices,
+        onUpdatePartitionVertices,
         onMoveCanopy,
         onMoveWindow,
         onMoveDoor,
@@ -306,6 +359,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         dragConductorEndpoint: null,
         dragVertexIndex: null,
         dragRoomVertices: null,
+        dragWallRingJoin: false,
     });
 
     useEffect(() => {
@@ -591,6 +645,12 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                         return true;
                     }
                 }
+
+                // Ronda 28/29: la auto-detección corre ANTES, en `onMouseDown`,
+                // con el punto crudo del clic (ver ese comentario ahí) — aquí
+                // ya no hace falta (y usar `cx,cy` ya-snapeado repetiría el
+                // bug de la Ronda 28: casi siempre cae justo sobre la pared).
+
                 s.isDrawing = true;
                 const scenePoint = canvasToScene(cx, cy);
                 s.roomVertices.push(scenePoint);
@@ -616,7 +676,12 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                         newPointScreen.y - first.y,
                     );
                     if (dist < closeThresholdPx) {
-                        onAddWall([...s.wallVertices, s.wallVertices[0]]);
+                        const closed = [...s.wallVertices, s.wallVertices[0]];
+                        if (activeTool === 'partition') {
+                            onAddPartition?.(closed);
+                        } else {
+                            onAddWall(closed);
+                        }
                         s.wallVertices = [];
                         s.isDrawing = false;
                         setWallPreview(null);
@@ -637,6 +702,8 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             canvasToScene,
             onAddRoom,
             onAddWall,
+            onAddPartition,
+            onAutoDetectRoom,
             fixtureGridAreaMode,
             onCloseFixtureGridArea,
         ],
@@ -737,6 +804,96 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                     return;
                 }
             }
+
+            const wallVertexHandle = eventElement.closest<SVGElement>(
+                '[data-wall-vertex-id]',
+            );
+            const wallEdgeHandle = eventElement.closest<SVGElement>(
+                '[data-wall-edge-id]',
+            );
+            const handledWallId =
+                wallVertexHandle?.dataset.wallVertexId ??
+                wallEdgeHandle?.dataset.wallEdgeId;
+            if (activeTool === 'select' && handledWallId) {
+                const wall = walls.find((item) => item.id === handledWallId);
+                const rawIndex =
+                    wallVertexHandle?.dataset.wallVertexIndex ??
+                    wallEdgeHandle?.dataset.wallEdgeIndex;
+                const handleIndex = Number(rawIndex);
+                if (wall && Number.isInteger(handleIndex)) {
+                    let vertices = wall.vertices.map((vertex) => ({
+                        ...vertex,
+                    }));
+                    let dragIndex = handleIndex;
+                    if (wallEdgeHandle) {
+                        // Seguro sin envolver: el handle de punto medio solo
+                        // se renderiza para `index < length - 1` (ver
+                        // `OverlayWalls.tsx`), así que `insertPolygonEdgeMidpoint`
+                        // nunca ve el índice final de un muro abierto.
+                        const inserted = insertPolygonEdgeMidpoint(
+                            vertices,
+                            handleIndex,
+                        );
+                        vertices = inserted.vertices;
+                        dragIndex = inserted.insertedIndex;
+                        onUpdateWallVertices?.(wall.id, vertices);
+                    }
+                    onSelectObject(wall.id);
+                    s.isDragging = true;
+                    s.dragStartScene = canvasToScene(rawX, rawY);
+                    s.dragObjectId = wall.id;
+                    s.dragObjectType = 'wall-vertex';
+                    s.dragVertexIndex = dragIndex;
+                    s.dragRoomVertices = vertices;
+                    s.dragWallRingJoin = isWallRingJoinVertex(vertices, dragIndex);
+                    onDragGesture?.('start');
+                    return;
+                }
+            }
+
+            const partitionVertexHandle = eventElement.closest<SVGElement>(
+                '[data-partition-vertex-id]',
+            );
+            const partitionEdgeHandle = eventElement.closest<SVGElement>(
+                '[data-partition-edge-id]',
+            );
+            const handledPartitionId =
+                partitionVertexHandle?.dataset.partitionVertexId ??
+                partitionEdgeHandle?.dataset.partitionEdgeId;
+            if (activeTool === 'select' && handledPartitionId) {
+                const partition = partitions.find((item) => item.id === handledPartitionId);
+                const rawIndex =
+                    partitionVertexHandle?.dataset.partitionVertexIndex ??
+                    partitionEdgeHandle?.dataset.partitionEdgeIndex;
+                const handleIndex = Number(rawIndex);
+                if (partition && Number.isInteger(handleIndex)) {
+                    let vertices = partition.vertices.map((vertex) => ({
+                        ...vertex,
+                    }));
+                    let dragIndex = handleIndex;
+                    if (partitionEdgeHandle) {
+                        // Mismo patrón que un muro abierto (Ronda 26): el
+                        // handle de punto medio solo se renderiza para
+                        // `index < length - 1`, nunca ve el índice final.
+                        const inserted = insertPolygonEdgeMidpoint(
+                            vertices,
+                            handleIndex,
+                        );
+                        vertices = inserted.vertices;
+                        dragIndex = inserted.insertedIndex;
+                        onUpdatePartitionVertices?.(partition.id, vertices);
+                    }
+                    onSelectObject(partition.id);
+                    s.isDragging = true;
+                    s.dragStartScene = canvasToScene(rawX, rawY);
+                    s.dragObjectId = partition.id;
+                    s.dragObjectType = 'partition-vertex';
+                    s.dragVertexIndex = dragIndex;
+                    s.dragRoomVertices = vertices;
+                    onDragGesture?.('start');
+                    return;
+                }
+            }
             const activeVerticesCanvas = (
                 activeTool === 'room' ||
                 activeTool === 'corridor' ||
@@ -748,6 +905,24 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                       ? s.wallVertices
                       : []
             ).map((v) => sceneToCanvas(v.x, v.y));
+
+            // Ronda 29: auto-detección con el punto CRUDO del clic, ANTES de
+            // aplicar snap — corrige el bug de la Ronda 28: `commitDrawVertex`
+            // recibía `cx,cy` YA ajustado por `resolveSnap`/`applyAngleSnap`
+            // (más abajo), así que cualquier clic cerca de una pared o línea
+            // DXF —el caso más común: el usuario apunta a una esquina para
+            // empezar a trazar con precisión— quedaba enganchado EXACTAMENTE
+            // sobre esa línea antes de que la auto-detección lo viera, y el
+            // punto de partida (`seedPoint`) caía sobre la barrera en vez de
+            // adentro del área → "seed-blocked" en el caso de uso más común,
+            // no en el caso raro. Con el punto crudo, el snap nunca interviene.
+            if (
+                s.roomVertices.length === 0 &&
+                (activeTool === 'room' || activeTool === 'corridor' || activeTool === 'stair') &&
+                onAutoDetectRoom?.(canvasToScene(rawX, rawY))
+            ) {
+                return;
+            }
 
             const prevPointM = getPrevPointM(activeTool, s);
             const noSnapTools = ['switch', 'wire', 'fixture', 'select', 'pan'];
@@ -1150,6 +1325,137 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                             return;
                         }
                     }
+
+                    // Ronda 26: mismo respaldo por tolerancia que arriba, para
+                    // muros — un muro es una polilínea ABIERTA (sin envolver
+                    // el último tramo con el primero como sí hace un Room).
+                    const selectedWall = walls.find(
+                        (wall) => wall.id === opts.selectedId,
+                    );
+                    if (selectedWall && selectedWall.vertices.length >= 2) {
+                        const vertexTolerance2 = 11 * 11;
+                        const midpointTolerance2 = 9 * 9;
+                        const screenVertices = selectedWall.vertices.map(
+                            (vertex) => sceneToCanvas(vertex.x, vertex.y),
+                        );
+                        const vertexIndex = screenVertices.findIndex(
+                            (vertex) =>
+                                (vertex.x - cx) ** 2 + (vertex.y - cy) ** 2 <=
+                                vertexTolerance2,
+                        );
+
+                        let vertices = selectedWall.vertices.map((vertex) => ({
+                            ...vertex,
+                        }));
+                        let dragIndex = vertexIndex;
+                        if (dragIndex < 0) {
+                            const edgeIndex = screenVertices.findIndex(
+                                (vertex, index) => {
+                                    if (index >= screenVertices.length - 1) {
+                                        return false;
+                                    }
+                                    const next = screenVertices[index + 1]!;
+                                    const midpoint = {
+                                        x: (vertex.x + next.x) / 2,
+                                        y: (vertex.y + next.y) / 2,
+                                    };
+                                    return (
+                                        (midpoint.x - cx) ** 2 +
+                                            (midpoint.y - cy) ** 2 <=
+                                        midpointTolerance2
+                                    );
+                                },
+                            );
+                            if (edgeIndex >= 0) {
+                                const inserted = insertPolygonEdgeMidpoint(
+                                    vertices,
+                                    edgeIndex,
+                                );
+                                vertices = inserted.vertices;
+                                dragIndex = inserted.insertedIndex;
+                                onUpdateWallVertices?.(
+                                    selectedWall.id,
+                                    vertices,
+                                );
+                            }
+                        }
+
+                        if (dragIndex >= 0) {
+                            s.isDragging = true;
+                            s.dragStartScene = canvasToScene(cx, cy);
+                            s.dragObjectId = selectedWall.id;
+                            s.dragObjectType = 'wall-vertex';
+                            s.dragVertexIndex = dragIndex;
+                            s.dragRoomVertices = vertices;
+                            s.dragWallRingJoin = isWallRingJoinVertex(vertices, dragIndex);
+                            onDragGesture?.('start');
+                            return;
+                        }
+                    }
+
+                    // Ronda 32: mismo respaldo por tolerancia para tabiques/separadores.
+                    const selectedPartition = partitions.find(
+                        (partition) => partition.id === opts.selectedId,
+                    );
+                    if (selectedPartition && selectedPartition.vertices.length >= 2) {
+                        const vertexTolerance2 = 11 * 11;
+                        const midpointTolerance2 = 9 * 9;
+                        const screenVertices = selectedPartition.vertices.map(
+                            (vertex) => sceneToCanvas(vertex.x, vertex.y),
+                        );
+                        const vertexIndex = screenVertices.findIndex(
+                            (vertex) =>
+                                (vertex.x - cx) ** 2 + (vertex.y - cy) ** 2 <=
+                                vertexTolerance2,
+                        );
+
+                        let vertices = selectedPartition.vertices.map((vertex) => ({
+                            ...vertex,
+                        }));
+                        let dragIndex = vertexIndex;
+                        if (dragIndex < 0) {
+                            const edgeIndex = screenVertices.findIndex(
+                                (vertex, index) => {
+                                    if (index >= screenVertices.length - 1) {
+                                        return false;
+                                    }
+                                    const next = screenVertices[index + 1]!;
+                                    const midpoint = {
+                                        x: (vertex.x + next.x) / 2,
+                                        y: (vertex.y + next.y) / 2,
+                                    };
+                                    return (
+                                        (midpoint.x - cx) ** 2 +
+                                            (midpoint.y - cy) ** 2 <=
+                                        midpointTolerance2
+                                    );
+                                },
+                            );
+                            if (edgeIndex >= 0) {
+                                const inserted = insertPolygonEdgeMidpoint(
+                                    vertices,
+                                    edgeIndex,
+                                );
+                                vertices = inserted.vertices;
+                                dragIndex = inserted.insertedIndex;
+                                onUpdatePartitionVertices?.(
+                                    selectedPartition.id,
+                                    vertices,
+                                );
+                            }
+                        }
+
+                        if (dragIndex >= 0) {
+                            s.isDragging = true;
+                            s.dragStartScene = canvasToScene(cx, cy);
+                            s.dragObjectId = selectedPartition.id;
+                            s.dragObjectType = 'partition-vertex';
+                            s.dragVertexIndex = dragIndex;
+                            s.dragRoomVertices = vertices;
+                            onDragGesture?.('start');
+                            return;
+                        }
+                    }
                 }
 
                 // Hit-testing determinista: se evalúan TODOS los candidatos bajo
@@ -1241,6 +1547,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             onMeasureAreaFinish,
             onAddRoom,
             onAddWall,
+        onAddPartition,
             onAddWindow,
             onAddDoor,
             onSelectObject,
@@ -1248,6 +1555,8 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             onAddElectricalDevice,
             onConnectWire,
             onUpdateRoomVertices,
+            onUpdateWallVertices,
+            onUpdatePartitionVertices,
             onDragGesture,
             fixtures,
             lightSwitches,
@@ -1287,6 +1596,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                     label: string;
                 } | null,
             ) => void,
+            setAlignmentGuide?: (g: AlignmentGuide | null) => void,
             setWireReconnectPreview?: (
                 p: {
                     conductorId: string;
@@ -1486,6 +1796,40 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 const dxM = currentScene.x - s.dragStartScene.x;
                 const dyM = currentScene.y - s.dragStartScene.y;
 
+                /**
+                 * Ronda 30: mientras se arrastra un vértice de Room/Wall,
+                 * ajusta (snap) su posición a la misma columna/fila de
+                 * OTRO vértice de la MISMA forma cuando cae cerca (en
+                 * píxeles de pantalla — consistente con el resto del
+                 * sistema de snap), y reporta la guía visible al llamador.
+                 * `excludeIndices` deja fuera al propio vértice arrastrado
+                 * (y, para un muro con anillo unido, su copia del otro
+                 * extremo — ver el llamador).
+                 */
+                const ALIGNMENT_SNAP_PX = 8;
+                const alignVertexDrag = (
+                    siblingVertices: CanvasPoint[],
+                    excludeIndices: number[],
+                ): CanvasPoint => {
+                    const candidatesScreen = siblingVertices
+                        .filter((_, idx) => !excludeIndices.includes(idx))
+                        .map((v) => sceneToCanvas(v.x, v.y));
+                    const snap = resolveVertexAlignmentSnap(
+                        { x: cx, y: cy },
+                        candidatesScreen,
+                        ALIGNMENT_SNAP_PX,
+                    );
+                    if (snap.guideX === null && snap.guideY === null) {
+                        setAlignmentGuide?.(null);
+                    } else {
+                        setAlignmentGuide?.({
+                            x: snap.guideX !== null ? canvasToScene(snap.guideX, cy).x : null,
+                            y: snap.guideY !== null ? canvasToScene(cx, snap.guideY).y : null,
+                        });
+                    }
+                    return canvasToScene(snap.point.x, snap.point.y);
+                };
+
                 if (s.dragObjectType === 'fixture') {
                     if (selectedFixtureIds.includes(s.dragObjectId)) {
                         // Mover múltiples luminarias
@@ -1557,12 +1901,65 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                     s.dragVertexIndex !== null &&
                     s.dragRoomVertices
                 ) {
+                    const alignedScene = alignVertexDrag(
+                        s.dragRoomVertices,
+                        [s.dragVertexIndex],
+                    );
                     s.dragRoomVertices = movePolygonVertex(
                         s.dragRoomVertices,
                         s.dragVertexIndex,
-                        currentScene,
+                        alignedScene,
                     );
                     onUpdateRoomVertices?.(s.dragObjectId, s.dragRoomVertices);
+                    s.dragStartScene = currentScene;
+                } else if (
+                    s.dragObjectType === 'wall-vertex' &&
+                    s.dragVertexIndex !== null &&
+                    s.dragRoomVertices
+                ) {
+                    // `movePolygonVertex` no envuelve — reemplaza un solo
+                    // índice, válido tanto para el anillo cerrado de un Room
+                    // como para la polilínea abierta de un muro.
+                    // `dragWallRingJoin` cubre el caso especial: un muro de
+                    // contorno completo (jambas) con el primer y último
+                    // vértice duplicados a propósito — ahí hay que mover
+                    // ambas copias juntas o el anillo queda con una grieta
+                    // de 1 punto en esa esquina. Se excluye del candidato de
+                    // alineación (todavía está en su posición vieja, igual
+                    // a la del vértice arrastrado — no es una guía útil).
+                    const excludeIndices = [s.dragVertexIndex];
+                    if (s.dragWallRingJoin) {
+                        excludeIndices.push(
+                            s.dragVertexIndex === 0 ? s.dragRoomVertices.length - 1 : 0,
+                        );
+                    }
+                    const alignedScene = alignVertexDrag(s.dragRoomVertices, excludeIndices);
+                    let next = movePolygonVertex(s.dragRoomVertices, s.dragVertexIndex, alignedScene);
+                    if (s.dragWallRingJoin) {
+                        const otherEnd = s.dragVertexIndex === 0 ? next.length - 1 : 0;
+                        next = movePolygonVertex(next, otherEnd, alignedScene);
+                    }
+                    s.dragRoomVertices = next;
+                    onUpdateWallVertices?.(s.dragObjectId, s.dragRoomVertices);
+                    s.dragStartScene = currentScene;
+                } else if (
+                    s.dragObjectType === 'partition-vertex' &&
+                    s.dragVertexIndex !== null &&
+                    s.dragRoomVertices
+                ) {
+                    // Ronda 32: mismo mecanismo que 'wall-vertex' (sin el
+                    // caso especial de anillo unido — un tabique siempre es
+                    // polilínea abierta, nunca se cierra sobre sí mismo).
+                    const alignedScene = alignVertexDrag(
+                        s.dragRoomVertices,
+                        [s.dragVertexIndex],
+                    );
+                    s.dragRoomVertices = movePolygonVertex(
+                        s.dragRoomVertices,
+                        s.dragVertexIndex,
+                        alignedScene,
+                    );
+                    onUpdatePartitionVertices?.(s.dragObjectId, s.dragRoomVertices);
                     s.dragStartScene = currentScene;
                 } else if (s.dragObjectType === 'room') {
                     const room = rooms.find((r) => r.id === s.dragObjectId);
@@ -1734,6 +2131,8 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             onMoveFixtures,
             onMoveRoom,
             onUpdateRoomVertices,
+            onUpdateWallVertices,
+            onUpdatePartitionVertices,
             onMoveCanopy,
             onMoveWindow,
             onMoveDoor,
@@ -1757,6 +2156,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             setCanopyPreview: (
                 p: { start: CanvasPoint; end: CanvasPoint } | null,
             ) => void,
+            setAlignmentGuide?: (g: AlignmentGuide | null) => void,
             setWireReconnectPreview?: (
                 p: {
                     conductorId: string;
@@ -1827,6 +2227,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 s.dragObjectId = null;
                 s.dragObjectType = null;
                 s.dragConductorEndpoint = null;
+                setAlignmentGuide?.(null);
                 onDragGesture?.('end');
             }
         },
@@ -1848,7 +2249,11 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             s.wallVertices &&
             s.wallVertices.length >= 2
         ) {
-            onAddWall(s.wallVertices);
+            if (activeTool === 'partition') {
+                onAddPartition?.(s.wallVertices);
+            } else {
+                onAddWall(s.wallVertices);
+            }
             s.wallVertices = [];
             s.isDrawing = false;
             onDoubleClick();
@@ -1862,7 +2267,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             stateRef.current.measureAreaVertices = [];
             onDoubleClick();
         }
-    }, [activeTool, onAddWall, onMeasureAreaFinish, onDoubleClick]);
+    }, [activeTool, onAddWall, onAddPartition, onMeasureAreaFinish, onDoubleClick]);
 
     const beginWireFromNode = useCallback(
         (

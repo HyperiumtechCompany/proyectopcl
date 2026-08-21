@@ -196,152 +196,176 @@ class PresupuestoController extends Controller
             }
         }
 
-        $connection->beginTransaction();
+        // El clear+reinsert de abajo (delete + insertGetId por fila) puede solapar con
+        // otro guardado concurrente de la misma sub-sección (p.ej. el autosave de
+        // Presupuesto y la sincronización que dispara Cronograma casi al mismo tiempo)
+        // y MySQL mata una de las dos transacciones como víctima de deadlock
+        // (SQLSTATE 40001). Mismo patrón de reintento que calculateACU() más abajo:
+        // reintentar la transacción completa, no tratarlo como error fatal.
+        $maxAttempts = 5;
+        $concurrencyDetector = new ConcurrencyErrorDetector;
 
-        try {
-            // Strategy: clear + re-insert (simple for spreadsheet-like data).
-            // Scoped por presupuesto_id — nunca un delete() global de la tabla.
-            if ($this->hasTenantColumn($tableName, 'presupuesto_id')) {
-                $connection->table($tableName)->where('presupuesto_id', $tenantPresupuestoId)->delete();
-            } else {
-                $connection->table($tableName)->delete();
-            }
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $connection->beginTransaction();
 
-            $idMapping = []; // Maps client-side IDs to new database IDs
+            try {
+                // Strategy: clear + re-insert (simple for spreadsheet-like data).
+                // Scoped por presupuesto_id — nunca un delete() global de la tabla.
+                if ($this->hasTenantColumn($tableName, 'presupuesto_id')) {
+                    $connection->table($tableName)->where('presupuesto_id', $tenantPresupuestoId)->delete();
+                } else {
+                    $connection->table($tableName)->delete();
+                }
 
-            foreach ($rows as $index => $row) {
-                $oldId = $row['id'] ?? null;
+                $idMapping = []; // Maps client-side IDs to new database IDs
 
-                // Clean and prepare row data
-                $cleanedRow = $this->prepareRowForSubsection($subsection, $row, $index, $project, $tenantPresupuestoId);
+                foreach ($rows as $index => $row) {
+                    $oldId = $row['id'] ?? null;
 
-                // Remap parent_id if it exists in our mapping
-                $originalParentId = $row['parent_id'] ?? null;
-                if (! is_null($originalParentId)) {
-                    if (isset($idMapping[$originalParentId])) {
-                        $cleanedRow['parent_id'] = $idMapping[$originalParentId];
-                    } else {
-                        // Crucial: If the parent hasn't been inserted yet or was deleted,
-                        // set to null to avoid FK violation (500 Error)
-                        $cleanedRow['parent_id'] = null;
+                    // Clean and prepare row data
+                    $cleanedRow = $this->prepareRowForSubsection($subsection, $row, $index, $project, $tenantPresupuestoId);
 
+                    // Remap parent_id if it exists in our mapping
+                    $originalParentId = $row['parent_id'] ?? null;
+                    if (! is_null($originalParentId)) {
+                        if (isset($idMapping[$originalParentId])) {
+                            $cleanedRow['parent_id'] = $idMapping[$originalParentId];
+                        } else {
+                            // Crucial: If the parent hasn't been inserted yet or was deleted,
+                            // set to null to avoid FK violation (500 Error)
+                            $cleanedRow['parent_id'] = null;
+
+                        }
+                    }
+
+                    // Insert and capture new ID
+                    $newId = $connection->table($tableName)->insertGetId($cleanedRow);
+
+                    // ─── Sincronizar con Tablas Hijas si es ACU ──────────────────────
+                    if ($subsection === 'acus') {
+                        $this->syncAcuComponents(
+                            $newId,
+                            is_string($row['mano_de_obra'] ?? null) ? json_decode($row['mano_de_obra'], true) : ($row['mano_de_obra'] ?? []),
+                            is_string($row['materiales'] ?? null) ? json_decode($row['materiales'], true) : ($row['materiales'] ?? []),
+                            is_string($row['equipos'] ?? null) ? json_decode($row['equipos'], true) : ($row['equipos'] ?? []),
+                            is_string($row['subcontratos'] ?? null) ? json_decode($row['subcontratos'], true) : ($row['subcontratos'] ?? []),
+                            is_string($row['subpartidas'] ?? null) ? json_decode($row['subpartidas'], true) : ($row['subpartidas'] ?? [])
+                        );
+                    }
+
+                    // Store mapping for children that might follow
+                    if ($oldId) {
+                        $idMapping[$oldId] = $newId;
+                    }
+
+                    // Sincronización automática con GG Variables
+                    if ($subsection === 'remuneraciones' && ! empty($cleanedRow['gg_variable_id'])) {
+                        // Si viene con un ID de variable de la tabla temporal de remapeo, lo usamos
+                        $varId = $cleanedRow['gg_variable_id'];
+                        if (isset($idMapping[$varId])) {
+                            $varId = $idMapping[$varId];
+                        }
+
+                        $totalUnitario = ($cleanedRow['sueldo_basico'] ?? 0) +
+                            ($cleanedRow['asignacion_familiar'] ?? 0) +
+                            ($cleanedRow['essalud'] ?? 0) +
+                            ($cleanedRow['cts'] ?? 0) +
+                            ($cleanedRow['vacaciones'] ?? 0) +
+                            ($cleanedRow['gratificacion'] ?? 0);
+
+                        $connection->table('gg_variables')
+                            ->where('id', $varId)
+                            ->update([
+                                'precio' => $totalUnitario,
+                                'cantidad_descripcion' => $cleanedRow['cantidad'] ?? 1,
+                                'cantidad_tiempo' => $cleanedRow['meses'] ?? 1,
+                                'participacion' => $cleanedRow['participacion'] ?? 100,
+                            ]);
                     }
                 }
 
-                // Insert and capture new ID
-                $newId = $connection->table($tableName)->insertGetId($cleanedRow);
-
-                // ─── Sincronizar con Tablas Hijas si es ACU ──────────────────────
-                if ($subsection === 'acus') {
-                    $this->syncAcuComponents(
-                        $newId,
-                        is_string($row['mano_de_obra'] ?? null) ? json_decode($row['mano_de_obra'], true) : ($row['mano_de_obra'] ?? []),
-                        is_string($row['materiales'] ?? null) ? json_decode($row['materiales'], true) : ($row['materiales'] ?? []),
-                        is_string($row['equipos'] ?? null) ? json_decode($row['equipos'], true) : ($row['equipos'] ?? []),
-                        is_string($row['subcontratos'] ?? null) ? json_decode($row['subcontratos'], true) : ($row['subcontratos'] ?? []),
-                        is_string($row['subpartidas'] ?? null) ? json_decode($row['subpartidas'], true) : ($row['subpartidas'] ?? [])
+                // Eliminar ACUs huérfanos cuya partida ya no existe en presupuesto_general
+                if ($subsection === 'general') {
+                    // Match por código normalizado, no por string exacto — presupuesto_general.partida
+                    // y presupuesto_acus.partida pueden diferir en padding de ceros (mismo criterio que
+                    // syncAllPrecioUnitarioFromAcus/calculateACU, ver CostoDatabaseService::normalizePartidaCode()).
+                    // Un whereNotIn exacto trataba como huérfano (y borraba en cascada) cualquier ACU
+                    // cuyo padding no calzara byte a byte con el presupuesto_general recién reinsertado,
+                    // dejando vivo solo el ACU recién re-sincronizado vía calculateACU (que sí escribe el
+                    // mismo formato que el payload actual) — el bug reportado de "guarda uno, borra el resto".
+                    $validNormalizedPartidas = array_flip(
+                        $connection->table('presupuesto_general')
+                            ->where('presupuesto_id', $tenantPresupuestoId)
+                            ->pluck('partida')
+                            ->map(fn ($p) => $this->dbService->normalizePartidaCode((string) $p))
+                            ->all()
                     );
-                }
 
-                // Store mapping for children that might follow
-                if ($oldId) {
-                    $idMapping[$oldId] = $newId;
-                }
-
-                // Sincronización automática con GG Variables
-                if ($subsection === 'remuneraciones' && ! empty($cleanedRow['gg_variable_id'])) {
-                    // Si viene con un ID de variable de la tabla temporal de remapeo, lo usamos
-                    $varId = $cleanedRow['gg_variable_id'];
-                    if (isset($idMapping[$varId])) {
-                        $varId = $idMapping[$varId];
-                    }
-
-                    $totalUnitario = ($cleanedRow['sueldo_basico'] ?? 0) +
-                        ($cleanedRow['asignacion_familiar'] ?? 0) +
-                        ($cleanedRow['essalud'] ?? 0) +
-                        ($cleanedRow['cts'] ?? 0) +
-                        ($cleanedRow['vacaciones'] ?? 0) +
-                        ($cleanedRow['gratificacion'] ?? 0);
-
-                    $connection->table('gg_variables')
-                        ->where('id', $varId)
-                        ->update([
-                            'precio' => $totalUnitario,
-                            'cantidad_descripcion' => $cleanedRow['cantidad'] ?? 1,
-                            'cantidad_tiempo' => $cleanedRow['meses'] ?? 1,
-                            'participacion' => $cleanedRow['participacion'] ?? 100,
-                        ]);
-                }
-            }
-
-            // Eliminar ACUs huérfanos cuya partida ya no existe en presupuesto_general
-            if ($subsection === 'general') {
-                // Match por código normalizado, no por string exacto — presupuesto_general.partida
-                // y presupuesto_acus.partida pueden diferir en padding de ceros (mismo criterio que
-                // syncAllPrecioUnitarioFromAcus/calculateACU, ver CostoDatabaseService::normalizePartidaCode()).
-                // Un whereNotIn exacto trataba como huérfano (y borraba en cascada) cualquier ACU
-                // cuyo padding no calzara byte a byte con el presupuesto_general recién reinsertado,
-                // dejando vivo solo el ACU recién re-sincronizado vía calculateACU (que sí escribe el
-                // mismo formato que el payload actual) — el bug reportado de "guarda uno, borra el resto".
-                $validNormalizedPartidas = array_flip(
-                    $connection->table('presupuesto_general')
+                    $orphanAcuIds = $connection->table('presupuesto_acus')
                         ->where('presupuesto_id', $tenantPresupuestoId)
-                        ->pluck('partida')
-                        ->map(fn ($p) => $this->dbService->normalizePartidaCode((string) $p))
-                        ->all()
-                );
+                        ->get(['id', 'partida'])
+                        ->filter(fn ($acu) => ! isset($validNormalizedPartidas[$this->dbService->normalizePartidaCode((string) $acu->partida)]))
+                        ->pluck('id');
 
-                $orphanAcuIds = $connection->table('presupuesto_acus')
-                    ->where('presupuesto_id', $tenantPresupuestoId)
-                    ->get(['id', 'partida'])
-                    ->filter(fn ($acu) => ! isset($validNormalizedPartidas[$this->dbService->normalizePartidaCode((string) $acu->partida)]))
-                    ->pluck('id');
-
-                if ($orphanAcuIds->isNotEmpty()) {
-                    foreach (['acu_mano_de_obra', 'acu_materiales', 'acu_equipos', 'acu_subcontratos', 'acu_subpartidas'] as $childTable) {
-                        $connection->table($childTable)->whereIn('acu_id', $orphanAcuIds)->delete();
+                    if ($orphanAcuIds->isNotEmpty()) {
+                        foreach (['acu_mano_de_obra', 'acu_materiales', 'acu_equipos', 'acu_subcontratos', 'acu_subpartidas'] as $childTable) {
+                            $connection->table($childTable)->whereIn('acu_id', $orphanAcuIds)->delete();
+                        }
+                        $connection->table('presupuesto_acus')->whereIn('id', $orphanAcuIds)->delete();
                     }
-                    $connection->table('presupuesto_acus')->whereIn('id', $orphanAcuIds)->delete();
                 }
+
+                $connection->commit();
+
+                // Sincronización automática de totales si es presupuesto general
+                if ($subsection === 'general') {
+                    $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
+                }
+
+                // Recalcular consolidado en backend para evitar circularidad y cachear totales
+                if (in_array($subsection, ['general', 'gastos_fijos', 'gastos_generales', 'supervision', 'control_concurrente'], true)) {
+                    $this->recalculateConsolidadoSnapshot($project, null);
+                }
+
+                // Fetch updated data to return
+                $updatedRows = $this->getOrderedRows($tableName)
+                    ->map(fn ($row) => (array) $row)
+                    ->toArray();
+
+                return response()->json([
+                    'success' => true,
+                    'count' => count($rows),
+                    'rows' => $updatedRows,
+                ]);
+            } catch (\Exception $e) {
+                if ($connection->transactionLevel() > 0) {
+                    $connection->rollBack();
+                }
+
+                if ($attempt < $maxAttempts && $concurrencyDetector->causedByConcurrencyError($e)) {
+                    usleep(random_int(50_000, 150_000) * $attempt);
+
+                    continue;
+                }
+
+                Log::error('Error saving presupuesto data', [
+                    'subsection' => $subsection,
+                    'project' => $project->id,
+                    'error' => $e->getMessage(),
+                    'attempt' => $attempt,
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'error' => $e->getMessage(),
+                ], 500);
             }
-
-            $connection->commit();
-
-            // Sincronización automática de totales si es presupuesto general
-            if ($subsection === 'general') {
-                $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
-            }
-
-            // Recalcular consolidado en backend para evitar circularidad y cachear totales
-            if (in_array($subsection, ['general', 'gastos_fijos', 'gastos_generales', 'supervision', 'control_concurrente'], true)) {
-                $this->recalculateConsolidadoSnapshot($project, null);
-            }
-
-            // Fetch updated data to return
-            $updatedRows = $this->getOrderedRows($tableName)
-                ->map(fn ($row) => (array) $row)
-                ->toArray();
-
-            return response()->json([
-                'success' => true,
-                'count' => count($rows),
-                'rows' => $updatedRows,
-            ]);
-        } catch (\Exception $e) {
-            if ($connection->transactionLevel() > 0) {
-                $connection->rollBack();
-            }
-            Log::error('Error saving presupuesto data', [
-                'subsection' => $subsection,
-                'project' => $project->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'error' => $e->getMessage(),
-            ], 500);
         }
+
+        return response()->json([
+            'success' => false,
+            'error' => 'No se pudo guardar debido a alta concurrencia. Intenta nuevamente.',
+        ], 500);
     }
 
     /**

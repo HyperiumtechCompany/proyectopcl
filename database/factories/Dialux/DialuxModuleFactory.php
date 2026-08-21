@@ -24,6 +24,7 @@ class DialuxModuleFactory extends Factory
             'description' => fake()->optional()->sentence(),
             'sort_order' => 0,
             'status' => 'draft',
+            'kind' => 'building',
             'data' => null,
         ];
     }

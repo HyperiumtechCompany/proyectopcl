@@ -340,6 +340,13 @@ describe('buildPartitionOcclusionBoxes', () => {
         expect(boxes).toHaveLength(0);
     });
 
+    it('las particiones de plástico reforzado (PRFV) sí ocluyen, a diferencia del vidrio', () => {
+        const boxes = buildPartitionOcclusionBoxes([buildPartition({ partitionType: 'reinforced_plastic' })], []);
+
+        expect(boxes).toHaveLength(1);
+        expect(boxes[0]).toMatchObject({ zMin: 0.15, zMax: 2.1 });
+    });
+
     it('una puerta en la partición recorta el tramo entre bottomGap y su altura', () => {
         const door: Door = { id: 'door-p', partitionId: 'part-1', wallId: '', offsetAlongWall: 0.5, width: 0.7, height: 2.0 };
         const boxes = buildPartitionOcclusionBoxes([buildPartition()], [door]);

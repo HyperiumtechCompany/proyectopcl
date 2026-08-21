@@ -1,10 +1,12 @@
 import type { OcclusionBox } from '@/pages/dialux/domain/geometry/occlusionBoxes';
 import type { Fixture, Room } from '@/pages/dialux/hooks/types';
+import type { PartitionPatchInput } from '@/pages/dialux/hooks/roomPatches';
 import type {
     CalculationLuminaire,
     CalculationMaterial,
     CalculationObject,
     CalculationObstacle,
+    CalculationPartitionPatch,
 } from './types';
 
 /**
@@ -42,6 +44,20 @@ export function groupObstaclesByLevel(obstacles: CalculationObstacle[]): Map<str
             list.push(obstacle);
         } else {
             byLevel.set(obstacle.levelId, [obstacle]);
+        }
+    }
+    return byLevel;
+}
+
+/** Agrupa parches de partición por nivel — mismo criterio que `groupObstaclesByLevel`. */
+export function groupPartitionPatchesByLevel(patches: CalculationPartitionPatch[]): Map<string, PartitionPatchInput[]> {
+    const byLevel = new Map<string, PartitionPatchInput[]>();
+    for (const patch of patches) {
+        const list = byLevel.get(patch.levelId);
+        if (list) {
+            list.push(patch);
+        } else {
+            byLevel.set(patch.levelId, [patch]);
         }
     }
     return byLevel;
