@@ -1973,15 +1973,34 @@ class PresupuestoController extends Controller
                     'updated_at' => now(),
                 ];
 
-                // Update or insert ACU
-                if (! empty($validated['id'])) {
+                // Update or insert ACU. Un "id" vacío no basta para decidir insertar: si
+                // ya existe un ACU en esta partida (mismo presupuesto), un insert ciego
+                // crea un duplicado que compite por el mismo código — la sincronización
+                // automática (CostoDatabaseService::recalculateAcuFromJson) entonces
+                // sobrescribe presupuesto_general.precio_unitario con el que se procese
+                // último en el loop, pisando el correcto en silencio. Confirmado en
+                // producción (proyecto 6, 2026-08-20/21, ver memoria
+                // costos-copyacudata-partida-collision-incident — el origen real no fue
+                // "Copiar presupuesto" sino este insert sin match por partida).
+                $existingId = $validated['id'] ?? null;
+                if (empty($existingId)) {
+                    $normalizedPartida = $this->dbService->normalizePartidaCode((string) $validated['partida']);
+                    $existingId = DB::connection('costos_tenant')
+                        ->table('presupuesto_acus')
+                        ->where('presupuesto_id', $tenantPresupuestoId)
+                        ->get(['id', 'partida'])
+                        ->first(fn ($row) => $this->dbService->normalizePartidaCode((string) $row->partida) === $normalizedPartida)
+                        ?->id;
+                }
+
+                if (! empty($existingId)) {
                     // Update existing ACU
                     DB::connection('costos_tenant')
                         ->table('presupuesto_acus')
-                        ->where('id', $validated['id'])
+                        ->where('id', $existingId)
                         ->update($acuData);
 
-                    $acuId = $validated['id'];
+                    $acuId = $existingId;
                 } else {
                     // Insert new ACU
                     $acuData['created_at'] = now();
