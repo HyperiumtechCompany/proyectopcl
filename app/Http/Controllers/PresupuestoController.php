@@ -4269,6 +4269,39 @@ class PresupuestoController extends Controller
             ->where('presupuesto_id', $sourcePresupuestoId)
             ->get();
 
+        // Esta función inserta ciegamente los ACUs del origen preservando su
+        // partida tal cual. Si el destino YA tiene un ACU en alguna de esas
+        // partidas, quedan dos ACUs compitiendo por el mismo código, y
+        // CostoDatabaseService::recalculateAcuFromJson() (que corre en cada
+        // carga de página) sobrescribe presupuesto_general.precio_unitario con
+        // el último que procese el loop — sin ningún error visible, el precio
+        // "correcto" queda pisado en silencio indefinidamente. Confirmado en
+        // producción (proyecto 6, 2026-08-20/21: 4 ACUs copiados desde otro
+        // presupuesto chocaron con 3 partidas existentes, desincronizando el
+        // presupuesto por más de un día hasta que se detectó y reparó a mano).
+        // Se rechaza la copia completa ante cualquier colisión en vez de
+        // mezclar datos.
+        $targetPartidas = $connection->table('presupuesto_acus')
+            ->where('presupuesto_id', $targetPresupuestoId)
+            ->pluck('partida')
+            ->map(fn ($p) => $this->dbService->normalizePartidaCode((string) $p))
+            ->flip();
+
+        $collisions = [];
+        foreach ($sourceAcus as $sourceAcu) {
+            $normalized = $this->dbService->normalizePartidaCode((string) $sourceAcu->partida);
+            if ($targetPartidas->has($normalized)) {
+                $collisions[] = $sourceAcu->partida;
+            }
+        }
+
+        if (! empty($collisions)) {
+            throw new \RuntimeException(
+                'El presupuesto destino ya tiene ACUs en las partidas: '.implode(', ', array_unique($collisions))
+                .'. Copia cancelada para evitar duplicar y desincronizar precios.'
+            );
+        }
+
         foreach ($sourceAcus as $sourceAcu) {
             $acuData = (array) $sourceAcu;
             unset($acuData['id']);
