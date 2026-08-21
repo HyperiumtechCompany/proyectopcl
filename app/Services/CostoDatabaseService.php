@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CostoProject;
 use App\Models\Ubigeo;
+use Illuminate\Database\ConcurrencyErrorDetector;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
@@ -981,6 +982,20 @@ class CostoDatabaseService
             }
 
         } catch (\Exception $e) {
+            // Cuando esto se llama desde dentro de la transacción de calculateACU()
+            // (PresupuestoController::calculateACU -> update_project_prices), un deadlock
+            // aquí hace que InnoDB aborte TODA la transacción abierta, no solo este UPDATE.
+            // Tragarnos el error en silencio dejaba a calculateACU() creyendo que la
+            // transacción seguía viva: intentaba hacer commit() sobre una transacción ya
+            // abortada por MySQL y fallaba con "There is no active transaction", un error
+            // que el retry-loop de calculateACU no reconoce como deadlock y por tanto no
+            // reintenta. Relanzar el deadlock deja que ese retry-loop lo maneje como
+            // corresponde (reintentar la transacción completa).
+            $concurrencyDetector = new ConcurrencyErrorDetector;
+            if ($concurrencyDetector->causedByConcurrencyError($e)) {
+                throw $e;
+            }
+
             Log::error('Error propagating insumo update', [
                 'insumo_id' => $insumo->id ?? null,
                 'error' => $e->getMessage(),
