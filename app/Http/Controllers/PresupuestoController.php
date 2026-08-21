@@ -672,136 +672,157 @@ class PresupuestoController extends Controller
             ], 422);
         }
 
-        DB::connection('costos_tenant')->beginTransaction();
+        // Mismo riesgo de deadlock que update()/calculateACU() al escribir sobre
+        // presupuesto_general si esto se dispara junto a otro guardado concurrente.
+        $maxAttempts = 5;
+        $concurrencyDetector = new ConcurrencyErrorDetector;
 
-        try {
-            // Prefer summary table (item, descripcion, und, total) when available
-            $schemaBuilder = DB::connection('costos_tenant')->getSchemaBuilder();
-            $resumenTable = "{$metradoType}_resumen";
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            DB::connection('costos_tenant')->beginTransaction();
 
-            $isModular = in_array($metradoType, ['metrado_sanitarias', 'metrado_arquitectura', 'metrado_estructura']);
+            try {
+                // Prefer summary table (item, descripcion, und, total) when available
+                $schemaBuilder = DB::connection('costos_tenant')->getSchemaBuilder();
+                $resumenTable = "{$metradoType}_resumen";
 
-            if ($isModular) {
-                // Modulares usa total_general, unidad y partida
-                $metradoQuery = DB::connection('costos_tenant')
-                    ->table("{$metradoType}_resumen")
-                    ->select('partida', 'descripcion', 'unidad', 'total_general as total')
-                    ->whereNotNull('partida')
-                    ->where('partida', '!=', '')
-                    ->orderBy('item_order')
-                    ->orderBy('id');
-            } elseif ($schemaBuilder->hasTable($resumenTable)) {
-                // Tablas resumen planas: item, descripcion, und (unidad), total
-                $metradoQuery = DB::connection('costos_tenant')
-                    ->table($resumenTable)
-                    ->select('item', DB::raw('item as partida'), 'descripcion', DB::raw('und as unidad'), 'total')
-                    ->orderBy('item_order')
-                    ->orderBy('id');
-            } else {
-                // Fallback: tabla principal
-                $metradoQuery = DB::connection('costos_tenant')
-                    ->table($metradoType)
-                    ->select('item', 'partida', 'descripcion', 'unidad', 'total');
-                if ($this->hasTenantColumn($metradoType, 'item_order')) {
-                    $metradoQuery->orderBy('item_order');
+                $isModular = in_array($metradoType, ['metrado_sanitarias', 'metrado_arquitectura', 'metrado_estructura']);
+
+                if ($isModular) {
+                    // Modulares usa total_general, unidad y partida
+                    $metradoQuery = DB::connection('costos_tenant')
+                        ->table("{$metradoType}_resumen")
+                        ->select('partida', 'descripcion', 'unidad', 'total_general as total')
+                        ->whereNotNull('partida')
+                        ->where('partida', '!=', '')
+                        ->orderBy('item_order')
+                        ->orderBy('id');
+                } elseif ($schemaBuilder->hasTable($resumenTable)) {
+                    // Tablas resumen planas: item, descripcion, und (unidad), total
+                    $metradoQuery = DB::connection('costos_tenant')
+                        ->table($resumenTable)
+                        ->select('item', DB::raw('item as partida'), 'descripcion', DB::raw('und as unidad'), 'total')
+                        ->orderBy('item_order')
+                        ->orderBy('id');
+                } else {
+                    // Fallback: tabla principal
+                    $metradoQuery = DB::connection('costos_tenant')
+                        ->table($metradoType)
+                        ->select('item', 'partida', 'descripcion', 'unidad', 'total');
+                    if ($this->hasTenantColumn($metradoType, 'item_order')) {
+                        $metradoQuery->orderBy('item_order');
+                    }
+                    if ($this->hasTenantColumn($metradoType, 'id')) {
+                        $metradoQuery->orderBy('id');
+                    }
                 }
-                if ($this->hasTenantColumn($metradoType, 'id')) {
-                    $metradoQuery->orderBy('id');
+                $metradoRows = $metradoQuery->get();
+
+                $createdCount = 0;
+                $updatedCount = 0;
+
+                $rowIndex = 0;
+                foreach ($metradoRows as $metradoRow) {
+                    $codigo = trim((string) ($metradoRow->item ?? $metradoRow->partida ?? ''));
+                    if (! $codigo) {
+                        // Saltamos filas sin código de ítem
+                        continue;
+                    }
+
+                    // Usamos la descripción tal cual viene del resumen; si falta, caemos al código de ítem.
+                    $descripcion = trim($metradoRow->descripcion ?? ($metradoRow->item ?? ''));
+                    $unidad = $metradoRow->unidad ?? ($metradoRow->und ?? '');
+                    $total = $metradoRow->total ?? 0;
+
+                    // Check if partida already exists in presupuesto_general
+                    $existingPartida = DB::connection('costos_tenant')
+                        ->table('presupuesto_general')
+                        ->where('partida', $codigo)
+                        ->first();
+
+                    if ($existingPartida) {
+                        // Update metrado y sincronizamos unidad/descripcion desde el origen
+                        DB::connection('costos_tenant')
+                            ->table('presupuesto_general')
+                            ->where('partida', $codigo)
+                            ->update([
+                                'metrado' => $total,
+                                'unidad' => $unidad,
+                                'descripcion' => $descripcion,
+                                'metrado_source' => $metradoType,
+                                'item_order' => $this->hasTenantColumn('presupuesto_general', 'item_order') ? $rowIndex : null,
+                                'updated_at' => now(),
+                            ]);
+                        $updatedCount++;
+                    } else {
+                        // Create new partida
+                        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+                        $insertData = [
+                            'presupuesto_id' => $tenantPresupuestoId,
+                            'partida' => $codigo,
+                            'descripcion' => $descripcion,
+                            'unidad' => $unidad,
+                            'metrado' => $total,
+                            'precio_unitario' => 0,
+                            'metrado_source' => $metradoType,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ];
+                        if ($this->hasTenantColumn('presupuesto_general', 'item_order')) {
+                            $insertData['item_order'] = $rowIndex;
+                        }
+
+                        DB::connection('costos_tenant')
+                            ->table('presupuesto_general')
+                            ->insert($insertData);
+                        $createdCount++;
+                    }
+
+                    $rowIndex++;
                 }
-            }
-            $metradoRows = $metradoQuery->get();
 
-            $createdCount = 0;
-            $updatedCount = 0;
+                DB::connection('costos_tenant')->commit();
 
-            $rowIndex = 0;
-            foreach ($metradoRows as $metradoRow) {
-                $codigo = trim((string) ($metradoRow->item ?? $metradoRow->partida ?? ''));
-                if (! $codigo) {
-                    // Saltamos filas sin código de ítem
+                // Sincronizar totales tras importación
+                $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+                $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Importación completada exitosamente',
+                    'summary' => [
+                        'created' => $createdCount,
+                        'updated' => $updatedCount,
+                        'total' => $createdCount + $updatedCount,
+                    ],
+                ]);
+            } catch (\Exception $e) {
+                if (DB::connection('costos_tenant')->transactionLevel() > 0) {
+                    DB::connection('costos_tenant')->rollBack();
+                }
+
+                if ($attempt < $maxAttempts && $concurrencyDetector->causedByConcurrencyError($e)) {
+                    usleep(random_int(50_000, 150_000) * $attempt);
+
                     continue;
                 }
 
-                // Usamos la descripción tal cual viene del resumen; si falta, caemos al código de ítem.
-                $descripcion = trim($metradoRow->descripcion ?? ($metradoRow->item ?? ''));
-                $unidad = $metradoRow->unidad ?? ($metradoRow->und ?? '');
-                $total = $metradoRow->total ?? 0;
+                Log::error('Error importing metrado', [
+                    'metrado_type' => $metradoType,
+                    'project' => $project->id,
+                    'error' => $e->getMessage(),
+                ]);
 
-                // Check if partida already exists in presupuesto_general
-                $existingPartida = DB::connection('costos_tenant')
-                    ->table('presupuesto_general')
-                    ->where('partida', $codigo)
-                    ->first();
-
-                if ($existingPartida) {
-                    // Update metrado y sincronizamos unidad/descripcion desde el origen
-                    DB::connection('costos_tenant')
-                        ->table('presupuesto_general')
-                        ->where('partida', $codigo)
-                        ->update([
-                            'metrado' => $total,
-                            'unidad' => $unidad,
-                            'descripcion' => $descripcion,
-                            'metrado_source' => $metradoType,
-                            'item_order' => $this->hasTenantColumn('presupuesto_general', 'item_order') ? $rowIndex : null,
-                            'updated_at' => now(),
-                        ]);
-                    $updatedCount++;
-                } else {
-                    // Create new partida
-                    $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
-                    $insertData = [
-                        'presupuesto_id' => $tenantPresupuestoId,
-                        'partida' => $codigo,
-                        'descripcion' => $descripcion,
-                        'unidad' => $unidad,
-                        'metrado' => $total,
-                        'precio_unitario' => 0,
-                        'metrado_source' => $metradoType,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ];
-                    if ($this->hasTenantColumn('presupuesto_general', 'item_order')) {
-                        $insertData['item_order'] = $rowIndex;
-                    }
-
-                    DB::connection('costos_tenant')
-                        ->table('presupuesto_general')
-                        ->insert($insertData);
-                    $createdCount++;
-                }
-
-                $rowIndex++;
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al importar metrado: '.$e->getMessage(),
+                ], 500);
             }
-
-            DB::connection('costos_tenant')->commit();
-
-            // Sincronizar totales tras importación
-            $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
-            $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Importación completada exitosamente',
-                'summary' => [
-                    'created' => $createdCount,
-                    'updated' => $updatedCount,
-                    'total' => $createdCount + $updatedCount,
-                ],
-            ]);
-        } catch (\Exception $e) {
-            DB::connection('costos_tenant')->rollBack();
-            Log::error('Error importing metrado', [
-                'metrado_type' => $metradoType,
-                'project' => $project->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al importar metrado: '.$e->getMessage(),
-            ], 500);
         }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'No se pudo importar debido a alta concurrencia. Intenta nuevamente.',
+        ], 500);
     }
 
     /**
@@ -833,133 +854,154 @@ class PresupuestoController extends Controller
             }
         }
 
-        DB::connection('costos_tenant')->beginTransaction();
+        // Mismo riesgo de deadlock que update()/calculateACU() al escribir sobre
+        // presupuesto_general si esto se dispara junto a otro guardado concurrente.
+        $maxAttempts = 5;
+        $concurrencyDetector = new ConcurrencyErrorDetector;
 
-        try {
-            $createdCount = 0;
-            $updatedCount = 0;
-            $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
-            $hasItemOrder = $this->hasTenantColumn('presupuesto_general', 'item_order');
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            DB::connection('costos_tenant')->beginTransaction();
 
-            $schemaBuilder = DB::connection('costos_tenant')->getSchemaBuilder();
+            try {
+                $createdCount = 0;
+                $updatedCount = 0;
+                $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+                $hasItemOrder = $this->hasTenantColumn('presupuesto_general', 'item_order');
 
-            foreach ($metradosList as $metradoType) {
-                $isModular = in_array($metradoType, ['metrado_sanitarias', 'metrado_arquitectura', 'metrado_estructura']);
+                $schemaBuilder = DB::connection('costos_tenant')->getSchemaBuilder();
 
-                if ($isModular) {
-                    $metradoQuery = DB::connection('costos_tenant')
-                        ->table("{$metradoType}_resumen")
-                        ->select('partida', 'descripcion', 'unidad', 'total_general as total')
-                        ->whereNotNull('partida')
-                        ->where('partida', '!=', '')
-                        ->orderBy('item_order')
-                        ->orderBy('id');
-                } elseif ($schemaBuilder->hasTable("{$metradoType}_resumen")) {
-                    $metradoQuery = DB::connection('costos_tenant')
-                        ->table("{$metradoType}_resumen")
-                        ->select('item', DB::raw('item as partida'), 'descripcion', DB::raw('und as unidad'), 'total')
-                        ->orderBy('item_order')
-                        ->orderBy('id');
-                } else {
-                    // Query the metrado table for partida structure
-                    $metradoQuery = DB::connection('costos_tenant')
-                        ->table($metradoType)
-                        ->select('item', 'partida', 'descripcion', 'unidad', 'total');
-                    if ($this->hasTenantColumn($metradoType, 'item_order')) {
-                        $metradoQuery->orderBy('item_order');
-                    }
-                    if ($this->hasTenantColumn($metradoType, 'id')) {
-                        $metradoQuery->orderBy('id');
-                    }
-                }
-                $metradoRows = $metradoQuery->get();
+                foreach ($metradosList as $metradoType) {
+                    $isModular = in_array($metradoType, ['metrado_sanitarias', 'metrado_arquitectura', 'metrado_estructura']);
 
-                $rowIndex = 0;
-                foreach ($metradoRows as $metradoRow) {
-                    $codigo = trim((string) ($metradoRow->item ?? $metradoRow->partida ?? ''));
-                    if (! $codigo) {
-                        continue;
-                    }
-
-                    // No duplicar el código en la descripción: usamos la descripción del resumen o, si falta, el código.
-                    $descripcion = trim($metradoRow->descripcion ?? ($metradoRow->item ?? ''));
-                    $unidad = $metradoRow->unidad ?? ($metradoRow->und ?? '');
-                    $total = $metradoRow->total ?? 0;
-
-                    // Check if partida already exists in presupuesto_general
-                    $existingPartida = DB::connection('costos_tenant')
-                        ->table('presupuesto_general')
-                        ->where('partida', $codigo)
-                        ->first();
-
-                    if ($existingPartida) {
-                        // Update metrado y campos derivados
-                        DB::connection('costos_tenant')
-                            ->table('presupuesto_general')
-                            ->where('partida', $codigo)
-                            ->update([
-                                'metrado' => $total,
-                                'unidad' => $unidad,
-                                'descripcion' => $descripcion,
-                                'metrado_source' => $metradoType,
-                                'item_order' => $hasItemOrder ? $rowIndex : $existingPartida->item_order ?? null,
-                                'updated_at' => now(),
-                            ]);
-                        $updatedCount++;
+                    if ($isModular) {
+                        $metradoQuery = DB::connection('costos_tenant')
+                            ->table("{$metradoType}_resumen")
+                            ->select('partida', 'descripcion', 'unidad', 'total_general as total')
+                            ->whereNotNull('partida')
+                            ->where('partida', '!=', '')
+                            ->orderBy('item_order')
+                            ->orderBy('id');
+                    } elseif ($schemaBuilder->hasTable("{$metradoType}_resumen")) {
+                        $metradoQuery = DB::connection('costos_tenant')
+                            ->table("{$metradoType}_resumen")
+                            ->select('item', DB::raw('item as partida'), 'descripcion', DB::raw('und as unidad'), 'total')
+                            ->orderBy('item_order')
+                            ->orderBy('id');
                     } else {
-                        // Create new partida
-                        $insertData = [
-                            'presupuesto_id' => $tenantPresupuestoId,
-                            'partida' => $codigo,
-                            'descripcion' => $descripcion,
-                            'unidad' => $unidad,
-                            'metrado' => $total,
-                            'precio_unitario' => 0,
-                            'metrado_source' => $metradoType,
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ];
-                        if ($hasItemOrder) {
-                            $insertData['item_order'] = $rowIndex;
+                        // Query the metrado table for partida structure
+                        $metradoQuery = DB::connection('costos_tenant')
+                            ->table($metradoType)
+                            ->select('item', 'partida', 'descripcion', 'unidad', 'total');
+                        if ($this->hasTenantColumn($metradoType, 'item_order')) {
+                            $metradoQuery->orderBy('item_order');
+                        }
+                        if ($this->hasTenantColumn($metradoType, 'id')) {
+                            $metradoQuery->orderBy('id');
+                        }
+                    }
+                    $metradoRows = $metradoQuery->get();
+
+                    $rowIndex = 0;
+                    foreach ($metradoRows as $metradoRow) {
+                        $codigo = trim((string) ($metradoRow->item ?? $metradoRow->partida ?? ''));
+                        if (! $codigo) {
+                            continue;
                         }
 
-                        DB::connection('costos_tenant')
+                        // No duplicar el código en la descripción: usamos la descripción del resumen o, si falta, el código.
+                        $descripcion = trim($metradoRow->descripcion ?? ($metradoRow->item ?? ''));
+                        $unidad = $metradoRow->unidad ?? ($metradoRow->und ?? '');
+                        $total = $metradoRow->total ?? 0;
+
+                        // Check if partida already exists in presupuesto_general
+                        $existingPartida = DB::connection('costos_tenant')
                             ->table('presupuesto_general')
-                            ->insert($insertData);
-                        $createdCount++;
+                            ->where('partida', $codigo)
+                            ->first();
+
+                        if ($existingPartida) {
+                            // Update metrado y campos derivados
+                            DB::connection('costos_tenant')
+                                ->table('presupuesto_general')
+                                ->where('partida', $codigo)
+                                ->update([
+                                    'metrado' => $total,
+                                    'unidad' => $unidad,
+                                    'descripcion' => $descripcion,
+                                    'metrado_source' => $metradoType,
+                                    'item_order' => $hasItemOrder ? $rowIndex : $existingPartida->item_order ?? null,
+                                    'updated_at' => now(),
+                                ]);
+                            $updatedCount++;
+                        } else {
+                            // Create new partida
+                            $insertData = [
+                                'presupuesto_id' => $tenantPresupuestoId,
+                                'partida' => $codigo,
+                                'descripcion' => $descripcion,
+                                'unidad' => $unidad,
+                                'metrado' => $total,
+                                'precio_unitario' => 0,
+                                'metrado_source' => $metradoType,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ];
+                            if ($hasItemOrder) {
+                                $insertData['item_order'] = $rowIndex;
+                            }
+
+                            DB::connection('costos_tenant')
+                                ->table('presupuesto_general')
+                                ->insert($insertData);
+                            $createdCount++;
+                        }
+
+                        $rowIndex++;
                     }
-
-                    $rowIndex++;
                 }
+
+                DB::connection('costos_tenant')->commit();
+
+                // Sincronizar totales tras importación
+                $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Importación por lotes completada exitosamente',
+                    'summary' => [
+                        'created' => $createdCount,
+                        'updated' => $updatedCount,
+                        'total' => $createdCount + $updatedCount,
+                    ],
+                ]);
+            } catch (\Exception $e) {
+                if (DB::connection('costos_tenant')->transactionLevel() > 0) {
+                    DB::connection('costos_tenant')->rollBack();
+                }
+
+                if ($attempt < $maxAttempts && $concurrencyDetector->causedByConcurrencyError($e)) {
+                    usleep(random_int(50_000, 150_000) * $attempt);
+
+                    continue;
+                }
+
+                Log::error('Error batch importing metrados', [
+                    'metrados' => $metradosList,
+                    'project' => $project->id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al importar metrados: '.$e->getMessage(),
+                ], 500);
             }
-
-            DB::connection('costos_tenant')->commit();
-
-            // Sincronizar totales tras importación
-            $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Importación por lotes completada exitosamente',
-                'summary' => [
-                    'created' => $createdCount,
-                    'updated' => $updatedCount,
-                    'total' => $createdCount + $updatedCount,
-                ],
-            ]);
-        } catch (\Exception $e) {
-            DB::connection('costos_tenant')->rollBack();
-            Log::error('Error batch importing metrados', [
-                'metrados' => $metradosList,
-                'project' => $project->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al importar metrados: '.$e->getMessage(),
-            ], 500);
         }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'No se pudo importar debido a alta concurrencia. Intenta nuevamente.',
+        ], 500);
     }
 
     /**
@@ -1035,56 +1077,77 @@ class PresupuestoController extends Controller
                     // Use the budget's stored unit; ACU Excel unit text is unreliable.
                     $unidad = $existingPartida->unidad ?? '';
 
-                    DB::connection('costos_tenant')->beginTransaction();
+                    // Cada ACU es su propia transacción para no perder todo el archivo si
+                    // una fila individual falla. Bajo guardado paralelo (Delphin dispara
+                    // cronograma+presupuesto+ACUs a la vez) esa transacción puede toparse
+                    // con un deadlock transitorio (SQLSTATE 40001) — se reintenta en vez de
+                    // abortar el resto del archivo (antes: relanzaba y el catch externo
+                    // cortaba la importación completa desde esa fila en adelante).
+                    $acuMaxAttempts = 5;
+                    $acuConcurrencyDetector = new ConcurrencyErrorDetector;
 
-                    try {
-                        $existingAcu = DB::connection('costos_tenant')
-                            ->table('presupuesto_acus')
-                            ->where('presupuesto_id', $tenantPresupuestoId)
-                            ->where('partida', $partida)
-                            ->first();
+                    for ($acuAttempt = 1; $acuAttempt <= $acuMaxAttempts; $acuAttempt++) {
+                        DB::connection('costos_tenant')->beginTransaction();
 
-                        $acuData = [
-                            'presupuesto_id' => $tenantPresupuestoId,
-                            'partida' => $partida,
-                            'descripcion' => $acu['descripcion'],
-                            'unidad' => $unidad ?: $existingPartida->unidad,
-                            'rendimiento' => $acu['rendimiento'] ?? 1,
-                            'mano_de_obra' => ! empty($acu['mano_de_obra']) ? json_encode($acu['mano_de_obra']) : null,
-                            'costo_mano_obra' => $acu['costo_mano_obra'] ?? 0,
-                            'materiales' => ! empty($acu['materiales']) ? json_encode($acu['materiales']) : null,
-                            'costo_materiales' => $acu['costo_materiales'] ?? 0,
-                            'equipos' => ! empty($acu['equipos']) ? json_encode($acu['equipos']) : null,
-                            'costo_equipos' => $acu['costo_equipos'] ?? 0,
-                            'subcontratos' => ! empty($acu['subcontratos']) ? json_encode($acu['subcontratos']) : null,
-                            'costo_subcontratos' => $acu['costo_subcontratos'] ?? 0,
-                            'subpartidas' => ! empty($acu['subpartidas']) ? json_encode($acu['subpartidas']) : null,
-                            'costo_subpartidas' => $acu['costo_subpartidas'] ?? 0,
-                            'item_order' => $acuIndex,
-                            'updated_at' => now(),
-                        ];
-
-                        if ($existingAcu) {
-                            DB::connection('costos_tenant')
+                        try {
+                            $existingAcu = DB::connection('costos_tenant')
                                 ->table('presupuesto_acus')
-                                ->where('id', $existingAcu->id)
-                                ->update($acuData);
-                            $acuId = $existingAcu->id;
-                            $totalUpdated++;
-                        } else {
-                            $acuData['created_at'] = now();
-                            $acuId = DB::connection('costos_tenant')
-                                ->table('presupuesto_acus')
-                                ->insertGetId($acuData);
-                            $totalCreated++;
+                                ->where('presupuesto_id', $tenantPresupuestoId)
+                                ->where('partida', $partida)
+                                ->first();
+
+                            $acuData = [
+                                'presupuesto_id' => $tenantPresupuestoId,
+                                'partida' => $partida,
+                                'descripcion' => $acu['descripcion'],
+                                'unidad' => $unidad ?: $existingPartida->unidad,
+                                'rendimiento' => $acu['rendimiento'] ?? 1,
+                                'mano_de_obra' => ! empty($acu['mano_de_obra']) ? json_encode($acu['mano_de_obra']) : null,
+                                'costo_mano_obra' => $acu['costo_mano_obra'] ?? 0,
+                                'materiales' => ! empty($acu['materiales']) ? json_encode($acu['materiales']) : null,
+                                'costo_materiales' => $acu['costo_materiales'] ?? 0,
+                                'equipos' => ! empty($acu['equipos']) ? json_encode($acu['equipos']) : null,
+                                'costo_equipos' => $acu['costo_equipos'] ?? 0,
+                                'subcontratos' => ! empty($acu['subcontratos']) ? json_encode($acu['subcontratos']) : null,
+                                'costo_subcontratos' => $acu['costo_subcontratos'] ?? 0,
+                                'subpartidas' => ! empty($acu['subpartidas']) ? json_encode($acu['subpartidas']) : null,
+                                'costo_subpartidas' => $acu['costo_subpartidas'] ?? 0,
+                                'item_order' => $acuIndex,
+                                'updated_at' => now(),
+                            ];
+
+                            if ($existingAcu) {
+                                DB::connection('costos_tenant')
+                                    ->table('presupuesto_acus')
+                                    ->where('id', $existingAcu->id)
+                                    ->update($acuData);
+                                $acuId = $existingAcu->id;
+                                $totalUpdated++;
+                            } else {
+                                $acuData['created_at'] = now();
+                                $acuId = DB::connection('costos_tenant')
+                                    ->table('presupuesto_acus')
+                                    ->insertGetId($acuData);
+                                $totalCreated++;
+                            }
+
+                            $this->syncAcuComponentsFromImport($acuId, $acu);
+
+                            DB::connection('costos_tenant')->commit();
+                            break;
+                        } catch (\Exception $e) {
+                            if (DB::connection('costos_tenant')->transactionLevel() > 0) {
+                                DB::connection('costos_tenant')->rollBack();
+                            }
+
+                            if ($acuAttempt < $acuMaxAttempts && $acuConcurrencyDetector->causedByConcurrencyError($e)) {
+                                usleep(random_int(50_000, 150_000) * $acuAttempt);
+
+                                continue;
+                            }
+
+                            throw $e;
                         }
-
-                        $this->syncAcuComponentsFromImport($acuId, $acu);
-
-                        DB::connection('costos_tenant')->commit();
-                    } catch (\Exception $e) {
-                        DB::connection('costos_tenant')->rollBack();
-                        throw $e;
                     }
 
                     $acuIndex++;
@@ -2420,72 +2483,98 @@ class PresupuestoController extends Controller
             ], 400);
         }
 
-        DB::connection('costos_tenant')->beginTransaction();
+        // Mismo riesgo de deadlock que update()/calculateACU() cuando esto (ej. borrar
+        // una fila de ACU) se dispara junto al guardado paralelo de Delphin. Mismo
+        // patrón de reintento.
+        $maxAttempts = 5;
+        $concurrencyDetector = new ConcurrencyErrorDetector;
 
-        try {
-            // Get all rows ordered
-            $rows = $this->getOrderedRows($tableName)->toArray();
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            DB::connection('costos_tenant')->beginTransaction();
 
-            // Check if the row exists
-            if ($rowIndex >= count($rows)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'La fila no existe',
-                ], 404);
-            }
+            try {
+                // Get all rows ordered
+                $rows = $this->getOrderedRows($tableName)->toArray();
 
-            $rowToDelete = (object) $rows[$rowIndex];
-            $rowId = $rowToDelete->id ?? null;
+                // Check if the row exists
+                if ($rowIndex >= count($rows)) {
+                    DB::connection('costos_tenant')->rollBack();
 
-            if (! $rowId) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No se pudo obtener el ID de la fila',
-                ], 400);
-            }
-
-            // Delete the row
-            DB::connection('costos_tenant')
-                ->table($tableName)
-                ->where('id', $rowId)
-                ->delete();
-
-            // Reorder remaining rows if the table has item_order column
-            if ($this->hasTenantColumn($tableName, 'item_order')) {
-                $remainingRows = $this->getOrderedRows($tableName)->values()->all();
-                foreach ($remainingRows as $index => $row) {
-                    DB::connection('costos_tenant')
-                        ->table($tableName)
-                        ->where('id', $row->id)
-                        ->update(['item_order' => $index]);
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'La fila no existe',
+                    ], 404);
                 }
+
+                $rowToDelete = (object) $rows[$rowIndex];
+                $rowId = $rowToDelete->id ?? null;
+
+                if (! $rowId) {
+                    DB::connection('costos_tenant')->rollBack();
+
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'No se pudo obtener el ID de la fila',
+                    ], 400);
+                }
+
+                // Delete the row
+                DB::connection('costos_tenant')
+                    ->table($tableName)
+                    ->where('id', $rowId)
+                    ->delete();
+
+                // Reorder remaining rows if the table has item_order column
+                if ($this->hasTenantColumn($tableName, 'item_order')) {
+                    $remainingRows = $this->getOrderedRows($tableName)->values()->all();
+                    foreach ($remainingRows as $index => $row) {
+                        DB::connection('costos_tenant')
+                            ->table($tableName)
+                            ->where('id', $row->id)
+                            ->update(['item_order' => $index]);
+                    }
+                }
+
+                DB::connection('costos_tenant')->commit();
+
+                // Sincronizar totales tras eliminación si es presupuesto general
+                if ($subsection === 'general') {
+                    $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+                    $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Fila eliminada correctamente',
+                ]);
+            } catch (\Exception $e) {
+                if (DB::connection('costos_tenant')->transactionLevel() > 0) {
+                    DB::connection('costos_tenant')->rollBack();
+                }
+
+                if ($attempt < $maxAttempts && $concurrencyDetector->causedByConcurrencyError($e)) {
+                    usleep(random_int(50_000, 150_000) * $attempt);
+
+                    continue;
+                }
+
+                Log::error("Error deleting row from {$tableName}", [
+                    'project' => $project->id,
+                    'row_index' => $rowIndex,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Error al eliminar la fila: '.$e->getMessage(),
+                ], 500);
             }
-
-            DB::connection('costos_tenant')->commit();
-
-            // Sincronizar totales tras eliminación si es presupuesto general
-            if ($subsection === 'general') {
-                $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
-                $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Fila eliminada correctamente',
-            ]);
-        } catch (\Exception $e) {
-            DB::connection('costos_tenant')->rollBack();
-            Log::error("Error deleting row from {$tableName}", [
-                'project' => $project->id,
-                'row_index' => $rowIndex,
-                'error' => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'error' => 'Error al eliminar la fila: '.$e->getMessage(),
-            ], 500);
         }
+
+        return response()->json([
+            'success' => false,
+            'error' => 'No se pudo eliminar debido a alta concurrencia. Intenta nuevamente.',
+        ], 500);
     }
 
     /**
@@ -3353,99 +3442,118 @@ class PresupuestoController extends Controller
         $connection = DB::connection('costos_tenant');
         $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
 
-        $connection->beginTransaction();
-        try {
-            // Clear all rows for this presupuesto
-            $connection->table('supervision_gg_detalle')
-                ->where('presupuesto_id', $tenantPresupuestoId)
-                ->delete();
+        // Mismo riesgo de deadlock que update()/calculateACU() (clear+reinsert sobre
+        // una tabla scoped por presupuesto_id) si esto se dispara junto a otro
+        // guardado concurrente del mismo presupuesto.
+        $maxAttempts = 5;
+        $concurrencyDetector = new ConcurrencyErrorDetector;
 
-            $idMapping = [];
-            $sectionTotals = []; // parentId (new) => sum of subtotals
-
-            foreach ($rows as $index => $row) {
-                $oldId = $row['id'] ?? null;
-
-                // Prepare clean row
-                $cleanRow = [
-                    'presupuesto_id' => $tenantPresupuestoId,
-                    'parent_id' => null,
-                    'tipo_fila' => in_array($row['tipo_fila'] ?? '', ['seccion', 'detalle']) ? $row['tipo_fila'] : 'detalle',
-                    'item_codigo' => substr((string) ($row['item_codigo'] ?? ''), 0, 20) ?: null,
-                    'concepto' => $row['concepto'] ?? '',
-                    'unidad' => substr((string) ($row['unidad'] ?? ''), 0, 20) ?: null,
-                    'cantidad' => is_numeric($row['cantidad'] ?? null) ? (float) $row['cantidad'] : 0,
-                    'meses' => is_numeric($row['meses'] ?? null) ? (float) $row['meses'] : 0,
-                    'importe' => is_numeric($row['importe'] ?? null) ? (float) $row['importe'] : 0,
-                    'total_seccion' => 0, // will be updated after all children inserted
-                    'item_order' => $index,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-
-                // Remap parent_id
-                $originalParentId = $row['parent_id'] ?? null;
-                if (! is_null($originalParentId) && isset($idMapping[$originalParentId])) {
-                    $cleanRow['parent_id'] = $idMapping[$originalParentId];
-                }
-
-                $newId = $connection->table('supervision_gg_detalle')->insertGetId($cleanRow);
-
-                if ($oldId) {
-                    $idMapping[$oldId] = $newId;
-                }
-            }
-
-            // Recalculate total_seccion for each section row
-            // (sum the stored subtotal of its direct children)
-            $sectionRows = $connection->table('supervision_gg_detalle')
-                ->where('presupuesto_id', $tenantPresupuestoId)
-                ->where('tipo_fila', 'seccion')
-                ->get();
-
-            foreach ($sectionRows as $section) {
-                $sectionTotal = $connection->table('supervision_gg_detalle')
-                    ->where('parent_id', $section->id)
-                    ->where('tipo_fila', 'detalle')
-                    ->sum('subtotal');
-
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $connection->beginTransaction();
+            try {
+                // Clear all rows for this presupuesto
                 $connection->table('supervision_gg_detalle')
-                    ->where('id', $section->id)
-                    ->update(['total_seccion' => round((float) $sectionTotal, 4)]);
+                    ->where('presupuesto_id', $tenantPresupuestoId)
+                    ->delete();
+
+                $idMapping = [];
+                $sectionTotals = []; // parentId (new) => sum of subtotals
+
+                foreach ($rows as $index => $row) {
+                    $oldId = $row['id'] ?? null;
+
+                    // Prepare clean row
+                    $cleanRow = [
+                        'presupuesto_id' => $tenantPresupuestoId,
+                        'parent_id' => null,
+                        'tipo_fila' => in_array($row['tipo_fila'] ?? '', ['seccion', 'detalle']) ? $row['tipo_fila'] : 'detalle',
+                        'item_codigo' => substr((string) ($row['item_codigo'] ?? ''), 0, 20) ?: null,
+                        'concepto' => $row['concepto'] ?? '',
+                        'unidad' => substr((string) ($row['unidad'] ?? ''), 0, 20) ?: null,
+                        'cantidad' => is_numeric($row['cantidad'] ?? null) ? (float) $row['cantidad'] : 0,
+                        'meses' => is_numeric($row['meses'] ?? null) ? (float) $row['meses'] : 0,
+                        'importe' => is_numeric($row['importe'] ?? null) ? (float) $row['importe'] : 0,
+                        'total_seccion' => 0, // will be updated after all children inserted
+                        'item_order' => $index,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+
+                    // Remap parent_id
+                    $originalParentId = $row['parent_id'] ?? null;
+                    if (! is_null($originalParentId) && isset($idMapping[$originalParentId])) {
+                        $cleanRow['parent_id'] = $idMapping[$originalParentId];
+                    }
+
+                    $newId = $connection->table('supervision_gg_detalle')->insertGetId($cleanRow);
+
+                    if ($oldId) {
+                        $idMapping[$oldId] = $newId;
+                    }
+                }
+
+                // Recalculate total_seccion for each section row
+                // (sum the stored subtotal of its direct children)
+                $sectionRows = $connection->table('supervision_gg_detalle')
+                    ->where('presupuesto_id', $tenantPresupuestoId)
+                    ->where('tipo_fila', 'seccion')
+                    ->get();
+
+                foreach ($sectionRows as $section) {
+                    $sectionTotal = $connection->table('supervision_gg_detalle')
+                        ->where('parent_id', $section->id)
+                        ->where('tipo_fila', 'detalle')
+                        ->sum('subtotal');
+
+                    $connection->table('supervision_gg_detalle')
+                        ->where('id', $section->id)
+                        ->update(['total_seccion' => round((float) $sectionTotal, 4)]);
+                }
+
+                // Global total = SUM of root section totals
+                $grandTotal = $connection->table('supervision_gg_detalle')
+                    ->where('presupuesto_id', $tenantPresupuestoId)
+                    ->whereNull('parent_id')
+                    ->where('tipo_fila', 'seccion')
+                    ->sum('total_seccion');
+
+                $connection->commit();
+
+                // Return updated rows
+                $updatedRows = $connection->table('supervision_gg_detalle')
+                    ->where('presupuesto_id', $tenantPresupuestoId)
+                    ->orderBy('item_order')
+                    ->orderBy('id')
+                    ->get()
+                    ->map(fn ($r) => (array) $r)
+                    ->toArray();
+
+                return response()->json([
+                    'success' => true,
+                    'rows' => $updatedRows,
+                    'total' => round((float) $grandTotal, 2),
+                ]);
+            } catch (\Exception $e) {
+                if ($connection->transactionLevel() > 0) {
+                    $connection->rollBack();
+                }
+
+                if ($attempt < $maxAttempts && $concurrencyDetector->causedByConcurrencyError($e)) {
+                    usleep(random_int(50_000, 150_000) * $attempt);
+
+                    continue;
+                }
+
+                Log::error('Error saving supervision_gg_detalle', [
+                    'project' => $project->id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
             }
-
-            // Global total = SUM of root section totals
-            $grandTotal = $connection->table('supervision_gg_detalle')
-                ->where('presupuesto_id', $tenantPresupuestoId)
-                ->whereNull('parent_id')
-                ->where('tipo_fila', 'seccion')
-                ->sum('total_seccion');
-
-            $connection->commit();
-
-            // Return updated rows
-            $updatedRows = $connection->table('supervision_gg_detalle')
-                ->where('presupuesto_id', $tenantPresupuestoId)
-                ->orderBy('item_order')
-                ->orderBy('id')
-                ->get()
-                ->map(fn ($r) => (array) $r)
-                ->toArray();
-
-            return response()->json([
-                'success' => true,
-                'rows' => $updatedRows,
-                'total' => round((float) $grandTotal, 2),
-            ]);
-        } catch (\Exception $e) {
-            $connection->rollBack();
-            Log::error('Error saving supervision_gg_detalle', [
-                'project' => $project->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
+
+        return response()->json(['success' => false, 'error' => 'No se pudo guardar debido a alta concurrencia. Intenta nuevamente.'], 500);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -4024,18 +4132,34 @@ class PresupuestoController extends Controller
 
         $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
 
-        DB::connection('costos_tenant')->beginTransaction();
-        try {
-            $this->copyAcuData($sourcePresupuestoId, $tenantPresupuestoId, $project->database_name);
-            DB::connection('costos_tenant')->commit();
+        $maxAttempts = 5;
+        $concurrencyDetector = new ConcurrencyErrorDetector;
 
-            return response()->json(['success' => true, 'message' => 'Presupuesto copiado exitosamente']);
-        } catch (\Exception $e) {
-            DB::connection('costos_tenant')->rollBack();
-            Log::error('Error copying budget: '.$e->getMessage());
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            DB::connection('costos_tenant')->beginTransaction();
+            try {
+                $this->copyAcuData($sourcePresupuestoId, $tenantPresupuestoId, $project->database_name);
+                DB::connection('costos_tenant')->commit();
 
-            return response()->json(['success' => false, 'message' => 'Error al copiar presupuesto: '.$e->getMessage()], 500);
+                return response()->json(['success' => true, 'message' => 'Presupuesto copiado exitosamente']);
+            } catch (\Exception $e) {
+                if (DB::connection('costos_tenant')->transactionLevel() > 0) {
+                    DB::connection('costos_tenant')->rollBack();
+                }
+
+                if ($attempt < $maxAttempts && $concurrencyDetector->causedByConcurrencyError($e)) {
+                    usleep(random_int(50_000, 150_000) * $attempt);
+
+                    continue;
+                }
+
+                Log::error('Error copying budget: '.$e->getMessage());
+
+                return response()->json(['success' => false, 'message' => 'Error al copiar presupuesto: '.$e->getMessage()], 500);
+            }
         }
+
+        return response()->json(['success' => false, 'message' => 'No se pudo copiar debido a alta concurrencia. Intenta nuevamente.'], 500);
     }
 
     private function validateAcuComponentType(string $tipo): void
@@ -4061,54 +4185,75 @@ class PresupuestoController extends Controller
     {
         $connection = DB::connection('costos_tenant');
 
-        $mo = $connection->table('acu_mano_de_obra')->where('acu_id', $acuId)->orderBy('item_order')->get();
-        $ma = $connection->table('acu_materiales')->where('acu_id', $acuId)->orderBy('item_order')->get();
-        $eq = $connection->table('acu_equipos')->where('acu_id', $acuId)->orderBy('item_order')->get();
-        $sc = $connection->table('acu_subcontratos')->where('acu_id', $acuId)->orderBy('item_order')->get();
-        $sp = $connection->table('acu_subpartidas')->where('acu_id', $acuId)->orderBy('item_order')->get();
+        // Mismo riesgo de deadlock que propagateInsumoUpdate()/calculateACU() al tocar
+        // presupuesto_general: reintentar en vez de dejar la excepción sin capturar
+        // (este método no corre dentro de una transacción propia, así que un deadlock
+        // aquí se propagaba sin control ni log al handler por defecto de Laravel).
+        $maxAttempts = 5;
+        $concurrencyDetector = new ConcurrencyErrorDetector;
 
-        $costoMo = $mo->sum('parcial');
-        $costoMa = $ma->sum('parcial');
-        $costoEq = $eq->sum('parcial');
-        $costoSc = $sc->sum('parcial');
-        $costoSp = $sp->sum('parcial');
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                $mo = $connection->table('acu_mano_de_obra')->where('acu_id', $acuId)->orderBy('item_order')->get();
+                $ma = $connection->table('acu_materiales')->where('acu_id', $acuId)->orderBy('item_order')->get();
+                $eq = $connection->table('acu_equipos')->where('acu_id', $acuId)->orderBy('item_order')->get();
+                $sc = $connection->table('acu_subcontratos')->where('acu_id', $acuId)->orderBy('item_order')->get();
+                $sp = $connection->table('acu_subpartidas')->where('acu_id', $acuId)->orderBy('item_order')->get();
 
-        $connection->table('presupuesto_acus')
-            ->where('id', $acuId)
-            ->update([
-                'mano_de_obra' => json_encode($mo),
-                'materiales' => json_encode($ma),
-                'equipos' => json_encode($eq),
-                'subcontratos' => json_encode($sc),
-                'subpartidas' => json_encode($sp),
-                'costo_mano_obra' => $costoMo,
-                'costo_materiales' => $costoMa,
-                'costo_equipos' => $costoEq,
-                'costo_subcontratos' => $costoSc,
-                'costo_subpartidas' => $costoSp,
-                'updated_at' => now(),
-            ]);
+                $costoMo = $mo->sum('parcial');
+                $costoMa = $ma->sum('parcial');
+                $costoEq = $eq->sum('parcial');
+                $costoSc = $sc->sum('parcial');
+                $costoSp = $sp->sum('parcial');
 
-        // Sync with presupuesto_general — match por código normalizado, no por
-        // string exacto (ver CostoDatabaseService::normalizePartidaCode()).
-        $acu = $connection->table('presupuesto_acus')->where('id', $acuId)->first();
-        if ($acu) {
-            $normalizedPartida = $this->dbService->normalizePartidaCode((string) data_get($acu, 'partida'));
-            $generalRows = $connection->table('presupuesto_general')
-                ->where('presupuesto_id', data_get($acu, 'presupuesto_id'))
-                ->get(['id', 'partida']);
-            foreach ($generalRows as $generalRow) {
-                if ($this->dbService->normalizePartidaCode($generalRow->partida) === $normalizedPartida) {
-                    $connection->table('presupuesto_general')
-                        ->where('id', $generalRow->id)
-                        ->update([
-                            'precio_unitario' => (float) data_get($acu, 'costo_unitario_total', 0),
-                            'updated_at' => now(),
-                        ]);
+                $connection->table('presupuesto_acus')
+                    ->where('id', $acuId)
+                    ->update([
+                        'mano_de_obra' => json_encode($mo),
+                        'materiales' => json_encode($ma),
+                        'equipos' => json_encode($eq),
+                        'subcontratos' => json_encode($sc),
+                        'subpartidas' => json_encode($sp),
+                        'costo_mano_obra' => $costoMo,
+                        'costo_materiales' => $costoMa,
+                        'costo_equipos' => $costoEq,
+                        'costo_subcontratos' => $costoSc,
+                        'costo_subpartidas' => $costoSp,
+                        'updated_at' => now(),
+                    ]);
+
+                // Sync with presupuesto_general — match por código normalizado, no por
+                // string exacto (ver CostoDatabaseService::normalizePartidaCode()).
+                $acu = $connection->table('presupuesto_acus')->where('id', $acuId)->first();
+                if ($acu) {
+                    $normalizedPartida = $this->dbService->normalizePartidaCode((string) data_get($acu, 'partida'));
+                    $generalRows = $connection->table('presupuesto_general')
+                        ->where('presupuesto_id', data_get($acu, 'presupuesto_id'))
+                        ->get(['id', 'partida']);
+                    foreach ($generalRows as $generalRow) {
+                        if ($this->dbService->normalizePartidaCode($generalRow->partida) === $normalizedPartida) {
+                            $connection->table('presupuesto_general')
+                                ->where('id', $generalRow->id)
+                                ->update([
+                                    'precio_unitario' => (float) data_get($acu, 'costo_unitario_total', 0),
+                                    'updated_at' => now(),
+                                ]);
+                        }
+                    }
+
+                    $this->dbService->syncCostoDirecto(DB::connection('costos_tenant')->getDatabaseName(), data_get($acu, 'presupuesto_id'));
                 }
-            }
 
-            $this->dbService->syncCostoDirecto(DB::connection('costos_tenant')->getDatabaseName(), data_get($acu, 'presupuesto_id'));
+                return;
+            } catch (\Exception $e) {
+                if ($attempt < $maxAttempts && $concurrencyDetector->causedByConcurrencyError($e)) {
+                    usleep(random_int(50_000, 150_000) * $attempt);
+
+                    continue;
+                }
+
+                throw $e;
+            }
         }
     }
 
