@@ -8,6 +8,7 @@ use Illuminate\Database\ConcurrencyErrorDetector;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class CronogramaV2Controller extends Controller
@@ -150,6 +151,17 @@ class CronogramaV2Controller extends Controller
 
                     continue;
                 }
+
+                // Este endpoint nunca logueaba en laravel.log — el error solo viajaba en
+                // el JSON de respuesta, y el frontend (useGanttTasks.ts saveTasks()) lo
+                // descarta y solo guarda un booleano. Sin este log era imposible diagnosticar
+                // un fallo real desde el servidor.
+                Log::error('Error saving cronograma_general', [
+                    'project' => $project,
+                    'attempt' => $attempt,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
 
                 return response()->json([
                     'status' => 'error',
