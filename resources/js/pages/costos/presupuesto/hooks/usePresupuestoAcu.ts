@@ -28,6 +28,17 @@ function r2(n: number): number { return new Decimal(n).toDecimalPlaces(10).toNum
 
 function roundCantidad(n: number): number { return new Decimal(n).toDecimalPlaces(4).toNumber(); }
 
+// Mismo criterio que CostoDatabaseService::normalizePartidaCode() (PHP) y
+// normalizedPartida() en InsumosConsolidadosModal.tsx: rellena cada segmento a
+// 2 dígitos para que "1.1.1.8" y "01.01.01.08" comparen igual.
+function normalizePartidaKey(value: string): string {
+    return String(value ?? '')
+        .split('.')
+        .filter(Boolean)
+        .map((p) => p.padStart(2, '0'))
+        .join('.');
+}
+
 function roundPrecio(n: number): number { return new Decimal(n).toDecimalPlaces(2).toNumber(); }
 
 // Multiplies operands with Decimal.js precision and rounds the result to 10dp.
@@ -114,10 +125,19 @@ export function upsertLocalAcuRow(
     rows: ACURowSummary[],
     updatedAcu: ACURowSummary,
 ): ACURowSummary[] {
-    const exists = rows.some((acu) => acu.partida === updatedAcu.partida);
+    // Comparar con === exacto dejaba pasar "1.1.1.8" vs "01.01.01.08" como
+    // partidas distintas: el match fallaba, el ACU editado se agregaba como
+    // fila DUPLICADA en vez de reemplazar la existente. Como acuRows alimenta
+    // directo a "Insumos Consolidados" (sin volver a pedir al servidor), cada
+    // edición con un formato de partida distinto inflaba ese total en el
+    // navegador sin tocar la base de datos — confirmado en producción,
+    // proyecto 6: el total de Equipos crecía entre una carga y otra sin que
+    // los datos de BD cambiaran.
+    const targetKey = normalizePartidaKey(updatedAcu.partida);
+    const exists = rows.some((acu) => normalizePartidaKey(acu.partida) === targetKey);
     if (!exists) return [...rows, updatedAcu];
 
-    return rows.map((acu) => acu.partida === updatedAcu.partida ? updatedAcu : acu);
+    return rows.map((acu) => normalizePartidaKey(acu.partida) === targetKey ? updatedAcu : acu);
 }
 
 interface UsePresupuestoAcuProps {
@@ -190,8 +210,16 @@ export function usePresupuestoAcu({
 
     const selectedAcu = useMemo(() => {
         if (!selectedPartidaCode) return null;
-        
-        const existingAcu = acuRows.find((row) => row.partida === selectedPartidaCode);
+
+        // === exacto aquí era la causa raíz de fondo: si el ACU está guardado con
+        // padding distinto al de selectedPartidaCode (ej. "01.01.01.08" vs
+        // "1.1.1.8", que es como llegan desde el árbol de Cronograma), el match
+        // fallaba y el panel mostraba una plantilla en blanco como si la partida
+        // no tuviera ACU — aunque sí lo tenía, con datos reales. Editar esa
+        // "plantilla" terminaba creando un ACU duplicado en vez de actualizar el
+        // existente. Confirmado en producción, proyecto 6.
+        const targetKey = normalizePartidaKey(selectedPartidaCode);
+        const existingAcu = acuRows.find((row) => normalizePartidaKey(row.partida) === targetKey);
         if (existingAcu) {
             // Override description/unit with live budget tree data
             if (selectedPartidaData) {
@@ -234,7 +262,7 @@ export function usePresupuestoAcu({
                     ?.toLowerCase()
                     .includes(
                         selectedCell.data.descripcion?.toString().toLowerCase() || '',
-                    ) || acu.partida === selectedCell.data.partida,
+                    ) || normalizePartidaKey(acu.partida) === normalizePartidaKey(selectedCell.data.partida ?? ''),
         );
 
         if (!matchingAcu) return;

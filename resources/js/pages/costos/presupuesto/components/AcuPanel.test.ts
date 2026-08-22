@@ -57,6 +57,29 @@ describe('ACU resource selection', () => {
         expect(rows[0].mano_de_obra[0].cod_insumo).toBe('MO-047');
     });
 
+    it('matches an existing ACU even when its partida has different zero-padding', () => {
+        // Bug real en producción: el ACU llegaba guardado como "01.01.01.08"
+        // pero la edición se disparaba con "1.1.1.8" (formato del árbol de
+        // Cronograma) — el === exacto no los veía como la misma partida y
+        // agregaba una fila duplicada en vez de reemplazar la existente,
+        // inflando "Insumos Consolidados" sin tocar la base de datos.
+        const original = {
+            id: 120,
+            partida: '01.01.01.08',
+            costo_unitario_total: 128.69,
+        } as ACURowSummary;
+        const updated = {
+            ...original,
+            partida: '1.1.1.8',
+            costo_unitario_total: 150,
+        } as ACURowSummary;
+
+        const rows = upsertLocalAcuRow([original], updated);
+
+        expect(rows).toHaveLength(1);
+        expect(rows[0].costo_unitario_total).toBe(150);
+    });
+
     it('rounds ACU component quantities to four decimals before calculating', () => {
         const calculated = calculateAcuLocally({
             mano_de_obra: [
