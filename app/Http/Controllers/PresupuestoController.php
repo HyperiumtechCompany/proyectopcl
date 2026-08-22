@@ -1919,6 +1919,18 @@ class PresupuestoController extends Controller
 
                     $checkAndUpdatePrice = function ($items, $priceKey) use ($project, $dbService) {
                         foreach ($items as $item) {
+                            // Herramientas (equipos con descripción "herramienta...", ej.
+                            // "HERRAMIENTAS MANUALES"): su precio_hora NUNCA es un precio de
+                            // catálogo — es costoManoObra del propio ACU (dinámico, distinto
+                            // en cada ACU). Tratarlo como "el catálogo cambió" cuando difiere
+                            // del precio de catálogo actual sobreescribe insumo_productos con
+                            // un valor que solo tenía sentido para ESE ACU, y lo propaga a
+                            // TODOS los demás ACUs del proyecto por igual — confirmado en
+                            // producción: corrompió "HERRAMIENTAS MANUALES" en decenas de
+                            // ACUs con el costoManoObra de uno solo.
+                            if ($priceKey === 'precio_hora' && stripos((string) ($item['descripcion'] ?? ''), 'herramienta') !== false) {
+                                continue;
+                            }
                             if (! empty($item['insumo_id'])) {
                                 $sentPrice = (float) ($item[$priceKey] ?? 0);
                                 $insumo = DB::connection('costos_tenant')

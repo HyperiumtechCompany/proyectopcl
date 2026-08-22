@@ -881,6 +881,23 @@ class CostoDatabaseService
                     foreach ($affected as $row) {
                         $affectedAcuIds[] = $row->acu_id;
 
+                        // Herramientas (equipos con descripción "herramienta...", ej.
+                        // "HERRAMIENTAS MANUALES"): su precio real NUNCA es el precio de
+                        // catálogo del insumo — es un % de la mano de obra del propio ACU
+                        // (ver calculateACU()/recalculateAcuFromJson(): parcial =
+                        // costoManoObra × cantidad/100). Aplicarles esta propagación de
+                        // precio de catálogo sin ese caso especial escribía
+                        // cantidad × precio_nuevo directo (ej. 3 × 1.972 = 5.916 en vez de
+                        // 0.03 × 1.972 = 0.05916, 100x de más) — confirmado en producción:
+                        // corrompió "HERRAMIENTAS MANUALES" en decenas de ACUs a la vez, en
+                        // un solo evento, porque ese insumo se reutiliza en casi todos los
+                        // ACUs del proyecto. Se omiten aquí; su valor correcto se restaura
+                        // solo en el próximo recalculateAcuFromJson()/calculateACU() (ya que
+                        // ninguno de los dos toca el precio de catálogo para este caso).
+                        if ($table === 'acu_equipos' && stripos((string) $row->descripcion, 'herramienta') !== false) {
+                            continue;
+                        }
+
                         // Recalcular parcial del item — 10 decimales (no 2), igual que
                         // calculateACU()/recalculateAcuFromJson(): con metrados grandes,
                         // hasta 6dp en costo_mano_obra/etc. se amplifica a céntimos frente

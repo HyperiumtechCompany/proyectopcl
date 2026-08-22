@@ -231,32 +231,13 @@ export function flattenInsumos(
 
     let procesados = 0;
 
-    // DIAGNÓSTICO TEMPORAL — remover después de encontrar el desfase Insumos
-    // Consolidados vs Costo Directo en Equipos (proyecto 6, 2026-08-22).
-    // eslint-disable-next-line no-console
-    (globalThis as any).__diagEquipos = [];
-
     for (const acu of acuRows) {
         const partidaKey = normalizedPartida(acu.partida);
         const presupuestoCantidad = presupuestoCantidadByPartida.get(partidaKey) ?? 0;
 
-        if (presupuestoCantidad === 0) {
-            const equiposCount = Array.isArray((acu as any).equipos) ? (acu as any).equipos.length : 0;
-            if (equiposCount > 0) {
-                // eslint-disable-next-line no-console
-                (globalThis as any).__diagEquipos.push({
-                    partida: acu.partida,
-                    partidaKey,
-                    motivo: 'EXCLUIDO: presupuestoCantidad=0',
-                    equiposCount,
-                    costo_equipos: (acu as any).costo_equipos,
-                });
-            }
-            continue;
-        }
+        if (presupuestoCantidad === 0) continue;
 
         procesados++;
-        let __acuEquiposTotal = 0;
 
         for (const { key } of INSUMO_TYPES) {
             if (!tiposValidos.includes(key)) continue;
@@ -326,30 +307,8 @@ export function flattenInsumos(
                         cantidadTotal: usage.cantidad,
                     },
                 });
-                if (key === 'equipos') __acuEquiposTotal += usage.parcial;
             }
         }
-
-        // DIAGNÓSTICO TEMPORAL
-        const __expectedEquipos = presupuestoCantidad * Number((acu as any).costo_equipos ?? 0);
-        if (Math.abs(__acuEquiposTotal - __expectedEquipos) > 0.01) {
-            (globalThis as any).__diagEquipos.push({
-                partida: acu.partida,
-                partidaKey,
-                motivo: 'DIVERGE en equipos',
-                presupuestoCantidad,
-                acuEquiposTotalCalculado: __acuEquiposTotal,
-                esperadoSegunCostoEquipos: __expectedEquipos,
-                diferencia: __acuEquiposTotal - __expectedEquipos,
-                costo_equipos: (acu as any).costo_equipos,
-                equiposItems: (acu as any).equipos,
-            });
-        }
-    }
-
-    if ((globalThis as any).__diagEquipos?.length) {
-        // eslint-disable-next-line no-console
-        console.log('DIAG equipos:', JSON.stringify((globalThis as any).__diagEquipos, null, 2));
     }
 
     return rows;
