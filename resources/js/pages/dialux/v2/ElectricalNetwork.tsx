@@ -125,6 +125,8 @@ export default function ElectricalNetworkPage({
                             selectedId={editor.selectedId}
                             calculations={editor.calculations}
                             onUpdateEdge={editor.updateEdge}
+                            onUpdateNode={editor.updateNode}
+                            onChangeNodeParent={editor.changeNodeParent}
                         />
                         <details className="border-t border-slate-200 bg-white dark:border-white/10 dark:bg-[#101218]">
                             <summary className="cursor-pointer p-3 text-xs font-semibold text-slate-700 dark:text-slate-300">

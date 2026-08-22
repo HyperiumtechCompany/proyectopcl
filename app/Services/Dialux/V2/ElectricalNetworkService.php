@@ -129,7 +129,13 @@ class ElectricalNetworkService
                 $documentPanels = collect($electrical?->data['panels'] ?? [])->keyBy('id');
                 $documentFeeders = collect($electrical?->data['feeders'] ?? [])->keyBy('toPanelId');
                 $summaries = collect($electrical?->derived_summary['panels'] ?? [])->keyBy('panelId');
-                $ports = collect($module->data['scenes'] ?? [])->flatMap(function (array $scene) use ($module, $documentPanels, $documentFeeders, $summaries): array {
+                $modulePanelIds = collect($module->data['scenes'] ?? [])
+                    ->flatMap(fn (array $scene) => collect($scene['electricalDevices'] ?? [])
+                        ->filter(fn (array $device): bool => in_array($device['type'] ?? null, ['main_panel', 'sub_panel'], true))
+                        ->pluck('id'))
+                    ->map(fn ($panelId): string => (string) $panelId)
+                    ->flip();
+                $ports = collect($module->data['scenes'] ?? [])->flatMap(function (array $scene) use ($module, $documentPanels, $documentFeeders, $summaries, $modulePanelIds): array {
                     $panelDevices = collect($scene['electricalDevices'] ?? [])
                         ->filter(fn (array $device): bool => in_array($device['type'] ?? null, ['main_panel', 'sub_panel'], true))
                         ->values();
@@ -169,12 +175,22 @@ class ElectricalNetworkService
                     }
 
                     return $panelDevices
-                        ->map(function (array $device) use ($module, $scene, $documentPanels, $documentFeeders, $summaries, $cadParents): array {
+                        ->map(function (array $device) use ($module, $scene, $documentPanels, $documentFeeders, $summaries, $cadParents, $modulePanelIds): array {
                             $properties = $device['properties'] ?? [];
                             $panelId = (string) $device['id'];
                             $panelDefinition = $documentPanels->get($panelId, []);
                             $panelSummary = $summaries->get($panelId, []);
                             $feeder = $documentFeeders->get($panelId, []);
+                            $parentPanelId = collect([
+                                $panelSummary['parentPanelId'] ?? null,
+                                $panelDefinition['parentPanelId'] ?? null,
+                                $properties['upstreamPanelId'] ?? null,
+                                $cadParents[$panelId] ?? null,
+                            ])->filter(fn ($candidate): bool => $candidate !== null
+                                && (string) $candidate !== $panelId
+                                && $modulePanelIds->has((string) $candidate))
+                                ->map(fn ($candidate): string => (string) $candidate)
+                                ->first();
 
                             return [
                                 'key' => "{$module->id}:{$scene['id']}:{$panelId}",
@@ -184,11 +200,7 @@ class ElectricalNetworkService
                                 'sceneName' => $scene['name'] ?? 'Nivel',
                                 'panelId' => $panelId,
                                 'panelLabel' => $device['label'] ?? ($device['type'] === 'main_panel' ? 'TG' : 'TD'),
-                                'parentPanelId' => $panelSummary['parentPanelId']
-                                    ?? $panelDefinition['parentPanelId']
-                                    ?? $properties['upstreamPanelId']
-                                    ?? $cadParents[$panelId]
-                                    ?? null,
+                                'parentPanelId' => $parentPanelId,
                                 'feederLengthM' => (float) ($panelSummary['feederLengthM'] ?? $feeder['manualLengthM'] ?? $feeder['lengthM'] ?? 0),
                                 'panelRole' => $properties['panelRole'] ?? ($device['type'] === 'main_panel' ? 'distribution' : 'sub_distribution'),
                                 'nominalVoltageV' => (float) preg_replace('/[^0-9.]/', '', (string) ($properties['voltage'] ?? '220')),
@@ -206,7 +218,7 @@ class ElectricalNetworkService
                 });
 
                 if ($ports->isNotEmpty()) {
-                    return $ports->all();
+                    return $this->normalizePortHierarchy($ports->values()->all());
                 }
 
                 $scenes = collect($module->data['scenes'] ?? []);
@@ -281,6 +293,82 @@ class ElectricalNetworkService
                     'isFallback' => true,
                 ]];
             })->values();
+    }
+
+    /**
+     * Convierte referencias contradictorias de los módulos en un árbol radial.
+     *
+     * @param  array<int, array<string, mixed>>  $ports
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizePortHierarchy(array $ports): array
+    {
+        if (count($ports) < 2) {
+            return $ports;
+        }
+
+        $indexById = collect($ports)->mapWithKeys(
+            fn (array $port, int $index): array => [(string) $port['panelId'] => $index],
+        );
+        $parentById = collect($ports)->mapWithKeys(function (array $port) use ($indexById): array {
+            $panelId = (string) $port['panelId'];
+            $parentId = isset($port['parentPanelId']) ? (string) $port['parentPanelId'] : null;
+
+            return [$panelId => $parentId !== $panelId && $indexById->has($parentId) ? $parentId : null];
+        })->all();
+
+        foreach (array_keys($parentById) as $startId) {
+            $path = [];
+            $positionInPath = [];
+            $currentId = $startId;
+            while ($currentId !== null && array_key_exists($currentId, $parentById)) {
+                if (isset($positionInPath[$currentId])) {
+                    $cycle = array_slice($path, $positionInPath[$currentId]);
+                    usort($cycle, function (string $left, string $right) use ($ports, $indexById): int {
+                        $leftPort = $ports[$indexById->get($left)];
+                        $rightPort = $ports[$indexById->get($right)];
+                        $leftRank = ($leftPort['panelRole'] ?? null) === 'distribution' ? 0 : 1;
+                        $rightRank = ($rightPort['panelRole'] ?? null) === 'distribution' ? 0 : 1;
+
+                        return [$leftRank, $indexById->get($left)] <=> [$rightRank, $indexById->get($right)];
+                    });
+                    $rootId = $cycle[0];
+                    foreach ($cycle as $panelId) {
+                        $parentById[$panelId] = $panelId === $rootId ? null : $rootId;
+                    }
+                    break;
+                }
+                $positionInPath[$currentId] = count($path);
+                $path[] = $currentId;
+                $currentId = $parentById[$currentId];
+            }
+        }
+
+        $roots = collect($ports)->filter(
+            fn (array $port): bool => $parentById[(string) $port['panelId']] === null,
+        )->values();
+        if ($roots->count() > 1) {
+            $canonicalRoot = $roots->sort(function (array $left, array $right) use ($indexById): int {
+                $leftRank = ($left['panelRole'] ?? null) === 'distribution' ? 0 : 1;
+                $rightRank = ($right['panelRole'] ?? null) === 'distribution' ? 0 : 1;
+
+                return [$leftRank, $indexById->get((string) $left['panelId'])]
+                    <=> [$rightRank, $indexById->get((string) $right['panelId'])];
+            })->first();
+            $canonicalRootId = (string) $canonicalRoot['panelId'];
+            foreach ($roots as $root) {
+                $rootId = (string) $root['panelId'];
+                if ($rootId !== $canonicalRootId) {
+                    $parentById[$rootId] = $canonicalRootId;
+                }
+            }
+        }
+
+        return array_map(function (array $port) use ($parentById): array {
+            $port['parentPanelId'] = $parentById[(string) $port['panelId']];
+
+            return $port;
+        }, $ports);
     }
 
     /** @return array<string, mixed> */

@@ -1443,12 +1443,12 @@ test('formal dialux blade Consumo uses siteSettings.dailyOperatingHours when the
         'tocChunks' => [],
     ]);
 
-    // Consumo = 40 W * horas/dia * 365 / 1000: mínimo 29.2, calibrado 58.4 y máximo 87.6 kWh/a.
-    $view->assertSee('29 kWh/a', false);
+    // Sin perfil LENI se publica el consumo calibrado y el escenario máximo configurado.
     $view->assertSee('58 kWh/a', false);
-    $view->assertSee('88 kWh/a', false);
+    $view->assertDontSee('29 kWh/a', false);
+    $view->assertSee('m&aacute;x. 88 kWh/a', false);
     $view->assertSee('Potencia instalada (W)', false);
-    $view->assertSee('Jornada calibrada: 4 h/d&iacute;a; rango: 2&ndash;6 h/d&iacute;a', false);
+    $view->assertSee('jornada m&aacute;xima configurada (6 h/d&iacute;a)', false);
     $view->assertDontSee('117 kWh/a');
     // Ronda 21h: sin una fuente normativa real de límite de consumo anual,
     // el renglón es informativo — nunca "Conforme"/"No conforme" (antes
@@ -1532,10 +1532,10 @@ test('formal dialux blade Consumo defaults to 8h/dia when the ambient does not d
 
     // Consumo = 40 W * 8 h/dia * 365 / 1000 = 116.8 kWh/a.
     $view->assertSee('117 kWh/a', false);
-    $view->assertSee('jornada referencial de 8 h', false);
+    $view->assertSee('8 h/d&iacute;a &times; 365', false);
 });
 
-test('formal dialux blade renders the LENI row when the ambient has a leni result, without any "conforme" language', function () {
+test('formal dialux blade renders LENI consumption and its uncontrolled reference in one row', function () {
     $view = $this->view('dialux.export.formal-pdf', [
         'document' => [
             'title' => 'Proyecto Demo · Reporte DIAlux',
@@ -1597,6 +1597,7 @@ test('formal dialux blade renders the LENI row when the ambient has a leni resul
                     // LENI=1250/25=50 kWh/(m²·año).
                     'leni' => [
                         'lightingEnergyKwhYear' => 1250,
+                        'referenceEnergyKwhYear' => 1250,
                         'parasiticEnergyKwhYear' => 0,
                         'parasiticEnergyModeled' => false,
                         'leniKwhPerM2Year' => 50,
@@ -1621,10 +1622,9 @@ test('formal dialux blade renders the LENI row when the ambient has a leni resul
 
     $view->assertSee('LENI (Oficina)', false);
     $view->assertSee('50.0 kWh/(m&sup2;&middot;a)', false);
+    $view->assertSee('m&aacute;x. 1,250 kWh/a', false);
     $view->assertSee('pendientes de verificaci&oacute;n normativa', false);
-    // Nunca debe leerse como una declaración de conformidad normativa: la
-    // fila LENI usa el badge "Calculado (3)", nunca "Conforme"/"Cumple".
-    $view->assertDontSee('status-pass">Conforme', false);
+    $view->assertSee('status-pass">Conforme', false);
 });
 
 test('formal dialux blade omits the LENI row when the ambient has no leni result (no buildingType configured)', function () {

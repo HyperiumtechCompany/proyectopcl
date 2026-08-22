@@ -86,6 +86,13 @@ export function ElectricalCanvas({
                     <path d="M0,0 L8,4 L0,8 Z" className="fill-cyan-500" />
                 </marker>
             </defs>
+            <text
+                x="24"
+                y="32"
+                className="pointer-events-none fill-slate-400 text-[12px] dark:fill-slate-500"
+            >
+                Arrastra los tableros para ordenarlos · salida celeste → entrada gris para conectar
+            </text>
             {data.edges.map((edge) => {
                 const source = nodeMap.get(edge.sourceNodeId);
                 const target = nodeMap.get(edge.targetNodeId);

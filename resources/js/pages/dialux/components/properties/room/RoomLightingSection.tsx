@@ -18,6 +18,7 @@ import {
     SectionWrapper,
     SelectField,
 } from '../PropertyFields';
+import { NormativeValuesSummary } from '../NormativeValuesSummary';
 
 /**
  * Sección "Iluminación" de `RoomProps.tsx` (Fase 2, extracción sin cambiar
@@ -46,6 +47,8 @@ export function RoomLightingSection({
 }) {
     const store = useEditorStore();
     const manualUgr = getRoomManualUgr(room);
+    const selectedRequirement =
+        normActivities.find((activity) => activity.activity === room.normativeActivity) ?? null;
 
     return (
         <>
@@ -173,6 +176,44 @@ export function RoomLightingSection({
                                     : room.usefulPlaneHeight,
                         });
                     }}
+                />
+            )}
+            <NormativeValuesSummary
+                requirement={selectedRequirement}
+                manualValues={{
+                    ugr: room.ugrLimit,
+                    uniformity: room.uniformityTarget,
+                    ra: room.raRequiredOverride,
+                }}
+            />
+            {selectedRequirement?.ugr === null && (
+                <EditField
+                    label="UGRL manual requerido"
+                    value={room.ugrLimit ?? 22}
+                    min={10}
+                    max={40}
+                    step={1}
+                    onChange={(value) => onUpdate({ ugrLimit: value })}
+                />
+            )}
+            {selectedRequirement?.uniformity === null && (
+                <EditField
+                    label="Uo manual requerido"
+                    value={room.uniformityTarget ?? 0.4}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    onChange={(value) => onUpdate({ uniformityTarget: value })}
+                />
+            )}
+            {selectedRequirement?.ra === null && (
+                <EditField
+                    label="Ra manual requerido"
+                    value={room.raRequiredOverride ?? 80}
+                    min={0}
+                    max={100}
+                    step={1}
+                    onChange={(value) => onUpdate({ raRequiredOverride: value })}
                 />
             )}
             <EditField

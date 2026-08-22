@@ -55,6 +55,7 @@ import {
     SelectField,
     TextField,
 } from './PropertyFields';
+import { NormativeValuesSummary } from './NormativeValuesSummary';
 
 // Temporalmente solo se ofrece la grilla de luminarias de techo.
 const SHOW_WALL_FIXTURE_GRID = false;
@@ -121,6 +122,8 @@ const WallInteriorLightingSection: React.FC<{
         normativeCategory,
         normativeSection,
     );
+    const selectedRequirement =
+        activities.find((activity) => activity.activity === normativeActivity) ?? null;
 
     const ambientRoom = ambientMatch?.room ?? null;
 
@@ -334,9 +337,38 @@ const WallInteriorLightingSection: React.FC<{
                     onChange={(val) => {
                         const act = activities.find((a) => a.activity === val);
                         const illuminanceLux = act?.illuminanceLux ?? lux;
-                        onUpdate({ normativeActivity: val, illuminanceLux });
-                        onUpdateAmbient({ activity: val, illuminanceLux });
+                        onUpdate({
+                            normativeActivity: val,
+                            illuminanceLux,
+                        });
+                        onUpdateAmbient({
+                            activity: val,
+                            illuminanceLux,
+                            ugrLimit: act?.ugr,
+                            uniformityTarget: act?.uniformity,
+                        });
                     }}
+                />
+            )}
+
+            <NormativeValuesSummary
+                requirement={selectedRequirement}
+                manualValues={{
+                    ugr: ambientConfig?.ugrLimit,
+                    uniformity: ambientConfig?.uniformityTarget,
+                    ra: ambientConfig?.raRequiredOverride,
+                }}
+            />
+            {selectedRequirement?.ra === null && (
+                <EditField
+                    label="Ra manual requerido"
+                    value={ambientConfig?.raRequiredOverride ?? 80}
+                    min={0}
+                    max={100}
+                    step={1}
+                    onChange={(value) =>
+                        onUpdateAmbient({ raRequiredOverride: value })
+                    }
                 />
             )}
 

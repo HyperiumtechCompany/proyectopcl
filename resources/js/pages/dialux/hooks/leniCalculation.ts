@@ -19,6 +19,8 @@ export interface LeniInputs {
 export interface LeniResult {
     /** W_L en kWh/año. */
     lightingEnergyKwhYear: number;
+    /** Energía del mismo ambiente sin reducciones por controles. */
+    referenceEnergyKwhYear: number;
     /** W_P en kWh/año — energía parásita de controles/standby, NO modelada (ver `parasiticEnergyModeled`). */
     parasiticEnergyKwhYear: number;
     parasiticEnergyModeled: false;
@@ -76,11 +78,13 @@ export function calculateLeni(inputs: LeniInputs): LeniResult | null {
 
     const effectiveHours = annualHoursDay * factorOccupancy * factorDaylight + annualHoursNight * factorOccupancy;
     const lightingEnergyKwhYear = (installedPowerWatts * factorConstantIlluminance * effectiveHours) / 1000;
+    const referenceEnergyKwhYear = (installedPowerWatts * (annualHoursDay + annualHoursNight)) / 1000;
     const parasiticEnergyKwhYear = 0;
     const leniKwhPerM2Year = (lightingEnergyKwhYear + parasiticEnergyKwhYear) / usefulAreaM2;
 
     return {
         lightingEnergyKwhYear,
+        referenceEnergyKwhYear,
         parasiticEnergyKwhYear,
         parasiticEnergyModeled: false,
         leniKwhPerM2Year,

@@ -541,6 +541,8 @@ export const EditorLayout = memo(function EditorLayout() {
                         fixtures: ambient.fixtures,
                         result: resultByObjectId.get(ambient.room.id)!,
                         sourceRoomName: ambient.roomName,
+                        sourceRoomId: ambient.roomId,
+                        ambientConfigKey: ambient.configKey,
                         levelId: scene.id,
                         levelName: scene.name,
                         levelIndex: scene.floorIndex ?? 0,
@@ -1223,7 +1225,7 @@ export const EditorLayout = memo(function EditorLayout() {
             <DxfExportDialog open={showDxfExportDialog} onOpenChange={setShowDxfExportDialog} />
 
             <Dialog open={resultsModalOpen} onOpenChange={setResultsModalOpen}>
-                <DialogContent className="flex h-[96dvh] w-[calc(100vw-1rem)] max-w-[1600px] flex-col gap-0 overflow-hidden border-slate-300 dark:border-slate-800 bg-gray-100 dark:bg-[#090b10] p-0 text-slate-900 dark:text-slate-100 sm:h-[94dvh] sm:w-[96vw] sm:max-w-[1600px]">
+                <DialogContent className="flex h-[96dvh] w-[calc(100vw-0.5rem)] max-w-none flex-col gap-0 overflow-hidden border-slate-300 bg-gray-100 p-0 text-slate-900 dark:border-slate-800 dark:bg-[#090b10] dark:text-slate-100 sm:h-[94dvh] sm:w-[99vw] sm:max-w-none">
                     <DialogHeader className="shrink-0 border-b border-slate-300 dark:border-slate-800/80 px-4 py-4 pr-12 text-left sm:px-6 sm:py-5">
                         <DialogTitle className="text-base font-semibold tracking-tight text-slate-900 dark:text-white sm:text-lg">
                             Resultados de iluminacion por recinto
@@ -1233,7 +1235,7 @@ export const EditorLayout = memo(function EditorLayout() {
                             se resume el calculo en una tabla.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+                    <div className="min-h-0 flex-1 overflow-y-auto p-2 sm:p-3">
                         <ResultsPanel rooms={roomResults} calculationRun={lastCalculationRun} />
                     </div>
                 </DialogContent>

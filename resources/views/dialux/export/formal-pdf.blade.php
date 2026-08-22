@@ -519,32 +519,28 @@
                     ? $usefulPowerDensity / ((float) $referenceLux / 100)
                     : null;
             $dailyOperatingHours = (float) ($detail['dailyOperatingHours'] ?? 8);
-            $minimumDailyOperatingHours = (float) ($detail['minimumDailyOperatingHours'] ?? $dailyOperatingHours);
             $maximumDailyOperatingHours = (float) ($detail['maximumDailyOperatingHours'] ?? $dailyOperatingHours);
-            $consumption =
+            // Con evaluación energética se usa EN 15193: perfil anual y
+            // factores de control. P × h/día × 365 solo es el respaldo
+            // informativo cuando el proyecto aún no tiene perfil LENI.
+            $leni = $detail['leni'] ?? null;
+            $consumption = $leni['lightingEnergyKwhYear'] ?? (
                 ($detail['totalPowerWatts'] ?? null) !== null
                     ? ((float) $detail['totalPowerWatts'] * $dailyOperatingHours * 365) / 1000
-                    : null;
-            $minimumConsumption =
+                    : null
+            );
+            $maximumConsumption = $leni['referenceEnergyKwhYear'] ?? (
                 ($detail['totalPowerWatts'] ?? null) !== null
-                    ? ((float) $detail['totalPowerWatts'] * min($minimumDailyOperatingHours, $maximumDailyOperatingHours) * 365) / 1000
+                    ? ((float) $detail['totalPowerWatts'] * max($dailyOperatingHours, $maximumDailyOperatingHours) * 365) / 1000
+                    : null
+            );
+            $consumptionPassesReference =
+                $consumption !== null && $maximumConsumption !== null
+                    ? (float) $consumption <= (float) $maximumConsumption + 0.000001
                     : null;
-            $maximumConsumption =
-                ($detail['totalPowerWatts'] ?? null) !== null
-                    ? ((float) $detail['totalPowerWatts'] * max($minimumDailyOperatingHours, $maximumDailyOperatingHours) * 365) / 1000
-                    : null;
-            // Ronda 21h: este renglón ANTES fabricaba un "límite" de consumo
-            // copiando literalmente el lux normativo del ambiente (`targetLux`,
-            // ej. 500) y relabeleándolo como kWh/a — sin ninguna base
-            // normativa real. Producía un "Conforme"/"No conforme" sin
-            // sentido (hallazgo real: un ambiente con 946 kWh/a marcado "No
-            // conforme" contra "máx. 500 kWh/a", donde 500 solo era el lux
-            // exigido). Ningún proyecto de este sistema tiene hoy una fuente
-            // normativa citable para un límite de consumo anual por ambiente
-            // (es un concepto tipo LENI/EN 15193-1, ajeno al RNE EM.010
-            // peruano) — hasta que se cite una norma real y aplicable, el
-            // consumo se muestra como dato informativo, "No regulado", nunca
-            // "conforme"/"no conforme".
+            // Nunca se convierte el targetLux en kWh/a. El máximo mostrado es
+            // exclusivamente la referencia energética del mismo perfil sin
+            // controles; sin perfil LENI el dato permanece "No regulado".
 
             // Estado real por métrica (RequirementEvaluation), no un check decorativo fijo.
             $evaluationsByMetric = collect($detail['requirementEvaluations'] ?? [])
@@ -562,7 +558,7 @@
                 // en vivo, ResultsPanel.tsx, ya distinguía "no regulado" de
                 // "no evaluado" — el PDF no).
                 if ($evaluation === null) {
-                    return '<span class="verification-status status-not-regulated">No regulado</span>';
+                    return '<span class="verification-status status-not-regulated">No exigido</span>';
                 }
                 $status = $evaluation['status'] ?? 'not-evaluated';
                 $label = match ($status) {
@@ -667,39 +663,21 @@
                     <td></td>
                 </tr>
                 <tr>
-                    <td rowspan="3"><strong>Valores de consumo</strong></td>
-                    <td>M&iacute;nimo</td>
-                    <td class="result-number">' .
-                $formatNumber($minimumConsumption, 0, ' kWh/a') .
-                '</td>
-                    <td class="result-number">' .
-                $formatNumber(min($minimumDailyOperatingHours, $maximumDailyOperatingHours), 1, ' h/d&iacute;a') .
-                '</td>
-                    <td class="result-check"><span class="verification-status status-not-regulated">Escenario</span></td>
-                    <td></td>
-                </tr>
-                <tr>
-                    <td>Calibrado</td>
+                    <td><strong>Valores de consumo</strong></td>
+                    <td>Consumo</td>
                     <td class="result-number">' .
                 $formatNumber($consumption, 0, ' kWh/a') .
                 '</td>
                     <td class="result-number">' .
-                $formatNumber($dailyOperatingHours, 1, ' h/d&iacute;a') .
+                ($maximumConsumption !== null ? 'm&aacute;x. ' . $formatNumber($maximumConsumption, 0, ' kWh/a') : '-') .
                 '</td>
                     <td class="result-check">' .
-                '<span class="verification-status status-not-regulated">No regulado</span>' .
+                ($leni === null
+                    ? '<span class="verification-status status-not-regulated">Escenario</span>'
+                    : ($consumptionPassesReference
+                        ? '<span class="verification-status status-pass">Conforme</span>'
+                        : '<span class="verification-status status-fail">No conforme</span>')) .
                 '</td>
-                    <td></td>
-                </tr>
-                <tr>
-                    <td>M&aacute;ximo</td>
-                    <td class="result-number">' .
-                $formatNumber($maximumConsumption, 0, ' kWh/a') .
-                '</td>
-                    <td class="result-number">' .
-                $formatNumber(max($minimumDailyOperatingHours, $maximumDailyOperatingHours), 1, ' h/d&iacute;a') .
-                '</td>
-                    <td class="result-check"><span class="verification-status status-not-regulated">Escenario</span></td>
                     <td></td>
                 </tr>' .
                 (($detail['leni'] ?? null) !== null
@@ -740,17 +718,18 @@
         <div class="ambient-note">
             (1)
 Valores calculados desde los resultados almacenados del ambiente.<br>
-            (2) Consumo estimado con la f&oacute;rmula: Consumo anual (kWh/a) = Potencia instalada (W)
-            &times; horas de operaci&oacute;n diarias &times; 365 &divide; 1000. Jornada calibrada: ' .
-                rtrim(rtrim(number_format($dailyOperatingHours, 1, '.', ''), '0'), '.') .
-                ' h/d&iacute;a; rango: ' .
-                rtrim(rtrim(number_format(min($minimumDailyOperatingHours, $maximumDailyOperatingHours), 1, '.', ''), '0'), '.') .
-                '&ndash;' .
-                rtrim(rtrim(number_format(max($minimumDailyOperatingHours, $maximumDailyOperatingHours), 1, '.', ''), '0'), '.') .
-                ' h/d&iacute;a. Es un promedio simple y no reproduce la evaluaci&oacute;n
-            energ&eacute;tica horaria de DIALux evo, que considera autonom&iacute;a de luz diurna, orientaci&oacute;n
-            real y atenuaci&oacute;n por escena).' .
-                (($detail['leni'] ?? null) !== null
+            (2) ' .
+                ($leni !== null
+                    ? 'Evaluaci&oacute;n energ&eacute;tica: W<sub>L</sub> = P<sub>n</sub> &times; F<sub>C</sub> &times;
+            [(t<sub>D</sub> &times; F<sub>O</sub> &times; F<sub>D</sub>) + (t<sub>N</sub> &times; F<sub>O</sub>)]
+            &divide; 1000. La referencia m&aacute;xima usa el mismo perfil sin reducciones
+            (F<sub>C</sub> = F<sub>O</sub> = F<sub>D</sub> = 1).'
+                    : 'Estimaci&oacute;n simple: Consumo anual (kWh/a) = Potencia instalada (W) &times; ' .
+                        rtrim(rtrim(number_format($dailyOperatingHours, 1, '.', ''), '0'), '.') .
+                        ' h/d&iacute;a &times; 365 &divide; 1000. El m&aacute;ximo usa la jornada m&aacute;xima configurada (' .
+                        rtrim(rtrim(number_format(max($dailyOperatingHours, $maximumDailyOperatingHours), 1, '.', ''), '0'), '.') .
+                        ' h/d&iacute;a) y se identifica como escenario, no como l&iacute;mite normativo.') .
+                ($leni !== null
                     ? '<br>(3) LENI = m&eacute;todo simplificado EN 15193-1, con horas/factores de referencia
             <strong>pendientes de verificaci&oacute;n normativa</strong> (no una cita confirmada de la norma) y
             energ&iacute;a par&aacute;sita (standby de controles) no modelada &mdash; puede subestimar el consumo

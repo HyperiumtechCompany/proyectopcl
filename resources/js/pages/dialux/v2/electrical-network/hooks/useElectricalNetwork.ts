@@ -3,6 +3,7 @@ import { calculateElectricalNetwork } from '../domain/calculations';
 import { canConnect, validateElectricalNetwork } from '../domain/graph';
 import type {
     ElectricalEdge,
+    ElectricalNode,
     ElectricalNetworkSnapshot,
     ModuleElectricalPort,
     Point,
@@ -48,6 +49,46 @@ export function useElectricalNetwork(
                 node.id === nodeId ? { ...node, position } : node,
             ),
         }));
+    const updateNode = (nodeId: string, patch: Partial<ElectricalNode>) =>
+        change((data) => ({
+            ...data,
+            nodes: data.nodes.map((node) =>
+                node.id === nodeId ? { ...node, ...patch } : node,
+            ),
+        }));
+    const changeNodeParent = (nodeId: string, parentId: string) => {
+        if (!parentId || parentId === nodeId) return;
+        change((data) => {
+            const withoutIncoming = {
+                ...data,
+                edges: data.edges.filter((edge) => edge.targetNodeId !== nodeId),
+            };
+            if (!canConnect(withoutIncoming, parentId, nodeId)) return data;
+            const source = data.nodes.find((node) => node.id === parentId);
+            const target = data.nodes.find((node) => node.id === nodeId);
+            return {
+                ...withoutIncoming,
+                edges: [
+                    ...withoutIncoming.edges,
+                    {
+                        id: id(),
+                        sourceNodeId: parentId,
+                        targetNodeId: nodeId,
+                        label: `${source?.label ?? 'Origen'} → ${target?.label ?? 'Destino'}`,
+                        lengthMode: 'manual',
+                        horizontalLengthM: 0,
+                        verticalLengthM: 0,
+                        conductorType: 'N2XOH',
+                        conductorMaterial: 'copper',
+                        sectionMm2: 10,
+                        wireConfiguration: '3F+N+T',
+                        powerFactor: 0.9,
+                    },
+                ],
+            };
+        });
+        setMessage('Tablero alimentador actualizado. Completa la longitud del tramo.');
+    };
     const connectModuleToTg = (moduleId: number) => {
         const modulePorts = ports.filter((port) => port.moduleId === moduleId);
         if (modulePorts.length === 0) return;
@@ -267,6 +308,8 @@ export function useElectricalNetwork(
         saving,
         dirty,
         moveNode,
+        updateNode,
+        changeNodeParent,
         connectModuleToTg,
         startConnection,
         finishConnection,

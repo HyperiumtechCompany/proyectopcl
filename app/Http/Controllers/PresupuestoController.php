@@ -3232,38 +3232,23 @@ class PresupuestoController extends Controller
 
         $rows = $query->get();
 
-        // ─── Cargar Componentes para ACUs desde Tablas Hijas ──────────────────
-        if ($tableName === 'presupuesto_acus') {
-            return $rows->map(function ($row) use ($connection) {
-                $acuId = $row->id;
-
-                // Estos campos reemplazan el contenido de los JSON si están presentes
-                // (Para compatibilidad gradual, si no hay filas en las tablas hijas, conserva el JSON)
-                $mo = $connection->table('acu_mano_de_obra')->where('acu_id', $acuId)->orderBy('item_order')->get();
-                $ma = $connection->table('acu_materiales')->where('acu_id', $acuId)->orderBy('item_order')->get();
-                $eq = $connection->table('acu_equipos')->where('acu_id', $acuId)->orderBy('item_order')->get();
-                $sc = $connection->table('acu_subcontratos')->where('acu_id', $acuId)->orderBy('item_order')->get();
-                $sp = $connection->table('acu_subpartidas')->where('acu_id', $acuId)->orderBy('item_order')->get();
-
-                if ($mo->isNotEmpty()) {
-                    $row->mano_de_obra = json_encode($mo);
-                }
-                if ($ma->isNotEmpty()) {
-                    $row->materiales = json_encode($ma);
-                }
-                if ($eq->isNotEmpty()) {
-                    $row->equipos = json_encode($eq);
-                }
-                if ($sc->isNotEmpty()) {
-                    $row->subcontratos = json_encode($sc);
-                }
-                if ($sp->isNotEmpty()) {
-                    $row->subpartidas = json_encode($sp);
-                }
-
-                return $row;
-            });
-        }
+        // NOTA: antes, para 'presupuesto_acus', esta función reemplazaba las columnas
+        // JSON (mano_de_obra/materiales/equipos/subcontratos/subpartidas) con datos
+        // recién leídos de las tablas relacionales acu_mano_de_obra/acu_materiales/
+        // acu_equipos/acu_subcontratos/acu_subpartidas ("para compatibilidad gradual").
+        // Esas tablas relacionales son solo un índice secundario que
+        // CostoDatabaseService::recalculateAcuFromJson() (la auto-reparación que corre
+        // en cada carga de página) NUNCA actualiza — solo corrige las columnas JSON.
+        // El resultado: cualquier corrección automática (ej. precisión, o el caso
+        // especial de "herramientas" = % de mano de obra) quedaba invisible para
+        // siempre en la respuesta al frontend, porque este override volvía a servir
+        // la versión sin corregir en cada petición, sin importar cuántas veces se
+        // resincronizara el JSON. Confirmado en producción: Insumos Consolidados
+        // seguía mostrando datos corruptos de "HERRAMIENTAS MANUALES" incluso después
+        // de arreglar el JSON y de recargar con la caché completamente limpia. Las
+        // columnas JSON en presupuesto_acus son la fuente que el resto del sistema
+        // (recalculateAcuFromJson, el frontend) ya trata como autoritativa — se sirven
+        // tal cual, sin este override.
 
         return $rows;
     }

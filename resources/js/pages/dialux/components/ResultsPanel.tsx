@@ -2,7 +2,6 @@ import {
     AlertTriangle,
     BadgeCheck,
     Building2,
-    Check,
     CheckCircle,
     Gauge,
     Layers3,
@@ -10,9 +9,8 @@ import {
     RotateCcw,
     TableProperties,
     XCircle,
-    Zap,
 } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { calculateAnnualConsumption } from '@/pages/dialux/domain/calculation/consumptionCalibration';
 import type { CalculationRun } from '@/pages/dialux/domain/calculation/types';
 import { determineCoverage } from '@/pages/dialux/hooks/lightingCalculations';
@@ -35,6 +33,8 @@ export interface RoomResultSummary {
     levelId: string;
     levelName: string;
     levelIndex: number;
+    sourceRoomId?: string;
+    ambientConfigKey?: string;
 }
 
 interface ResultsPanelProps {
@@ -81,6 +81,11 @@ interface RoomTableRow {
     coverage: 'optimal' | 'insufficient' | 'excessive';
     installedPowerWatts: number;
     hasCompletePowerData: boolean;
+    dailyOperatingHours: number;
+    minimumDailyOperatingHours: number;
+    maximumDailyOperatingHours: number;
+    sourceRoomId: string;
+    ambientConfigKey: string;
 }
 
 type ComplianceValues = Pick<
@@ -141,6 +146,8 @@ export function buildTableRows(rooms: RoomResultSummary[]): RoomTableRow[] {
             levelId,
             levelName,
             levelIndex,
+            sourceRoomId,
+            ambientConfigKey,
         }) => {
             const inputs = buildRoomLightingInputs(room, fixtures);
 
@@ -193,6 +200,13 @@ export function buildTableRows(rooms: RoomResultSummary[]): RoomTableRow[] {
                     (fixture) =>
                         typeof fixture.power === 'number' && fixture.power >= 0,
                 ),
+                dailyOperatingHours: room.dailyOperatingHours ?? 8,
+                minimumDailyOperatingHours:
+                    room.minimumDailyOperatingHours ?? Math.max(0, (room.dailyOperatingHours ?? 8) - 2),
+                maximumDailyOperatingHours:
+                    room.maximumDailyOperatingHours ?? Math.min(24, (room.dailyOperatingHours ?? 8) + 2),
+                sourceRoomId: sourceRoomId ?? room.id.split('::')[0],
+                ambientConfigKey: ambientConfigKey ?? room.id.split('::')[1] ?? 'ambient-1',
             };
         },
     );
@@ -208,22 +222,8 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
     rooms,
     calculationRun,
 }) => {
-    const projectOperatingHours = useEditorStore(
-        (state) => state.project?.siteSettings?.dailyOperatingHours ?? 8,
-    );
-    const projectMinimumHours = useEditorStore(
-        (state) =>
-            state.project?.siteSettings?.minimumDailyOperatingHours ??
-            Math.max(0, (state.project?.siteSettings?.dailyOperatingHours ?? 8) - 2),
-    );
-    const projectMaximumHours = useEditorStore(
-        (state) =>
-            state.project?.siteSettings?.maximumDailyOperatingHours ??
-            Math.min(24, (state.project?.siteSettings?.dailyOperatingHours ?? 8) + 2),
-    );
-    const setProjectSiteSettings = useEditorStore(
-        (state) => state.setProjectSiteSettings,
-    );
+    const project = useEditorStore((state) => state.project);
+    const updateRoom = useEditorStore((state) => state.updateRoom);
     const rows = buildTableRows(rooms);
     const levels = Array.from(
         new Map(
@@ -242,19 +242,10 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
     const [selectedLevelId, setSelectedLevelId] = useState('all');
     const [selectedRoomName, setSelectedRoomName] = useState('all');
     const [showWarnings, setShowWarnings] = useState(false);
-    const [minimumHours, setMinimumHours] = useState(
-        projectMinimumHours,
-    );
-    const [maximumHours, setMaximumHours] = useState(
-        projectMaximumHours,
-    );
-    const [calibratedHours, setCalibratedHours] = useState(
-        projectOperatingHours,
-    );
+    const [ambientHourOverrides, setAmbientHourOverrides] = useState<Record<string, number>>({});
+    const [ambientMinimumHourOverrides, setAmbientMinimumHourOverrides] = useState<Record<string, number>>({});
+    const [ambientMaximumHourOverrides, setAmbientMaximumHourOverrides] = useState<Record<string, number>>({});
 
-    useEffect(() => {
-        setCalibratedHours(projectOperatingHours);
-    }, [projectOperatingHours]);
     const activeLevelId =
         selectedLevelId === 'all' ||
         levels.some((level) => level.id === selectedLevelId)
@@ -279,49 +270,45 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                       (row.sourceRoomName ?? 'Sin recinto') === activeRoomName,
               );
 
-    const consumption = useMemo(() => {
-        const totalPowerWatts = filteredRows.reduce(
-            (sum, row) => sum + row.installedPowerWatts,
-            0,
-        );
-        const roomConsumptions = filteredRows
-            .filter(
-                (row) =>
-                    row.hasCompletePowerData && row.installedPowerWatts > 0,
-            )
-            .map((row) =>
-                calculateAnnualConsumption(
-                    row.installedPowerWatts,
-                    calibratedHours,
-                ),
-            );
+    const updateAmbientOperatingHours = (
+        row: RoomTableRow,
+        field: 'minimumDailyOperatingHours' | 'dailyOperatingHours' | 'maximumDailyOperatingHours',
+        hours: number,
+    ) => {
+        const currentMinimum = ambientMinimumHourOverrides[row.id] ?? row.minimumDailyOperatingHours;
+        const currentUsage = ambientHourOverrides[row.id] ?? row.dailyOperatingHours;
+        const currentMaximum = ambientMaximumHourOverrides[row.id] ?? row.maximumDailyOperatingHours;
+        let normalizedHours = Math.min(24, Math.max(0, hours));
+        if (field === 'minimumDailyOperatingHours') {
+            normalizedHours = Math.min(normalizedHours, currentUsage);
+        } else if (field === 'maximumDailyOperatingHours') {
+            normalizedHours = Math.max(normalizedHours, currentUsage);
+        } else {
+            normalizedHours = Math.min(currentMaximum, Math.max(currentMinimum, normalizedHours));
+        }
+        if (field === 'minimumDailyOperatingHours') {
+            setAmbientMinimumHourOverrides((current) => ({ ...current, [row.id]: normalizedHours }));
+        } else if (field === 'maximumDailyOperatingHours') {
+            setAmbientMaximumHourOverrides((current) => ({ ...current, [row.id]: normalizedHours }));
+        } else {
+            setAmbientHourOverrides((current) => ({ ...current, [row.id]: normalizedHours }));
+        }
 
-        return {
-            totalPowerWatts,
-            calibrated: calculateAnnualConsumption(
-                totalPowerWatts,
-                calibratedHours,
-            ),
-            minimum: calculateAnnualConsumption(
-                totalPowerWatts,
-                Math.min(minimumHours, maximumHours),
-            ),
-            maximum: calculateAnnualConsumption(
-                totalPowerWatts,
-                Math.max(minimumHours, maximumHours),
-            ),
-            roomMinimum:
-                roomConsumptions.length > 0 ? Math.min(...roomConsumptions) : 0,
-            roomMaximum:
-                roomConsumptions.length > 0 ? Math.max(...roomConsumptions) : 0,
-            incompleteRooms: filteredRows.filter(
-                (row) => !row.hasCompletePowerData,
-            ).length,
-        };
-    }, [calibratedHours, filteredRows, maximumHours, minimumHours]);
+        const sourceRoom = project?.scenes
+            .flatMap((scene) => scene.rooms)
+            .find((room) => room.id === row.sourceRoomId);
+        if (!sourceRoom) return;
 
-    const formatConsumption = (value: number) =>
-        `${value.toLocaleString('es-PE', { maximumFractionDigits: 1 })} kWh/a`;
+        updateRoom(row.sourceRoomId, {
+            ambientConfigs: {
+                ...sourceRoom.ambientConfigs,
+                [row.ambientConfigKey]: {
+                    ...sourceRoom.ambientConfigs?.[row.ambientConfigKey],
+                    [field]: normalizedHours,
+                },
+            },
+        });
+    };
 
     if (filteredRows.length === 0) {
         return (
@@ -490,163 +477,6 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                 </div>
             </section>
 
-            <section
-                aria-label="Calibracion de consumo"
-                className="rounded-xl border border-cyan-200 bg-cyan-50/70 p-3 sm:p-4 dark:border-cyan-900/70 dark:bg-cyan-950/20"
-            >
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                    <div className="min-w-0 xl:max-w-md">
-                        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-                            <Zap
-                                size={16}
-                                className="text-cyan-600 dark:text-cyan-300"
-                            />
-                            Calibracion previa a la exportacion
-                        </h3>
-                        <p className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
-                            Ajusta las horas diarias globales y compara el rango
-                            anual. Los ambientes con horas propias conservan su
-                            ajuste al exportar.
-                        </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 xl:w-[31rem]">
-                        {[
-                            {
-                                label: 'Horas minimas',
-                                value: minimumHours,
-                                setter: setMinimumHours,
-                            },
-                            {
-                                label: 'Horas para exportar',
-                                value: calibratedHours,
-                                setter: setCalibratedHours,
-                            },
-                            {
-                                label: 'Horas maximas',
-                                value: maximumHours,
-                                setter: setMaximumHours,
-                            },
-                        ].map((field) => (
-                            <label
-                                key={field.label}
-                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900/80"
-                            >
-                                <span className="block text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
-                                    {field.label}
-                                </span>
-                                <input
-                                    type="number"
-                                    min={0}
-                                    max={24}
-                                    step={0.5}
-                                    value={field.value}
-                                    onChange={(event) =>
-                                        field.setter(
-                                            Math.min(
-                                                24,
-                                                Math.max(
-                                                    0,
-                                                    Number(event.target.value),
-                                                ),
-                                            ),
-                                        )
-                                    }
-                                    className="mt-1 w-full border-0 bg-transparent p-0 text-sm font-semibold text-slate-900 outline-none focus:ring-0 dark:text-white"
-                                />
-                            </label>
-                        ))}
-                    </div>
-
-                    <button
-                        type="button"
-                        onClick={() =>
-                            setProjectSiteSettings({
-                                dailyOperatingHours: calibratedHours,
-                                minimumDailyOperatingHours: Math.min(
-                                    minimumHours,
-                                    maximumHours,
-                                ),
-                                maximumDailyOperatingHours: Math.max(
-                                    minimumHours,
-                                    maximumHours,
-                                ),
-                            })
-                        }
-                        disabled={
-                            calibratedHours === projectOperatingHours &&
-                            Math.min(minimumHours, maximumHours) ===
-                                projectMinimumHours &&
-                            Math.max(minimumHours, maximumHours) ===
-                                projectMaximumHours
-                        }
-                        className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-cyan-700 px-4 text-xs font-semibold text-white transition hover:bg-cyan-600 disabled:cursor-default disabled:bg-emerald-700 disabled:opacity-90 dark:bg-cyan-600 dark:hover:bg-cyan-500 dark:disabled:bg-emerald-700"
-                    >
-                        <Check size={14} />
-                            {calibratedHours === projectOperatingHours &&
-                            Math.min(minimumHours, maximumHours) ===
-                                projectMinimumHours &&
-                            Math.max(minimumHours, maximumHours) ===
-                                projectMaximumHours
-                            ? 'Aplicado al proyecto'
-                            : 'Aplicar para exportar'}
-                    </button>
-                </div>
-
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-                    {[
-                        [
-                            'Potencia instalada',
-                            `${consumption.totalPowerWatts.toLocaleString('es-PE', { maximumFractionDigits: 1 })} W`,
-                        ],
-                        [
-                            'Consumo calibrado',
-                            formatConsumption(consumption.calibrated),
-                        ],
-                        [
-                            'Minimo del rango',
-                            formatConsumption(consumption.minimum),
-                        ],
-                        [
-                            'Maximo del rango',
-                            formatConsumption(consumption.maximum),
-                        ],
-                        [
-                            'Ambiente minimo',
-                            formatConsumption(consumption.roomMinimum),
-                        ],
-                        [
-                            'Ambiente maximo',
-                            formatConsumption(consumption.roomMaximum),
-                        ],
-                    ].map(([label, value]) => (
-                        <div
-                            key={label}
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-950/70"
-                        >
-                            <p className="text-[9px] font-semibold tracking-wider text-slate-500 uppercase">
-                                {label}
-                            </p>
-                            <p className="mt-1 font-mono text-sm font-bold text-slate-900 tabular-nums dark:text-slate-100">
-                                {value}
-                            </p>
-                        </div>
-                    ))}
-                </div>
-
-                {consumption.incompleteRooms > 0 && (
-                    <p className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-700 dark:text-amber-300">
-                        <AlertTriangle size={12} />
-                        {consumption.incompleteRooms} ambiente(s) tienen
-                        luminarias sin potencia; el consumo mostrado es parcial.
-                    </p>
-                )}
-                <div className="mt-3 rounded-lg border border-cyan-200 bg-white/80 px-3 py-2 text-[10px] leading-relaxed text-slate-600 dark:border-cyan-900/60 dark:bg-slate-950/60 dark:text-slate-300">
-                    <strong className="text-slate-800 dark:text-slate-100">Fórmula:</strong>{' '}
-                    Consumo anual (kWh/a) = Potencia instalada (W) × horas de operación diarias × 365 ÷ 1000. El mínimo, calibrado y máximo usan respectivamente las tres jornadas indicadas arriba.
-                </div>
-            </section>
-
             <section className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70 dark:shadow-2xl">
                 <div className="flex items-start gap-3 border-b border-slate-300 px-4 py-3 sm:px-5 sm:py-4 dark:border-slate-800">
                     <TableProperties
@@ -716,29 +546,31 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                     </div>
                 </div>
 
-                <div className="max-h-[58vh] overflow-auto overscroll-contain">
-                    <table className="w-full min-w-[1280px] table-fixed text-left text-xs">
+                <div className="max-h-[66vh] overflow-auto overscroll-contain">
+                    <table className="w-full min-w-[1240px] table-fixed text-left text-[10px] leading-snug">
                         <thead className="sticky top-0 bg-slate-100 text-center backdrop-blur dark:bg-slate-950/95">
-                            <tr className="border-b border-slate-300 text-[11px] font-semibold tracking-[0.1em] text-slate-600 uppercase dark:border-slate-800 dark:text-slate-500">
-                                <th className="w-56 px-3 py-3">Ambiente</th>
-                                <th className="w-20 px-2 py-3">Área</th>
-                                <th className="w-28 px-2 py-3">Aplicación</th>
-                                <th className="w-20 px-2 py-3">Norma</th>
-                                <th className="w-20 px-2 py-3">Luminarias</th>
-                                <th className="w-24 px-2 py-3">Lm/Foco</th>
-                                <th className="w-24 px-2 py-3">Lm Req.</th>
-                                <th className="w-24 px-2 py-3">Cantidad</th>
-                                <th className="w-16 px-2 py-3">E avg</th>
-                                <th className="w-16 px-2 py-3">E min</th>
-                                <th className="w-16 px-2 py-3">E max</th>
+                            <tr className="border-b border-slate-300 text-[9px] font-semibold tracking-[0.06em] text-slate-600 uppercase dark:border-slate-800 dark:text-slate-500">
+                                <th className="w-44 px-2 py-2.5">Ambiente</th>
+                                <th className="w-14 px-1 py-2.5">Área</th>
+                                <th className="w-20 px-1 py-2.5">Aplicación</th>
+                                <th className="w-16 px-1 py-2.5">Norma</th>
+                                <th className="w-14 px-1 py-2.5">Lum.</th>
+                                <th className="w-28 px-1 py-2.5">Horas min/uso/máx</th>
+                                <th className="w-32 px-1 py-2.5">Consumo min/uso/máx</th>
+                                <th className="w-20 px-1 py-2.5">Lm/Foco</th>
+                                <th className="w-20 px-1 py-2.5">Lm Req.</th>
+                                <th className="w-20 px-1 py-2.5">Cantidad</th>
+                                <th className="w-14 px-1 py-2.5">E avg</th>
+                                <th className="w-14 px-1 py-2.5">E min</th>
+                                <th className="w-14 px-1 py-2.5">E max</th>
                                 <th
-                                    className="w-16 px-2 py-3"
+                                    className="w-14 px-1 py-2.5"
                                     title="Uniformidad calculada del grid real (Emin/Eavg del motor de cálculo)"
                                 >
                                     Uo
                                 </th>
-                                <th className="w-16 px-2 py-3">UGR</th>
-                                <th className="w-48 px-3 py-3">Estado</th>
+                                <th className="w-14 px-1 py-2.5">UGR</th>
+                                <th className="w-40 px-2 py-2.5">Estado</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -752,6 +584,12 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                     (!row.ugrNotEvaluated &&
                                         row.ugr <= row.ugrLimit);
                                 const compliant = isRoomCompliant(row);
+                                const minimumOperatingHours = ambientMinimumHourOverrides[row.id] ?? row.minimumDailyOperatingHours;
+                                const operatingHours = ambientHourOverrides[row.id] ?? row.dailyOperatingHours;
+                                const maximumOperatingHours = ambientMaximumHourOverrides[row.id] ?? row.maximumDailyOperatingHours;
+                                const consumptionValues = [minimumOperatingHours, operatingHours, maximumOperatingHours].map(
+                                    (hours) => calculateAnnualConsumption(row.installedPowerWatts, hours),
+                                );
                                 const warn = luxOk && (!uniformityOk || !ugrOk);
                                 const showLevelHeader =
                                     activeLevelId === 'all' &&
@@ -766,8 +604,8 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                         {showLevelHeader && (
                                             <tr className="border-y border-cyan-200 bg-cyan-50 dark:border-cyan-900/50 dark:bg-cyan-950/30">
                                                 <td
-                                                    colSpan={14}
-                                                    className="px-4 py-2 text-left text-xs font-semibold tracking-wide text-cyan-800 dark:text-cyan-200"
+                                                    colSpan={16}
+                                                    className="px-4 py-2 text-left text-[10px] font-semibold tracking-wide text-cyan-800 dark:text-cyan-200"
                                                 >
                                                     <span className="inline-flex items-center gap-2">
                                                         <Layers3 size={13} />
@@ -776,7 +614,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                                 </td>
                                             </tr>
                                         )}
-                                        <tr className="border-b border-slate-200 text-center text-xs text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-800/70 dark:text-slate-200 dark:hover:bg-slate-900/60">
+                                        <tr className="border-b border-slate-200 text-center text-[10px] leading-snug text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-800/70 dark:text-slate-200 dark:hover:bg-slate-900/60">
                                             <td className="px-3 py-3">
                                                 <div className="flex items-start gap-2 text-left">
                                                     <Lightbulb
@@ -815,6 +653,51 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                             </td>
                                             <td className="px-2 py-3 font-mono tabular-nums">
                                                 {row.fixtureCount}
+                                            </td>
+                                            <td className="px-2 py-3">
+                                                <div className="grid grid-cols-3 gap-1">
+                                                    {[
+                                                        ['minimumDailyOperatingHours', 'Mín.', minimumOperatingHours],
+                                                        ['dailyOperatingHours', 'Uso', operatingHours],
+                                                        ['maximumDailyOperatingHours', 'Máx.', maximumOperatingHours],
+                                                    ].map(([field, label, value]) => (
+                                                        <label key={field} className="min-w-0">
+                                                            <span className="block text-[8px] text-slate-500">{label}</span>
+                                                            <input
+                                                                aria-label={`${label} horas diarias de ${row.roomName}`}
+                                                                type="number"
+                                                                min={0}
+                                                                max={24}
+                                                                step={0.5}
+                                                                value={value}
+                                                                onChange={(event) =>
+                                                                    updateAmbientOperatingHours(
+                                                                        row,
+                                                                        field as 'minimumDailyOperatingHours' | 'dailyOperatingHours' | 'maximumDailyOperatingHours',
+                                                                        Number(event.target.value),
+                                                                    )
+                                                                }
+                                                                className="h-8 w-full rounded-md border border-slate-300 bg-white px-1 text-center font-mono text-[10px] font-semibold text-slate-900 tabular-nums outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                                                            />
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                            <td className="px-2 py-3">
+                                                <div className="grid gap-0.5 font-mono text-[10px] tabular-nums">
+                                                    {consumptionValues.map((value, consumptionIndex) => (
+                                                        <div
+                                                            key={consumptionIndex}
+                                                            className={consumptionIndex === 1 ? 'font-bold text-cyan-700 dark:text-cyan-300' : 'text-slate-500 dark:text-slate-400'}
+                                                        >
+                                                            {['Mín.', 'Uso', 'Máx.'][consumptionIndex]}{' '}
+                                                            {value.toLocaleString('es-PE', { maximumFractionDigits: 1 })} kWh/a
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                {!row.hasCompletePowerData && (
+                                                    <span className="mt-1 block text-[8px] text-amber-600 dark:text-amber-400">Potencia parcial</span>
+                                                )}
                                             </td>
                                             <td className="px-2 py-3 font-mono tabular-nums">
                                                 <div>
@@ -877,7 +760,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                                         warn,
                                                     )}
                                                     <span
-                                                        className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                                                        className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${
                                                             compliant
                                                                 ? coverageStyles.optimal
                                                                 : 'border-red-300 bg-red-50 text-red-700 dark:border-red-800/70 dark:bg-red-950/60 dark:text-red-300'

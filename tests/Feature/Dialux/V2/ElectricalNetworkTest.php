@@ -45,6 +45,7 @@ test('an owner can load ports and persist a versioned electrical network', funct
             'version' => 1,
             'panels' => [[
                 'panelId' => 'td-1',
+                'parentPanelId' => 'td-01',
                 'installedPowerW' => 7200,
                 'demandPowerW' => 5400,
                 'ownInstalledPowerW' => 7200,
@@ -53,6 +54,7 @@ test('an owner can load ports and persist a versioned electrical network', funct
                 'mainBreakerA' => 16,
             ], [
                 'panelId' => 'td-01',
+                'parentPanelId' => 'td-1',
                 'installedPowerW' => 2400,
                 'demandPowerW' => 1800,
                 'ownInstalledPowerW' => 2400,
@@ -79,6 +81,7 @@ test('an owner can load ports and persist a versioned electrical network', funct
         ->assertJsonPath('ports.0.demandPowerW', 5400)
         ->assertJsonPath('ports.0.currentA', 8.2)
         ->assertJsonPath('ports.0.mainBreakerA', 16)
+        ->assertJsonPath('ports.0.parentPanelId', null)
         ->assertJsonPath('ports.1.panelLabel', 'TD-01')
         ->assertJsonPath('ports.1.parentPanelId', 'td-1');
 

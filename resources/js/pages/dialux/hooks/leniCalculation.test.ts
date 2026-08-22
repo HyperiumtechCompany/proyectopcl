@@ -40,6 +40,7 @@ describe('calculateLeni', () => {
         expect(result!.factorConstantIlluminance).toBe(1);
         // W_L = (500 × 1 × [(2250×1×1) + (250×1)]) / 1000 = 500 × 2500 / 1000 = 1250 kWh/año
         expect(result!.lightingEnergyKwhYear).toBeCloseTo(1250, 6);
+        expect(result!.referenceEnergyKwhYear).toBeCloseTo(1250, 6);
         expect(result!.parasiticEnergyKwhYear).toBe(0);
         expect(result!.parasiticEnergyModeled).toBe(false);
         // LENI = 1250 / 25 = 50 kWh/(m²·año)
@@ -69,6 +70,7 @@ describe('calculateLeni', () => {
         // effectiveHours = 2000 × 0.75 × 0.75 + 0 × 0.75 = 1125
         // W_L = (1000 × 0.9 × 1125) / 1000 = 1012.5 kWh/año
         expect(result!.lightingEnergyKwhYear).toBeCloseTo(1012.5, 6);
+        expect(result!.referenceEnergyKwhYear).toBeCloseTo(2000, 6);
         expect(result!.leniKwhPerM2Year).toBeCloseTo(10.125, 6);
     });
 

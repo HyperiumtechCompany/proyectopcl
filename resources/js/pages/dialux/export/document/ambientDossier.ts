@@ -227,11 +227,13 @@ export function buildAmbientDetails(
                     snapshot.project.siteSettings?.dailyOperatingHours ??
                     8,
                 minimumDailyOperatingHours:
+                    ambient.room.minimumDailyOperatingHours ??
                     snapshot.project.siteSettings?.minimumDailyOperatingHours ??
                     ambient.room.dailyOperatingHours ??
                     snapshot.project.siteSettings?.dailyOperatingHours ??
                     8,
                 maximumDailyOperatingHours:
+                    ambient.room.maximumDailyOperatingHours ??
                     snapshot.project.siteSettings?.maximumDailyOperatingHours ??
                     ambient.room.dailyOperatingHours ??
                     snapshot.project.siteSettings?.dailyOperatingHours ??

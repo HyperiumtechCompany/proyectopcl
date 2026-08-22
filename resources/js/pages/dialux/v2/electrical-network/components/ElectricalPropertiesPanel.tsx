@@ -1,5 +1,9 @@
 import type { EdgeCalculation } from '../domain/calculations';
-import type { ElectricalEdge, ElectricalNetworkData } from '../domain/types';
+import type {
+    ElectricalEdge,
+    ElectricalNetworkData,
+    ElectricalNode,
+} from '../domain/types';
 
 const inputClass =
     'mt-1 h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white';
@@ -9,11 +13,15 @@ export function ElectricalPropertiesPanel({
     selectedId,
     calculations,
     onUpdateEdge,
+    onUpdateNode,
+    onChangeNodeParent,
 }: {
     data: ElectricalNetworkData;
     selectedId?: string;
     calculations: EdgeCalculation[];
     onUpdateEdge: (id: string, patch: Partial<ElectricalEdge>) => void;
+    onUpdateNode: (id: string, patch: Partial<ElectricalNode>) => void;
+    onChangeNodeParent: (nodeId: string, parentId: string) => void;
 }) {
     const edge = data.edges.find((item) => item.id === selectedId);
     const node = data.nodes.find((item) => item.id === selectedId);
@@ -35,7 +43,18 @@ export function ElectricalPropertiesPanel({
             <div className="grid max-h-80 gap-3 overflow-y-auto p-4 xl:max-h-none">
                 {node && (
                     <>
-                        <Info label="Nombre" value={node.label} />
+                        <label className="text-[11px] text-slate-500">
+                            Nombre visible
+                            <input
+                                className={inputClass}
+                                value={node.label}
+                                onChange={(event) =>
+                                    onUpdateNode(node.id, {
+                                        label: event.target.value,
+                                    })
+                                }
+                            />
+                        </label>
                         <Info label="Tipo" value={node.type} />
                         {node.moduleName && (
                             <Info label="Módulo" value={node.moduleName} />
@@ -48,6 +67,58 @@ export function ElectricalPropertiesPanel({
                                 label="ID del tablero"
                                 value={node.deviceId}
                             />
+                        )}
+                        {node.type === 'module_panel_port' && (
+                            <label className="text-[11px] text-slate-500">
+                                Alimentado desde
+                                <select
+                                    className={inputClass}
+                                    value={
+                                        data.edges.find(
+                                            (item) =>
+                                                item.targetNodeId === node.id,
+                                        )?.sourceNodeId ?? ''
+                                    }
+                                    onChange={(event) =>
+                                        onChangeNodeParent(
+                                            node.id,
+                                            event.target.value,
+                                        )
+                                    }
+                                >
+                                    <option value="" disabled>
+                                        Selecciona un tablero
+                                    </option>
+                                    {data.nodes
+                                        .filter(
+                                            (candidate) =>
+                                                candidate.id !== node.id &&
+                                                [
+                                                    'main_panel',
+                                                    'module_panel_port',
+                                                ].includes(candidate.type) &&
+                                                (candidate.type ===
+                                                    'main_panel' ||
+                                                    candidate.moduleId ===
+                                                        node.moduleId),
+                                        )
+                                        .map((candidate) => (
+                                            <option
+                                                key={candidate.id}
+                                                value={candidate.id}
+                                            >
+                                                {candidate.moduleName
+                                                    ? `${candidate.moduleName} · `
+                                                    : ''}
+                                                {candidate.label}
+                                            </option>
+                                        ))}
+                                </select>
+                                <span className="mt-1 block leading-relaxed text-slate-400">
+                                    Reemplaza únicamente el tramo de entrada de
+                                    este tablero.
+                                </span>
+                            </label>
                         )}
                     </>
                 )}

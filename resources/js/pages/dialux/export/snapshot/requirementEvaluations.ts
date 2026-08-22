@@ -55,6 +55,9 @@ function evaluateRequirementStatus(passes: boolean, source: string | undefined):
  * (hallazgo bloqueante, planes/plan_cierre_brecha_paridad_dialux_evo.md §-9.4).
  */
 export function resolveRaRequired(room: Room): number | null {
+    if (room.raRequiredOverride !== undefined) {
+        return room.raRequiredOverride;
+    }
     if (!room.normativeActivity || !room.normativeStandard) {
         return null;
     }

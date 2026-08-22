@@ -89,6 +89,8 @@ export interface AmbientConfig {
      * valor a todo el proyecto (2026-08-19).
      */
     dailyOperatingHours?: number;
+    minimumDailyOperatingHours?: number;
+    maximumDailyOperatingHours?: number;
     /**
      * Límite de UGR de ESTE sub-ambiente — mismo mecanismo que
      * `illuminanceLux` arriba: sin esto, `ugrLimit` SIEMPRE se re-deriva de
@@ -102,6 +104,8 @@ export interface AmbientConfig {
     ugrLimit?: number | null;
     /** Mismo mecanismo que `ugrLimit` arriba, para el objetivo de uniformidad (Uo). */
     uniformityTarget?: number | null;
+    /** Requisito Ra manual cuando la aplicación normativa no lo especifica. */
+    raRequiredOverride?: number | null;
     /**
      * Altura del plano útil / zona marginal de ESTE sub-ambiente — mismo
      * motivo que `outletUse` abajo: un recinto físico subdividido por
@@ -352,6 +356,8 @@ export interface Room {
     illuminanceLux?: number;
     /** Ver `AmbientConfig.dailyOperatingHours` — mismo campo, valor propio de este Room cuando no hay sub-ambiente con su propio override. */
     dailyOperatingHours?: number;
+    minimumDailyOperatingHours?: number;
+    maximumDailyOperatingHours?: number;
     fixtureLumens?: number;
     normativeStandard?: NormativeStandard;
     normativeCategory?: string;
@@ -360,6 +366,8 @@ export interface Room {
     normativeLabel?: string;
     ugrLimit?: number | null;
     uniformityTarget?: number | null;
+    /** Requisito Ra manual cuando la aplicación normativa no lo especifica. */
+    raRequiredOverride?: number | null;
     colorRenderingRa?: number | null;
     specificRequirements?: string | null;
     usefulPlaneHeight?: number | null;

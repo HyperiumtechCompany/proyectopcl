@@ -665,12 +665,16 @@ function buildSingleAmbientSpace(
         illuminanceLux,
         norma: illuminanceLux,
         dailyOperatingHours: ambientConfig?.dailyOperatingHours ?? room.dailyOperatingHours,
+        minimumDailyOperatingHours: ambientConfig?.minimumDailyOperatingHours ?? room.minimumDailyOperatingHours,
+        maximumDailyOperatingHours: ambientConfig?.maximumDailyOperatingHours ?? room.maximumDailyOperatingHours,
         ugrLimit: ambientConfig?.ugrLimit ?? activityOption?.ugr ?? room.ugrLimit,
         uniformityTarget:
             ambientConfig?.uniformityTarget ??
             activityOption?.uniformity ??
             room.uniformityTarget,
         colorRenderingRa: activityOption?.ra ?? room.colorRenderingRa,
+        raRequiredOverride:
+            ambientConfig?.raRequiredOverride ?? room.raRequiredOverride,
         specificRequirements:
             activityOption?.specificRequirements ?? room.specificRequirements,
         usefulPlaneHeight:
@@ -809,12 +813,16 @@ function buildWallDefinedAmbientSpaces(
             illuminanceLux,
             norma: illuminanceLux,
             dailyOperatingHours: ambientConfig?.dailyOperatingHours ?? room.dailyOperatingHours,
+            minimumDailyOperatingHours: ambientConfig?.minimumDailyOperatingHours ?? room.minimumDailyOperatingHours,
+            maximumDailyOperatingHours: ambientConfig?.maximumDailyOperatingHours ?? room.maximumDailyOperatingHours,
             ugrLimit: ambientConfig?.ugrLimit ?? activityOption?.ugr ?? room.ugrLimit,
             uniformityTarget:
                 ambientConfig?.uniformityTarget ??
                 activityOption?.uniformity ??
                 room.uniformityTarget,
             colorRenderingRa: activityOption?.ra ?? room.colorRenderingRa,
+            raRequiredOverride:
+                ambientConfig?.raRequiredOverride ?? room.raRequiredOverride,
             specificRequirements:
                 activityOption?.specificRequirements ??
                 room.specificRequirements,
@@ -902,12 +910,16 @@ export function deriveAmbientSpaces(
             illuminanceLux,
             norma: illuminanceLux,
             dailyOperatingHours: ambientConfig?.dailyOperatingHours ?? room.dailyOperatingHours,
+            minimumDailyOperatingHours: ambientConfig?.minimumDailyOperatingHours ?? room.minimumDailyOperatingHours,
+            maximumDailyOperatingHours: ambientConfig?.maximumDailyOperatingHours ?? room.maximumDailyOperatingHours,
             ugrLimit: ambientConfig?.ugrLimit ?? activityOption?.ugr ?? room.ugrLimit,
             uniformityTarget:
                 ambientConfig?.uniformityTarget ??
                 activityOption?.uniformity ??
                 room.uniformityTarget,
             colorRenderingRa: activityOption?.ra ?? room.colorRenderingRa,
+            raRequiredOverride:
+                ambientConfig?.raRequiredOverride ?? room.raRequiredOverride,
             specificRequirements:
                 activityOption?.specificRequirements ??
                 room.specificRequirements,
@@ -982,12 +994,16 @@ export function deriveAmbientSpaces(
             illuminanceLux,
             norma: illuminanceLux,
             dailyOperatingHours: ambientConfig?.dailyOperatingHours ?? room.dailyOperatingHours,
+            minimumDailyOperatingHours: ambientConfig?.minimumDailyOperatingHours ?? room.minimumDailyOperatingHours,
+            maximumDailyOperatingHours: ambientConfig?.maximumDailyOperatingHours ?? room.maximumDailyOperatingHours,
             ugrLimit: ambientConfig?.ugrLimit ?? activityOption?.ugr ?? room.ugrLimit,
             uniformityTarget:
                 ambientConfig?.uniformityTarget ??
                 activityOption?.uniformity ??
                 room.uniformityTarget,
             colorRenderingRa: activityOption?.ra ?? room.colorRenderingRa,
+            raRequiredOverride:
+                ambientConfig?.raRequiredOverride ?? room.raRequiredOverride,
             specificRequirements:
                 activityOption?.specificRequirements ??
                 room.specificRequirements,
@@ -1129,4 +1145,3 @@ export function findAmbientSpaceAtPoint(
 ): DerivedAmbientSpace | null {
     return findAmbientSpaceContainingPoint(deriveSceneAmbientSpaces(scene), point);
 }
-

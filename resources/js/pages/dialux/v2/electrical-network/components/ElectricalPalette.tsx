@@ -69,22 +69,29 @@ export function ElectricalPalette({
                                 )}
                             </div>
                             <div className="mt-2 space-y-1 border-l border-slate-300 pl-2 dark:border-slate-700">
-                                {modulePorts.map((port) => (
-                                    <div
-                                        key={port.key}
-                                        className="flex items-center gap-1.5 text-[10px] text-slate-600 dark:text-slate-300"
-                                    >
-                                        <Cable className="h-3 w-3 text-cyan-500" />
-                                        <span className="truncate">
-                                            {port.panelLabel}
-                                        </span>
-                                        {port.parentPanelId && (
-                                            <span className="truncate text-slate-400">
-                                                ← {port.parentPanelId}
+                                {modulePorts.map((port) => {
+                                    const parent = modulePorts.find(
+                                        (candidate) =>
+                                            candidate.panelId ===
+                                            port.parentPanelId,
+                                    );
+                                    return (
+                                        <div
+                                            key={port.key}
+                                            className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-1.5 text-[10px] text-slate-600 dark:text-slate-300"
+                                        >
+                                            <Cable className="mt-0.5 h-3 w-3 text-cyan-500" />
+                                            <span className="truncate font-medium">
+                                                {port.panelLabel}
                                             </span>
-                                        )}
-                                    </div>
-                                ))}
+                                            <span className="col-start-2 truncate text-slate-400">
+                                                {parent
+                                                    ? `Alimentado por ${parent.panelLabel}`
+                                                    : 'Raíz del módulo · alimentado por TG'}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
                             </div>
                             <button
                                 type="button"
@@ -97,8 +104,8 @@ export function ElectricalPalette({
                                     <PlugZap className="h-3.5 w-3.5" />
                                 )}
                                 {imported
-                                    ? 'Sincronizar estructura'
-                                    : 'Conectar módulo al TG'}
+                                    ? 'Actualizar jerarquía del módulo'
+                                    : 'Agregar estructura al lienzo'}
                             </button>
                         </article>
                     );

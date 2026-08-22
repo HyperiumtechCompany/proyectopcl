@@ -59,6 +59,16 @@ describe('resolveRaRequired', () => {
         // EN 12464-1 exige Ra >= 60 para "Vestibulos de entrada" (normativaData.ts).
         expect(resolveRaRequired(room)).toBe(60);
     });
+
+    it('prioriza el requisito Ra completado manualmente cuando la aplicación no lo especifica', () => {
+        const room = buildRoom({
+            normativeStandard: 'en_12464_1',
+            normativeActivity: 'Baño',
+            raRequiredOverride: 80,
+        });
+
+        expect(resolveRaRequired(room)).toBe(80);
+    });
 });
 
 describe('resolveRaCalculated', () => {
