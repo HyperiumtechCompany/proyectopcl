@@ -45,3 +45,7 @@ yarn-error.log
 !/public/dialux-core/pkg/dialux_core.js
 !/public/dialux-core/pkg/dialux_core_bg.wasm
 /.recovery/
+
+# Radiance (LBNL, ~30 MB de binarios) instalado localmente por
+# `npm run setup:radiance` — nunca se versiona, cada máquina lo genera.
+/.radiance/

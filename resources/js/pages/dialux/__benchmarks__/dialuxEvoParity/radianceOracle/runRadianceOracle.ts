@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import type { Fixture, Vertex } from '@/pages/dialux/hooks/types';
 import { generateIesFromFixture } from './generateIes';
@@ -71,18 +72,55 @@ export interface RadianceOracleResult {
     sensorCount: number;
 }
 
+/**
+ * Instalación local automática (`npm run setup:radiance` →
+ * `scripts/setup-radiance.mjs`), 7 niveles arriba de este archivo
+ * (`radianceOracle/` → repo root). No versionada (`.radiance/` está en
+ * `.gitignore`, ~30 MB de binarios) — cada máquina la genera una vez con el
+ * script. Resuelve la fricción real reportada por el usuario: antes había
+ * que exportar `RADIANCE_BIN_DIR` a mano en cada checkout/máquina; con esto,
+ * basta correr el script de setup una vez y los tests de esta carpeta la
+ * encuentran solos, sin ninguna variable de entorno.
+ */
+function localInstallBinDir(): string {
+    const thisFileDir = fileURLToPath(new URL('.', import.meta.url));
+    return join(thisFileDir, '..', '..', '..', '..', '..', '..', '..', '.radiance', 'bin');
+}
+
+/**
+ * Único punto de verdad para "¿hay Radiance disponible?" — usado por el
+ * `describe.skipIf`/`hasRadiance` de cada test de esta carpeta. Antes de
+ * esto, cada test file repetía `Boolean(process.env.RADIANCE_BIN_DIR)`
+ * directamente, lo que hacía que TODOS se saltaran en silencio en una
+ * máquina con Radiance instalado vía `npm run setup:radiance` (fallback
+ * local) pero sin la variable de entorno exportada a mano — exactamente el
+ * caso que el fallback de `resolveBinDir()` existe para resolver.
+ */
+export function isRadianceAvailable(): boolean {
+    if (process.env.RADIANCE_BIN_DIR) {
+        return true;
+    }
+    return existsSync(localInstallBinDir());
+}
+
 function resolveBinDir(): string {
     const configured = process.env.RADIANCE_BIN_DIR;
-    if (!configured) {
-        throw new Error(
-            'RADIANCE_BIN_DIR no está definida. Instala Radiance (ver README.md de esta carpeta) y exporta ' +
-                'RADIANCE_BIN_DIR apuntando a su carpeta "bin" antes de correr el oráculo.',
-        );
+    if (configured) {
+        if (!existsSync(configured)) {
+            throw new Error(`RADIANCE_BIN_DIR apunta a una ruta que no existe: ${configured}`);
+        }
+        return configured;
     }
-    if (!existsSync(configured)) {
-        throw new Error(`RADIANCE_BIN_DIR apunta a una ruta que no existe: ${configured}`);
+
+    const localInstall = localInstallBinDir();
+    if (existsSync(localInstall)) {
+        return localInstall;
     }
-    return configured;
+
+    throw new Error(
+        'No se encontró Radiance. Corre "npm run setup:radiance" (instala en .radiance/, detectado automáticamente) ' +
+            'o exporta RADIANCE_BIN_DIR apuntando a una instalación existente (ver README.md de esta carpeta).',
+    );
 }
 
 function binaryPath(binDir: string, name: string): string {

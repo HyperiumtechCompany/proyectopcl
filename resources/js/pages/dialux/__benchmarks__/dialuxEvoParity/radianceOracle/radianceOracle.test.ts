@@ -6,7 +6,7 @@ import { GRID_SPACING } from '@/pages/dialux/hooks/lightingEngineCore';
 import { getRoomUsefulPlaneHeight } from '@/pages/dialux/hooks/roomLighting';
 import type { Project, Room, Scene } from '@/pages/dialux/hooks/types';
 import { buildCasetaVsGuarderiasFixture, buildSsHhVsBanoFixture, type DialuxEvoParityFixture } from '../fixtures';
-import { runRadianceOracle } from './runRadianceOracle';
+import { isRadianceAvailable, runRadianceOracle } from './runRadianceOracle';
 
 /**
  * Integración con el oráculo de validación Radiance —
@@ -22,7 +22,7 @@ import { runRadianceOracle } from './runRadianceOracle';
  * que calcula en milisegundos) — `TEST_TIMEOUT_MS` está fijado holgado a
  * propósito, no es un valor a "optimizar".
  */
-const hasRadiance = Boolean(process.env.RADIANCE_BIN_DIR);
+const hasRadiance = isRadianceAvailable();
 // Debe ser mayor que `runRadianceOracle`'s `timeoutMs` interno (default
 // 360000 ms) — si no, Vitest podría reportar timeout de test ANTES de que
 // el propio oráculo tenga oportunidad de fallar con un mensaje más claro.

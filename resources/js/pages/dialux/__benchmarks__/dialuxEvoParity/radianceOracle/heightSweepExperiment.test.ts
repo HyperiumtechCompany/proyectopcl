@@ -6,7 +6,7 @@ import { GRID_SPACING } from '@/pages/dialux/hooks/lightingEngineCore';
 import { getRoomUsefulPlaneHeight } from '@/pages/dialux/hooks/roomLighting';
 import type { Project, Room, Scene } from '@/pages/dialux/hooks/types';
 import { buildSsHhVsBanoFixture } from '../fixtures';
-import { runRadianceOracle } from './runRadianceOracle';
+import { isRadianceAvailable, runRadianceOracle } from './runRadianceOracle';
 
 /**
  * Ronda de investigación (2026-08-19): aísla la ALTURA como única variable
@@ -39,7 +39,7 @@ import { runRadianceOracle } from './runRadianceOracle';
  * `radianceOracle.test.ts`: un hallazgo real medido contra Radiance, no un
  * script de depuración descartable.
  */
-const hasRadiance = Boolean(process.env.RADIANCE_BIN_DIR);
+const hasRadiance = isRadianceAvailable();
 const TEST_TIMEOUT_MS = 420_000;
 
 function buildRoomAtHeight(height: number): { room: Room; fixtureZ: number } {

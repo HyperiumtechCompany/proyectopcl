@@ -15,7 +15,8 @@
         "types": "tsc --noEmit",
         "wasm:build": "wasm-pack build dialux-core --target web --out-dir ../public/dialux-core/pkg",
         "wasm:build:release": "wasm-pack build dialux-core --target web --release --out-dir ../public/dialux-core/pkg",
-        "test": "vitest run"
+        "test": "vitest run",
+        "setup:radiance": "node scripts/setup-radiance.mjs"
     },
     "devDependencies": {
         "@eslint/js": "^9.19.0",

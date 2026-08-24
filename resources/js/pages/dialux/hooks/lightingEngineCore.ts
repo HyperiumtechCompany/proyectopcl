@@ -25,7 +25,12 @@ import type { Fixture, LightingResult, Room } from './useEditorStore';
  * `CalculationConfig` — y desde `buildProductionCalculationConfig()`
  * (cierre de brechas `dialux-calc-reviewer`), que es el que usan el botón
  * "Calcular" y el export, los tres SÍ están activos por defecto en
- * producción (`occlusion: true`, `interreflection: 'auto-by-shape'`).
+ * producción (`occlusion: true`, `interreflection: 'iterative'` desde la
+ * Ronda 25 de `plan_cierre_brecha_paridad_dialux_evo.md`, 2026-08-19 — este
+ * comentario decía `'auto-by-shape'`, desactualizado desde ese cambio;
+ * corregido en la Ronda 24, 2026-08-22, tras confirmar con 4 casos reales
+ * triangulados contra Radiance que `iterative` es la aproximación más cerca
+ * de la física real en todos, ver `productionCalculationConfig.ts`).
  * No incrementar sin actualizar los goldens en `hooks/__fixtures__/`.
  */
 export const LIGHTING_ENGINE_VERSION = 'direct-preview-v1';

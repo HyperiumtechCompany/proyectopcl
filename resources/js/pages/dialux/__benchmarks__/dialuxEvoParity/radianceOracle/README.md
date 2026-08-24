@@ -15,23 +15,33 @@ Esto resuelve un bloqueo real que arrastraba la investigación desde antes de es
 
 ## Instalación de Radiance
 
+### Opción recomendada — un comando, sin variables de entorno
+
+```bash
+npm run setup:radiance
+```
+
+Descarga el build oficial más reciente para tu sistema operativo (GitHub Releases de LBNL-ETA/Radiance) y lo instala en `.radiance/` en la raíz del repo (no versionado — cada máquina/checkout lo genera con este comando, idempotente: si ya está instalado no vuelve a descargar). `runRadianceOracle.ts::resolveBinDir()` lo detecta automáticamente ahí — no hace falta exportar `RADIANCE_BIN_DIR` en absoluto con esta opción. Pensado para no repetir la instalación manual en cada máquina/checkout (casa, oficina, CI, etc.).
+
+### Opción manual — instalación propia en cualquier ruta
+
 1. Descargar el build oficial de tu sistema operativo desde <https://github.com/LBNL-ETA/Radiance/releases/latest> (usar el asset `Radiance_<hash>_Windows.zip`, `_Linux.zip`, o el `.pkg`/`.zip` de macOS — NO hace falta instalador, el zip es portable).
 2. Descomprimir en cualquier carpeta, por ejemplo `C:\radiance\` o `~/radiance/`. Debe quedar una carpeta `bin/` (con `oconv`, `rtrace`, `ies2rad`, etc.) y una carpeta `lib/` hermana (con los archivos `.cal` que esos binarios necesitan en tiempo de ejecución).
-3. Exportar la variable de entorno `RADIANCE_BIN_DIR` apuntando a esa carpeta `bin/`:
+3. Exportar la variable de entorno `RADIANCE_BIN_DIR` apuntando a esa carpeta `bin/` — tiene prioridad sobre la instalación automática de `.radiance/` si ambas están presentes:
    - PowerShell: `$env:RADIANCE_BIN_DIR = "C:\radiance\bin"`
    - Bash: `export RADIANCE_BIN_DIR="/ruta/a/radiance/bin"`
 
-**Licencia**: Radiance se distribuye bajo una licencia propia estilo BSD (permisiva, sin copyleft) — ver `License.txt` en el propio repositorio de Radiance. No se vendorea ningún binario de Radiance en este repositorio; cada quien instala su propia copia siguiendo el paso 1.
+**Licencia**: Radiance se distribuye bajo una licencia propia estilo BSD (permisiva, sin copyleft) — ver `License.txt` en el propio repositorio de Radiance. No se vendorea ningún binario de Radiance en este repositorio; cada quien lo instala con `npm run setup:radiance` o siguiendo el paso 1 de la opción manual.
 
 ## Cómo correrlo
 
-Sin `RADIANCE_BIN_DIR` configurada, los tests de esta carpeta se SALTAN automáticamente (nunca fallan por falta de instalación):
+Sin Radiance instalado (ni `.radiance/` local ni `RADIANCE_BIN_DIR`), los tests de esta carpeta se SALTAN automáticamente (nunca fallan por falta de instalación):
 
 ```bash
 npx vitest run resources/js/pages/dialux/__benchmarks__/dialuxEvoParity/radianceOracle
 ```
 
-Con Radiance instalado:
+Con `npm run setup:radiance` ya corrido, el mismo comando de arriba los ejecuta — no hace falta nada más. Para forzar una instalación distinta a la local del repo:
 
 ```bash
 RADIANCE_BIN_DIR=/ruta/a/radiance/bin npx vitest run resources/js/pages/dialux/__benchmarks__/dialuxEvoParity/radianceOracle

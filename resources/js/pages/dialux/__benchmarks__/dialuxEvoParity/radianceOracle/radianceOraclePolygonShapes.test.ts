@@ -6,7 +6,7 @@ import { GRID_SPACING } from '@/pages/dialux/hooks/lightingEngineCore';
 import { getRoomUsefulPlaneHeight } from '@/pages/dialux/hooks/roomLighting';
 import type { Project, Room, Scene } from '@/pages/dialux/hooks/types';
 import { buildAllPolygonShapeFixtures, type PolygonShapeFixture } from './polygonShapeFixtures';
-import { runRadianceOracleForPolygon } from './runRadianceOracle';
+import { isRadianceAvailable, runRadianceOracleForPolygon } from './runRadianceOracle';
 
 /**
  * Ronda 14 (`planes/plan_cierre_brecha_paridad_dialux_evo.md` §-14): a
@@ -20,7 +20,7 @@ import { runRadianceOracleForPolygon } from './runRadianceOracle';
  * Igual que `radianceOracleShapeVariation.test.ts`: se salta automáticamente
  * sin `RADIANCE_BIN_DIR`, y ninguna aserción decide "qué modo es mejor".
  */
-const hasRadiance = Boolean(process.env.RADIANCE_BIN_DIR);
+const hasRadiance = isRadianceAvailable();
 const TEST_TIMEOUT_MS = 720_000;
 const ORACLE_TIMEOUT_MS = 600_000;
 
@@ -58,12 +58,33 @@ function buildProjectForFixture(fixture: PolygonShapeFixture): Project {
     return { id: `${fixture.id}-project`, name: fixture.label, created_at: '', updated_at: '', scenes: [scene] };
 }
 
+/**
+ * `maintenanceFactor: 1` en LAS TRES ramas (no solo 'none') — corregido
+ * 2026-08-22 (`planes/plan_precision_fisica_motor_dialux_vs_evo.md` §2): el
+ * oráculo Radiance reporta valores "como nuevo" (sin factor de
+ * mantenimiento — Radiance no lo conoce, ver README de esta carpeta), pero
+ * `buildProductionCalculationConfig()` aplica el default de producción
+ * (`DEFAULT_DIRECT_PREVIEW_CONFIG.maintenanceFactor = 0.8`, ninguno de estos
+ * `Project` sintéticos declara `siteSettings`). Antes de este fix, 'none' se
+ * forzaba a 1 pero 'first-bounce'/'iterative' se dejaban con el 0.8 de
+ * producción — comparar esos dos contra el oráculo (MF=1) los sub-reportaba
+ * ~20% de forma sistemática, EN TODAS las comparaciones de esta carpeta que
+ * usaban este mismo patrón (`radianceOracleShapeVariation.test.ts` tenía
+ * exactamente el mismo bug). Verificado en el caso real "SS.HH" de Módulo 22
+ * (`modulo22RealCase.test.ts`): con el bug, `iterative` parecía la opción
+ * más cercana a DIALux evo (Δ6.5%); corregido, es `first-bounce` la más
+ * cercana (Δ4.6%) e `iterative` queda mucho más cerca de Radiance/física
+ * real (Δ9.6% vs. Δ19.1% de `first-bounce`) — una conclusión OPUESTA. Los
+ * porcentajes registrados en esta carpeta ANTES de esta fecha para
+ * `first-bounce`/`iterative` deben tratarse con cautela hasta remedirse.
+ */
 async function computeEngineAvgLux(fixture: PolygonShapeFixture, interreflection: 'none' | 'first-bounce' | 'iterative'): Promise<number> {
     const project = buildProjectForFixture(fixture);
     const base = buildProductionCalculationConfig(project);
-    const config = interreflection === 'iterative'
-        ? { ...base, interreflection, maxBounces: 30, convergenceTolerance: 1e-6 }
-        : { ...base, interreflection, maintenanceFactor: interreflection === 'none' ? 1 : base.maintenanceFactor };
+    const config =
+        interreflection === 'iterative'
+            ? { ...base, interreflection, maxBounces: 30, convergenceTolerance: 1e-6, maintenanceFactor: 1 }
+            : { ...base, interreflection, maintenanceFactor: 1 };
     const { resultsByRoom } = await runProjectLightingCalculation(project, config);
     return Object.values(resultsByRoom)[0]!.avg_lux;
 }

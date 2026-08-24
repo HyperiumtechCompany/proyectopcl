@@ -1367,10 +1367,40 @@ export interface Scene {
  *   cambian algún resultado calculado.
  */
 export interface ProjectSiteSettings {
-    /** Factor de mantenimiento (MF). Afecta el cálculo real. Default 0.80. */
+    /**
+     * Factor de mantenimiento (MF) como escalar único. Afecta el cálculo
+     * real. Default 0.80. Sigue siendo la fuente de verdad cuando NO se
+     * declaran los cuatro componentes desagregados de abajo — ver
+     * `domain/calculation/maintenanceFactor.ts::resolveMaintenanceFactor`.
+     */
     maintenanceFactor?: number;
-    /** Solo documental — no cambia cómo se calcula `maintenanceFactor`. */
+    /**
+     * Ya NO es solo documental desde `resolveMaintenanceFactor` (2026-08-22,
+     * `planes/plan_precision_fisica_motor_dialux_vs_evo.md` §3.4) — cuando
+     * `maintenanceMethod === 'cie_97_2005'` Y los cuatro componentes de abajo
+     * están todos declarados, `maintenanceFactor` efectivo se CALCULA como su
+     * producto en vez de leerse del escalar de arriba. Con cualquier otro
+     * valor (incluido `undefined`, el caso de todo proyecto existente), el
+     * comportamiento es idéntico al de siempre — cambio aditivo, no
+     * disruptivo.
+     */
     maintenanceMethod?: 'din_5035' | 'cie_97_2005' | 'iesna' | 'jieg_001';
+    /**
+     * Componentes CIE 97:2005 del factor de mantenimiento —
+     * `MF = LLMF × LSF × LMF × RSMF`. Todos opcionales y 0-1; el motor solo
+     * los usa cuando `maintenanceMethod === 'cie_97_2005'` Y los CUATRO están
+     * presentes (ver doc-comment de `maintenanceMethod`) — declarar solo
+     * algunos no tiene efecto, para no producir un resultado parcialmente
+     * desagregado sin que el usuario lo pidiera explícitamente.
+     */
+    /** Depreciación del flujo luminoso de la lámpara/módulo LED durante el intervalo de mantenimiento (Lamp Lumen Maintenance Factor). */
+    lightLossMaintenanceFactor?: number;
+    /** Fracción de lámparas/módulos que siguen funcionando al final del intervalo (Lamp Survival Factor). 1.0 típico en LED con garantía de vida útil declarada. */
+    luminaireSurvivalFactor?: number;
+    /** Depreciación por suciedad acumulada EN la luminaria (Luminaire Maintenance Factor / Luminaire Dirt Depreciation), según ambiente y tipo de luminaria (IP). */
+    luminaireMaintenanceFactor?: number;
+    /** Depreciación por suciedad acumulada en las superficies del recinto (Room Surface Maintenance Factor), según ambiente e intervalo de limpieza. */
+    roomSurfaceMaintenanceFactor?: number;
     /**
      * Horas de operación diarias asumidas para "Consumo (kWh/a)" en el PDF
      * (`Consumo = Ptotal × horas × 365 / 1000`). Afecta el cálculo real de

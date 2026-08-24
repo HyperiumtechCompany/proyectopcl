@@ -6,7 +6,7 @@ import { GRID_SPACING } from '@/pages/dialux/hooks/lightingEngineCore';
 import { getRoomUsefulPlaneHeight } from '@/pages/dialux/hooks/roomLighting';
 import type { Project, Room, Scene } from '@/pages/dialux/hooks/types';
 import { buildAllShapeVariationFixtures, type ShapeVariationFixture } from './shapeVariationFixtures';
-import { runRadianceOracle } from './runRadianceOracle';
+import { isRadianceAvailable, runRadianceOracle } from './runRadianceOracle';
 
 /**
  * Ronda 6 → siguiente paso concreto (`planes/plan_cierre_brecha_paridad_dialux_evo.md`
@@ -21,7 +21,7 @@ import { runRadianceOracle } from './runRadianceOracle';
  * es mejor" — eso es exactamente la pregunta abierta que este test alimenta
  * con más datos, no algo que un test deba fijar de antemano.
  */
-const hasRadiance = Boolean(process.env.RADIANCE_BIN_DIR);
+const hasRadiance = isRadianceAvailable();
 // Mayor que `radianceOracle.test.ts` (420_000): el caso "large-square" (16 m²,
 // grilla 6x6) mide más superficie/sensores que los fixtures de `fixtures.ts`
 // (~2-4 m²) — la corrida con reflexión completa (`-ab 8`) tardó más de 360s
@@ -55,12 +55,27 @@ function buildProjectForShape(fixture: ShapeVariationFixture): Project {
     return { id: `${fixture.id}-project`, name: fixture.label, created_at: '', updated_at: '', scenes: [scene] };
 }
 
+/**
+ * `maintenanceFactor: 1` en LAS TRES ramas (no solo 'none') — corregido
+ * 2026-08-22 (`planes/plan_precision_fisica_motor_dialux_vs_evo.md` §2,
+ * mismo bug y mismo fix que `radianceOraclePolygonShapes.test.ts`): el
+ * oráculo Radiance reporta valores "como nuevo", pero antes de este fix
+ * 'first-bounce'/'iterative' se dejaban con el 0.8 de
+ * `DEFAULT_DIRECT_PREVIEW_CONFIG` (ningún fixture de este archivo declara
+ * `siteSettings`) — sub-reportaba esos dos modos ~20% de forma sistemática
+ * contra el oráculo en TODAS las filas de este archivo. Verificado con el
+ * caso real "SS.HH" de Módulo 22 (`modulo22RealCase.test.ts`) que el fix
+ * invierte cuál modo queda más cerca de qué referencia. Los porcentajes
+ * `first-bounce`/`iterative` registrados en este archivo ANTES de esta fecha
+ * (Rondas 6-22) deben tratarse con cautela hasta remedirse.
+ */
 async function computeEngineAvgLux(fixture: ShapeVariationFixture, interreflection: 'none' | 'first-bounce' | 'iterative'): Promise<number> {
     const project = buildProjectForShape(fixture);
     const base = buildProductionCalculationConfig(project);
-    const config = interreflection === 'iterative'
-        ? { ...base, interreflection, maxBounces: 30, convergenceTolerance: 1e-6 }
-        : { ...base, interreflection, maintenanceFactor: interreflection === 'none' ? 1 : base.maintenanceFactor };
+    const config =
+        interreflection === 'iterative'
+            ? { ...base, interreflection, maxBounces: 30, convergenceTolerance: 1e-6, maintenanceFactor: 1 }
+            : { ...base, interreflection, maintenanceFactor: 1 };
     const { resultsByRoom } = await runProjectLightingCalculation(project, config);
     return Object.values(resultsByRoom)[0]!.avg_lux;
 }

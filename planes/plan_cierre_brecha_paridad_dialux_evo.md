@@ -1,5 +1,50 @@
 # Plan de cierre de brecha de paridad con DIALux evo (benchmark Pozuzo vs. MÓDULO I)
 
+## -24. Ronda 24 (2026-08-22) — el patrón de la Ronda 23 se CONFIRMA en 3 casos reales adicionales: DIALux evo sub-representa la interreflexión ~25% de forma consistente
+
+A pedido explícito del usuario ("confirmar el patrón primero" antes de tocar cualquier default de producción), se repitió la triangulación motor/Radiance/DIALux evo de la Ronda 23 sobre 3 casos reales más: "Caseta de Control" (Módulo 22, 4.73 m², aspecto ~1:1) y "Aula 1°"/"Aula 2°" (Vinchos, ~43 m² cada una, geometría real de 24-26 vértices por muros-anillo, aspecto ~1:1). Nuevo archivo permanente: `radianceOracle/multiCaseRealTriangulation.test.ts`.
+
+| Caso | Área | DIALux evo | `first-bounce` (Δevo/Δradiance) | `iterative` (Δevo/Δradiance) | Radiance (física real) | Δ(evo, Radiance) |
+|---|---:|---:|---:|---:|---:|---:|
+| SS.HH (Módulo 22) | 2.18 m² | 206 lx | 215.4 (+4.6%/-19.1%) | 240.9 (+16.9%/-9.6%) | 266.5 lx | -29.4% |
+| Caseta de Control (Módulo 22) | 4.73 m² | 203 lx | 199.7 (+1.6%/-20.5%) | 225.8 (+11.2%/-10.1%) | 251.2 lx | -23.8% |
+| Aula 1° (Vinchos) | 43.80 m² | 544 lx | 592.3 (+8.9%/-16.0%) | 618.0 (+13.6%/-12.4%) | 705.2 lx | -29.6% |
+| Aula 2° (Vinchos) | 42.71 m² | 567 lx | 635.6 (+12.1%/-12.5%) | 660.9 (+16.6%/-9.1%) | 726.7 lx | -28.2% |
+
+**El patrón se confirma sin excepción en los 4 casos** (3 proyectos reales distintos, área 2-44 m², aspecto 1:1-2.4:1):
+
+- DIALux evo queda entre -23.8% y -29.6% de la física real (Radiance) — un rango de apenas 6 puntos porcentuales pese a que el área varía 20x. Demasiado consistente para ser casualidad de un solo caso; parece una propiedad sistemática del método de cálculo de DIALux evo (photon shooting con presupuesto de fotones limitado, ver informe de investigación citado en Ronda 22/`plan_precision_fisica_motor_dialux_vs_evo.md`), no un artefacto de geometría puntual.
+- `iterative` es, en los 4 casos, la aproximación MÁS CERCANA a la física real (Δradiance 9.1%-12.4%).
+- `first-bounce` es, en los 4 casos, la aproximación MÁS CERCANA a DIALux evo (Δevo 1.6%-12.1%) — pero por la razón equivocada: no porque sea más correcto, sino porque comparte con DIALux evo el mismo tipo de sub-representación de interreflexión, en magnitud parecida.
+
+**Esto resuelve la contradicción abierta desde la Ronda 22** ("Módulo 22 favorece first-bounce, sshh-vs-bano con Radiance favorece iterative, sin explicación"): no era una contradicción real — first-bounce SIEMPRE se parece más a DIALux evo, e iterative SIEMPRE se parece más a la física real, en los 4 casos con evidencia limpia (post-fix del bug de mantenimiento, Ronda 23). La aparente contradicción de rondas anteriores combinaba el bug de factor de mantenimiento con la comparación correcta-pero-no-triangulada de casos distintos.
+
+**Corrección (mismo día, antes de recomendar un cambio)**: `buildProductionCalculationConfig()` YA usa `interreflection: 'iterative'` como default desde la Ronda 25 (2026-08-19) — no `'auto-by-shape'`. Esta Ronda 24 no propone cambiar el default: lo CONFIRMA con evidencia independiente (Radiance, 4 casos reales), por una vía distinta a la que motivó la Ronda 25. El doc-comment de `lightingEngineCore.ts` que todavía citaba `'auto-by-shape'` como default (desactualizado desde la Ronda 25) se corrigió en esta misma fecha. Ver `plan_precision_fisica_motor_dialux_vs_evo.md` §3.1 para el detalle completo y la decisión de negocio real que sigue abierta: dejar de tratar "parecerse a DIALux evo" como sinónimo de "correcto" al comunicar resultados al cliente.
+
+## -23. Ronda 23 (2026-08-22) — primera triangulación real motor/Radiance/DIALux evo sobre el MISMO caso, y un bug de factor de mantenimiento que sub-reportaba `first-bounce`/`iterative` ~20% en todo el oráculo desde la Ronda 6
+
+Continuación de la Ronda 22 (misma pregunta sin resolver: por qué Módulo 22 favorece `first-bounce` contra DIALux evo mientras `sshh-vs-bano` favorece `iterative` contra Radiance). En vez de otra hipótesis sobre la variable de confusión, se triangularon los TRES vértices —motor propio, Radiance, DIALux evo real— sobre el MISMO ambiente físico exacto por primera vez: "SS.HH" del proyecto real Módulo 22, geometría real de 10 vértices (`deriveSceneAmbientSpaces`, no reconstruida a mano), fotometría real, área 2.18 m², altura 4.67 m. Nuevo archivo permanente: `radianceOracle/modulo22RealCase.test.ts`.
+
+**Bug encontrado antes de poder confiar en el resultado**: `radianceOracleShapeVariation.test.ts` y `radianceOraclePolygonShapes.test.ts` (usados en TODAS las mediciones de first-bounce/iterative vs. Radiance de las Rondas 6-22, incluida la tabla de la Ronda 22 arriba) dejaban `first-bounce`/`iterative` con el factor de mantenimiento de producción (`0.8` — ninguno de esos fixtures declara `siteSettings`), mientras comparaban contra el oráculo Radiance, que reporta explícitamente valores "como nuevo" (sin factor de mantenimiento). Solo la rama `'none'` (luz directa) se forzaba a `maintenanceFactor: 1`. Esto sub-reportaba `first-bounce`/`iterative` ~20% (÷0.8) de forma sistemática en cada fila de esos dos archivos, desde que existen (Ronda 6 en adelante). **No se corrigió `heightSweepExperiment.test.ts`** (la tabla de la Ronda 22, arriba) — no usa el mismo patrón (`computeEngineAvgLux`), pero no se auditó todavía si tiene un problema análogo por otra vía; queda como pendiente explícito, no resuelto.
+
+Corregido (`maintenanceFactor: 1` en las tres ramas de interreflexión) en los tres archivos que sí tenían el patrón, incluido el nuevo `modulo22RealCase.test.ts`.
+
+**Resultado de la triangulación, ya con el fix**:
+
+| | Ē (avg_lux) | Δ vs. DIALux evo (206 lx) | Δ vs. Radiance físico (266.5 lx) |
+|---|---:|---:|---:|
+| Motor propio, directo | 185.3 | -10.0% | -0.5% vs. Radiance directo (186.3 lx) |
+| Motor propio, `first-bounce` | 215.4 | **+4.6%** | -19.1% |
+| Motor propio, `iterative` | 240.9 | +16.9% | **-9.6%** |
+| DIALux evo real | 206 | — | -22.7% |
+| Radiance, radiosidad completa | 266.5 | +29.4% | — |
+
+**Sin el fix, esta misma medición daba la conclusión OPUESTA** (`first-bounce`=172.4 lx Δ16.3%, `iterative`=192.7 lx Δ6.5% — `iterative` parecía ganar). Es la primera evidencia concreta de que parte de la confusión "no hay ganador universal" de las Rondas 6-22 pudo deberse, al menos en parte, a esta comparación no homogénea, no solo a que el ganador dependa genuinamente de la geometría.
+
+**Hallazgo físico, no solo metodológico**: en este caso real, es **DIALux evo quien queda más lejos de la física real** (Radiance, -22.7%) que el propio motor en modo `iterative` (-9.6%). El motor en `first-bounce` es el que más se parece a DIALux evo (+4.6%) — y `first-bounce` es exactamente lo que `auto-by-shape` (el default de producción) ya elige para este aspecto de recinto (~2.4:1). Es decir: sin cambiar nada, la configuración de producción actual YA es la más parecida a DIALux evo en este caso real — pero el precio es alejarse de lo que Radiance calcula como físicamente correcto. Detalle completo y la tensión que esto implica: `planes/plan_precision_fisica_motor_dialux_vs_evo.md` §2/§3.1.
+
+**N=1 — no generalizar todavía.** Próximo paso recomendado: repetir esta misma triangulación sobre "Caseta de Control"/"Ventanilla de atención" (mismo proyecto) y sobre Vinchos (aspecto ~1:1) antes de tocar cualquier default de producción.
+
 ## -22. Ronda 22 (2026-08-19) — la altura NO explica la contradicción first-bounce/iterative; se instaló Radiance para investigarlo con evidencia real
 
 Pregunta pendiente desde antes: el proyecto real "Módulo 22" (SS.HH, aspecto 2.40:1, altura 4.67 m) favorece `first-bounce` frente a DIALux evo; el benchmark `sshh-vs-bano` (aspecto 2.33:1, altura 3.5 m) favorece `iterative` frente al oráculo Radiance — misma familia de aspecto, veredicto contrario, y la única diferencia obvia entre ambos era la altura.

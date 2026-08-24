@@ -1,4 +1,5 @@
 import type { Project } from '@/pages/dialux/hooks/types';
+import { resolveMaintenanceFactor } from './maintenanceFactor';
 import { DEFAULT_DIRECT_PREVIEW_CONFIG, type CalculationConfig } from './types';
 
 /**
@@ -171,7 +172,13 @@ import { DEFAULT_DIRECT_PREVIEW_CONFIG, type CalculationConfig } from './types';
 export function buildProductionCalculationConfig(project: Project): CalculationConfig {
     return {
         ...DEFAULT_DIRECT_PREVIEW_CONFIG,
-        maintenanceFactor: project.siteSettings?.maintenanceFactor ?? DEFAULT_DIRECT_PREVIEW_CONFIG.maintenanceFactor,
+        // `resolveMaintenanceFactor` (§3.4 del plan de precisión, 2026-08-22):
+        // desagrega en LLMF×LSF×LMF×RSMF (CIE 97:2005) SOLO cuando el
+        // proyecto declara `maintenanceMethod: 'cie_97_2005'` y los 4
+        // componentes — en cualquier otro caso es exactamente
+        // `project.siteSettings?.maintenanceFactor ?? DEFAULT`, idéntico al
+        // comportamiento de antes de esta función (no disruptivo).
+        maintenanceFactor: resolveMaintenanceFactor(project.siteSettings),
         occlusion: true,
         interreflection: 'iterative',
         maxBounces: 100,
