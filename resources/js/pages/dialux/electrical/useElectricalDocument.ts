@@ -405,6 +405,33 @@ export function useElectricalDocument({
                             Math.round(totals.demandPowerW * 100) / 100,
                         derived_summary: {
                             version: 1,
+                            circuits: derivedRef.current.circuits.map(
+                                (circuit) => {
+                                    const source = document.circuits.find(
+                                        (candidate) =>
+                                            candidate.id === circuit.circuitId,
+                                    );
+                                    const panel = document.panels.find(
+                                        (candidate) =>
+                                            candidate.id === circuit.panelId,
+                                    );
+                                    const floor = document.floors.find(
+                                        (candidate) =>
+                                            candidate.id === panel?.floorId,
+                                    );
+
+                                    return {
+                                        ...circuit,
+                                        floorId:
+                                            floor?.id ?? panel?.floorId ?? null,
+                                        floorName: floor?.name ?? 'Sin nivel',
+                                        description: source?.description ?? '',
+                                    };
+                                },
+                            ),
+                            feeders: derivedRef.current.feeders.map(
+                                (feeder) => ({ ...feeder }),
+                            ),
                             panels: derivedRef.current.panels.map((panel) => {
                                 const sourcePanel = document.panels.find(
                                     (candidate) =>

@@ -1443,12 +1443,11 @@ test('formal dialux blade Consumo uses siteSettings.dailyOperatingHours when the
         'tocChunks' => [],
     ]);
 
-    // Sin perfil LENI se publica el consumo calibrado y el escenario máximo configurado.
-    $view->assertSee('58 kWh/a', false);
-    $view->assertDontSee('29 kWh/a', false);
-    $view->assertSee('m&aacute;x. 88 kWh/a', false);
+    // Sin perfil LENI se publican juntos los tres escenarios configurados.
+    $view->assertSee('29 / <strong>58</strong> / 88 kWh/a', false);
+    $view->assertSee('2.0 / 4.0 / 6.0 h/d&iacute;a', false);
     $view->assertSee('Potencia instalada (W)', false);
-    $view->assertSee('jornada m&aacute;xima configurada (6 h/d&iacute;a)', false);
+    $view->assertSee('m&iacute;nima (2 h/d&iacute;a)', false);
     $view->assertDontSee('117 kWh/a');
     // Ronda 21h: sin una fuente normativa real de límite de consumo anual,
     // el renglón es informativo — nunca "Conforme"/"No conforme" (antes
@@ -1531,8 +1530,8 @@ test('formal dialux blade Consumo defaults to 8h/dia when the ambient does not d
     ]);
 
     // Consumo = 40 W * 8 h/dia * 365 / 1000 = 116.8 kWh/a.
-    $view->assertSee('117 kWh/a', false);
-    $view->assertSee('8 h/d&iacute;a &times; 365', false);
+    $view->assertSee('88 / <strong>117</strong> / 146 kWh/a', false);
+    $view->assertSee('6.0 / 8.0 / 10.0 h/d&iacute;a', false);
 });
 
 test('formal dialux blade renders LENI consumption and its uncontrolled reference in one row', function () {

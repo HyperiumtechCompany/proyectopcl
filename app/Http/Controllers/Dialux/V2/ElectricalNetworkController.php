@@ -27,6 +27,16 @@ class ElectricalNetworkController extends Controller
             'network' => ['version' => $network->version, 'data' => $network->data],
             'ports' => $this->networks->portsFor($dialuxProject),
             'conductors' => $this->networks->conductorsFor($dialuxProject),
+            'moduleScenes' => $dialuxProject->modules()
+                ->where('kind', '!=', 'general')
+                ->get(['id', 'name', 'data'])
+                ->map(fn ($module): array => [
+                    'moduleId' => $module->id,
+                    'moduleName' => $module->name,
+                    'data' => $module->data,
+                    'scenes' => $module->data['scenes'] ?? [],
+                ])
+                ->values(),
         ];
 
         if (request()->wantsJson()) {

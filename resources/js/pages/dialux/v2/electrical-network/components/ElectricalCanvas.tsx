@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import type { EdgeCalculation } from '../domain/calculations';
 import type {
     ElectricalNetworkData,
     ModuleElectricalPort,
@@ -15,6 +16,7 @@ interface Props {
     onFinishConnection: (id: string) => void;
     onMove: (id: string, point: Point) => void;
     onRemove: (id: string) => void;
+    calculations: EdgeCalculation[];
 }
 
 export function ElectricalCanvas({
@@ -27,6 +29,7 @@ export function ElectricalCanvas({
     onFinishConnection,
     onMove,
     onRemove,
+    calculations,
 }: Props) {
     const svgRef = useRef<SVGSVGElement>(null);
     const dragRef = useRef<
@@ -103,6 +106,9 @@ export function ElectricalCanvas({
                 const y2 = target.position.y + 56;
                 const middle = (x1 + x2) / 2;
                 const path = `M ${x1} ${y1} C ${middle} ${y1}, ${middle} ${y2}, ${x2} ${y2}`;
+                const calculation = calculations.find(
+                    (item) => item.edgeId === edge.id,
+                );
                 return (
                     <g
                         key={edge.id}
@@ -135,7 +141,7 @@ export function ElectricalCanvas({
                             textAnchor="middle"
                             className="pointer-events-none fill-slate-500 text-[10px] dark:fill-slate-300"
                         >
-                            {edge.label ?? 'Alimentador'}
+                            {`${edge.label ?? 'Alimentador'} · ${edge.horizontalLengthM + edge.verticalLengthM > 0 ? `${(edge.horizontalLengthM + edge.verticalLengthM).toFixed(1)} m` : 'longitud pendiente'}${calculation && calculation.lengthM > 0 && calculation.demandPowerW > 0 ? ` · ΔU ${calculation.ownVoltageDropPercent.toFixed(2)}%` : ''}`}
                         </text>
                     </g>
                 );
@@ -154,6 +160,13 @@ export function ElectricalCanvas({
                         transform={`translate(${node.position.x} ${node.position.y})`}
                         className="cursor-grab active:cursor-grabbing"
                         onPointerDown={(event) => {
+                            if (
+                                connectingFrom &&
+                                connectingFrom !== node.id
+                            ) {
+                                event.stopPropagation();
+                                return;
+                            }
                             const svg = svgRef.current;
                             if (!svg) return;
                             event.stopPropagation();
@@ -167,7 +180,14 @@ export function ElectricalCanvas({
                         }}
                         onClick={(event) => {
                             event.stopPropagation();
-                            onSelect(node.id);
+                            if (
+                                connectingFrom &&
+                                connectingFrom !== node.id
+                            ) {
+                                onFinishConnection(node.id);
+                            } else {
+                                onSelect(node.id);
+                            }
                         }}
                     >
                         <rect
@@ -207,13 +227,13 @@ export function ElectricalCanvas({
                                 y="92"
                                 className="fill-slate-500 text-[10px] dark:fill-slate-400"
                             >
-                                {sceneName}
+                                {`${sceneName}${port && port.installedPowerW > 0 ? ` · ${(port.installedPowerW / 1000).toFixed(2)} kW` : ' · sin carga'}`}
                             </text>
                         )}
                         <circle
                             cx="0"
                             cy="56"
-                            r="8"
+                            r={connectingFrom ? 13 : 9}
                             className="cursor-crosshair fill-slate-400 stroke-white stroke-2 dark:stroke-slate-900"
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={(event) => {
@@ -224,14 +244,28 @@ export function ElectricalCanvas({
                         <circle
                             cx="200"
                             cy="56"
-                            r="8"
+                            r="11"
                             className={`cursor-crosshair stroke-white stroke-2 dark:stroke-slate-900 ${connectingFrom === node.id ? 'fill-amber-500' : 'fill-cyan-500'}`}
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={(event) => {
                                 event.stopPropagation();
                                 onStartConnection(node.id);
                             }}
-                        />
+                        >
+                            <title>
+                                Iniciar conexión desde {node.label}
+                            </title>
+                        </circle>
+                        {connectingFrom && connectingFrom !== node.id && (
+                            <text
+                                x="100"
+                                y="105"
+                                textAnchor="middle"
+                                className="pointer-events-none fill-emerald-500 text-[10px] font-bold"
+                            >
+                                CLIC PARA CONECTAR
+                            </text>
+                        )}
                         {node.type === 'module_panel_port' && (
                             <g
                                 className="cursor-pointer"

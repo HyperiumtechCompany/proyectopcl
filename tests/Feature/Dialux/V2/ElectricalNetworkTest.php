@@ -41,8 +41,40 @@ test('an owner can load ports and persist a versioned electrical network', funct
         'frequency_hz' => 60,
         'installed_power_w' => 7200,
         'demand_power_w' => 5400,
+        'data' => [
+            'feeders' => [[
+                'id' => 'feeder-td-01',
+                'fromPanelId' => 'td-1',
+                'toPanelId' => 'td-01',
+                'lengthM' => 15,
+                'manualLengthM' => 28,
+            ]],
+        ],
         'derived_summary' => [
             'version' => 1,
+            'circuits' => [[
+                'circuitId' => 'c-1',
+                'panelId' => 'td-1',
+                'floorId' => 'floor-1',
+                'floorName' => 'Piso 1',
+                'code' => 'C-1',
+                'type' => 'lighting',
+                'description' => 'Alumbrado Piso 1',
+                'totalPowerW' => 7200,
+                'demandPowerW' => 5400,
+                'currentA' => 8.2,
+                'designCurrentA' => 10.25,
+                'lengthM' => 42,
+                'calculatedHorizontalLengthM' => 38,
+                'calculatedVerticalLengthM' => 4,
+                'sectionMm2' => 4,
+                'conductorLabel' => '4 mmÂ² Cu THW-90',
+                'breakerA' => 16,
+                'voltageDropPct' => 1.1,
+                'cumulativeVoltageDropPct' => 1.1,
+                'status' => 'ok',
+                'warnings' => [],
+            ]],
             'panels' => [[
                 'panelId' => 'td-1',
                 'parentPanelId' => 'td-01',
@@ -55,6 +87,7 @@ test('an owner can load ports and persist a versioned electrical network', funct
             ], [
                 'panelId' => 'td-01',
                 'parentPanelId' => 'td-1',
+                'feederLengthM' => 0,
                 'installedPowerW' => 2400,
                 'demandPowerW' => 1800,
                 'ownInstalledPowerW' => 2400,
@@ -72,6 +105,21 @@ test('an owner can load ports and persist a versioned electrical network', funct
             'conductors' => [['id' => 'wire-1', 'sourceId' => 'a', 'targetId' => 'b']],
         ]]],
     ]);
+    $planOnlyModule = DialuxModule::factory()->for($project, 'project')->create([
+        'name' => 'Módulo desde plano',
+        'data' => ['scenes' => [[
+            'id' => 'floor-plan',
+            'name' => 'Piso carga',
+            'fixtures' => [['id' => 'lum-1', 'power' => 54]],
+            'electricalDevices' => [[
+                'id' => 'td-plan', 'type' => 'sub_panel', 'label' => 'TD-PLAN',
+                'properties' => [],
+            ], [
+                'id' => 'outlet-1', 'type' => 'outlet_floor', 'label' => 'T-1',
+                'properties' => ['ratedPowerW' => 180],
+            ]],
+        ]]],
+    ]);
 
     $response = $this->actingAs($user)->getJson(route('dialux-v2.projects.electrical-network.show', $project))
         ->assertSuccessful()
@@ -81,15 +129,24 @@ test('an owner can load ports and persist a versioned electrical network', funct
         ->assertJsonPath('ports.0.demandPowerW', 5400)
         ->assertJsonPath('ports.0.currentA', 8.2)
         ->assertJsonPath('ports.0.mainBreakerA', 16)
+        ->assertJsonPath('ports.0.circuits.0.code', 'C-1')
+        ->assertJsonPath('ports.0.circuits.0.lengthM', 42)
         ->assertJsonPath('ports.0.parentPanelId', null)
         ->assertJsonPath('ports.1.panelLabel', 'TD-01')
-        ->assertJsonPath('ports.1.parentPanelId', 'td-1');
+        ->assertJsonPath('ports.1.parentPanelId', 'td-1')
+        ->assertJsonPath('ports.1.feederLengthM', 28);
 
     $fallbackPort = collect($response->json('ports'))->firstWhere('moduleId', $wiredModule->id);
     expect($fallbackPort)
         ->not->toBeNull()
         ->and($fallbackPort['panelLabel'])->toBe('Entrada · Módulo cableado')
         ->and($fallbackPort['isFallback'])->toBeTrue();
+
+    $planPort = collect($response->json('ports'))->firstWhere('moduleId', $planOnlyModule->id);
+    expect($planPort)
+        ->not->toBeNull()
+        ->and($planPort['installedPowerW'])->toBe(234)
+        ->and($planPort['demandPowerW'])->toBe(234);
 
     $snapshot = $response->json('network');
     $this->actingAs($user)->putJson(route('dialux-v2.projects.electrical-network.update', $project), $snapshot)

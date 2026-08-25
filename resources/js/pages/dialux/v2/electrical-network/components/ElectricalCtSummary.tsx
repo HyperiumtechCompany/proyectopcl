@@ -22,8 +22,25 @@ export function ElectricalCtSummary({
     const feeders = calculations.filter((item) =>
         moduleEdgeIds.has(item.edgeId),
     );
-    const demandPowerW = feeders.reduce(
-        (maximum, item) => Math.max(maximum, item.demandPowerW),
+    const mainPanelNodeIds = new Set(
+        data.nodes
+            .filter((node) => node.type === 'main_panel')
+            .map((node) => node.id),
+    );
+    const rootFeederIds = new Set(
+        data.edges
+            .filter(
+                (edge) =>
+                    mainPanelNodeIds.has(edge.sourceNodeId) &&
+                    moduleNodeIds.has(edge.targetNodeId),
+            )
+            .map((edge) => edge.id),
+    );
+    const rootFeeders = feeders.filter((item) =>
+        rootFeederIds.has(item.edgeId),
+    );
+    const demandPowerW = rootFeeders.reduce(
+        (total, item) => total + item.demandPowerW,
         0,
     );
     const maxCurrentA = feeders.reduce(

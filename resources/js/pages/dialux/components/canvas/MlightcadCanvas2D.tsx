@@ -2169,7 +2169,19 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                                   `${pendingCalibration.cadDistance.toFixed(4)} ud CAD → ingresa la medida real`
                                 : ui.activeTool === 'calibrate' &&
                                     visibleCalibrationLine
-                                  ? 'Selecciona el segundo punto (Shift = ortogonal)'
+                                  ? // Distancia CAD en vivo mientras se arrastra el segundo
+                                    // punto — antes solo se veía el texto de ayuda y el
+                                    // número aparecía recién al soltar, sin forma de
+                                    // verificar el tramo mientras se traza (mismo patrón
+                                    // que ya usa OverlayMeasureDistance para "Medir").
+                                    `${(
+                                        Math.hypot(
+                                            visibleCalibrationLine.end.x -
+                                                visibleCalibrationLine.start.x,
+                                            visibleCalibrationLine.end.y -
+                                                visibleCalibrationLine.start.y,
+                                        ) / (effectiveScale > 0 ? effectiveScale : 1)
+                                    ).toFixed(4)} ud CAD — Shift = ortogonal`
                                   : null
                         }
                     />

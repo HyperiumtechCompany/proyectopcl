@@ -3,6 +3,7 @@ import { calculateElectricalNetwork } from '../domain/calculations';
 import { canConnect, validateElectricalNetwork } from '../domain/graph';
 import type {
     ElectricalEdge,
+    ElectricalNetworkData,
     ElectricalNode,
     ElectricalNetworkSnapshot,
     ModuleElectricalPort,
@@ -18,8 +19,88 @@ export function useElectricalNetwork(
     initial: ElectricalNetworkSnapshot,
     ports: ModuleElectricalPort[],
     conductors: ConductorCatalog[],
+    panelFeederGeometry: Record<
+        string,
+        {
+            horizontalLengthM: number;
+            verticalLengthM: number;
+            mountingHeightM: number;
+            ceilingRiseM: number;
+            x: number;
+            y: number;
+            sceneId: string;
+            floorElevationM: number;
+        }
+    > = {},
 ) {
-    const [snapshot, setSnapshot] = useState(initial);
+    const [snapshot, setSnapshot] = useState(() => ({
+        ...initial,
+        data: {
+            ...initial.data,
+            edges: initial.data.edges.map((edge) => {
+                const target = initial.data.nodes.find(
+                    (node) => node.id === edge.targetNodeId,
+                );
+                const source = initial.data.nodes.find(
+                    (node) => node.id === edge.sourceNodeId,
+                );
+                if (!target?.deviceId) return edge;
+                const geometry = panelFeederGeometry[target.deviceId];
+                if (source?.type === 'main_panel') {
+                    const verticalLengthM =
+                        (geometry?.floorElevationM ?? 0) +
+                        (geometry?.mountingHeightM ?? 1.9);
+                    const currentTotal =
+                        edge.horizontalLengthM + edge.verticalLengthM;
+                    const usesDefaultTotal =
+                        currentTotal <= 0 ||
+                        Math.abs(currentTotal - 200) < 0.05;
+                    return {
+                        ...edge,
+                        lengthMode: usesDefaultTotal
+                            ? ('combined' as const)
+                            : edge.lengthMode,
+                        horizontalLengthM: usesDefaultTotal
+                            ? Math.max(0, 200 - verticalLengthM)
+                            : edge.horizontalLengthM,
+                        verticalLengthM,
+                    };
+                }
+                if (!geometry) return edge;
+                const sourceGeometry = source?.deviceId
+                    ? panelFeederGeometry[source.deviceId]
+                    : undefined;
+                const crossesLevels =
+                    sourceGeometry !== undefined &&
+                    sourceGeometry.sceneId !== geometry.sceneId;
+                const verticalLengthM = crossesLevels
+                    ? Math.abs(
+                          geometry.floorElevationM +
+                              geometry.mountingHeightM -
+                              (sourceGeometry.floorElevationM +
+                                  sourceGeometry.mountingHeightM),
+                      )
+                    : geometry.verticalLengthM > 0
+                      ? geometry.verticalLengthM
+                      : (sourceGeometry?.ceilingRiseM ?? 1.6) +
+                        geometry.mountingHeightM;
+                const horizontalLengthM = crossesLevels
+                    ? Math.hypot(
+                          geometry.x - sourceGeometry.x,
+                          geometry.y - sourceGeometry.y,
+                      )
+                    : geometry.horizontalLengthM > 0
+                      ? geometry.horizontalLengthM
+                      : edge.horizontalLengthM;
+                return {
+                    ...edge,
+                    lengthMode: 'plan' as const,
+                    horizontalLengthM,
+                    verticalLengthM,
+                };
+            }),
+        },
+    }));
     const [selectedId, setSelectedId] = useState<string>();
     const [connectingFrom, setConnectingFrom] = useState<string>();
     const [saving, setSaving] = useState(false);
@@ -57,11 +138,25 @@ export function useElectricalNetwork(
             ),
         }));
     const changeNodeParent = (nodeId: string, parentId: string) => {
-        if (!parentId || parentId === nodeId) return;
+        if (parentId === nodeId) return;
+        if (!parentId) {
+            change((data) => ({
+                ...data,
+                edges: data.edges.filter(
+                    (edge) => edge.targetNodeId !== nodeId,
+                ),
+            }));
+            setMessage(
+                'Tablero desconectado. Puedes conectarlo desde el TG u otro tablero del mismo módulo.',
+            );
+            return;
+        }
         change((data) => {
             const withoutIncoming = {
                 ...data,
-                edges: data.edges.filter((edge) => edge.targetNodeId !== nodeId),
+                edges: data.edges.filter(
+                    (edge) => edge.targetNodeId !== nodeId,
+                ),
             };
             if (!canConnect(withoutIncoming, parentId, nodeId)) return data;
             const source = data.nodes.find((node) => node.id === parentId);
@@ -87,7 +182,9 @@ export function useElectricalNetwork(
                 ],
             };
         });
-        setMessage('Tablero alimentador actualizado. Completa la longitud del tramo.');
+        setMessage(
+            'Tablero alimentador actualizado. Completa la longitud del tramo.',
+        );
     };
     const connectModuleToTg = (moduleId: number) => {
         const modulePorts = ports.filter((port) => port.moduleId === moduleId);
@@ -145,12 +242,32 @@ export function useElectricalNetwork(
                 sourceNodeId: string,
                 targetNodeId: string,
                 label: string,
-                lengthM = 0,
+                geometry = { horizontalLengthM: 0, verticalLengthM: 0 },
             ) => {
                 const incoming = edges.find(
                     (edge) => edge.targetNodeId === targetNodeId,
                 );
-                if (incoming?.sourceNodeId === sourceNodeId) return;
+                if (incoming?.sourceNodeId === sourceNodeId) {
+                    if (
+                        geometry.horizontalLengthM + geometry.verticalLengthM >
+                            0 &&
+                        incoming.horizontalLengthM + incoming.verticalLengthM <=
+                            0
+                    ) {
+                        edges = edges.map((edge) =>
+                            edge.id === incoming.id
+                                ? {
+                                      ...edge,
+                                      horizontalLengthM:
+                                          geometry.horizontalLengthM,
+                                      verticalLengthM: geometry.verticalLengthM,
+                                      lengthMode: 'plan',
+                                  }
+                                : edge,
+                        );
+                    }
+                    return;
+                }
                 if (incoming) {
                     edges = edges.filter((edge) => edge.id !== incoming.id);
                 }
@@ -159,9 +276,13 @@ export function useElectricalNetwork(
                     sourceNodeId,
                     targetNodeId,
                     label,
-                    lengthMode: lengthM > 0 ? 'plan' : 'manual',
-                    horizontalLengthM: lengthM,
-                    verticalLengthM: 0,
+                    lengthMode:
+                        geometry.horizontalLengthM + geometry.verticalLengthM >
+                        0
+                            ? 'plan'
+                            : 'manual',
+                    horizontalLengthM: geometry.horizontalLengthM,
+                    verticalLengthM: geometry.verticalLengthM,
                     conductorType: 'N2XOH',
                     conductorMaterial: 'copper',
                     sectionMm2: 10,
@@ -175,13 +296,73 @@ export function useElectricalNetwork(
                 const parentId = port.parentPanelId
                     ? nodeIdByPanel.get(port.parentPanelId)
                     : undefined;
+                const parentPort = port.parentPanelId
+                    ? modulePorts.find(
+                          (candidate) =>
+                              candidate.panelId === port.parentPanelId,
+                      )
+                    : undefined;
                 addEdge(
                     parentId ?? tg.id,
                     targetId,
                     parentId
-                        ? `${port.moduleName}: ${port.parentPanelId} → ${port.panelLabel}`
+                        ? `${parentPort?.panelLabel ?? 'Tablero'} → ${port.panelLabel}`
                         : `TG → ${port.moduleName}: ${port.panelLabel}`,
-                    parentId ? (port.feederLengthM ?? 0) : 0,
+                    parentId
+                        ? (() => {
+                              const targetGeometry =
+                                  panelFeederGeometry[port.panelId];
+                              const sourceGeometry = port.parentPanelId
+                                  ? panelFeederGeometry[port.parentPanelId]
+                                  : undefined;
+                              const crossesLevels =
+                                  sourceGeometry !== undefined &&
+                                  targetGeometry !== undefined &&
+                                  sourceGeometry.sceneId !==
+                                      targetGeometry.sceneId;
+                              const verticalLengthM = crossesLevels
+                                  ? Math.abs(
+                                        targetGeometry.floorElevationM +
+                                            targetGeometry.mountingHeightM -
+                                            (sourceGeometry.floorElevationM +
+                                                sourceGeometry.mountingHeightM),
+                                    )
+                                  : targetGeometry?.verticalLengthM &&
+                                      targetGeometry.verticalLengthM > 0
+                                    ? targetGeometry.verticalLengthM
+                                    : (sourceGeometry?.ceilingRiseM ?? 1.6) +
+                                      (targetGeometry?.mountingHeightM ?? 1.9);
+                              return {
+                                  horizontalLengthM: crossesLevels
+                                      ? Math.hypot(
+                                            targetGeometry.x - sourceGeometry.x,
+                                            targetGeometry.y - sourceGeometry.y,
+                                        )
+                                      : targetGeometry?.horizontalLengthM &&
+                                          targetGeometry.horizontalLengthM > 0
+                                        ? targetGeometry.horizontalLengthM
+                                        : Math.max(
+                                              0,
+                                              (port.feederLengthM ?? 0) -
+                                                  verticalLengthM,
+                                          ),
+                                  verticalLengthM,
+                              };
+                          })()
+                        : (() => {
+                              const verticalLengthM =
+                                  (panelFeederGeometry[port.panelId]
+                                      ?.floorElevationM ?? 0) +
+                                  (panelFeederGeometry[port.panelId]
+                                      ?.mountingHeightM ?? 1.9);
+                              return {
+                                  horizontalLengthM: Math.max(
+                                      0,
+                                      200 - verticalLengthM,
+                                  ),
+                                  verticalLengthM,
+                              };
+                          })(),
                 );
             }
 
@@ -198,6 +379,10 @@ export function useElectricalNetwork(
     const startConnection = (sourceId: string) => {
         setConnectingFrom(sourceId);
         setMessage('Selecciona el puerto de entrada del tablero destino.');
+    };
+    const cancelConnection = () => {
+        setConnectingFrom(undefined);
+        setMessage('Conexión cancelada.');
     };
     const finishConnection = (targetId: string) => {
         if (!connectingFrom) {
@@ -259,6 +444,13 @@ export function useElectricalNetwork(
                 edge.id === edgeId ? { ...edge, ...patch } : edge,
             ),
         }));
+    const updateSettings = (
+        patch: Partial<ElectricalNetworkData['settings']>,
+    ) =>
+        change((data) => ({
+            ...data,
+            settings: { ...data.settings, ...patch },
+        }));
     const removeById = (targetId: string) => {
         change((data) => ({
             ...data,
@@ -312,8 +504,10 @@ export function useElectricalNetwork(
         changeNodeParent,
         connectModuleToTg,
         startConnection,
+        cancelConnection,
         finishConnection,
         updateEdge,
+        updateSettings,
         removeSelected,
         removeById,
         save,

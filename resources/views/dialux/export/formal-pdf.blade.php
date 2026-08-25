@@ -519,24 +519,33 @@
                     ? $usefulPowerDensity / ((float) $referenceLux / 100)
                     : null;
             $dailyOperatingHours = (float) ($detail['dailyOperatingHours'] ?? 8);
-            $maximumDailyOperatingHours = (float) ($detail['maximumDailyOperatingHours'] ?? $dailyOperatingHours);
+            $minimumDailyOperatingHours = min(
+                $dailyOperatingHours,
+                max(0, (float) ($detail['minimumDailyOperatingHours'] ?? ($dailyOperatingHours - 2)))
+            );
+            $maximumDailyOperatingHours = max(
+                $dailyOperatingHours,
+                min(24, (float) ($detail['maximumDailyOperatingHours'] ?? ($dailyOperatingHours + 2)))
+            );
             // Con evaluación energética se usa EN 15193: perfil anual y
             // factores de control. P × h/día × 365 solo es el respaldo
             // informativo cuando el proyecto aún no tiene perfil LENI.
             $leni = $detail['leni'] ?? null;
-            $consumption = $leni['lightingEnergyKwhYear'] ?? (
-                ($detail['totalPowerWatts'] ?? null) !== null
-                    ? ((float) $detail['totalPowerWatts'] * $dailyOperatingHours * 365) / 1000
-                    : null
-            );
-            $maximumConsumption = $leni['referenceEnergyKwhYear'] ?? (
-                ($detail['totalPowerWatts'] ?? null) !== null
-                    ? ((float) $detail['totalPowerWatts'] * max($dailyOperatingHours, $maximumDailyOperatingHours) * 365) / 1000
-                    : null
-            );
+            $totalPowerWatts = ($detail['totalPowerWatts'] ?? null) !== null
+                ? (float) $detail['totalPowerWatts']
+                : null;
+            $minimumConsumption = $totalPowerWatts !== null
+                ? ($totalPowerWatts * $minimumDailyOperatingHours * 365) / 1000
+                : null;
+            $consumption = $totalPowerWatts !== null
+                ? ($totalPowerWatts * $dailyOperatingHours * 365) / 1000
+                : null;
+            $maximumConsumption = $totalPowerWatts !== null
+                ? ($totalPowerWatts * $maximumDailyOperatingHours * 365) / 1000
+                : null;
             $consumptionPassesReference =
-                $consumption !== null && $maximumConsumption !== null
-                    ? (float) $consumption <= (float) $maximumConsumption + 0.000001
+                $leni !== null
+                    ? (float) ($leni['lightingEnergyKwhYear'] ?? 0) <= (float) ($leni['referenceEnergyKwhYear'] ?? 0) + 0.000001
                     : null;
             // Nunca se convierte el targetLux en kWh/a. El máximo mostrado es
             // exclusivamente la referencia energética del mismo perfil sin
@@ -664,12 +673,24 @@
                 </tr>
                 <tr>
                     <td><strong>Valores de consumo</strong></td>
-                    <td>Consumo</td>
+                    <td>M&iacute;nimo / Uso / M&aacute;ximo</td>
                     <td class="result-number">' .
-                $formatNumber($consumption, 0, ' kWh/a') .
+                '<span style="white-space:nowrap;">' .
+                $formatNumber($minimumConsumption, 0) .
+                ' / <strong>' .
+                $formatNumber($consumption, 0) .
+                '</strong> / ' .
+                $formatNumber($maximumConsumption, 0, ' kWh/a') .
+                '</span>' .
                 '</td>
                     <td class="result-number">' .
-                ($maximumConsumption !== null ? 'm&aacute;x. ' . $formatNumber($maximumConsumption, 0, ' kWh/a') : '-') .
+                '<span style="white-space:nowrap;">' .
+                $formatNumber($minimumDailyOperatingHours, 1) .
+                ' / ' .
+                $formatNumber($dailyOperatingHours, 1) .
+                ' / ' .
+                $formatNumber($maximumDailyOperatingHours, 1, ' h/d&iacute;a') .
+                '</span>' .
                 '</td>
                     <td class="result-check">' .
                 ($leni === null
@@ -687,7 +708,11 @@
                     <td class="result-number">' .
                         $formatNumber($detail['leni']['leniKwhPerM2Year'] ?? null, 1, ' kWh/(m&sup2;&middot;a)') .
                         '</td>
-                    <td class="result-number">-</td>
+                    <td class="result-number">' .
+                        (($detail['leni']['referenceEnergyKwhYear'] ?? null) !== null
+                            ? 'm&aacute;x. ' . $formatNumber($detail['leni']['referenceEnergyKwhYear'], 0, ' kWh/a')
+                            : '-') .
+                        '</td>
                     <td class="result-check">' .
                         '<span class="verification-status status-not-regulated">Calculado (3)</span>' .
                         '</td>
@@ -724,11 +749,13 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
             [(t<sub>D</sub> &times; F<sub>O</sub> &times; F<sub>D</sub>) + (t<sub>N</sub> &times; F<sub>O</sub>)]
             &divide; 1000. La referencia m&aacute;xima usa el mismo perfil sin reducciones
             (F<sub>C</sub> = F<sub>O</sub> = F<sub>D</sub> = 1).'
-                    : 'Estimaci&oacute;n simple: Consumo anual (kWh/a) = Potencia instalada (W) &times; ' .
+                    : 'Estimaci&oacute;n simple: Consumo anual (kWh/a) = Potencia instalada (W) &times; horas de uso diario &times; 365 &divide; 1000. Los tres valores corresponden a las jornadas configuradas: m&iacute;nima (' .
+                        rtrim(rtrim(number_format($minimumDailyOperatingHours, 1, '.', ''), '0'), '.') .
+                        ' h/d&iacute;a), uso (' .
                         rtrim(rtrim(number_format($dailyOperatingHours, 1, '.', ''), '0'), '.') .
-                        ' h/d&iacute;a &times; 365 &divide; 1000. El m&aacute;ximo usa la jornada m&aacute;xima configurada (' .
-                        rtrim(rtrim(number_format(max($dailyOperatingHours, $maximumDailyOperatingHours), 1, '.', ''), '0'), '.') .
-                        ' h/d&iacute;a) y se identifica como escenario, no como l&iacute;mite normativo.') .
+                        ' h/d&iacute;a) y m&aacute;xima (' .
+                        rtrim(rtrim(number_format($maximumDailyOperatingHours, 1, '.', ''), '0'), '.') .
+                        ' h/d&iacute;a). Son escenarios operativos, no l&iacute;mites normativos.') .
                 ($leni !== null
                     ? '<br>(3) LENI = m&eacute;todo simplificado EN 15193-1, con horas/factores de referencia
             <strong>pendientes de verificaci&oacute;n normativa</strong> (no una cita confirmada de la norma) y

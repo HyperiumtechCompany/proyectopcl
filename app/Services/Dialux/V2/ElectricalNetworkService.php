@@ -129,16 +129,61 @@ class ElectricalNetworkService
                 $documentPanels = collect($electrical?->data['panels'] ?? [])->keyBy('id');
                 $documentFeeders = collect($electrical?->data['feeders'] ?? [])->keyBy('toPanelId');
                 $summaries = collect($electrical?->derived_summary['panels'] ?? [])->keyBy('panelId');
+                $circuitSummaries = collect($electrical?->derived_summary['circuits'] ?? [])->groupBy(
+                    fn (array $circuit): string => (string) ($circuit['panelId'] ?? ''),
+                );
+                if ($circuitSummaries->isEmpty()) {
+                    $floorsById = collect($electrical?->data['floors'] ?? [])->keyBy('id');
+                    $circuitSummaries = collect($electrical?->data['circuits'] ?? [])
+                        ->map(function (array $circuit) use ($documentPanels, $floorsById): array {
+                            $panel = $documentPanels->get((string) ($circuit['panelId'] ?? ''), []);
+                            $floorId = $panel['floorId'] ?? null;
+                            $lengthM = (float) ($circuit['manualLengthM'] ?? $circuit['lengthM'] ?? 0);
+
+                            return [
+                                'circuitId' => (string) ($circuit['id'] ?? ''),
+                                'panelId' => (string) ($circuit['panelId'] ?? ''),
+                                'floorId' => $floorId,
+                                'floorName' => $floorsById->get($floorId)['name'] ?? 'Sin nivel',
+                                'code' => (string) ($circuit['code'] ?? 'Salida'),
+                                'type' => (string) ($circuit['type'] ?? 'special'),
+                                'description' => (string) ($circuit['description'] ?? ''),
+                                'totalPowerW' => 0,
+                                'demandPowerW' => 0,
+                                'currentA' => 0,
+                                'designCurrentA' => 0,
+                                'lengthM' => $lengthM,
+                                'calculatedHorizontalLengthM' => $lengthM,
+                                'calculatedVerticalLengthM' => 0,
+                                'sectionMm2' => (float) ($circuit['manualSectionMm2'] ?? 0),
+                                'conductorLabel' => null,
+                                'breakerA' => (float) ($circuit['manualBreakerA'] ?? 0),
+                                'voltageDropPct' => 0,
+                                'cumulativeVoltageDropPct' => 0,
+                                'status' => 'advertencia',
+                                'warnings' => ['Recalcula y guarda el mÃ³dulo para publicar los resultados CT completos.'],
+                            ];
+                        })
+                        ->groupBy('panelId');
+                }
                 $modulePanelIds = collect($module->data['scenes'] ?? [])
                     ->flatMap(fn (array $scene) => collect($scene['electricalDevices'] ?? [])
                         ->filter(fn (array $device): bool => in_array($device['type'] ?? null, ['main_panel', 'sub_panel'], true))
                         ->pluck('id'))
                     ->map(fn ($panelId): string => (string) $panelId)
                     ->flip();
-                $ports = collect($module->data['scenes'] ?? [])->flatMap(function (array $scene) use ($module, $documentPanels, $documentFeeders, $summaries, $modulePanelIds): array {
+                $ports = collect($module->data['scenes'] ?? [])->flatMap(function (array $scene) use ($module, $documentPanels, $documentFeeders, $summaries, $circuitSummaries, $modulePanelIds): array {
                     $panelDevices = collect($scene['electricalDevices'] ?? [])
                         ->filter(fn (array $device): bool => in_array($device['type'] ?? null, ['main_panel', 'sub_panel'], true))
                         ->values();
+                    $sceneInstalledPowerW = collect($scene['fixtures'] ?? [])->sum(
+                        fn (array $fixture): float => max(0, (float) ($fixture['power'] ?? $fixture['powerWatts'] ?? 0)),
+                    ) + collect($scene['electricalDevices'] ?? [])
+                        ->filter(fn (array $device): bool => str_starts_with((string) ($device['type'] ?? ''), 'outlet_'))
+                        ->sum(fn (array $device): float => max(0, (float) ($device['properties']['ratedPowerW'] ?? 180)));
+                    $fallbackPanelPowerW = $panelDevices->count() > 0
+                        ? $sceneInstalledPowerW / $panelDevices->count()
+                        : 0;
                     $panelIds = $panelDevices->pluck('id')->map(fn ($id): string => (string) $id)->flip();
                     $panelById = $panelDevices->keyBy(fn (array $device): string => (string) $device['id']);
                     $panelOrder = $panelDevices->pluck('id')->mapWithKeys(
@@ -175,12 +220,37 @@ class ElectricalNetworkService
                     }
 
                     return $panelDevices
-                        ->map(function (array $device) use ($module, $scene, $documentPanels, $documentFeeders, $summaries, $cadParents, $modulePanelIds): array {
+                        ->map(function (array $device) use ($module, $scene, $documentPanels, $documentFeeders, $summaries, $circuitSummaries, $cadParents, $modulePanelIds, $fallbackPanelPowerW): array {
                             $properties = $device['properties'] ?? [];
                             $panelId = (string) $device['id'];
                             $panelDefinition = $documentPanels->get($panelId, []);
                             $panelSummary = $summaries->get($panelId, []);
                             $feeder = $documentFeeders->get($panelId, []);
+                            $feederLengthM = collect([
+                                $feeder['manualLengthM'] ?? null,
+                                $panelSummary['feederLengthM'] ?? null,
+                                $feeder['lengthM'] ?? null,
+                            ])->first(fn ($length): bool => is_numeric($length) && (float) $length > 0) ?? 0;
+                            $installedPowerW = collect([
+                                $panelSummary['installedPowerW'] ?? null,
+                                $module->electricalProject?->installed_power_w,
+                                $fallbackPanelPowerW,
+                            ])->first(fn ($power): bool => is_numeric($power) && (float) $power > 0) ?? 0;
+                            $demandPowerW = collect([
+                                $panelSummary['demandPowerW'] ?? null,
+                                $module->electricalProject?->demand_power_w,
+                                $installedPowerW,
+                            ])->first(fn ($power): bool => is_numeric($power) && (float) $power > 0) ?? 0;
+                            $ownInstalledPowerW = collect([
+                                $panelSummary['ownInstalledPowerW'] ?? null,
+                                $fallbackPanelPowerW,
+                                $installedPowerW,
+                            ])->first(fn ($power): bool => is_numeric($power) && (float) $power > 0) ?? 0;
+                            $ownDemandPowerW = collect([
+                                $panelSummary['ownDemandPowerW'] ?? null,
+                                $fallbackPanelPowerW,
+                                $demandPowerW,
+                            ])->first(fn ($power): bool => is_numeric($power) && (float) $power > 0) ?? 0;
                             $parentPanelId = collect([
                                 $panelSummary['parentPanelId'] ?? null,
                                 $panelDefinition['parentPanelId'] ?? null,
@@ -201,17 +271,18 @@ class ElectricalNetworkService
                                 'panelId' => $panelId,
                                 'panelLabel' => $device['label'] ?? ($device['type'] === 'main_panel' ? 'TG' : 'TD'),
                                 'parentPanelId' => $parentPanelId,
-                                'feederLengthM' => (float) ($panelSummary['feederLengthM'] ?? $feeder['manualLengthM'] ?? $feeder['lengthM'] ?? 0),
+                                'feederLengthM' => (float) $feederLengthM,
                                 'panelRole' => $properties['panelRole'] ?? ($device['type'] === 'main_panel' ? 'distribution' : 'sub_distribution'),
                                 'nominalVoltageV' => (float) preg_replace('/[^0-9.]/', '', (string) ($properties['voltage'] ?? '220')),
                                 'phases' => str_starts_with((string) ($properties['phases'] ?? '1'), '3') ? 3 : 1,
-                                'installedPowerW' => (float) ($panelSummary['installedPowerW'] ?? $module->electricalProject?->installed_power_w ?? 0),
-                                'demandPowerW' => (float) ($panelSummary['demandPowerW'] ?? $module->electricalProject?->demand_power_w ?? 0),
-                                'ownInstalledPowerW' => (float) ($panelSummary['ownInstalledPowerW'] ?? $panelSummary['installedPowerW'] ?? $module->electricalProject?->installed_power_w ?? 0),
-                                'ownDemandPowerW' => (float) ($panelSummary['ownDemandPowerW'] ?? $panelSummary['demandPowerW'] ?? $module->electricalProject?->demand_power_w ?? 0),
+                                'installedPowerW' => (float) $installedPowerW,
+                                'demandPowerW' => (float) $demandPowerW,
+                                'ownInstalledPowerW' => (float) $ownInstalledPowerW,
+                                'ownDemandPowerW' => (float) $ownDemandPowerW,
                                 'currentA' => (float) ($panelSummary['currentA'] ?? 0),
                                 'mainBreakerA' => (float) ($panelSummary['mainBreakerA'] ?? 0),
                                 'circuitsCount' => (int) ($panelSummary['circuitCount'] ?? count($device['connectedDeviceIds'] ?? [])),
+                                'circuits' => $circuitSummaries->get($panelId, collect())->values()->all(),
                                 'revision' => optional($module->updated_at)->toISOString(),
                             ];
                         })->all();
@@ -224,11 +295,16 @@ class ElectricalNetworkService
                 $scenes = collect($module->data['scenes'] ?? []);
                 $firstScene = $scenes->first();
                 if ($summaries->isNotEmpty()) {
-                    return $summaries->map(function (array $summary) use ($module, $electrical, $documentPanels, $documentFeeders, $firstScene): array {
+                    return $summaries->map(function (array $summary) use ($module, $electrical, $documentPanels, $documentFeeders, $circuitSummaries, $firstScene): array {
                         $panelId = (string) $summary['panelId'];
                         $definition = $documentPanels->get($panelId, []);
                         $feeder = $documentFeeders->get($panelId, []);
                         $sceneId = (string) ($definition['floorId'] ?? $firstScene['id'] ?? 'module');
+                        $feederLengthM = collect([
+                            $feeder['manualLengthM'] ?? null,
+                            $summary['feederLengthM'] ?? null,
+                            $feeder['lengthM'] ?? null,
+                        ])->first(fn ($length): bool => is_numeric($length) && (float) $length > 0) ?? 0;
 
                         return [
                             'key' => "{$module->id}:{$sceneId}:{$panelId}",
@@ -239,7 +315,7 @@ class ElectricalNetworkService
                             'panelId' => $panelId,
                             'panelLabel' => $summary['panelLabel'] ?? $definition['code'] ?? $definition['name'] ?? $panelId,
                             'parentPanelId' => $summary['parentPanelId'] ?? $definition['parentPanelId'] ?? null,
-                            'feederLengthM' => (float) ($summary['feederLengthM'] ?? $feeder['manualLengthM'] ?? $feeder['lengthM'] ?? 0),
+                            'feederLengthM' => (float) $feederLengthM,
                             'panelRole' => ($summary['parentPanelId'] ?? $definition['parentPanelId'] ?? null) ? 'sub_distribution' : 'distribution',
                             'nominalVoltageV' => (float) ($definition['voltageV'] ?? $electrical?->voltage_v ?? 220),
                             'phases' => (int) ($definition['phases'] ?? $electrical?->phases ?? 1) === 3 ? 3 : 1,
@@ -250,6 +326,7 @@ class ElectricalNetworkService
                             'currentA' => (float) ($summary['currentA'] ?? 0),
                             'mainBreakerA' => (float) ($summary['mainBreakerA'] ?? 0),
                             'circuitsCount' => (int) ($summary['circuitCount'] ?? 0),
+                            'circuits' => $circuitSummaries->get($panelId, collect())->values()->all(),
                             'revision' => optional($module->updated_at)->toISOString(),
                             'isFallback' => true,
                         ];
@@ -289,6 +366,7 @@ class ElectricalNetworkService
                     'currentA' => (float) ($summary['currentA'] ?? 0),
                     'mainBreakerA' => (float) ($summary['mainBreakerA'] ?? 0),
                     'circuitsCount' => count($electrical?->data['circuits'] ?? []),
+                    'circuits' => $circuitSummaries->get($panelId, collect())->values()->all(),
                     'revision' => optional($module->updated_at)->toISOString(),
                     'isFallback' => true,
                 ]];

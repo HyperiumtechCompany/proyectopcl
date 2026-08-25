@@ -15,6 +15,7 @@ export function ElectricalPropertiesPanel({
     onUpdateEdge,
     onUpdateNode,
     onChangeNodeParent,
+    onRemove,
 }: {
     data: ElectricalNetworkData;
     selectedId?: string;
@@ -22,6 +23,7 @@ export function ElectricalPropertiesPanel({
     onUpdateEdge: (id: string, patch: Partial<ElectricalEdge>) => void;
     onUpdateNode: (id: string, patch: Partial<ElectricalNode>) => void;
     onChangeNodeParent: (nodeId: string, parentId: string) => void;
+    onRemove: (id: string) => void;
 }) {
     const edge = data.edges.find((item) => item.id === selectedId);
     const node = data.nodes.find((item) => item.id === selectedId);
@@ -86,8 +88,8 @@ export function ElectricalPropertiesPanel({
                                         )
                                     }
                                 >
-                                    <option value="" disabled>
-                                        Selecciona un tablero
+                                    <option value="">
+                                        Sin conexión
                                     </option>
                                     {data.nodes
                                         .filter(
@@ -118,12 +120,29 @@ export function ElectricalPropertiesPanel({
                                     Reemplaza únicamente el tramo de entrada de
                                     este tablero.
                                 </span>
+                                {data.edges.some(
+                                    (item) => item.targetNodeId === node.id,
+                                ) && (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            onChangeNodeParent(node.id, '')
+                                        }
+                                        className="mt-2 w-full rounded-md border border-rose-400/60 px-2 py-1.5 text-[10px] font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30"
+                                    >
+                                        Desconectar alimentador
+                                    </button>
+                                )}
                             </label>
                         )}
                     </>
                 )}
                 {edge && (
                     <>
+                        <Info
+                            label="Longitud total"
+                            value={`${(edge.horizontalLengthM + edge.verticalLengthM).toFixed(2)} m`}
+                        />
                         <NumberField
                             label="Longitud horizontal (m)"
                             value={edge.horizontalLengthM}
@@ -229,6 +248,13 @@ export function ElectricalPropertiesPanel({
                                 ))}
                             </div>
                         )}
+                        <button
+                            type="button"
+                            onClick={() => onRemove(edge.id)}
+                            className="w-full rounded-md border border-rose-400/60 px-2 py-1.5 text-[10px] font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30"
+                        >
+                            Desconectar este tramo
+                        </button>
                     </>
                 )}
             </div>

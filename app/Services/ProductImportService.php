@@ -1699,17 +1699,18 @@ class ProductImportService
 
         $angles = array_map('floatval', $gammaAngles);
         $referenceLumens = (float) ($web['reference_lumens'] ?? 0);
-        // Ronda 21m: cd/1000 lm (mismo convenio que la tabla de intensidades
-        // y DIALux evo, "Dimension unit: cd / 1000 lm"), no cd absoluta al
-        // flujo actual del producto — ver el puerto TS (`buildPolarSvgFromMatrix.ts`)
-        // para el hallazgo real que motivó el cambio. La forma de la curva
-        // no cambia (radio relativo, unit-invariante); solo el número impreso.
-        $klmScale = $referenceLumens > 0 ? 1000.0 / $referenceLumens : 1.0;
-        $plane = array_map(static fn ($v) => (float) $v * $klmScale, $candela[$primaryIndex]);
+        // Ronda 21m re-normalizaba a cd/1000lm citando como referencia la
+        // tabla de intensidades del catálogo — esa tabla tenía el mismo
+        // error (dividía de más un valor que el parser ya entrega en cd
+        // absolutos). Verificado contra una exportación real del LDT Editor
+        // de DIAL GmbH: su pestaña "Luminous intensities" muestra cd
+        // absolutos (1639.51 en γ=0° para esta misma luminaria de 2580 lm),
+        // no cd/1000lm — revertido a usar `candela` tal cual llega.
+        $plane = array_map('floatval', $candela[$primaryIndex]);
 
         $secondaryIndex = $this->findClosestCPlane($cAngles, 90.0, [$primaryIndex], 30.0);
         $secondaryPlane = $secondaryIndex !== null && is_array($candela[$secondaryIndex] ?? null)
-            ? array_map(static fn ($v) => (float) $v * $klmScale, $candela[$secondaryIndex])
+            ? array_map('floatval', $candela[$secondaryIndex])
             : null;
         $hasSecondPlane = ! empty($secondaryPlane);
 
@@ -1807,7 +1808,7 @@ class ProductImportService
     </g>
     <text x="18" y="22" font-family="Arial, sans-serif" font-size="11" fill="#0f172a" font-weight="700">CDL polar</text>
     <text x="18" y="38" font-family="Arial, sans-serif" font-size="8" fill="#64748b">{$safeTitle}</text>
-    <text x="18" y="246" font-family="Arial, sans-serif" font-size="8" fill="#64748b">Imax {$safeMax} cd/klm{$fluxSuffix}</text>
+    <text x="18" y="246" font-family="Arial, sans-serif" font-size="8" fill="#64748b">Imax {$safeMax} cd{$fluxSuffix}</text>
 </svg>
 SVG;
     }

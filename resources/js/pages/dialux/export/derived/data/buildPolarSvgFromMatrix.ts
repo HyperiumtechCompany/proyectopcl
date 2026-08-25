@@ -66,20 +66,23 @@ export function buildPolarSvgFromMatrix(web: PolarMatrixInput | null | undefined
         return null;
     }
 
-    // Normalizar a cd/klm usando los lúmenes de la luminaria (totalLumens)
-    // para coincidir con el comportamiento de DIALux, que muestra el gráfico
-    // basado en el flujo de salida, no en el flujo de lámpara raw.
-    const reference = totalLumens ?? web?.reference_lumens;
-    const klmScale = reference && reference > 0 ? 1000 / reference : 1;
-    const plane = rawPlane.map((v) => v * klmScale);
+    // `web.candela` ya viene en cd absolutos (el parser Rust/PHP la escala
+    // al flujo real al importar, ver `dialux-photometry/src/main.rs` y
+    // `ProductImportService.php`) — NO volver a normalizar aquí. La Ronda
+    // 21m re-normalizaba a cd/klm citando como referencia la tabla de
+    // intensidades del catálogo, pero esa tabla tenía el mismo error (hacía
+    // la misma división de más) — verificado contra una exportación real
+    // del LDT Editor de DIAL GmbH: su pestaña "Luminous intensities"
+    // muestra cd absolutos (1639.51 en γ=0° para esta misma luminaria de
+    // 2580 lm), no cd/1000lm. `totalLumens` ya no se usa para re-escalar.
+    const plane = rawPlane;
 
     const secondaryIndex = findClosestCPlane(web?.c_angles, 90, new Set([primaryIndex]), 30);
     const rawSecondaryPlane = secondaryIndex !== null ? candela?.[secondaryIndex] : undefined;
     const hasSecondPlane = Array.isArray(rawSecondaryPlane) && rawSecondaryPlane.length > 0;
-    const secondaryPlane = hasSecondPlane ? rawSecondaryPlane!.map((v) => v * klmScale) : undefined;
+    const secondaryPlane = hasSecondPlane ? rawSecondaryPlane : undefined;
 
-    const globalMaxRaw = Math.max(0, ...(candela ?? []).flat());
-    const maxCandela = globalMaxRaw * klmScale;
+    const maxCandela = Math.max(0, ...(candela ?? []).flat());
     if (maxCandela <= 0) {
         return null;
     }
@@ -172,6 +175,6 @@ export function buildPolarSvgFromMatrix(web: PolarMatrixInput | null | undefined
     </g>
     <text x="18" y="22" font-family="Arial, sans-serif" font-size="11" fill="#0f172a" font-weight="700">CDL polar</text>
     <text x="18" y="38" font-family="Arial, sans-serif" font-size="8" fill="#64748b">${safeTitle}</text>
-    <text x="18" y="246" font-family="Arial, sans-serif" font-size="8" fill="#64748b">Imax ${safeMax} cd/klm${fluxSuffix}</text>
+    <text x="18" y="246" font-family="Arial, sans-serif" font-size="8" fill="#64748b">Imax ${safeMax} cd${fluxSuffix}</text>
 </svg>`;
 }

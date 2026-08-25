@@ -35,15 +35,14 @@ export function buildCartesianSvgFromMatrix(web: CartesianMatrixInput | null | u
         return null;
     }
 
-    const reference = totalLumens ?? web?.reference_lumens;
-    const klmScale = reference && reference > 0 ? 1000 / reference : 1;
-    const planes = rawPlanes.map((plane) => plane.map((v) => v * klmScale));
+    // `web.candela` ya viene en cd absolutos (el parser la escala al flujo
+    // real al importar) — NO volver a normalizar a cd/klm aquí. Mismo
+    // hallazgo que `buildPolarSvgFromMatrix.ts`: la exportación real del
+    // LDT Editor de DIAL GmbH muestra cd absolutos, no cd/1000lm, para esta
+    // misma luminaria. `totalLumens` ya no se usa para re-escalar.
+    const planes = rawPlanes;
 
     const maxAngle = Math.max(...angles, 1);
-    // `planes` (arriba) ya está escalado a cd/klm — usarlo directamente en
-    // vez de re-derivar del `candela` crudo evita repetir el escalado (y el
-    // `ReferenceError` real que había aquí: `candela` no existe en este
-    // scope, la variable desestructurada se llama `rawPlanes`).
     const maxCandela = Math.max(0, ...planes.flat());
     if (maxCandela <= 0) {
         return null;
@@ -83,7 +82,7 @@ export function buildCartesianSvgFromMatrix(web: CartesianMatrixInput | null | u
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH * 1.4}" height="${HEIGHT * 1.4}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
     <rect width="${WIDTH}" height="${HEIGHT}" fill="#ffffff"/>
     <text x="10" y="16" font-family="Arial, sans-serif" font-size="11" fill="#0f172a" font-weight="700">Diagrama cartesiano</text>
-    <text x="10" y="${HEIGHT - 6}" font-family="Arial, sans-serif" font-size="7" fill="#64748b">${safeTitle} — γ (°) vs. cd/klm${fluxSuffix}</text>
+    <text x="10" y="${HEIGHT - 6}" font-family="Arial, sans-serif" font-size="7" fill="#64748b">${safeTitle} — γ (°) vs. cd${fluxSuffix}</text>
     ${gridLines.join('\n    ')}
     <path d="M ${MARGIN_LEFT} ${MARGIN_TOP} L ${MARGIN_LEFT} ${HEIGHT - MARGIN_BOTTOM} L ${WIDTH - MARGIN_RIGHT} ${HEIGHT - MARGIN_BOTTOM}" stroke="#94a3b8" stroke-width="1"/>
     ${planePaths.join('\n    ')}

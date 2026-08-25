@@ -12,7 +12,7 @@ describe('Fase 15 — buildPolarSvgFromMatrix', () => {
         expect(svg).toContain('<svg');
         expect(svg).toContain('CDL polar');
         expect(svg).toContain('Producto de prueba');
-        expect(svg).toContain('Imax 1,000 cd/klm');
+        expect(svg).toContain('Imax 1,000 cd');
     });
 
     it('es determinista: misma entrada produce el mismo SVG', () => {
@@ -44,28 +44,28 @@ describe('Fase 15 — buildPolarSvgFromMatrix', () => {
     });
 
     /**
-     * Ronda 21m: hallazgo real del usuario — comparó esta curva contra una
-     * captura de DIALux evo con "los mismos datos" (confirmado punto a punto
-     * con su propio lector LDT) y los números impresos no coincidían. Causa:
-     * este gráfico mostraba candela ABSOLUTA al flujo actual del producto
-     * (ej. 1857 cd a 1508 lm), mientras DIALux evo siempre muestra cd/1000 lm
-     * (ej. ~1231.4 cd/klm para el mismo dato). La FORMA de la curva no
-     * cambia (es un radio relativo, `valor/máximo`, unit-invariante) — este
-     * test fija el número impreso, que es lo que sí cambió.
+     * Revierte Ronda 21m. Aquel hallazgo asumió que DIALux evo siempre
+     * muestra cd/1000lm y re-normalizó esta curva para "coincidir" — pero
+     * la referencia que usó (la tabla de intensidades del catálogo,
+     * `IntensityTable.tsx`) tenía el mismo error de raíz: dividía de más un
+     * valor que el parser (Rust/PHP) ya entrega en cd absolutos al flujo
+     * real. Verificado contra una exportación real del LDT Editor de DIAL
+     * GmbH para una luminaria de 2580 lm: su pestaña "Luminous intensities"
+     * muestra cd absolutos (1639.51 en γ=0°), no cd/1000lm. `web.candela` ya
+     * viene absoluto — no hay que volver a escalarlo con `reference_lumens`.
      */
-    it('Ronda 21m: candela se expresa en cd/1000 lm, no cd absoluta al flujo actual', () => {
-        // 1857 cd a 1508 lm de referencia → 1857 × 1000/1508 = 1231.43 cd/klm.
+    it('candela se muestra en cd absolutos, tal cual llega en la matriz (no se re-normaliza a cd/1000lm)', () => {
         const svg = buildPolarSvgFromMatrix(
             { gamma_angles: [0, 30], candela: [[1857, 800]], reference_lumens: 1508 },
             'TEG18046',
         );
-        expect(svg).toContain('Imax 1,231.4 cd/klm');
-        expect(svg).not.toContain('Imax 1,857');
+        expect(svg).toContain('Imax 1,857 cd');
+        expect(svg).not.toContain('1,231.4');
     });
 
-    it('sin reference_lumens: no hay factor de escala que aplicar, se muestra la candela tal cual (no inventa un flujo de referencia)', () => {
+    it('sin reference_lumens: se muestra la candela tal cual (no inventa un flujo de referencia)', () => {
         const svg = buildPolarSvgFromMatrix({ gamma_angles: [0, 30], candela: [[1857, 800]] }, 'X');
-        expect(svg).toContain('Imax 1,857 cd/klm');
+        expect(svg).toContain('Imax 1,857 cd');
     });
 
     it('escapa caracteres especiales del título', () => {

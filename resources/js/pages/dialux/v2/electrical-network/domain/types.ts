@@ -87,8 +87,33 @@ export interface ModuleElectricalPort {
     currentA: number;
     mainBreakerA: number;
     circuitsCount: number;
+    circuits?: ModuleElectricalCircuit[];
     revision: string;
     isFallback?: boolean;
+}
+
+export interface ModuleElectricalCircuit {
+    circuitId: string;
+    panelId: string;
+    floorId?: string | null;
+    floorName?: string | null;
+    code: string;
+    type: 'lighting' | 'outlets' | 'special';
+    description?: string | null;
+    totalPowerW: number;
+    demandPowerW: number;
+    currentA: number;
+    designCurrentA: number;
+    lengthM: number;
+    calculatedHorizontalLengthM: number;
+    calculatedVerticalLengthM: number;
+    sectionMm2: number;
+    conductorLabel?: string | null;
+    breakerA: number;
+    voltageDropPct: number;
+    cumulativeVoltageDropPct: number;
+    status: 'ok' | 'advertencia' | 'error';
+    warnings: string[];
 }
 
 export interface GraphIssue {
