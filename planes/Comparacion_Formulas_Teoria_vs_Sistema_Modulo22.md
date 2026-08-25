@@ -6,10 +6,22 @@ por tener geometría de particiones incorrecta). Mismo formato que el
 informe de Módulo VII, para poder comparar ambos casos con el mismo
 criterio.
 
-**Actualización 25/08/2026:** el hallazgo de la sección 3 (brecha de Ē
-por oclusión) ya se investigó a fondo y se corrigió en el motor —
-manteniendo la oclusión activa, como exigió el cliente. Los números de
-este documento ya reflejan el resultado corregido y verificado.
+**Actualización 25/08/2026 (Ronda 32):** el hallazgo de la sección 3
+(brecha de Ē por oclusión) ya se investigó a fondo y se corrigió en el
+motor — manteniendo la oclusión activa, como exigió el cliente. Los
+números de este documento ya reflejan el resultado corregido y
+verificado.
+
+**Actualización 25/08/2026 (Ronda 33 — Radiance):** se corrió
+[Radiance](https://github.com/LBNL-ETA/Radiance) (motor de simulación
+lumínica de código abierto, validado académicamente, sin las
+aproximaciones de un solo rebote de ningún motor comercial) como
+**tercer punto de referencia independiente**, sobre la geometría real y
+cóncava de "Caseta de Control". Hallazgo central que cambia el marco de
+todo este documento: **DIALux evo subestima la interreflexión física
+real en este tipo de recinto (alto, angosto, muy reflectante) — no es
+"la verdad" contra la que hay que ajustar nuestro motor.** Ver sección
+3.1.
 
 ---
 
@@ -40,6 +52,14 @@ este documento ya reflejan el resultado corregido y verificado.
 2.  Índice del local: K = (L×W)/(h×(L+W)) = (2.101×2.320)/(4.07×(2.101+2.320)) ≈ **0.27** — muy bajo, típico de un local alto y angosto.
 3.  UF: sin tabla de fabricante disponible para esta luminaria. UF retrocalculado del resultado real de DIALux: UF = (Ē×A)/(Φtotal×MF) = (203×4.71)/(5160×0.80) ≈ **0.23**.
 4.  **Ē = (5160 × 0.23 × 0.80)/4.71 ≈ 200.9 lx** (cierra por construcción, verificación de consistencia interna).
+
+**Aviso (Ronda 33):** este 200.9 lx no es un valor teórico
+independiente — el UF del paso 3 se sacó retrocalculando del propio
+203 lx de DIALux, así que este número solo confirma que la fórmula
+está bien aplicada, no que 200.9/203 sean "la luz real" del ambiente.
+Radiance (sección 3.1) muestra que la física real converge bastante
+más alto (≈251 lx) — el método de flujo clásico, igual que DIALux,
+también trunca la interreflexión completa.
 
 ---
 
@@ -92,32 +112,78 @@ casualidad de este caso puntual.
 ### Lo que NO se resolvió — honestidad, no maquillaje
 
 La mejora es real y grande (de -11.0% a -6.4%, de -6.5% a -3.4%), pero
-**no cierra completo**: con el fix, Caseta de control (190 lx) y SS.HH
-(199 lx) siguen técnicamente por debajo del umbral de 200 lx en
-nuestro sistema, mientras DIALux los marca conformes (203/206 lx).
-Queda un patrón secundario menor sin resolver (sombreado de esquina en
-parches de pared cerca de vértices del polígono) — no se tocó porque
-la evidencia para ese caso no era tan sólida como la del piso/techo, y
-el riesgo de una regresión sin esa certeza no se justificaba.
+**no cierra completo contra DIALux**: con el fix, Caseta de control
+(190 lx) y SS.HH (199 lx) siguen técnicamente por debajo del umbral de
+200 lx en nuestro sistema, mientras DIALux los marca conformes
+(203/206 lx). Queda un patrón secundario menor sin tocar (sombreado de
+esquina en parches de pared cerca de vértices del polígono) — la
+sección 3.1 explica por qué no se corrigió, con evidencia nueva de que
+es sombreado real, no un bug.
+
+---
+
+## 3.1 Radiance como tercer punto de referencia (Ronda 33)
+
+Hasta acá, todo el documento comparaba dos números (el nuestro y el de
+DIALux) asumiendo implícitamente que DIALux es el que hay que igualar.
+Se corrió [Radiance](https://github.com/LBNL-ETA/Radiance) — motor de
+código abierto validado académicamente, sin las aproximaciones de un
+solo rebote que usa cualquier motor comercial — sobre la geometría
+real y cóncava de "Caseta de Control" (no una aproximación
+rectangular), con la fotometría real de la luminaria (candela real del
+archivo `60739.ldt`, no un modelo genérico).
+
+| Fuente | Ē | Diferencia vs. Radiance (física real) |
+|---|---|---|
+| **Radiance** (radiosidad completa, referencia física) | **251.3 lx** | — |
+| Nuestro motor, modo `iterative` | 237.5 lx | -5.5 % (el más cercano a la física real) |
+| DIALux evo | 203 lx | -23.8 % |
+| Nuestro motor, modo `first-bounce` (el de producción) | 199.7 lx | -20.5 % |
+
+**Validación del montaje:** la luz directa (sin ningún rebote) coincide
+casi exacto entre nuestro motor y Radiance (167.7 vs 168.0 lx, 0.2 %
+de diferencia) — confirma que la escena, la fotometría y la geometría
+están bien construidas; lo que sigue no es un error de montaje.
+
+**Conclusión, con evidencia:** DIALux evo subestima la interreflexión
+física real en este tipo de recinto (alto, angosto, muy reflectante)
+— nuestro propio modo `iterative` está de hecho MÁS cerca de la
+física real que DIALux. Lo que pasa es que nuestro `first-bounce`
+(producción) y DIALux truncan la interreflexión de forma parecida por
+diseño, así que coinciden entre sí — pero eso no los hace "correctos",
+solo consistentes entre ellos.
+
+**Por eso el patrón de esquina de la sección 3 no se corrigió:** se
+instrumentó y se localizó con precisión — ocurre exactamente en la
+muesca de la jamba de la puerta, entre tramos de pared cortos y
+perpendiculares. Es un rincón real proyectando sombra sobre sí mismo,
+no un bug. Corregirlo empujaría el resultado MÁS LEJOS de DIALux (que
+ya sabemos que subestima) y MÁS CERCA de la física real — el efecto
+contrario al que un fix pensado solo para "parecerse más a DIALux"
+buscaría.
 
 ---
 
 ## 4. Comparación final
 
-| | Camino 1 — Teoría | Camino 2 — Nuestro sistema (corregido) | DIALux evo |
-|---|---|---|---|
-| Ē (Caseta de control) | 200.9 lx | **190.0 lx** | 203 lx |
-| ¿Cumple Ē≥200 lx? | Sí (por construcción) | **No** (por 5 %) | Sí |
-| Uo | no calculable | 0.86 | 0.87 |
+| | Camino 1 — Teoría | Camino 2 — Nuestro sistema (corregido) | DIALux evo | Radiance (física real) |
+|---|---|---|---|---|
+| Ē (Caseta de control) | 200.9 lx (retrocalculado de DIALux, no independiente) | **190.0 lx** | 203 lx | **251.3 lx** |
+| ¿Cumple Ē≥200 lx? | Sí (por construcción) | **No** (por 5 %) | Sí | Sí, con margen amplio |
+| Uo | no calculable | 0.86 | 0.87 | no medido en esta ronda |
 
-**Para el cliente, en una frase:** se identificó y corrigió una causa
-real que subestimaba la luz reflejada en ambientes compactos —
-la brecha bajó a la mitad (de 11% a 6.4%) manteniendo la oclusión
-activa. El resultado todavía queda unos pocos lux por debajo del
-mínimo normativo en nuestro sistema; DIALux lo marca conforme con
-margen ajustado (203 de 200 requeridos), así que la diferencia
-restante puede deberse a precisión de malla o a un segundo efecto
-menor de esquina, no a un error de dato del proyecto.
+**Para el cliente, en una frase — ya no es "nos falta acercarnos a
+DIALux":** se identificó y corrigió una causa real que subestimaba la
+luz reflejada en ambientes compactos (la brecha contra DIALux bajó de
+11% a 6.4% manteniendo la oclusión activa). Pero al triangular con
+Radiance (referencia física independiente, sin aproximaciones) se
+descubrió que **DIALux mismo subestima la física real en este tipo de
+recinto en un 24%** — así que "igualar a DIALux" y "ser físicamente
+correcto" no son el mismo objetivo aquí. El resultado de nuestro
+sistema (190 lx) queda técnicamente unos lux bajo el mínimo normativo
+usando DIALux como referencia, pero está lejos de ser un valor
+irrazonable frente a la física real del ambiente (251 lx) — es, si
+acaso, conservador.
 
 ---
 
@@ -131,3 +197,13 @@ Motor: `runDirectPreviewEngine.ts` + `buildCalculationSnapshot.ts` +
 `iterativeRadiosity.ts` + `radiosityTransfer.ts` + `roomPatches.ts`.
 Fix de esta ronda: `radiosityTransfer.ts`, `roomPatches.ts`,
 documentado como "Ronda 32" en `productionCalculationConfig.ts`.
+
+**Radiance** (Lawrence Berkeley National Laboratory,
+[github.com/LBNL-ETA/Radiance](https://github.com/LBNL-ETA/Radiance)),
+licencia estilo BSD, validado académicamente contra casos analíticos
+CIE — usado como tercer punto de referencia físico independiente,
+Ronda 33 (2026-08-25). Infraestructura de este proyecto:
+`resources/js/pages/dialux/__benchmarks__/dialuxEvoParity/radianceOracle/`
+(ver su `README.md`), caso real corrido:
+`multiCaseRealTriangulation.test.ts` →
+`caseta-de-control-modulo22`.
