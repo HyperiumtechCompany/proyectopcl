@@ -34,6 +34,27 @@ export interface EnclosurePatch {
     area: number;
     /** Reflectancia difusa (0-1), ya recortada a rango válido — ver `clampReflectance`. */
     reflectance: number;
+    /**
+     * Semiancho REAL del parche en su plano tangente, en la misma base
+     * `(tu, tv)` que `patchTangents` (`radiosityTransfer.ts`) deriva de
+     * `normal` — SOLO para parches de PARED/PARTICIÓN (a lo largo de la
+     * arista y vertical), Ronda 32 (2026-08-25). Antes de esto,
+     * `patchVisibilityFraction` adivinaba un footprint CUADRADO isotrópico
+     * `√área/2` para muestrear la sombra dura del propio parche — para un
+     * tramo de pared subdividido (`wallVerticalSegments`/`horizontalSegments`)
+     * el semiancho real (`segmentLength/2`, `segmentHeight/2`) es exacto por
+     * construcción, más preciso que la aproximación cuadrada. Piso/techo
+     * NUNCA definen estos campos (quedan `undefined` a propósito) — ver el
+     * caso especial correspondiente en `patchVisibilityFraction`, que NO
+     * usa footprint alguno para esos dos parches (el porqué está documentado
+     * ahí: un solo parche sin subdividir cubriendo TODO el ambiente no tiene
+     * ningún semiancho seguro que asignarle en un polígono cóncavo).
+     * Opcional: sin definir, `radiosityTransfer.ts` cae al comportamiento
+     * isotrópico `√área/2` de siempre (no disruptivo para cualquier
+     * `EnclosurePatch` construido a mano, ej. en tests).
+     */
+    halfExtentU?: number;
+    halfExtentV?: number;
 }
 
 export interface EnclosureReflectances {
@@ -166,6 +187,15 @@ export function buildRoomEnclosurePatches(
     const wallReflectance = clampReflectance(reflectances.wall);
     const floorReflectance = clampReflectance(reflectances.floor);
 
+    // Piso/techo: un solo parche cubre TODO el ambiente (no se subdividen,
+    // límite conocido documentado más abajo) — NO se le asigna
+    // `halfExtentU/V` a propósito. `radiosityTransfer.ts` (`patchVisibilityFraction`)
+    // trata piso/techo como un caso especial (un único rayo al centroide, sin
+    // muestreo de footprint) precisamente porque no hay ningún semiancho
+    // seguro que asignarles: para un polígono cóncavo (muesca de jamba de
+    // puerta, caso real "Caseta de Control", Módulo 22) incluso el bbox
+    // recortado por `inset` deja esquinas de muestreo fuera del ambiente, ver
+    // ese archivo para el porqué completo.
     const patches: EnclosurePatch[] = [
         {
             x: centroid.x,
@@ -224,6 +254,11 @@ export function buildRoomEnclosurePatches(
                     normal,
                     area: segmentLength * segmentHeight,
                     reflectance: wallReflectance,
+                    // Semiancho REAL del propio tramo subdividido (Ronda 32)
+                    // — exacto por construcción, no una aproximación
+                    // `√área/2`, ver doc de `EnclosurePatch.halfExtentU/V`.
+                    halfExtentU: segmentLength / 2,
+                    halfExtentV: segmentHeight / 2,
                 });
             }
         }
@@ -317,6 +352,9 @@ export function buildPartitionEnclosurePatches(
                             normal,
                             area: segmentLength * segmentHeight,
                             reflectance: clampedReflectance,
+                            // Ver doc de `EnclosurePatch.halfExtentU/V` (Ronda 32).
+                            halfExtentU: segmentLength / 2,
+                            halfExtentV: segmentHeight / 2,
                         });
                     }
                 }

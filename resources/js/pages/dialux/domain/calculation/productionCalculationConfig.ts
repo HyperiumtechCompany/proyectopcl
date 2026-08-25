@@ -168,6 +168,40 @@ import { DEFAULT_DIRECT_PREVIEW_CONFIG, type CalculationConfig } from './types';
  * es un dato de proyecto incompleto — colocar el objeto `Door` real en la
  * abertura (Vinchos y Módulo VII comparten el mismo patrón sin puertas
  * registradas) corrige la oclusión ahí sin tocar código.
+ *
+ * ## Ronda 32 (2026-08-25) — auto-oclusión de piso/techo por su propio
+ * footprint de muestreo, con oclusión activa
+ *
+ * Los números de Ē de la Ronda 25 arriba (+12.9%/+10.5%/+8.6%) ya habían
+ * quedado desactualizados por cambios posteriores (fotometría reparada,
+ * ajustes de malla) — verificado de nuevo antes de esta ronda con
+ * `modulo22GoldenCase.test.ts`: "Caseta de Control" Ē=180.7 lx (evo 203,
+ * Δ-11.0%) y "SS.HH" Ē=192.7 lx (evo 206, Δ-6.5%), es decir el signo se
+ * había invertido a subestimado sin que ninguna ronda lo documentara.
+ * Causa encontrada (`hooks/radiosityTransfer.ts`, `patchVisibilityFraction`):
+ * el muestreo de footprint "sombra dura" (2026-08-21, 5 rayos en vez de 1)
+ * usa un semiancho isotrópico `√área/2` para TODOS los parches — para
+ * piso/techo, que `roomPatches.ts` nunca subdivide (un solo parche cubre
+ * TODO el ambiente), ese semiancho se pasa de largo del polígono real en
+ * cualquier recinto no cuadrado o con muesca de jamba: 4 de las 5 muestras
+ * de "Caseta de Control" caían dentro de la caja opaca de sus propias
+ * paredes perimetrales (auto-oclusión geométrica, confirmado instrumentando
+ * `isSegmentOccluded` caja por caja), colapsando la contribución de
+ * piso/techo a la interreflexión a ~1/5 de su valor real. Un semiancho
+ * recortado al bbox del polígono (incluso restando el margen de oclusión)
+ * tampoco alcanza para el polígono cóncavo real — se probó y no cambió el
+ * resultado ni un lx. Fix real: piso/techo usan un ÚNICO rayo al centroide
+ * (sin footprint) en `patchVisibilityFraction`, ya que al no estar
+ * subdivididos no hay ningún borde de sombra local que un footprint pueda
+ * representar de todos modos; pared/partición conservan el footprint de 5
+ * rayos, ahora con semiancho EXACTO (`segmentLength/2`/`segmentHeight/2` del
+ * propio tramo subdividido) en vez de la aproximación `√área/2`. Resultado
+ * (mismo test, oclusión SIGUE activa): "Caseta de Control" Ē=190.0 lx
+ * (Δ-6.4%), "SS.HH" Ē=199.0 lx (Δ-3.4%, Uo=0.88 = evo exacto). Verificado
+ * también contra "Vinchos" (`vinchosGoldenCase.test.ts`, sin muesca de
+ * jamba, geometría simple): "Aula 1°" -9.1%→-0.4% (pasa a CONFORME, igual
+ * que evo), "Aula 2°" -6.8%→+2.3% — mismo signo de mejora en un proyecto
+ * geométricamente distinto, no una casualidad de Módulo 22.
  */
 export function buildProductionCalculationConfig(project: Project): CalculationConfig {
     return {

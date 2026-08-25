@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\MergeProjectInsumosRequest;
 use App\Http\Requests\UpdateInsumoProductoRequest;
 use App\Http\Requests\UpdateUnlinkedInsumoRequest;
 use App\Models\CostoProject;
@@ -575,6 +576,161 @@ class InsumoProductoController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Insumos reemplazados correctamente en el proyecto.',
+        ]);
+    }
+
+    /**
+     * Absorbe varios insumos en el insumo destino sin eliminar filas ni cantidades.
+     */
+    public function mergeProjectInsumos(MergeProjectInsumosRequest $request, $project): JsonResponse
+    {
+        $validated = $request->validated();
+        $connection = DB::connection('costos_tenant');
+        $projectModel = $project instanceof CostoProject ? $project : CostoProject::findOrFail($project);
+        $tenantPresupuestoId = app(CostoDatabaseService::class)->getDefaultPresupuestoId($projectModel->database_name);
+
+        $tableMap = [
+            'mano_de_obra' => 'acu_mano_de_obra',
+            'materiales' => 'acu_materiales',
+            'equipos' => 'acu_equipos',
+            'subcontratos' => 'acu_subcontratos',
+            'subpartidas' => 'acu_subpartidas',
+        ];
+        $table = $tableMap[$validated['tipo']];
+        $target = $validated['target'] ?? null;
+
+        if ($target === null) {
+            $targetSource = collect($validated['sources'])->first(
+                fn (array $source): bool => mb_strtoupper(trim($source['descripcion']))
+                    === mb_strtoupper(trim($validated['target_descripcion']))
+            );
+
+            if (! $targetSource) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El nombre destino debe corresponder a uno de los insumos seleccionados.',
+                ], 422);
+            }
+
+            $targetQuery = $connection->table("{$table} as t")
+                ->join('presupuesto_acus as a', 't.acu_id', '=', 'a.id')
+                ->where('a.presupuesto_id', $tenantPresupuestoId);
+
+            if (! empty($targetSource['insumo_id'])) {
+                $targetQuery->where('t.insumo_id', $targetSource['insumo_id']);
+            } else {
+                $targetQuery->whereRaw('UPPER(TRIM(t.descripcion)) = ?', [mb_strtoupper(trim($targetSource['descripcion']))])
+                    ->whereRaw('LOWER(TRIM(t.unidad)) = ?', [mb_strtolower(trim($targetSource['unidad']))]);
+
+                if (! empty($targetSource['codigo'])) {
+                    $targetQuery->whereRaw('UPPER(TRIM(COALESCE(t.cod_insumo, \'\'))) = ?', [mb_strtoupper(trim($targetSource['codigo']))]);
+                }
+            }
+
+            $targetRow = $targetQuery->select('t.*')->first();
+            if (! $targetRow) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontró el insumo destino dentro del proyecto.',
+                ], 422);
+            }
+
+            $target = [
+                'insumo_id' => $targetRow->insumo_id,
+                'codigo' => $targetRow->cod_insumo ?? '',
+                'codigo_producto' => $targetRow->codigo_producto ?? null,
+                'descripcion' => $targetRow->descripcion,
+                'unidad' => $targetRow->unidad,
+                'precio' => $validated['tipo'] === 'equipos'
+                    ? (float) $targetRow->precio_hora
+                    : (float) $targetRow->precio_unitario,
+            ];
+        }
+
+        $targetCodigo = trim((string) ($target['codigo'] ?? ''));
+        $targetIsSelected = collect($validated['sources'])->contains(function (array $source) use ($target, $targetCodigo): bool {
+            if (! empty($target['insumo_id']) && ! empty($source['insumo_id'])) {
+                return (int) $source['insumo_id'] === (int) $target['insumo_id'];
+            }
+
+            return mb_strtoupper(trim($source['codigo'] ?? '')) === mb_strtoupper($targetCodigo)
+                && mb_strtoupper(trim($source['descripcion'])) === mb_strtoupper(trim($target['descripcion']))
+                && mb_strtolower(trim($source['unidad'])) === mb_strtolower(trim($target['unidad']));
+        });
+
+        if (! $targetIsSelected) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El insumo destino debe formar parte de la selección.',
+            ], 422);
+        }
+
+        $result = $connection->transaction(function () use (
+            $connection,
+            $projectModel,
+            $table,
+            $target,
+            $targetCodigo,
+            $tenantPresupuestoId,
+            $validated,
+        ) {
+            $affectedAcuIds = [];
+            $affectedRows = 0;
+            foreach ($validated['sources'] as $source) {
+                $query = $connection->table("{$table} as t")
+                    ->join('presupuesto_acus as a', 't.acu_id', '=', 'a.id')
+                    ->where('a.presupuesto_id', $tenantPresupuestoId);
+
+                if (! empty($source['insumo_id'])) {
+                    $query->where('t.insumo_id', $source['insumo_id']);
+                } else {
+                    $query->whereRaw('UPPER(TRIM(t.descripcion)) = ?', [mb_strtoupper(trim($source['descripcion']))])
+                        ->whereRaw('LOWER(TRIM(t.unidad)) = ?', [mb_strtolower(trim($source['unidad']))]);
+
+                    if (! empty($source['codigo'])) {
+                        $query->whereRaw('UPPER(TRIM(COALESCE(t.cod_insumo, \'\'))) = ?', [mb_strtoupper(trim($source['codigo']))]);
+                    }
+                }
+
+                $items = $query->select('t.*')->get();
+                foreach ($items as $item) {
+                    $affectedAcuIds[] = (int) $item->acu_id;
+                    $cantidad = (float) ($item->cantidad ?? 0);
+                    $factor = (float) ($item->factor_desperdicio ?? 1);
+                    $precio = (float) $target['precio'];
+                    $priceColumn = $validated['tipo'] === 'equipos' ? 'precio_hora' : 'precio_unitario';
+                    $affectedRows += $connection->table($table)
+                        ->where('id', $item->id)
+                        ->update([
+                            'insumo_id' => $target['insumo_id'] ?? null,
+                            'cod_insumo' => $targetCodigo ?: null,
+                            'codigo_producto' => ($target['codigo_producto'] ?? null) ?: ($targetCodigo ?: null),
+                            'descripcion' => $target['descripcion'],
+                            'unidad' => $target['unidad'],
+                            $priceColumn => $precio,
+                            'parcial' => round($cantidad * $precio * ($validated['tipo'] === 'materiales' ? $factor : 1), 10),
+                            'updated_at' => now(),
+                        ]);
+                }
+            }
+
+            $affectedAcuIds = array_values(array_unique($affectedAcuIds));
+            if ($affectedRows === 0) {
+                abort(404, 'No se encontraron insumos para fusionar en este proyecto.');
+            }
+
+            $this->recalculateAcus($connection, $affectedAcuIds, $tenantPresupuestoId, $projectModel);
+
+            return [
+                'filas_afectadas' => $affectedRows,
+                'acus_afectados' => count($affectedAcuIds),
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Insumos fusionados correctamente.',
+            ...$result,
         ]);
     }
 

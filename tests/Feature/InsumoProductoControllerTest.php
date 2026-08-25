@@ -142,3 +142,151 @@ it('updates code and unit for an unlinked consolidated input', function () {
         ->and($material->descripcion)->toBe('Arena seleccionada')
         ->and((float) $material->parcial)->toBe(36.0);
 });
+
+it('absorbs inputs using the target price without deleting quantities', function () {
+    $connection = DB::connection('costos_tenant');
+    $presupuestoId = $this->dbService->getDefaultPresupuestoId($this->testDbName);
+    $acuId = createTestAcu($presupuestoId);
+    $unitId = $connection->table('unidad')->insertGetId([
+        'descripcion' => 'm',
+        'descripcion_singular' => 'Metro',
+        'orden' => '',
+        'informacion_unidad' => '',
+        'abreviatura_unidad' => 'm',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $firstAngleId = $connection->table('insumo_productos')->insertGetId([
+        'codigo_producto' => '510010002',
+        'descripcion' => 'ANGULO A36 1 1/4" X 3/16"x6m',
+        'unidad_id' => $unitId,
+        'tipo' => 'materiales',
+        'costo_unitario' => 30,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $targetAngleId = $connection->table('insumo_productos')->insertGetId([
+        'codigo_producto' => '510010003',
+        'descripcion' => 'ANGULO A36 1"x3/16"x6m',
+        'unidad_id' => $unitId,
+        'tipo' => 'materiales',
+        'costo_unitario' => 20,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $connection->table('acu_materiales')->insert([
+        [
+            'acu_id' => $acuId,
+            'cod_insumo' => '49',
+            'descripcion' => 'GRAVILLA DE 3/8 (PUESTO EN OBRA)',
+            'unidad' => 'm3',
+            'cantidad' => 0.053,
+            'precio_unitario' => 100,
+            'parcial' => 5.3,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+        [
+            'acu_id' => $acuId,
+            'cod_insumo' => '50',
+            'descripcion' => 'GRAVILLA DE 3/8',
+            'unidad' => 'm3',
+            'cantidad' => 0.055,
+            'precio_unitario' => 80,
+            'parcial' => 4.4,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+    ]);
+
+    $this->actingAs($this->user)
+        ->postJson("/costos/proyectos/{$this->project->id}/presupuesto/insumos/merge-project-insumos", [
+            'tipo' => 'materiales',
+            'target' => [
+                'insumo_id' => null,
+                'codigo' => '49',
+                'codigo_producto' => null,
+                'descripcion' => 'GRAVILLA DE 3/8 (PUESTO EN OBRA)',
+                'unidad' => 'm3',
+                'precio' => 100,
+            ],
+            'sources' => [
+                [
+                    'descripcion' => 'GRAVILLA DE 3/8 (PUESTO EN OBRA)',
+                    'unidad' => 'm3',
+                    'codigo' => '49',
+                ],
+                [
+                    'descripcion' => 'GRAVILLA DE 3/8',
+                    'unidad' => 'm3',
+                    'codigo' => '50',
+                ],
+            ],
+        ])
+        ->assertSuccessful()
+        ->assertJsonPath('filas_afectadas', 2)
+        ->assertJsonPath('acus_afectados', 1);
+
+    $materials = $connection->table('acu_materiales')
+        ->where('acu_id', $acuId)
+        ->orderBy('cod_insumo')
+        ->get();
+    $acu = $connection->table('presupuesto_acus')->where('id', $acuId)->first();
+    $storedMaterials = json_decode($acu->materiales, true);
+
+    expect($materials)->toHaveCount(2)
+        ->and($materials->pluck('descripcion')->unique()->all())->toBe(['GRAVILLA DE 3/8 (PUESTO EN OBRA)'])
+        ->and($materials->pluck('cod_insumo')->unique()->all())->toBe(['49'])
+        ->and($materials->pluck('precio_unitario')->map(fn ($price) => (float) $price)->all())->toBe([100.0, 100.0])
+        ->and($materials->pluck('cantidad')->map(fn ($quantity) => (float) $quantity)->all())->toBe([0.053, 0.055])
+        ->and(collect($storedMaterials)->pluck('descripcion')->unique()->all())->toBe(['GRAVILLA DE 3/8 (PUESTO EN OBRA)']);
+
+    $connection->table('acu_materiales')->insert([
+        [
+            'acu_id' => $acuId,
+            'insumo_id' => $firstAngleId,
+            'cod_insumo' => '51',
+            'descripcion' => 'ANGULO A36 1 1/4" X 3/16"x6m',
+            'unidad' => 'm',
+            'cantidad' => 2,
+            'precio_unitario' => 30,
+            'parcial' => 60,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+        [
+            'acu_id' => $acuId,
+            'insumo_id' => $targetAngleId,
+            'cod_insumo' => '51',
+            'descripcion' => 'ANGULO A36 1"x3/16"x6m',
+            'unidad' => 'm',
+            'cantidad' => 3,
+            'precio_unitario' => 20,
+            'parcial' => 60,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+    ]);
+
+    $this->actingAs($this->user)
+        ->postJson("/costos/proyectos/{$this->project->id}/presupuesto/insumos/merge-project-insumos", [
+            'tipo' => 'materiales',
+            'target_descripcion' => 'ANGULO A36 1"x3/16"x6m',
+            'sources' => [
+                ['insumo_id' => null, 'descripcion' => 'ANGULO A36 1 1/4" X 3/16"x6m', 'unidad' => 'm', 'codigo' => '51'],
+                ['insumo_id' => null, 'descripcion' => 'ANGULO A36 1"x3/16"x6m', 'unidad' => 'm', 'codigo' => '51'],
+            ],
+        ])
+        ->assertSuccessful();
+
+    $angles = $connection->table('acu_materiales')
+        ->where('acu_id', $acuId)
+        ->where('unidad', 'm')
+        ->get();
+
+    expect($angles->pluck('descripcion')->unique()->all())->toBe(['ANGULO A36 1"x3/16"x6m'])
+        ->and($angles->pluck('insumo_id')->unique()->all())->toBe([$targetAngleId])
+        ->and($angles->pluck('precio_unitario')->map(fn ($price) => (float) $price)->unique()->all())->toBe([20.0])
+        ->and($angles->pluck('cantidad')->map(fn ($quantity) => (float) $quantity)->all())->toBe([2.0, 3.0]);
+});

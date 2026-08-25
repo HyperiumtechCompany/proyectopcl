@@ -1,5 +1,6 @@
 import {
     ArrowDown,
+    ArrowRight,
     ArrowUp,
     ArrowUpDown,
     Briefcase,
@@ -90,6 +91,13 @@ export interface ConsolidatedInsumo {
     sourceKeys: string[];
     variantes: string[];
     references: InsumoReference[];
+}
+
+export interface MergeInsumoSource {
+    insumo_id: number | null;
+    descripcion: string;
+    unidad: string;
+    codigo: string;
 }
 
 export type InsumoSortKey =
@@ -382,6 +390,31 @@ export function consolidateInsumos(
         .sort((a, b) => b.parcial - a.parcial);
 }
 
+export function buildMergeSources(
+    rawRows: RawInsumo[],
+    selectedRows: ConsolidatedInsumo[],
+): MergeInsumoSource[] {
+    const selectedSourceKeys = new Set(
+        selectedRows.flatMap((row) => row.sourceKeys),
+    );
+    const sources = new Map<string, MergeInsumoSource>();
+
+    for (const row of rawRows) {
+        if (!selectedSourceKeys.has(row.sourceKey) || sources.has(row.sourceKey)) {
+            continue;
+        }
+
+        sources.set(row.sourceKey, {
+            insumo_id: row.insumo_id ?? null,
+            descripcion: row.descripcion,
+            unidad: row.unidad,
+            codigo: row.codigo,
+        });
+    }
+
+    return Array.from(sources.values());
+}
+
 export function sortInsumos<T extends Pick<ConsolidatedInsumo, InsumoSortKey>>(
     rows: T[],
     sort: SortState,
@@ -497,8 +530,8 @@ export function InsumosConsolidadosModal({
         setColumnFilters((prev) => ({ ...prev, [key]: value }));
     const hasColumnFilters = Object.values(columnFilters).some((v) => v.trim() !== '');
     const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-    const [mergeName, setMergeName] = useState('');
-    const [aliases, setAliases] = useState<Record<string, string>>({});
+    const [mergeTargetKey, setMergeTargetKey] = useState('');
+    const [isMerging, setIsMerging] = useState(false);
     const [sort, setSort] = useState<SortState>({
         key: 'parcial',
         direction: 'desc',
@@ -546,8 +579,8 @@ export function InsumosConsolidadosModal({
         [open, delphinRows, scopedAcuRows],
     );
     const consolidated = useMemo(
-        () => consolidateInsumos(rawRows, aliases),
-        [rawRows, aliases],
+        () => consolidateInsumos(rawRows, {}),
+        [rawRows],
     );
     const typeRows = useMemo(() => {
         const query = normalizeText(search);
@@ -592,6 +625,10 @@ export function InsumosConsolidadosModal({
         () => typeRows.filter((row) => selectedKeys.has(row.key)),
         [typeRows, selectedKeys],
     );
+    const mergeTarget =
+        selectedRows.find((row) => row.key === mergeTargetKey) ??
+        selectedRows[0] ??
+        null;
 
     const totalsByType = useMemo(() => {
         return INSUMO_TYPES.reduce<
@@ -627,29 +664,79 @@ export function InsumosConsolidadosModal({
         });
     };
 
-    const handleMerge = () => {
+    const handleMerge = async () => {
         if (!canMerge) {
             return;
         }
 
-        const targetName = mergeName.trim() || selectedRows[0].descripcion;
-        setAliases((prev) => {
-            const next = { ...prev };
-            for (const row of selectedRows) {
-                for (const sourceKey of row.sourceKeys) {
-                    next[sourceKey] = targetName;
-                }
-            }
-            return next;
+        if (!mergeTarget) return;
+
+        const sources = buildMergeSources(rawRows, selectedRows);
+        const absorbedNames = selectedRows
+            .filter((row) => row.key !== mergeTarget.key)
+            .map((row) => `"${row.descripcion}"`)
+            .join(', ');
+        const result = await Swal.fire({
+            title: '¿Confirmar fusión irreversible?',
+            text: `${absorbedNames} serán absorbidos por "${mergeTarget.descripcion}". Conservarán sus cantidades, pero adoptarán su código, unidad y precio de S/ ${fmt(mergeTarget.precio)}. Esta acción puede cambiar el presupuesto y no se puede deshacer.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#047857',
+            cancelButtonColor: '#475569',
+            confirmButtonText: 'Sí, fusionar definitivamente',
+            cancelButtonText: 'Cancelar',
+            target: document.body,
         });
-        setSelectedKeys(new Set());
-        setMergeName('');
+
+        if (!result.isConfirmed) return;
+
+        setIsMerging(true);
+        try {
+            await axios.post(
+                `/costos/proyectos/${projectData.id}/presupuesto/insumos/merge-project-insumos`,
+                {
+                    tipo: activeType,
+                    target: {
+                        insumo_id: mergeTarget.insumo_id ?? null,
+                        codigo: mergeTarget.codigo,
+                        codigo_producto: mergeTarget.codigo_producto ?? null,
+                        descripcion: mergeTarget.descripcion,
+                        unidad: mergeTarget.unidad,
+                        precio: mergeTarget.precio,
+                    },
+                    sources,
+                },
+            );
+            setSelectedKeys(new Set());
+            setMergeTargetKey('');
+            window.dispatchEvent(new CustomEvent('insumoUpdated'));
+            await Swal.fire(
+                'Fusión guardada',
+                'Las variantes y sus referencias fueron actualizadas.',
+                'success',
+            );
+        } catch (error: any) {
+            console.error('Error fusionando insumos:', error);
+            const validationMessage = Object.values(
+                error?.response?.data?.errors ?? {},
+            ).flat()[0];
+            await Swal.fire(
+                'Error',
+                (typeof validationMessage === 'string'
+                    ? validationMessage
+                    : error?.response?.data?.message) ||
+                    'No se pudieron fusionar los insumos',
+                'error',
+            );
+        } finally {
+            setIsMerging(false);
+        }
     };
 
     const handleTypeChange = (type: InsumoType) => {
         setActiveType(type);
         setSelectedKeys(new Set());
-        setMergeName('');
+        setMergeTargetKey('');
         setReferenceRow(null);
     };
 
@@ -945,26 +1032,81 @@ export function InsumosConsolidadosModal({
                                 />
                             </div>
 
-                            <div className="flex min-w-0 items-center gap-2">
-                                <input
-                                    className="w-72 rounded border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 transition-colors outline-none placeholder:text-slate-600 focus:border-sky-500 disabled:opacity-50"
-                                    value={mergeName}
-                                    disabled={selectedRows.length < 2}
-                                    onChange={(event) =>
-                                        setMergeName(event.target.value)
-                                    }
-                                    placeholder="Nombre para fusion manual"
-                                />
-                                <button
-                                    className="flex shrink-0 items-center gap-1.5 rounded bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
-                                    disabled={!canMerge}
-                                    onClick={handleMerge}
-                                >
-                                    <Check size={13} />
-                                    Fusionar
-                                </button>
+                            <div className="shrink-0 text-[11px] text-slate-400">
+                                Selecciona 2 o más filas para fusionar
                             </div>
                         </div>
+
+                        {canMerge && mergeTarget && (
+                            <div className="border-b border-slate-700 bg-slate-950/80 p-3">
+                                <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+                                    <div className="min-w-0 rounded border border-amber-800/70 bg-amber-950/30 p-3">
+                                        <p className="text-[10px] font-bold tracking-wider text-amber-400 uppercase">
+                                            Se reemplazan
+                                        </p>
+                                        <div className="mt-2 max-h-24 space-y-1 overflow-auto">
+                                            {selectedRows
+                                                .filter((row) => row.key !== mergeTarget.key)
+                                                .map((row) => (
+                                                    <div key={row.key} className="flex items-center justify-between gap-3 text-xs">
+                                                        <span className="truncate text-slate-200">
+                                                            {row.codigo || 'Sin código'} · {row.descripcion}
+                                                        </span>
+                                                        <span className="shrink-0 font-mono text-amber-300">
+                                                            S/ {fmt(row.precio)}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col items-center justify-center gap-1 text-emerald-400">
+                                        <ArrowRight className="rotate-90 lg:rotate-0" size={22} />
+                                        <span className="text-[9px] font-bold tracking-wider uppercase">
+                                            Adoptan sus datos
+                                        </span>
+                                    </div>
+
+                                    <div className="min-w-0 rounded border border-emerald-700 bg-emerald-950/40 p-3">
+                                        <label className="text-[10px] font-bold tracking-wider text-emerald-400 uppercase">
+                                            Destino que prevalece
+                                        </label>
+                                        <select
+                                            className="mt-2 w-full rounded border border-emerald-700 bg-slate-950 px-2 py-1.5 text-xs font-semibold text-white outline-none focus:border-emerald-400"
+                                            value={mergeTarget.key}
+                                            onChange={(event) => setMergeTargetKey(event.target.value)}
+                                        >
+                                            {selectedRows.map((row) => (
+                                                <option key={row.key} value={row.key}>
+                                                    {row.codigo || 'Sin código'} - {row.descripcion}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <p className="mt-2 text-[11px] text-emerald-200">
+                                            Quedarán: código <strong>{mergeTarget.codigo || 'sin código'}</strong>, unidad{' '}
+                                            <strong>{mergeTarget.unidad}</strong> y precio{' '}
+                                            <strong>S/ {fmt(mergeTarget.precio)}</strong>.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-3 flex items-center justify-between gap-4 rounded bg-slate-900 px-3 py-2">
+                                    <p className="text-[11px] text-slate-400">
+                                        Las cantidades y referencias de cada ACU se conservan. La operación no se puede deshacer.
+                                    </p>
+                                    <button
+                                        className="flex shrink-0 items-center gap-1.5 rounded bg-emerald-700 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                                        disabled={isMerging}
+                                        onClick={handleMerge}
+                                    >
+                                        <Check size={13} />
+                                        {isMerging
+                                            ? 'Fusionando...'
+                                            : `Fusionar ${selectedRows.length - 1} en ${mergeTarget.codigo || mergeTarget.descripcion}`}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {selectedRows.length >= 2 && !canMerge && (
                             <div className="border-b border-amber-900/60 bg-amber-950/40 px-4 py-2 text-xs text-amber-300">
@@ -1087,11 +1229,16 @@ export function InsumosConsolidadosModal({
                                             const selected = selectedKeys.has(
                                                 row.key,
                                             );
+                                            const isMergeTarget =
+                                                selected &&
+                                                row.key === mergeTarget?.key;
                                             return (
                                                 <tr
                                                     key={row.key}
-                                                    className={`transition-colors ${selected
-                                                        ? 'bg-sky-950/60'
+                                                    className={`transition-colors ${isMergeTarget
+                                                        ? 'bg-emerald-950/60 inset-ring-1 inset-ring-emerald-700/60'
+                                                        : selected
+                                                          ? 'bg-amber-950/40'
                                                         : 'hover:bg-slate-800/50'
                                                         }`}
                                                 >
@@ -1116,6 +1263,11 @@ export function InsumosConsolidadosModal({
                                                     <td className="min-w-72 p-2">
                                                         <div className="font-medium text-slate-100">
                                                             {row.descripcion}
+                                                            {isMergeTarget && (
+                                                                <span className="ml-2 rounded bg-emerald-700/70 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-emerald-50 uppercase">
+                                                                    Destino
+                                                                </span>
+                                                            )}
                                                         </div>
                                                         {row.variantes.length >
                                                             1 && (

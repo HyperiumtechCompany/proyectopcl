@@ -39,22 +39,61 @@ const PATCH_SAMPLE_OFFSETS: ReadonlyArray<{ fu: number; fv: number }> = [
 
 /**
  * Fracción de visibilidad [0,1] de `patch` desde `receiver`, muestreando su
- * footprint real (lado = `√área`, la misma aproximación cuadrada que ya usa
- * `roomPatches.ts` para subdividir parches) en vez de un único rayo al
- * centroide — ver doc de `patchTangents` arriba.
+ * footprint real en vez de un único rayo al centroide — ver doc de
+ * `patchTangents` arriba.
+ *
+ * CASO ESPECIAL piso/techo (`|normal.z| > 0.99`) — Ronda 32 (2026-08-25):
+ * usan un ÚNICO rayo al centroide, SIN muestreo de footprint. Antes de esto,
+ * el footprint isotrópico `√área/2` (heredado de "Ronda sombra dura",
+ * 2026-08-21, pensado para parches de PARED ya subdivididos en tramos
+ * locales, donde una sombra parcial en el borde del tramo es un fenómeno
+ * real) se aplicaba también al piso/techo — que `buildRoomEnclosurePatches`
+ * NUNCA subdivide (un solo parche cubre TODO el ambiente, límite conocido
+ * documentado ahí). Para ese parche gigante, "footprint" no tiene el mismo
+ * sentido: sus 4 esquinas de muestreo, a `√área/2` del centroide, se pasan
+ * de largo del polígono real del ambiente en cualquier recinto no cuadrado
+ * o cóncavo (muesca de jamba de puerta) — un semiancho por eje recortado al
+ * bbox (`Math.max(...)−Math.min(...)`, incluso restando el margen de
+ * oclusión `surfaceInsetM`) TAMPOCO alcanza para un polígono cóncavo:
+ * verificado con datos reales ("Caseta de Control", Módulo 22, 4.73 m² en un
+ * recinto de 2.10×2.345 m con muesca de puerta) instrumentando
+ * `isSegmentOccluded` caja por caja — 4 de las 5 muestras seguían cayendo
+ * FUERA del ambiente, dentro de la caja opaca de sus propias paredes
+ * perimetrales (auto-oclusión geométrica, no un bloqueo físico real),
+ * colapsando la contribución de piso/techo a la interreflexión a ~1/5 de su
+ * valor real (Ē caía de 204 a 180 lx, -12%, con oclusión activa — el ajuste
+ * de escala del footprint no cambió el resultado ni un lx, confirmado
+ * corriendo el caso dorado antes/después). Como el parche no está
+ * subdividido, no hay ningún borde de sombra local que este parche pueda
+ * representar de todos modos — el rayo único al centroide (comportamiento
+ * de antes de "Ronda sombra dura" para este caso) es la prueba correcta:
+ * binaria, sin inventar una suavización que la geometría no soporta.
+ *
+ * Para pared/partición, el semiancho por eje usa `patch.halfExtentU`/
+ * `halfExtentV` cuando `roomPatches.ts` los provee (exacto por construcción
+ * — `segmentLength/2`/`segmentHeight/2` del propio tramo subdividido, más
+ * preciso que `√área/2`). Sin esos campos (`EnclosurePatch` construido a
+ * mano, ej. en tests), cae al `√área/2` isotrópico de siempre — no
+ * disruptivo.
  */
 function patchVisibilityFraction(receiver: SurfacePoint, patch: EnclosurePatch, obstacles: OcclusionBox[]): number {
     if (obstacles.length === 0) {
         return 1;
     }
-    const halfExtent = Math.sqrt(patch.area) / 2;
+    if (Math.abs(patch.normal.z) > 0.99) {
+        const centroid = { x: patch.x, y: patch.y, z: patch.z };
+        return isSegmentOccluded(receiver, centroid, obstacles) ? 0 : 1;
+    }
+    const fallbackHalfExtent = Math.sqrt(patch.area) / 2;
+    const halfExtentU = patch.halfExtentU ?? fallbackHalfExtent;
+    const halfExtentV = patch.halfExtentV ?? fallbackHalfExtent;
     const [tu, tv] = patchTangents(patch.normal);
     let visibleCount = 0;
     for (const sample of PATCH_SAMPLE_OFFSETS) {
         const samplePoint = {
-            x: patch.x + (tu.x * sample.fu + tv.x * sample.fv) * halfExtent,
-            y: patch.y + (tu.y * sample.fu + tv.y * sample.fv) * halfExtent,
-            z: patch.z + (tu.z * sample.fu + tv.z * sample.fv) * halfExtent,
+            x: patch.x + tu.x * sample.fu * halfExtentU + tv.x * sample.fv * halfExtentV,
+            y: patch.y + tu.y * sample.fu * halfExtentU + tv.y * sample.fv * halfExtentV,
+            z: patch.z + tu.z * sample.fu * halfExtentU + tv.z * sample.fv * halfExtentV,
         };
         if (!isSegmentOccluded(receiver, samplePoint, obstacles)) {
             visibleCount += 1;

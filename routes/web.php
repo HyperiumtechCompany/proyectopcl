@@ -415,6 +415,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/presupuesto/insumos/unidades', [InsumoProductoController::class, 'unidades'])->name('proyectos.presupuesto.insumos.unidades');
             Route::post('/presupuesto/insumos', [InsumoProductoController::class, 'store'])->name('proyectos.presupuesto.insumos.store');
             Route::post('/presupuesto/insumos/replace-project-insumo', [InsumoProductoController::class, 'replaceProjectInsumo'])->name('proyectos.presupuesto.insumos.replace');
+            Route::post('/presupuesto/insumos/merge-project-insumos', [InsumoProductoController::class, 'mergeProjectInsumos'])->name('proyectos.presupuesto.insumos.merge');
             Route::post('/presupuesto/insumos/update-unlinked', [InsumoProductoController::class, 'updateUnlinkedInsumo'])->name('proyectos.presupuesto.insumos.update-unlinked');
             Route::post('/presupuesto/insumos/seed', [InsumoProductoController::class, 'seedCatalog'])->name('proyectos.presupuesto.insumos.seed');
             Route::put('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'update'])->name('proyectos.presupuesto.insumos.update');

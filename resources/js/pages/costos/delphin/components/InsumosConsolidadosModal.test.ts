@@ -5,12 +5,63 @@ import type { DelphinRow } from '../types';
 import {
     calculateInsumoUsage,
     calculateReferencePrice,
+    buildMergeSources,
+    type ConsolidatedInsumo,
     consolidateInsumos,
     flattenInsumos,
     getSpecialtyAcus,
+    type RawInsumo,
     sortInsumos,
     sumInsumoTotals,
 } from './InsumosConsolidadosModal';
+
+it('construye una fuente única por variante seleccionada para persistir la fusión', () => {
+    const rawRows = [
+        {
+            sourceKey: 'materiales|gravilla|m3|49',
+            type: 'materiales',
+            codigo: '49',
+            insumo_id: null,
+            descripcion: 'GRAVILLA DE 3/8 (PUESTO EN OBRA)',
+            unidad: 'm3',
+        },
+        {
+            sourceKey: 'materiales|gravilla|m3|49',
+            type: 'materiales',
+            codigo: '49',
+            insumo_id: null,
+            descripcion: 'GRAVILLA DE 3/8 (PUESTO EN OBRA)',
+            unidad: 'm3',
+        },
+        {
+            sourceKey: 'materiales|gravilla-38|m3|50',
+            type: 'materiales',
+            codigo: '50',
+            insumo_id: 7,
+            descripcion: 'GRAVILLA DE 3/8',
+            unidad: 'm3',
+        },
+    ] as RawInsumo[];
+    const selectedRows = [
+        { sourceKeys: ['materiales|gravilla|m3|49'] },
+        { sourceKeys: ['materiales|gravilla-38|m3|50'] },
+    ] as ConsolidatedInsumo[];
+
+    expect(buildMergeSources(rawRows, selectedRows)).toEqual([
+        {
+            insumo_id: null,
+            codigo: '49',
+            descripcion: 'GRAVILLA DE 3/8 (PUESTO EN OBRA)',
+            unidad: 'm3',
+        },
+        {
+            insumo_id: 7,
+            codigo: '50',
+            descripcion: 'GRAVILLA DE 3/8',
+            unidad: 'm3',
+        },
+    ]);
+});
 
 const rows = [
     { descripcion: 'Zinc', codigo: '10', cantidad: 2, parcial: 40, usos: 1 },
