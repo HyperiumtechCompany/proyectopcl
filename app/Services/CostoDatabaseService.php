@@ -908,14 +908,25 @@ class CostoDatabaseService
                         $falc = (float) ($row->factor_desperdicio ?? 1);
                         $parcial = round($cant * $prec * ($table === 'acu_materiales' ? $falc : 1), 10);
 
+                        $updateData = [
+                            $priceField => $prec,
+                            'descripcion' => $insumo->descripcion,
+                            'parcial' => $parcial,
+                            'updated_at' => now(),
+                        ];
+
+                        if (! empty($insumo->codigo)) {
+                            $updateData['cod_insumo'] = $insumo->codigo;
+                            $updateData['codigo_producto'] = $insumo->codigo;
+                        }
+
+                        if (! empty($insumo->unidad)) {
+                            $updateData['unidad'] = $insumo->unidad;
+                        }
+
                         $connection->table($table)
                             ->where('id', $row->id)
-                            ->update([
-                                $priceField => $prec,
-                                'descripcion' => $insumo->descripcion,
-                                'parcial' => $parcial,
-                                'updated_at' => now(),
-                            ]);
+                            ->update($updateData);
                     }
                 }
             }

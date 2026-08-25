@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\UpdateInsumoProductoRequest;
+use App\Http\Requests\UpdateUnlinkedInsumoRequest;
 use App\Models\CostoProject;
 use App\Services\CostoDatabaseService;
 use Illuminate\Http\JsonResponse;
@@ -385,31 +387,49 @@ class InsumoProductoController extends Controller
      * Actualizar un producto/insumo existente.
      * PUT /costos/proyectos/{project}/presupuesto/insumos/{insumoId}
      */
-    public function update(Request $request, $project, $insumoId): JsonResponse
+    public function update(UpdateInsumoProductoRequest $request, $project, $insumoId): JsonResponse
     {
-        $validated = $request->validate([
-            'descripcion' => 'sometimes|string',
-            'especificaciones' => 'nullable|string',
-            'unidad_id' => 'sometimes|integer',
-            'diccionario_id' => 'sometimes|integer',
-            'tipo_proveedor' => 'sometimes|string|size:3',
-            'costo_unitario_lista' => 'sometimes|numeric|min:0',
-            'costo_unitario' => 'sometimes|numeric|min:0',
-            'costo_flete' => 'nullable|numeric|min:0',
-            'fecha_lista' => 'nullable|date',
-            'tipo' => 'sometimes|in:mano_de_obra,materiales,equipos,subcontratos,subpartidas',
-            'estado' => 'nullable|boolean',
-        ]);
+        $validated = $request->validated();
 
         $connection = DB::connection('costos_tenant');
 
-        // We assume auto-generated codes don't change frequently. If they do, they'll be left as is.
+        $unidad = isset($validated['unidad']) ? trim($validated['unidad']) : null;
+        unset($validated['unidad']);
 
-        $connection->table('insumo_productos')
-            ->where('id', $insumoId)
-            ->update(array_merge($validated, ['updated_at' => now()]));
+        $producto = $connection->transaction(function () use ($connection, $validated, $unidad, $insumoId) {
+            if ($unidad !== null) {
+                $unidadId = $connection->table('unidad')
+                    ->whereRaw('LOWER(TRIM(abreviatura_unidad)) = ?', [mb_strtolower($unidad)])
+                    ->orWhereRaw('LOWER(TRIM(descripcion)) = ?', [mb_strtolower($unidad)])
+                    ->value('id');
 
-        $producto = $connection->table('insumo_productos')->where('id', $insumoId)->first();
+                if (! $unidadId) {
+                    $unidadId = $connection->table('unidad')->insertGetId([
+                        'descripcion' => $unidad,
+                        'descripcion_singular' => $unidad,
+                        'orden' => '',
+                        'informacion_unidad' => '',
+                        'abreviatura_unidad' => $unidad,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+
+                $validated['unidad_id'] = $unidadId;
+            }
+
+            $connection->table('insumo_productos')
+                ->where('id', $insumoId)
+                ->update(array_merge($validated, ['updated_at' => now()]));
+
+            $producto = $connection->table('insumo_productos')->where('id', $insumoId)->first();
+            if ($producto) {
+                $producto->unidad = $unidad;
+                $producto->codigo = $validated['codigo_producto'] ?? null;
+            }
+
+            return $producto;
+        });
 
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // PROPAGACIÃ“N DE PRECIO A ACUS Y PRESUPUESTO
@@ -570,25 +590,22 @@ class InsumoProductoController extends Controller
      * POST /costos/proyectos/{project}/presupuesto/insumos/update-unlinked
      * Body: { tipo, old_descripcion, new_descripcion?, new_precio? }
      */
-    public function updateUnlinkedInsumo(Request $request, $project): JsonResponse
+    public function updateUnlinkedInsumo(UpdateUnlinkedInsumoRequest $request, $project): JsonResponse
     {
-        $validated = $request->validate([
-            'tipo' => 'required|in:mano_de_obra,materiales,equipos,subcontratos,subpartidas',
-            'old_descripcion' => 'required|string',
-            'new_descripcion' => 'nullable|string',
-            'new_precio' => 'nullable|numeric|min:0',
-        ]);
+        $validated = $request->validated();
 
         $tipo = $validated['tipo'];
         $oldDescripcion = trim($validated['old_descripcion']);
         $newDescripcion = isset($validated['new_descripcion']) ? trim($validated['new_descripcion']) : null;
+        $newCodigo = isset($validated['new_codigo']) ? trim($validated['new_codigo']) : null;
+        $newUnidad = isset($validated['new_unidad']) ? trim($validated['new_unidad']) : null;
         $newPrecio = $validated['new_precio'] ?? null;
 
         // Al menos uno debe estar presente
-        if ($newDescripcion === null && $newPrecio === null) {
+        if ($newCodigo === null && $newDescripcion === null && $newUnidad === null && $newPrecio === null) {
             return response()->json([
                 'success' => false,
-                'message' => 'Debe proporcionar new_descripcion o new_precio.',
+                'message' => 'Debe proporcionar al menos un campo para actualizar.',
             ], 422);
         }
 
@@ -632,6 +649,15 @@ class InsumoProductoController extends Controller
 
             if ($newDescripcion !== null && $newDescripcion !== '') {
                 $updateData['descripcion'] = $newDescripcion;
+            }
+
+            if ($newCodigo !== null && $newCodigo !== '') {
+                $updateData['cod_insumo'] = $newCodigo;
+                $updateData['codigo_producto'] = $newCodigo;
+            }
+
+            if ($newUnidad !== null && $newUnidad !== '') {
+                $updateData['unidad'] = $newUnidad;
             }
 
             if ($newPrecio !== null) {

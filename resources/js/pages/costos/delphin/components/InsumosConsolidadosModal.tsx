@@ -506,7 +506,9 @@ export function InsumosConsolidadosModal({
     const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<number | null>(null);
     const [referenceRow, setReferenceRow] = useState<ConsolidatedInsumo | null>(null);
     const [editingInsumo, setEditingInsumo] = useState<ConsolidatedInsumo | null>(null);
+    const [editCode, setEditCode] = useState('');
     const [editName, setEditName] = useState('');
+    const [editUnit, setEditUnit] = useState('');
     const [editPrice, setEditPrice] = useState(0);
     const [isSaving, setIsSaving] = useState(false);
     const [isMaximized, setIsMaximized] = useState(false);
@@ -653,7 +655,9 @@ export function InsumosConsolidadosModal({
 
     const handleEditClick = (row: ConsolidatedInsumo) => {
         setEditingInsumo(row);
+        setEditCode(row.codigo);
         setEditName(row.descripcion);
+        setEditUnit(row.unidad);
         setEditPrice(row.precio);
     };
 
@@ -667,7 +671,7 @@ export function InsumosConsolidadosModal({
         
         const result = await Swal.fire({
             title: '¿Confirmar cambios?',
-            text: `Se actualizará el nombre y precio en todos los ACUs del proyecto para "${editingInsumo.descripcion}". Esta acción es segura (no elimina datos) pero afectará los montos del presupuesto.`,
+            text: `Se actualizará el código, descripción, unidad y precio en todos los ACUs del proyecto para "${editingInsumo.descripcion}". Esta acción no elimina datos, pero puede afectar los montos del presupuesto.`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#0ea5e9',
@@ -684,7 +688,9 @@ export function InsumosConsolidadosModal({
             if (editingInsumo.insumo_id) {
                 // Caso A: Ya está vinculado al catálogo
                 await axios.put(`/costos/proyectos/${projectData.id}/presupuesto/insumos/${editingInsumo.insumo_id}`, {
+                    codigo_producto: editCode.trim(),
                     descripcion: editName,
+                    unidad: editUnit.trim(),
                     costo_unitario: editPrice
                 });
             } else {
@@ -692,7 +698,9 @@ export function InsumosConsolidadosModal({
                 await axios.post(`/costos/proyectos/${projectData.id}/presupuesto/insumos/update-unlinked`, {
                     tipo: activeType,
                     old_descripcion: editingInsumo.descripcion,
+                    new_codigo: editCode.trim(),
                     new_descripcion: editName,
+                    new_unidad: editUnit.trim(),
                     new_precio: editPrice
                 });
             }
@@ -1154,7 +1162,7 @@ export function InsumosConsolidadosModal({
                                                                 type="button"
                                                                 className="inline-flex rounded p-1.5 text-amber-400 transition-colors hover:bg-amber-950/50 hover:text-amber-200"
                                                                 onClick={() => handleEditClick(row)}
-                                                                title={`Editar nombre o precio`}
+                                                                title="Editar código, descripción, unidad o precio"
                                                                 aria-label={`Editar ${row.descripcion}`}
                                                             >
                                                                 <Edit3 size={14} />
@@ -1295,12 +1303,38 @@ export function InsumosConsolidadosModal({
                             <div className="p-4 space-y-4">
                                 <div>
                                     <label className="mb-1 block text-xs font-medium text-slate-300">
+                                        Código
+                                    </label>
+                                    <input
+                                        type="text"
+                                        maxLength={50}
+                                        value={editCode}
+                                        onChange={(e) => setEditCode(e.target.value)}
+                                        className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+                                        disabled={isSaving}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-slate-300">
                                         Descripción
                                     </label>
                                     <input
                                         type="text"
                                         value={editName}
                                         onChange={(e) => setEditName(e.target.value)}
+                                        className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+                                        disabled={isSaving}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-slate-300">
+                                        Unidad
+                                    </label>
+                                    <input
+                                        type="text"
+                                        maxLength={20}
+                                        value={editUnit}
+                                        onChange={(e) => setEditUnit(e.target.value)}
                                         className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
                                         disabled={isSaving}
                                     />
@@ -1333,7 +1367,7 @@ export function InsumosConsolidadosModal({
                                     type="button"
                                     onClick={handleSaveEdit}
                                     className="rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-500 disabled:opacity-50"
-                                    disabled={isSaving || !editName.trim()}
+                                    disabled={isSaving || !editCode.trim() || !editName.trim() || !editUnit.trim()}
                                 >
                                     {isSaving ? 'Guardando...' : 'Guardar y Propagar'}
                                 </button>
