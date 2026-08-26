@@ -20,6 +20,16 @@ export interface EdgeCalculation {
     ownVoltageDropV: number;
     ownVoltageDropPercent: number;
     accumulatedVoltageDropPercent: number;
+    /**
+     * Caída de tensión acumulada en VOLTIOS desde el TG real (raíz de la red
+     * general) hasta el extremo receptor de este alimentador — incluye la
+     * caída propia de este tramo. A diferencia de `accumulatedVoltageDropPercent`,
+     * este valor en voltios es el que se inyecta como `upstreamVoltageDropV`
+     * en el tablero raíz de un módulo (ver `ElectricalNetwork.tsx`), para que
+     * su propio árbol TD→C encadene la caída real con la MISMA fórmula que
+     * usa `calculatePanelCircuitSummaries` dentro del módulo.
+     */
+    accumulatedVoltageDropV: number;
     status: 'complete' | 'warning' | 'non_compliant' | 'incomplete';
     warnings: string[];
 }
@@ -78,7 +88,11 @@ export function calculateElectricalNetwork(
     if (network.rootNodeId) loadAt(network.rootNodeId);
 
     const results: EdgeCalculation[] = [];
-    const walk = (nodeId: string, accumulated: number): void => {
+    const walk = (
+        nodeId: string,
+        upstreamPercent: number,
+        upstreamV: number,
+    ): void => {
         for (const edge of children.get(nodeId) ?? []) {
             const load = loadAt(edge.targetNodeId);
             const powerFactor =
@@ -115,7 +129,10 @@ export function calculateElectricalNetwork(
                 network.settings.phases,
                 material,
             );
-            const accumulatedPercent = accumulated + ownPercent;
+            const accumulatedPercent = upstreamPercent + ownPercent;
+            const ownVoltageDropV =
+                (ownPercent * network.settings.nominalVoltageV) / 100;
+            const accumulatedV = upstreamV + ownVoltageDropV;
             const suggestion = selectConductor({
                 designCurrentA,
                 lengthM,
@@ -169,10 +186,10 @@ export function calculateElectricalNetwork(
                 ampacityA: selected?.ampacity_a,
                 breakerA: breaker.amps,
                 suggestedSectionMm2: suggestion.sectionMm2 || undefined,
-                ownVoltageDropV:
-                    (ownPercent * network.settings.nominalVoltageV) / 100,
+                ownVoltageDropV,
                 ownVoltageDropPercent: ownPercent,
                 accumulatedVoltageDropPercent: accumulatedPercent,
+                accumulatedVoltageDropV: accumulatedV,
                 status:
                     lengthM <= 0 || load.demand <= 0
                         ? 'incomplete'
@@ -184,10 +201,10 @@ export function calculateElectricalNetwork(
                             : 'complete',
                 warnings,
             });
-            walk(edge.targetNodeId, accumulatedPercent);
+            walk(edge.targetNodeId, accumulatedPercent, accumulatedV);
         }
     };
-    if (network.rootNodeId) walk(network.rootNodeId, 0);
+    if (network.rootNodeId) walk(network.rootNodeId, 0, 0);
 
     return results;
 }

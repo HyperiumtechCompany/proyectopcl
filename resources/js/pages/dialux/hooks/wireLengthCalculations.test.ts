@@ -129,6 +129,42 @@ describe('vínculo lógico de tableros entre pisos', () => {
         expect(td.upstreamVoltageDropV).toBe(tg.voltageDropV);
         expect(td.upstreamVoltageDropV).not.toBe(6.22);
     });
+
+    it('un TD raíz (sub_panel, sin hijos propios) que solo alimenta un Sub-TD de otro piso también genera su fila resumen', () => {
+        // Caso real: el TD del piso 1 es el tablero raíz del módulo (lo
+        // alimenta el TG del módulo general, fuera de este proyecto), no
+        // tiene ningún hijo dibujado en SU propia escena, y no es
+        // main_panel — antes del fix, `calculatePanelCircuitSummaries` lo
+        // dejaba invisible (ninguna de las 3 condiciones de
+        // `visibleSummaryCircuits` se cumplía), así que `panelFeederGeometry`
+        // en el módulo general nunca encontraba su altura de montaje real.
+        const piso1 = buildScene({
+            id: 'piso-1',
+            floorIndex: 0,
+            floorElevation: 0,
+            electricalDevices: [{
+                id: 'td-piso-1', type: 'sub_panel', label: 'TD', x: 0, y: 0,
+                mountingHeight: 1.8, connectedDeviceIds: [], properties: { sectionMm2: 16, lengthM: 200 },
+            }],
+        });
+        const piso2 = buildScene({
+            id: 'piso-2',
+            floorIndex: 1,
+            floorElevation: 3.5,
+            electricalDevices: [{
+                id: 'sub-td-01', type: 'sub_panel', label: 'Sub TD-01', x: 0, y: 0,
+                mountingHeight: 1.8, connectedDeviceIds: [], properties: { upstreamPanelId: 'td-piso-1', sectionMm2: 10, lengthM: 200 },
+            }],
+        });
+
+        const summaries = calculateProjectPanelCircuitSummaries([piso1, piso2]);
+        const td = summaries.find((item) => item.panelId === 'td-piso-1' && item.isPanelSummary);
+        const subTd = summaries.find((item) => item.panelId === 'sub-td-01' && item.isPanelSummary);
+
+        expect(td).toBeDefined();
+        expect(subTd).toBeDefined();
+        expect(subTd!.upstreamVoltageDropV).toBe(td!.voltageDropV);
+    });
 });
 
 describe('defaultNominalCableCurrent', () => {

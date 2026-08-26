@@ -615,11 +615,11 @@ export function InsumosConsolidadosModal({
         for (const { key } of INSUMO_TYPES) {
             const rows = consolidated.filter((row) => row.type === key);
             if (rows.length > 0) {
-                result[key] = sortInsumos(rows, { key: 'parcial', direction: 'desc' });
+                result[key] = sortInsumos(rows, sort);
             }
         }
         return result;
-    }, [consolidated]);
+    }, [consolidated, sort]);
 
     const selectedRows = useMemo(
         () => typeRows.filter((row) => selectedKeys.has(row.key)),

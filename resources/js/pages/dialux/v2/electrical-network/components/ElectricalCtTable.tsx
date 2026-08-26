@@ -1,17 +1,19 @@
 import { AlertTriangle, Check, CheckCircle2, Link2Off } from 'lucide-react';
 import { Fragment, useState } from 'react';
-import type { PanelCircuitSummary } from '@/pages/dialux/hooks/wireLengthCalculations';
+import { circuitCurrent } from '@/pages/dialux/electrical/engine/formulas';
+import { calculatePanelTotalCurrentA } from '@/pages/dialux/hooks/wireLengthCalculations';
+import { CONDUCTOR_SECTION_OPTIONS } from '@/pages/dialux/hooks/types';
 import type { EdgeCalculation } from '../domain/calculations';
+import {
+    rowsForDistributionPanel,
+    type ModuleCtCircuit,
+} from '../domain/ctTableRows';
 import type {
     ElectricalEdge,
     ElectricalNetworkData,
     GraphIssue,
 } from '../domain/types';
 
-type ModuleCtCircuit = PanelCircuitSummary & {
-    moduleId: number;
-    moduleName: string;
-};
 interface Props {
     data: ElectricalNetworkData;
     calculations: EdgeCalculation[];
@@ -29,15 +31,95 @@ interface Props {
     onSelect: (id: string) => void;
 }
 const COLS = 36;
+const ITM_OPTIONS = [
+    '1x10',
+    '1x16',
+    '1x20',
+    '1x25',
+    '1x32',
+    '1x40',
+    '1x50',
+    '1x63',
+    '2x10',
+    '2x16',
+    '2x20',
+    '2x25',
+    '2x32',
+    '2x40',
+    '2x50',
+    '2x63',
+    '3x10',
+    '3x15',
+    '3x16',
+    '3x20',
+    '3x25',
+    '3x30',
+    '3x32',
+    '3x35',
+    '3x40',
+    '3x50',
+    '3x60',
+    '3x63',
+    '3x70',
+    '3x75',
+    '3x80',
+    '3x100',
+    '3x125',
+    '3x140',
+    '3x150',
+    '3x160',
+    '3x175',
+    '3x180',
+    '3x200',
+    '3x225',
+    '3x250',
+    '3x300',
+    '3x320',
+    '3x400',
+    '3x500',
+    '3x630',
+    '4x16',
+    '4x25',
+    '4x40',
+    '4x63',
+    '4x80',
+    '4x100',
+    '4x125',
+    '4x160',
+    '4x200',
+    '4x250',
+    '4x320',
+    '4x400',
+    '4x500',
+    '4x630',
+].map((value) => [value, value] as [string, string]);
+const DIF_OPTIONS = ['2x25', '2x40', '2x63', '4x25', '4x40', '4x63'].map(
+    (value) => [value, value] as [string, string],
+);
+const EARTH_SECTION_OPTIONS = [2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120].map(
+    (value) => [value.toString(), value.toString()] as [string, string],
+);
+const CONDUCTOR_TYPE_OPTIONS = [
+    'TW',
+    'THW',
+    'NYY',
+    'LSOH-80',
+    'LSOH-90',
+    'N2X0H',
+].map((value) => [value, value] as [string, string]);
+
+function protectionValue(value: string): string {
+    return value.replace(/\s*A$/i, '');
+}
 
 export function ElectricalCtTable({
     data,
     calculations,
     moduleCtCircuits,
     issues,
-    onUpdateEdge,
     onUpdateSettings,
     onUpdateCircuit,
+    onUpdateEdge,
     onRemove,
     onSelect,
 }: Props) {
@@ -63,12 +145,15 @@ export function ElectricalCtTable({
             calcByEdge.get(edge.id)?.status ?? 'incomplete',
         ),
     ).length;
+    // Verifica TODO el árbol del módulo, no solo las salidas finales: una
+    // fila resumen (TD/TG) representa el alimentador que agrupa a sus
+    // hijos, y puede incumplir caída de tensión/capacidad aunque ninguna
+    // salida final propia lo haga (p.ej. un TD que solo alimenta Sub-TDs).
     const circuitProblems = moduleCtCircuits.filter(
         (item) =>
-            !item.isPanelSummary &&
-            (!item.voltageDropOk ||
-                !item.capacityConforms ||
-                item.normativeViolation),
+            !item.voltageDropOk ||
+            !item.capacityConforms ||
+            item.normativeViolation,
     ).length;
     const problems =
         topologyProblems +
@@ -85,20 +170,16 @@ export function ElectricalCtTable({
     const rootEdges = edges.filter(
         (edge) => nodes.get(edge.sourceNodeId)?.type === 'main_panel',
     );
-    const externalDrop = new Map<number, number>();
-    rootEdges.forEach((edge) => {
-        const moduleId = nodes.get(edge.targetNodeId)?.moduleId;
-        const result = calcByEdge.get(edge.id);
-        if (moduleId !== undefined && result)
-            externalDrop.set(moduleId, result.accumulatedVoltageDropPercent);
-    });
-    const globalInstalled = rootEdges.reduce(
-        (sum, edge) => sum + (calcByEdge.get(edge.id)?.installedPowerW ?? 0),
-        0,
+    const rootPanelIds = new Set(
+        rootEdges
+            .map((edge) => nodes.get(edge.targetNodeId)?.deviceId)
+            .filter((panelId): panelId is string => Boolean(panelId)),
     );
-    const globalDemand = rootEdges.reduce(
-        (sum, edge) => sum + (calcByEdge.get(edge.id)?.demandPowerW ?? 0),
-        0,
+    const rootDistributionSummaries = moduleCtCircuits.filter(
+        (circuit) =>
+            circuit.isPanelSummary &&
+            circuit.panelType === 'sub_panel' &&
+            rootPanelIds.has(circuit.panelId),
     );
 
     return (
@@ -135,26 +216,6 @@ export function ElectricalCtTable({
                 <table className="w-full min-w-[3500px] border-collapse text-left text-[10px] text-slate-700 dark:text-slate-200">
                     <FullHeader />
                     <tbody>
-                        <tr className="bg-violet-700 font-semibold text-white">
-                            <td colSpan={COLS} className="px-3 py-2">
-                                1 TG GENERAL · {moduleIds.length} módulo(s) ·{' '}
-                                {edges.length} TD/Sub‑TD · PI{' '}
-                                {(globalInstalled / 1000).toFixed(2)} kW · MD{' '}
-                                {(globalDemand / 1000).toFixed(2)} kW
-                            </td>
-                        </tr>
-                        <GeneralRow
-                            data={data}
-                            installedPowerW={globalInstalled}
-                            demandPowerW={globalDemand}
-                            calculations={rootEdges
-                                .map((edge) => calcByEdge.get(edge.id))
-                                .filter(
-                                    (item): item is EdgeCalculation =>
-                                        item !== undefined,
-                                )}
-                            onUpdate={onUpdateSettings}
-                        />
                         {moduleIds.map((moduleId) => {
                             const moduleEdges = edges
                                 .filter(
@@ -242,17 +303,16 @@ export function ElectricalCtTable({
                                         );
                                         const result = calcByEdge.get(edge.id);
                                         if (!target || !result) return null;
-                                        const rows = circuits.filter(
-                                            (item) =>
-                                                item.panelId ===
+                                        const { outputRows, summaryRows } =
+                                            rowsForDistributionPanel(
+                                                circuits,
+                                                moduleId,
                                                 target.deviceId,
-                                        );
-                                        const outputRows = rows.filter(
-                                            (item) => !item.isPanelSummary,
-                                        );
-                                        const summaryRows = rows.filter(
-                                            (item) => item.isPanelSummary,
-                                        );
+                                            );
+                                        const rowCount =
+                                            outputRows.length +
+                                            summaryRows.length;
+                                        if (rowCount === 0) return null;
                                         const panelKind =
                                             source?.type === 'main_panel'
                                                 ? 'TD'
@@ -287,14 +347,12 @@ export function ElectricalCtTable({
                                                         'Sin nivel'
                                                     }
                                                     panelLabel={target.label}
-                                                    panelKind={panelKind}
                                                     sourceLabel={
                                                         source?.label ?? 'TG'
                                                     }
-                                                    rowSpan={1 + rows.length}
-                                                    phases={
-                                                        data.settings.phases
-                                                    }
+                                                    panelKind={panelKind}
+                                                    rowSpan={rowCount + 1}
+                                                    phases={data.settings.phases}
                                                     onUpdate={onUpdateEdge}
                                                     onRemove={onRemove}
                                                     onSelect={onSelect}
@@ -303,15 +361,6 @@ export function ElectricalCtTable({
                                                     <CircuitRow
                                                         key={`${edge.id}:${circuit.rootConductorId}:${circuit.isPanelSummary ? 'CG' : 'C'}`}
                                                         circuit={circuit}
-                                                        externalDropPercent={
-                                                            externalDrop.get(
-                                                                moduleId,
-                                                            ) ?? 0
-                                                        }
-                                                        nominalVoltageV={
-                                                            data.settings
-                                                                .nominalVoltageV
-                                                        }
                                                         onUpdate={
                                                             onUpdateCircuit
                                                         }
@@ -321,15 +370,6 @@ export function ElectricalCtTable({
                                                     <CircuitRow
                                                         key={`${edge.id}:${circuit.rootConductorId}:CG`}
                                                         circuit={circuit}
-                                                        externalDropPercent={
-                                                            externalDrop.get(
-                                                                moduleId,
-                                                            ) ?? 0
-                                                        }
-                                                        nominalVoltageV={
-                                                            data.settings
-                                                                .nominalVoltageV
-                                                        }
                                                         onUpdate={
                                                             onUpdateCircuit
                                                         }
@@ -359,6 +399,20 @@ export function ElectricalCtTable({
                                 </td>
                             </tr>
                         ))}
+                        <tr className="bg-slate-800 font-semibold text-white">
+                            <td
+                                colSpan={COLS}
+                                className="px-3 py-2 text-center"
+                            >
+                                RESUMEN GENERAL (TG) · {moduleIds.length}{' '}
+                                módulo(s) · {rootEdges.length} TD principal(es)
+                            </td>
+                        </tr>
+                        <GeneralRow
+                            data={data}
+                            distributionSummaries={rootDistributionSummaries}
+                            onUpdate={onUpdateSettings}
+                        />
                     </tbody>
                 </table>
             </div>
@@ -425,27 +479,49 @@ function FullHeader() {
 
 function GeneralRow({
     data,
-    installedPowerW,
-    demandPowerW,
-    calculations,
+    distributionSummaries,
     onUpdate,
 }: {
     data: ElectricalNetworkData;
-    installedPowerW: number;
-    demandPowerW: number;
-    calculations: EdgeCalculation[];
+    distributionSummaries: ModuleCtCircuit[];
     onUpdate: Props['onUpdateSettings'];
 }) {
-    const designCurrent = Math.max(
+    const installedPowerW = distributionSummaries.reduce(
+        (sum, circuit) => sum + circuit.installedPowerW,
         0,
-        ...calculations.map((item) => item.designCurrentA),
     );
-    const maxDrop = Math.max(
+    const demandPowerW = distributionSummaries.reduce(
+        (sum, circuit) => sum + circuit.maximumDemandKw * 1000,
         0,
-        ...calculations.map((item) => item.accumulatedVoltageDropPercent),
     );
-    const ok = calculations.every(
-        (item) => item.status === 'complete' || item.status === 'warning',
+    const phaseCurrentR = distributionSummaries.reduce(
+        (sum, circuit) => sum + circuit.phaseCurrentR,
+        0,
+    );
+    const phaseCurrentS = distributionSummaries.reduce(
+        (sum, circuit) => sum + circuit.phaseCurrentS,
+        0,
+    );
+    const phaseCurrentT = distributionSummaries.reduce(
+        (sum, circuit) => sum + circuit.phaseCurrentT,
+        0,
+    );
+    const designFactor = data.settings.designFactor ?? 1.25;
+    const currentA = calculatePanelTotalCurrentA(
+        phaseCurrentR,
+        phaseCurrentS,
+        phaseCurrentT,
+        designFactor,
+    );
+    const theoreticalDesignCurrentA =
+        circuitCurrent(
+            demandPowerW,
+            data.settings.phases === 1 ? 220 : data.settings.nominalVoltageV,
+            data.settings.phases,
+            data.settings.defaultPowerFactor,
+        ) * designFactor;
+    const ok = distributionSummaries.every(
+        (circuit) => circuit.capacityConforms && circuit.voltageDropOk,
     );
 
     return (
@@ -482,12 +558,12 @@ function GeneralRow({
                     <option value={3}>3Φ+N+T</option>
                 </select>
             </td>
-            <Mono value={designCurrent.toFixed(2)} />
-            <Mono value={designCurrent.toFixed(2)} />
-            <Mono value="—" />
-            <Mono value="—" />
-            <Mono value="—" />
-            <Mono value="—" />
+            <Mono value={theoreticalDesignCurrentA.toFixed(2)} />
+            <Mono value={currentA.toFixed(2)} />
+            <Mono value={data.settings.phases === 3 ? 'RST' : 'R'} />
+            <Mono value={phaseCurrentR.toFixed(2)} />
+            <Mono value={phaseCurrentS.toFixed(2)} />
+            <Mono value={phaseCurrentT.toFixed(2)} />
             <Mono value="—" />
             <Edit
                 value={data.settings.workingTemperatureC}
@@ -505,7 +581,7 @@ function GeneralRow({
             <Mono value="0.00" />
             <Mono value="—" />
             <Mono value="0.00" />
-            <Mono value={`${maxDrop.toFixed(2)}%`} strong />
+            <Mono value="0.00%" strong />
             <Conform ok={ok} />
             <Mono value="—" />
             <Mono value="—" />
@@ -644,18 +720,13 @@ function FeederRow({
 
 function CircuitRow({
     circuit,
-    externalDropPercent,
-    nominalVoltageV,
     onUpdate,
 }: {
     circuit: ModuleCtCircuit;
-    externalDropPercent: number;
-    nominalVoltageV: number;
     onUpdate: Props['onUpdateCircuit'];
 }) {
-    const dropPct = externalDropPercent + circuit.voltageDropPct;
-    const dropV =
-        circuit.voltageDropV + (externalDropPercent * nominalVoltageV) / 100;
+    const dropPct = circuit.voltageDropPct;
+    const dropV = circuit.voltageDropV;
     const ok =
         circuit.voltageDropOk &&
         circuit.capacityConforms &&
@@ -684,9 +755,24 @@ function CircuitRow({
                           : circuit.traversedRoomNames.join(' → ')
                 }
             />
-            <Mono value={circuit.lightingPowerW.toFixed(0)} />
+            <Mono
+                value={
+                    circuit.isPanelSummary
+                        ? circuit.upstreamVoltageDropV.toFixed(2)
+                        : circuit.lightingPowerW.toFixed(0)
+                }
+            />
             <Mono value={circuit.outletPowerW.toFixed(0)} />
-            <Mono value={circuit.forcePowerW.toFixed(0)} />
+            {circuit.isPanelSummary ? (
+                <Mono value={circuit.forcePowerW.toFixed(0)} />
+            ) : (
+                <Edit
+                    value={circuit.forcePowerW}
+                    onChange={(value) =>
+                        onUpdate(circuit, { forcePowerW: value })
+                    }
+                />
+            )}
             <Edit
                 value={circuit.powerFactor}
                 onChange={(value) =>
@@ -701,10 +787,29 @@ function CircuitRow({
             />
             <Mono value={circuit.installedPowerKw.toFixed(2)} strong />
             <Mono value={circuit.maximumDemandKw.toFixed(2)} strong />
-            <Mono value={circuit.phases === 3 ? '3Φ+N+T' : '1Φ+N+T'} />
+            <SelectCell
+                value={circuit.phases.toString()}
+                options={[
+                    ['1', '1Φ+N+T'],
+                    ['3', '3Φ+N+T'],
+                ]}
+                onChange={(value) =>
+                    onUpdate(circuit, { phases: Number(value) as 1 | 3 })
+                }
+            />
             <Mono value={circuit.theoreticalDesignCurrentA.toFixed(2)} />
             <Mono value={circuit.currentA.toFixed(2)} />
-            <Mono value={circuit.phaseBalance} />
+            <SelectCell
+                value={circuit.phaseBalance}
+                options={['R', 'S', 'T', 'RS', 'ST', 'TR', 'RST'].map(
+                    (value) => [value, value] as [string, string],
+                )}
+                onChange={(value) =>
+                    onUpdate(circuit, {
+                        phaseBalance: value as ModuleCtCircuit['phaseBalance'],
+                    })
+                }
+            />
             <Mono value={circuit.phaseCurrentR.toFixed(2)} />
             <Mono value={circuit.phaseCurrentS.toFixed(2)} />
             <Mono value={circuit.phaseCurrentT.toFixed(2)} />
@@ -737,21 +842,28 @@ function CircuitRow({
             />
             <Mono value={circuit.admissibleCableCurrentA.toFixed(2)} />
             <Conform ok={circuit.capacityConforms} />
-            <TextEdit
-                value={circuit.itm}
+            <SelectCell
+                value={protectionValue(circuit.itm)}
+                options={ITM_OPTIONS}
                 onChange={(value) => onUpdate(circuit, { itm: value })}
             />
-            <TextEdit
-                value={circuit.dif}
+            <SelectCell
+                value={protectionValue(circuit.dif)}
+                options={DIF_OPTIONS}
                 onChange={(value) => onUpdate(circuit, { dif: value })}
             />
             <Mono value={circuit.horizontalLengthM.toFixed(2)} />
             <Mono value={circuit.verticalLengthM.toFixed(2)} />
             <Mono value={circuit.lengthM.toFixed(2)} />
-            <Edit
-                value={circuit.sectionMm2}
-                onChange={(value) => onUpdate(circuit, { sectionMm2: value })}
-                suffix="mm²"
+            <SelectCell
+                value={circuit.sectionMm2.toString()}
+                options={CONDUCTOR_SECTION_OPTIONS.map((option) => [
+                    option.value.toString(),
+                    option.label,
+                ])}
+                onChange={(value) =>
+                    onUpdate(circuit, { sectionMm2: Number(value) })
+                }
             />
             <Mono value={dropV.toFixed(2)} />
             <Mono value={`${dropPct.toFixed(2)}%`} strong />
@@ -762,18 +874,19 @@ function CircuitRow({
                 }
             />
             <Mono value={`${circuit.tubeDiameterMm} mm`} />
-            <TextEdit
+            <SelectCell
                 value={circuit.conductorType}
+                options={CONDUCTOR_TYPE_OPTIONS}
                 onChange={(value) =>
                     onUpdate(circuit, { conductorType: value })
                 }
             />
-            <Edit
-                value={circuit.earthSectionMm2}
+            <SelectCell
+                value={circuit.earthSectionMm2.toString()}
+                options={EARTH_SECTION_OPTIONS}
                 onChange={(value) =>
-                    onUpdate(circuit, { earthSectionMm2: value })
+                    onUpdate(circuit, { earthSectionMm2: Number(value) })
                 }
-                suffix="mm²"
             />
         </tr>
     );
@@ -868,20 +981,28 @@ function Edit({
     );
 }
 
-function TextEdit({
+function SelectCell({
     value,
+    options,
     onChange,
 }: {
     value: string;
+    options: Array<[string, string]>;
     onChange: (value: string) => void;
 }) {
     return (
         <td className="px-2 py-2">
-            <input
+            <select
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
                 className="h-8 w-24 rounded border border-slate-300 bg-white px-2 font-mono outline-none dark:border-white/15 dark:bg-[#182237]"
-            />
+            >
+                {options.map(([optionValue, label]) => (
+                    <option key={optionValue} value={optionValue}>
+                        {label}
+                    </option>
+                ))}
+            </select>
         </td>
     );
 }

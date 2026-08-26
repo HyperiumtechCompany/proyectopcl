@@ -29,8 +29,22 @@ function patchTangents(normal: Vector3): [Vector3, Vector3] {
     ];
 }
 
+/**
+ * EXPERIMENTO (2026-08-25) — grilla 3x3 (9 puntos) en vez de los 5 originales
+ * (centro + 4 esquinas, sin puntos medios de borde). Hipótesis: en una
+ * esquina cóncava (muesca de jamba) un parche vecino puede tener sus 4
+ * esquinas de muestreo ocluidas por el tramo perpendicular corto adyacente
+ * aunque una franja continua del parche SÍ sea visible — un artefacto de
+ * resolución de muestreo, no necesariamente el tamaño real de la sombra.
+ * Pendiente: medir contra el oráculo Radiance (4 casos reales) si esto
+ * cierra brecha sin regresión antes de decidir si se adopta.
+ */
 const PATCH_SAMPLE_OFFSETS: ReadonlyArray<{ fu: number; fv: number }> = [
     { fu: 0, fv: 0 },
+    { fu: 1, fv: 0 },
+    { fu: -1, fv: 0 },
+    { fu: 0, fv: 1 },
+    { fu: 0, fv: -1 },
     { fu: 1, fv: 1 },
     { fu: -1, fv: 1 },
     { fu: 1, fv: -1 },

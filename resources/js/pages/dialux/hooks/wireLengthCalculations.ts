@@ -574,7 +574,22 @@ function ambientNamesAlongConductor(
 }
 
 /** Resume cada salida física de tablero siguiendo la red de conductores hasta sus cargas finales. */
-export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummary[] {
+export function calculatePanelCircuitSummaries(
+    scene: Scene,
+    /**
+     * IDs de tablero que OTRA escena del mismo proyecto referencia como su
+     * `properties.upstreamPanelId` (enlace lógico entre pisos). Esta función
+     * solo ve la escena recibida, así que no puede saberlo por sí misma —
+     * `calculateProjectPanelCircuitSummaries` lo calcula mirando TODAS las
+     * escenas y lo pasa aquí. Sin esto, un TD que solo alimenta un Sub-TD de
+     * OTRO piso (sin hijos propios en su misma escena, sin ser main_panel, y
+     * sin su propio upstreamPanelId) nunca generaba fila resumen: quedaba
+     * invisible para `panelFeederGeometry` en el módulo general, y su
+     * longitud vertical real (altura de montaje + elevación de piso) nunca
+     * se calculaba.
+     */
+    externallyReferencedPanelIds: ReadonlySet<string> = new Set(),
+): PanelCircuitSummary[] {
     const fixtures = scene.fixtures ?? [];
     const switches = scene.lightSwitches ?? [];
     const devices = scene.electricalDevices ?? [];
@@ -1339,7 +1354,13 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
         // disponible para que esa misma Pasada lo encuentre — aunque en SU
         // propia escena no tenga hijos ni padre conductor.
         const ownPanel = panels.find((candidate) => candidate.id === summary.panelId);
-        return Boolean(ownPanel?.properties?.upstreamPanelId);
+        if (ownPanel?.properties?.upstreamPanelId) return true;
+        // El caso simétrico: ESTE tablero es el que otra escena declara como
+        // su upstreamPanelId (p.ej. el TD raíz de un módulo, cuyo único
+        // "hijo" es un Sub-TD de otro piso). Sin esto la fila resumen de
+        // ESTE tablero desaparecía — y con ella su longitud/geometría real
+        // para el módulo general.
+        return externallyReferencedPanelIds.has(summary.panelId);
     });
     const aliveCircuitsFinal = [...visibleSummaryCircuits, ...genericCircuits];
 
@@ -1397,8 +1418,19 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
  * TG de otra escena mediante `properties.upstreamPanelId`.
  */
 export function calculateProjectPanelCircuitSummaries(scenes: Scene[]): PanelCircuitSummary[] {
-    const summaries = scenes.flatMap((scene) => calculatePanelCircuitSummaries(scene));
     const devices = scenes.flatMap((scene) => scene.electricalDevices ?? []);
+    // Tableros que ALGUNA escena declara como su `upstreamPanelId` — deben
+    // ser visibles en `calculatePanelCircuitSummaries` aunque, en SU PROPIA
+    // escena, no tengan hijos ni sean main_panel (ver el parámetro nuevo de
+    // esa función).
+    const externallyReferencedPanelIds = new Set(
+        devices
+            .filter((device) => device.type === 'sub_panel' && device.properties?.upstreamPanelId)
+            .map((device) => device.properties!.upstreamPanelId as string),
+    );
+    const summaries = scenes.flatMap((scene) =>
+        calculatePanelCircuitSummaries(scene, externallyReferencedPanelIds),
+    );
     const linkedTdIdsByTg = new Map<string, string[]>();
 
     devices.forEach((device) => {

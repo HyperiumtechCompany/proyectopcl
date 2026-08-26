@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { calculateElectricalNetwork } from '../domain/calculations';
 import { canConnect, validateElectricalNetwork } from '../domain/graph';
 import type {
@@ -14,98 +14,134 @@ import type { ConductorCatalog } from '@/pages/dialux/electrical/engine/types';
 
 const id = () => crypto.randomUUID();
 
+export type PanelFeederGeometry = Record<
+    string,
+    {
+        horizontalLengthM: number;
+        verticalLengthM: number;
+        mountingHeightM: number;
+        ceilingRiseM: number;
+        x: number;
+        y: number;
+        sceneId: string;
+        floorElevationM: number;
+    }
+>;
+
+/**
+ * Deriva la longitud horizontal/vertical de UN alimentador a partir de la
+ * geometría real del módulo (altura de montaje del tablero, elevación de su
+ * piso, posición en planta) — misma fórmula para la conexión inicial
+ * (`connectModuleToTg`) y para la resincronización reactiva de abajo, para
+ * que ambos caminos calculen exactamente lo mismo.
+ *
+ * `null` = no hay suficiente información todavía (tablero destino sin
+ * geometría publicada) — el llamador debe dejar el valor existente tal cual.
+ */
+export function deriveAutoEdgeLength(
+    edge: Pick<ElectricalEdge, 'horizontalLengthM'>,
+    source: Pick<ElectricalNode, 'type' | 'deviceId'> | undefined,
+    target: Pick<ElectricalNode, 'deviceId'> | undefined,
+    panelFeederGeometry: PanelFeederGeometry,
+): Pick<ElectricalEdge, 'lengthMode' | 'horizontalLengthM' | 'verticalLengthM'> | null {
+    if (!target?.deviceId) return null;
+    const geometry = panelFeederGeometry[target.deviceId];
+    if (source?.type === 'main_panel') {
+        // El cableado del TG a un TD va por tierra (horizontal) y sube por
+        // el tablero (vertical = elevación del piso + altura de montaje):
+        // el usuario define la distancia horizontal total (200 m por
+        // defecto) y el resto es la subida real al tablero.
+        const verticalLengthM =
+            (geometry?.floorElevationM ?? 0) + (geometry?.mountingHeightM ?? 1.9);
+        return {
+            lengthMode: 'combined',
+            horizontalLengthM: Math.max(0, 200 - verticalLengthM),
+            verticalLengthM,
+        };
+    }
+    if (!geometry) return null;
+    const sourceGeometry = source?.deviceId
+        ? panelFeederGeometry[source.deviceId]
+        : undefined;
+    const crossesLevels =
+        sourceGeometry !== undefined && sourceGeometry.sceneId !== geometry.sceneId;
+    const verticalLengthM = crossesLevels
+        ? // Sube desde la altura de montaje del padre hasta la del hijo,
+          // usando la elevación real de cada piso — así un Sub-TD dos pisos
+          // más arriba suma la altura completa entre ambos, no un valor fijo.
+          Math.abs(
+              geometry.floorElevationM +
+                  geometry.mountingHeightM -
+                  (sourceGeometry.floorElevationM + sourceGeometry.mountingHeightM),
+          )
+        : geometry.verticalLengthM > 0
+          ? geometry.verticalLengthM
+          : (sourceGeometry?.ceilingRiseM ?? 1.6) + geometry.mountingHeightM;
+    const horizontalLengthM = crossesLevels
+        ? Math.hypot(geometry.x - sourceGeometry.x, geometry.y - sourceGeometry.y)
+        : geometry.horizontalLengthM > 0
+          ? geometry.horizontalLengthM
+          : edge.horizontalLengthM;
+    return { lengthMode: 'plan', horizontalLengthM, verticalLengthM };
+}
+
 export function useElectricalNetwork(
     projectId: number,
     initial: ElectricalNetworkSnapshot,
     ports: ModuleElectricalPort[],
     conductors: ConductorCatalog[],
-    panelFeederGeometry: Record<
-        string,
-        {
-            horizontalLengthM: number;
-            verticalLengthM: number;
-            mountingHeightM: number;
-            ceilingRiseM: number;
-            x: number;
-            y: number;
-            sceneId: string;
-            floorElevationM: number;
-        }
-    > = {},
+    panelFeederGeometry: PanelFeederGeometry = {},
 ) {
-    const [snapshot, setSnapshot] = useState(() => ({
-        ...initial,
-        data: {
-            ...initial.data,
-            edges: initial.data.edges.map((edge) => {
-                const target = initial.data.nodes.find(
-                    (node) => node.id === edge.targetNodeId,
-                );
-                const source = initial.data.nodes.find(
-                    (node) => node.id === edge.sourceNodeId,
-                );
-                if (!target?.deviceId) return edge;
-                const geometry = panelFeederGeometry[target.deviceId];
-                if (source?.type === 'main_panel') {
-                    const verticalLengthM =
-                        (geometry?.floorElevationM ?? 0) +
-                        (geometry?.mountingHeightM ?? 1.9);
-                    const currentTotal =
-                        edge.horizontalLengthM + edge.verticalLengthM;
-                    const usesDefaultTotal =
-                        currentTotal <= 0 ||
-                        Math.abs(currentTotal - 200) < 0.05;
-                    return {
-                        ...edge,
-                        lengthMode: usesDefaultTotal
-                            ? ('combined' as const)
-                            : edge.lengthMode,
-                        horizontalLengthM: usesDefaultTotal
-                            ? Math.max(0, 200 - verticalLengthM)
-                            : edge.horizontalLengthM,
-                        verticalLengthM,
-                    };
-                }
-                if (!geometry) return edge;
-                const sourceGeometry = source?.deviceId
-                    ? panelFeederGeometry[source.deviceId]
-                    : undefined;
-                const crossesLevels =
-                    sourceGeometry !== undefined &&
-                    sourceGeometry.sceneId !== geometry.sceneId;
-                const verticalLengthM = crossesLevels
-                    ? Math.abs(
-                          geometry.floorElevationM +
-                              geometry.mountingHeightM -
-                              (sourceGeometry.floorElevationM +
-                                  sourceGeometry.mountingHeightM),
-                      )
-                    : geometry.verticalLengthM > 0
-                      ? geometry.verticalLengthM
-                      : (sourceGeometry?.ceilingRiseM ?? 1.6) +
-                        geometry.mountingHeightM;
-                const horizontalLengthM = crossesLevels
-                    ? Math.hypot(
-                          geometry.x - sourceGeometry.x,
-                          geometry.y - sourceGeometry.y,
-                      )
-                    : geometry.horizontalLengthM > 0
-                      ? geometry.horizontalLengthM
-                      : edge.horizontalLengthM;
-                return {
-                    ...edge,
-                    lengthMode: 'plan' as const,
-                    horizontalLengthM,
-                    verticalLengthM,
-                };
-            }),
-        },
-    }));
+    const [snapshot, setSnapshot] = useState(initial);
     const [selectedId, setSelectedId] = useState<string>();
     const [connectingFrom, setConnectingFrom] = useState<string>();
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [message, setMessage] = useState<string>();
+    // Resincroniza las longitudes AUTOMÁTICAS (`lengthMode !== 'manual'`)
+    // cada vez que cambia la geometría real de los módulos — altura de
+    // montaje, elevación de piso, posición del tablero — no solo al montar
+    // el editor. Antes este cálculo vivía dentro del inicializador de
+    // `useState` (solo corría UNA vez, al primer render): si el usuario
+    // corregía la altura de un tablero en su propio módulo y volvía al
+    // módulo general, el alimentador se quedaba con la longitud vieja hasta
+    // desconectar y reconectar el módulo a mano. Una longitud editada a mano
+    // (`lengthMode === 'manual'`) nunca se toca aquí.
+    useEffect(() => {
+        const nodesById = new Map(
+            snapshot.data.nodes.map((node) => [node.id, node]),
+        );
+        let changed = false;
+        const edges = snapshot.data.edges.map((edge) => {
+            if (edge.lengthMode === 'manual') return edge;
+            const derived = deriveAutoEdgeLength(
+                edge,
+                nodesById.get(edge.sourceNodeId),
+                nodesById.get(edge.targetNodeId),
+                panelFeederGeometry,
+            );
+            if (!derived) return edge;
+            const sameLength =
+                edge.lengthMode === derived.lengthMode &&
+                Math.abs(edge.horizontalLengthM - derived.horizontalLengthM) <
+                    1e-6 &&
+                Math.abs(edge.verticalLengthM - derived.verticalLengthM) < 1e-6;
+            if (sameLength) return edge;
+            changed = true;
+            return { ...edge, ...derived };
+        });
+        if (!changed) return;
+        setSnapshot((current) => ({ ...current, data: { ...current.data, edges } }));
+        setDirty(true);
+        // Deps: `panelFeederGeometry` cambia cuando la geometría real de un
+        // módulo cambia (altura de montaje, elevación de piso); el largo de
+        // `edges` cambia cuando se conecta/desconecta un tablero (p.ej.
+        // `connectModuleToTg`, cuyo cálculo inicial de longitud puede quedar
+        // corto — este efecto lo corrige de inmediato con la MISMA fórmula
+        // canónica). No se agrega `snapshot` completo para no reejecutar
+        // esto en cada edición manual del usuario.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [panelFeederGeometry, snapshot.data.edges.length]);
     const issues = useMemo(
         () => validateElectricalNetwork(snapshot.data),
         [snapshot.data],

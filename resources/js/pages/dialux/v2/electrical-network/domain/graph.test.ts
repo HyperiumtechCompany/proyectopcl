@@ -133,5 +133,20 @@ describe('electrical network domain', () => {
         expect(results[1].breakerA).toBeGreaterThanOrEqual(
             results[1].designCurrentA,
         );
+        // accumulatedVoltageDropV es la versión en voltios de
+        // accumulatedVoltageDropPercent (misma cadena TG→TD), y es lo que
+        // ElectricalNetwork.tsx inyecta como `upstreamVoltageDropV` en el
+        // tablero raíz de cada módulo.
+        expect(results[0].accumulatedVoltageDropV).toBeCloseTo(
+            results[0].ownVoltageDropV,
+        );
+        expect(results[1].accumulatedVoltageDropV).toBeCloseTo(
+            results[0].accumulatedVoltageDropV + results[1].ownVoltageDropV,
+        );
+        expect(results[1].accumulatedVoltageDropV).toBeCloseTo(
+            (results[1].accumulatedVoltageDropPercent *
+                network().settings.nominalVoltageV) /
+                100,
+        );
     });
 });

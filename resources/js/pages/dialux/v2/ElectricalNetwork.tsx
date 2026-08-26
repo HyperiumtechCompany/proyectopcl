@@ -14,6 +14,7 @@ import type { BreadcrumbItem } from '@/types';
 import { ElectricalCanvas } from './electrical-network/components/ElectricalCanvas';
 import { ElectricalCtSummary } from './electrical-network/components/ElectricalCtSummary';
 import { ElectricalCtTable } from './electrical-network/components/ElectricalCtTable';
+import type { ModuleCtCircuit } from './electrical-network/domain/ctTableRows';
 import { ElectricalPalette } from './electrical-network/components/ElectricalPalette';
 import { ElectricalPropertiesPanel } from './electrical-network/components/ElectricalPropertiesPanel';
 import { ElectricalTreeView } from './electrical-network/components/ElectricalTreeView';
@@ -56,19 +57,6 @@ export default function ElectricalNetworkPage({
     const [modulesData, setModulesData] = useState(moduleScenes);
     const [workspaceView, setWorkspaceView] = useState<'diagram' | 'ct'>(
         'diagram',
-    );
-    const moduleCtCircuits = useMemo(
-        () =>
-            modulesData.flatMap((module) =>
-                calculateProjectPanelCircuitSummaries(module.scenes).map(
-                    (circuit) => ({
-                        ...circuit,
-                        moduleId: module.moduleId,
-                        moduleName: module.moduleName,
-                    }),
-                ),
-            ),
-        [modulesData],
     );
     const panelFeederGeometry = useMemo(
         () =>
@@ -124,8 +112,8 @@ export default function ElectricalNetworkPage({
         [modulesData],
     );
     const updateModuleCircuit = (
-        circuit: (typeof moduleCtCircuits)[number],
-        patch: Partial<(typeof moduleCtCircuits)[number]>,
+        circuit: ModuleCtCircuit,
+        patch: Partial<ModuleCtCircuit>,
     ) => {
         setModulesData((current) =>
             current.map((module) => {
@@ -147,6 +135,13 @@ export default function ElectricalNetworkPage({
                                                           patch.powerFactor,
                                                       defaultDemandFactor:
                                                           patch.demandFactor,
+                                                      phases:
+                                                          patch.phases === 3
+                                                              ? '3O'
+                                                              : patch.phases ===
+                                                                  1
+                                                                ? '1O'
+                                                                : undefined,
                                                       ambientTemperatureC:
                                                           patch.ambientTemperatureC,
                                                       groupedCircuitCount:
@@ -187,6 +182,8 @@ export default function ElectricalNetworkPage({
                                           ...defined({
                                               powerFactor: patch.powerFactor,
                                               demandFactor: patch.demandFactor,
+                                              forcePowerW: patch.forcePowerW,
+                                              system: patch.phases,
                                               phaseBalance: patch.phaseBalance,
                                               ambientTemperatureC:
                                                   patch.ambientTemperatureC,
@@ -236,6 +233,93 @@ export default function ElectricalNetworkPage({
         ports,
         conductors,
         panelFeederGeometry,
+    );
+    // Caída de tensión aguas arriba (en voltios) que la red general ya
+    // calculó desde el TG real hasta el tablero raíz de cada módulo
+    // (`editor.calculations[].accumulatedVoltageDropV`), indexada por el
+    // MISMO tablero que dentro de su propio módulo se trata como raíz
+    // (`port.parentPanelId` vacío). Solo esos tableros leen
+    // `properties.upstreamVoltageDropV` cuando no tienen padre local — ver
+    // "Pasada 2" en `calculatePanelCircuitSummaries` — así que son los
+    // únicos que necesitan la inyección; el resto del árbol de cada módulo
+    // ya hereda esta caída en cascada con la misma fórmula de siempre.
+    const upstreamVoltageDropVByDevice = useMemo(() => {
+        const result = new Map<string, number>();
+        for (const node of editor.snapshot.data.nodes) {
+            if (
+                node.type !== 'module_panel_port' ||
+                !node.deviceId ||
+                !node.sceneId ||
+                node.moduleId === undefined
+            ) {
+                continue;
+            }
+            const port = ports.find(
+                (candidate) =>
+                    candidate.moduleId === node.moduleId &&
+                    candidate.sceneId === node.sceneId &&
+                    candidate.panelId === node.deviceId,
+            );
+            if (!port || port.parentPanelId) continue;
+            const incomingEdge = editor.snapshot.data.edges.find(
+                (edge) => edge.targetNodeId === node.id,
+            );
+            const calc = incomingEdge
+                ? editor.calculations.find(
+                      (item) => item.edgeId === incomingEdge.id,
+                  )
+                : undefined;
+            if (!calc) continue;
+            result.set(
+                `${node.moduleId}:${node.sceneId}:${node.deviceId}`,
+                calc.accumulatedVoltageDropV,
+            );
+        }
+        return result;
+    }, [
+        ports,
+        editor.snapshot.data.nodes,
+        editor.snapshot.data.edges,
+        editor.calculations,
+    ]);
+    const moduleCtCircuits = useMemo<ModuleCtCircuit[]>(
+        () =>
+            modulesData.flatMap((module) => {
+                const scenes =
+                    upstreamVoltageDropVByDevice.size === 0
+                        ? module.scenes
+                        : module.scenes.map((scene) => {
+                              let changed = false;
+                              const electricalDevices =
+                                  scene.electricalDevices?.map((device) => {
+                                      const upstreamVoltageDropV =
+                                          upstreamVoltageDropVByDevice.get(
+                                              `${module.moduleId}:${scene.id}:${device.id}`,
+                                          );
+                                      if (upstreamVoltageDropV === undefined)
+                                          return device;
+                                      changed = true;
+                                      return {
+                                          ...device,
+                                          properties: {
+                                              ...device.properties,
+                                              upstreamVoltageDropV,
+                                          },
+                                      };
+                                  });
+                              return changed
+                                  ? { ...scene, electricalDevices }
+                                  : scene;
+                          });
+                return calculateProjectPanelCircuitSummaries(scenes).map(
+                    (circuit) => ({
+                        ...circuit,
+                        moduleId: module.moduleId,
+                        moduleName: module.moduleName,
+                    }),
+                );
+            }),
+        [modulesData, upstreamVoltageDropVByDevice],
     );
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'DIALux v2', href: '/dialux-v2' },
