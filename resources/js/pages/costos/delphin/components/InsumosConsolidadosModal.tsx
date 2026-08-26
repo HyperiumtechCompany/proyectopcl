@@ -805,7 +805,17 @@ export function InsumosConsolidadosModal({
             
         } catch (error: any) {
             console.error('Error actualizando insumo:', error);
-            Swal.fire('Error', error?.response?.data?.message || 'No se pudo actualizar el insumo', 'error');
+            const validationMessage = Object.values(
+                error?.response?.data?.errors ?? {},
+            ).flat()[0];
+            Swal.fire(
+                'Error',
+                (typeof validationMessage === 'string'
+                    ? validationMessage
+                    : error?.response?.data?.message) ||
+                    'No se pudo actualizar el insumo',
+                'error',
+            );
         } finally {
             setIsSaving(false);
         }
