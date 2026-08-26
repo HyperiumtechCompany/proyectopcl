@@ -36,4 +36,16 @@ class UpdateInsumoProductoRequest extends FormRequest
             'estado' => ['nullable', 'boolean'],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'codigo_producto.unique' => 'Ese código ya está asignado a otro producto del catálogo. Elige un código distinto, o usa "Fusionar" si quieres unificar ambos productos bajo un mismo código.',
+            'codigo_producto.max' => 'El código no puede tener más de 50 caracteres.',
+            'descripcion.required' => 'La descripción es obligatoria.',
+            'unidad.max' => 'La unidad no puede tener más de 20 caracteres.',
+            'costo_unitario.numeric' => 'El costo unitario debe ser un número.',
+            'costo_unitario.min' => 'El costo unitario no puede ser negativo.',
+        ];
+    }
 }
