@@ -1,8 +1,8 @@
-import { AlertTriangle, Check, CheckCircle2, Link2Off } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2 } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import { circuitCurrent } from '@/pages/dialux/electrical/engine/formulas';
-import { calculatePanelTotalCurrentA } from '@/pages/dialux/hooks/wireLengthCalculations';
 import { CONDUCTOR_SECTION_OPTIONS } from '@/pages/dialux/hooks/types';
+import { calculatePanelTotalCurrentA } from '@/pages/dialux/hooks/wireLengthCalculations';
 import type { EdgeCalculation } from '../domain/calculations';
 import {
     rowsForDistributionPanel,
@@ -19,7 +19,6 @@ interface Props {
     calculations: EdgeCalculation[];
     moduleCtCircuits: ModuleCtCircuit[];
     issues: GraphIssue[];
-    onUpdateEdge: (id: string, patch: Partial<ElectricalEdge>) => void;
     onUpdateSettings: (
         patch: Partial<ElectricalNetworkData['settings']>,
     ) => void;
@@ -27,7 +26,6 @@ interface Props {
         circuit: ModuleCtCircuit,
         patch: Partial<ModuleCtCircuit>,
     ) => void;
-    onRemove: (id: string) => void;
     onSelect: (id: string) => void;
 }
 const COLS = 36;
@@ -119,8 +117,6 @@ export function ElectricalCtTable({
     issues,
     onUpdateSettings,
     onUpdateCircuit,
-    onUpdateEdge,
-    onRemove,
     onSelect,
 }: Props) {
     const [verified, setVerified] = useState(false);
@@ -145,15 +141,21 @@ export function ElectricalCtTable({
             calcByEdge.get(edge.id)?.status ?? 'incomplete',
         ),
     ).length;
-    // Verifica TODO el árbol del módulo, no solo las salidas finales: una
-    // fila resumen (TD/TG) representa el alimentador que agrupa a sus
-    // hijos, y puede incumplir caída de tensión/capacidad aunque ninguna
-    // salida final propia lo haga (p.ej. un TD que solo alimenta Sub-TDs).
+    // La verificación del árbol es por TABLERO (fila resumen "CGx" de cada
+    // TD/Sub-TD/TG), nunca por salida individual — mismo criterio que ya usa
+    // la red v2 (`EdgeCalculation.status` en calculations.ts, que solo
+    // conoce alimentadores entre tableros, no circuitos de un ambiente).
+    // Con proyectos de hasta 25+ módulos, cada uno con una cantidad distinta
+    // de TD/Sub-TD (uno solo, tres, seis...) y algunos con salidas directo
+    // del TG, evaluar cada salida individualmente generaría ruido que no
+    // escala. Si un tablero incumple, eso ya se refleja en su propia fila
+    // resumen y se arrastra hacia arriba (TD → TG) por la cascada de ΔU.
     const circuitProblems = moduleCtCircuits.filter(
         (item) =>
-            !item.voltageDropOk ||
-            !item.capacityConforms ||
-            item.normativeViolation,
+            item.isPanelSummary &&
+            (!item.voltageDropOk ||
+                !item.capacityConforms ||
+                item.normativeViolation),
     ).length;
     const problems =
         topologyProblems +
@@ -338,34 +340,34 @@ export function ElectricalCtTable({
                                                         </td>
                                                     </tr>
                                                 )}
-                                                <FeederRow
-                                                    edge={edge}
-                                                    result={result}
-                                                    moduleName={moduleName}
-                                                    levelName={
-                                                        target.sceneName ??
-                                                        'Sin nivel'
-                                                    }
-                                                    panelLabel={target.label}
-                                                    sourceLabel={
-                                                        source?.label ?? 'TG'
-                                                    }
-                                                    panelKind={panelKind}
-                                                    rowSpan={rowCount + 1}
-                                                    phases={data.settings.phases}
-                                                    onUpdate={onUpdateEdge}
-                                                    onRemove={onRemove}
-                                                    onSelect={onSelect}
-                                                />
-                                                {outputRows.map((circuit) => (
-                                                    <CircuitRow
-                                                        key={`${edge.id}:${circuit.rootConductorId}:${circuit.isPanelSummary ? 'CG' : 'C'}`}
-                                                        circuit={circuit}
-                                                        onUpdate={
-                                                            onUpdateCircuit
-                                                        }
-                                                    />
-                                                ))}
+                                                {outputRows.map(
+                                                    (circuit, circuitIndex) => (
+                                                        <CircuitRow
+                                                            key={`${edge.id}:${circuit.rootConductorId}:C`}
+                                                            circuit={circuit}
+                                                            onUpdate={
+                                                                onUpdateCircuit
+                                                            }
+                                                            panelHeader={
+                                                                circuitIndex ===
+                                                                0
+                                                                    ? {
+                                                                          rowSpan:
+                                                                              outputRows.length,
+                                                                          panelKind,
+                                                                          panelLabel:
+                                                                              target.label,
+                                                                          onSelect:
+                                                                              () =>
+                                                                                  onSelect(
+                                                                                      edge.id,
+                                                                                  ),
+                                                                      }
+                                                                    : undefined
+                                                            }
+                                                        />
+                                                    ),
+                                                )}
                                                 {summaryRows.map((circuit) => (
                                                     <CircuitRow
                                                         key={`${edge.id}:${circuit.rootConductorId}:CG`}
@@ -373,6 +375,16 @@ export function ElectricalCtTable({
                                                         onUpdate={
                                                             onUpdateCircuit
                                                         }
+                                                        panelHeader={{
+                                                            rowSpan: 1,
+                                                            panelKind,
+                                                            panelLabel:
+                                                                target.label,
+                                                            onSelect: () =>
+                                                                onSelect(
+                                                                    edge.id,
+                                                                ),
+                                                        }}
                                                     />
                                                 ))}
                                             </Fragment>
@@ -590,140 +602,42 @@ function GeneralRow({
     );
 }
 
-function FeederRow({
-    edge,
-    result,
-    moduleName,
-    levelName,
-    panelLabel,
-    sourceLabel,
-    panelKind,
-    rowSpan,
-    phases,
-    onUpdate,
-    onRemove,
-    onSelect,
-}: {
-    edge: ElectricalEdge;
-    result: EdgeCalculation;
-    moduleName: string;
-    levelName: string;
-    panelLabel: string;
-    sourceLabel: string;
-    panelKind: string;
+interface PanelHeader {
     rowSpan: number;
-    phases: 1 | 3;
-    onUpdate: Props['onUpdateEdge'];
-    onRemove: Props['onRemove'];
-    onSelect: Props['onSelect'];
+    panelKind: string;
+    panelLabel: string;
+    onSelect?: () => void;
+}
+
+function PanelHeaderCell({
+    header,
+    summary,
+}: {
+    header: PanelHeader;
+    summary?: boolean;
 }) {
     return (
-        <tr
-            className="border-t border-slate-300 bg-violet-50/70 align-top dark:border-slate-700 dark:bg-violet-950/15"
-            onClick={() => onSelect(edge.id)}
+        <td
+            rowSpan={header.rowSpan}
+            onClick={header.onSelect}
+            className={`border-r border-slate-300 px-3 py-3 text-center align-middle dark:border-slate-700 ${summary ? 'cursor-pointer bg-blue-100 dark:bg-blue-950/40' : 'cursor-pointer bg-violet-50/80 dark:bg-violet-950/20'}`}
         >
-            <td
-                rowSpan={rowSpan}
-                className="border-r border-slate-300 px-3 py-3 text-center align-middle dark:border-slate-700"
-            >
-                <span className="rounded bg-cyan-700 px-1.5 py-0.5 text-[9px] font-bold text-white">
-                    {panelKind}
-                </span>
-                <p className="mt-1 font-semibold">{panelLabel}</p>
-                <button
-                    type="button"
-                    title="Desconectar alimentador"
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        onRemove(edge.id);
-                    }}
-                    className="mt-2 inline-flex items-center gap-1 rounded border border-rose-400 px-1.5 py-1 text-[8px] text-rose-500"
-                >
-                    <Link2Off className="h-3 w-3" /> Desconectar
-                </button>
-                <p className="text-[8px] text-slate-500">
-                    {moduleName} · {levelName}
-                </p>
-                <p className="mt-1 text-[8px] text-cyan-600 dark:text-cyan-400">
-                    Alimentado por {sourceLabel}
-                </p>
-            </td>
-            <Mono value="AG" accent />
-            <Description
-                title={`${sourceLabel} → ${panelLabel}`}
-                detail={`Alimentador · H ${edge.horizontalLengthM.toFixed(2)} m + V ${edge.verticalLengthM.toFixed(2)} m = ${(edge.horizontalLengthM + edge.verticalLengthM).toFixed(2)} m`}
-            />
-            <Mono value="0" />
-            <Mono value="0" />
-            <Mono value={result.installedPowerW.toFixed(0)} />
-            <Mono value={(edge.powerFactor ?? 0.9).toFixed(2)} />
-            <Mono value={(edge.demandFactor ?? 1).toFixed(2)} />
-            <Mono value={(result.installedPowerW / 1000).toFixed(2)} strong />
-            <Mono value={(result.demandPowerW / 1000).toFixed(2)} strong />
-            <Mono value={phases === 3 ? '3Φ+N+T' : '1Φ+N+T'} />
-            <Mono value={result.designCurrentA.toFixed(2)} />
-            <Mono value={result.currentA.toFixed(2)} />
-            <Mono value="—" />
-            <Mono value="—" />
-            <Mono value="—" />
-            <Mono value="—" />
-            <Mono value={result.ampacityA?.toFixed(2) ?? '—'} />
-            <Mono value="20" />
-            <Mono value="1" />
-            <Mono value="1.00" />
-            <Mono value="1.00" />
-            <Mono value={result.ampacityA?.toFixed(2) ?? '—'} />
-            <Conform ok={result.status !== 'non_compliant'} />
-            <Mono value={`${result.breakerA} A`} />
-            <Mono value="—" />
-            <Edit
-                value={edge.horizontalLengthM}
-                onChange={(value) =>
-                    onUpdate(edge.id, { horizontalLengthM: value })
-                }
-                suffix="m"
-            />
-            <Edit
-                value={edge.verticalLengthM}
-                onChange={(value) =>
-                    onUpdate(edge.id, { verticalLengthM: value })
-                }
-                suffix="m"
-            />
-            <Mono value={result.lengthM.toFixed(2)} />
-            <Edit
-                value={edge.sectionMm2}
-                onChange={(value) => onUpdate(edge.id, { sectionMm2: value })}
-                suffix="mm²"
-            />
-            <Mono value={result.ownVoltageDropV.toFixed(2)} />
-            <Mono
-                value={`${result.accumulatedVoltageDropPercent.toFixed(2)}%`}
-            />
-            <Conform
-                ok={result.status === 'complete' || result.status === 'warning'}
-            />
-            <Mono value="—" />
-            <td className="px-2 py-2">
-                <input
-                    value={edge.conductorType}
-                    onChange={(event) =>
-                        onUpdate(edge.id, { conductorType: event.target.value })
-                    }
-                    className="h-8 w-24 rounded border border-slate-300 bg-white px-2 dark:border-white/15 dark:bg-[#182237]"
-                />
-            </td>
-            <Mono value={edge.earthSectionMm2?.toFixed(1) ?? '—'} />
-        </tr>
+            <span className="rounded bg-cyan-700 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                {header.panelKind}
+            </span>
+            <p className="mt-1 font-semibold">{header.panelLabel}</p>
+        </td>
     );
 }
 
 function CircuitRow({
     circuit,
     onUpdate,
+    panelHeader,
 }: {
     circuit: ModuleCtCircuit;
     onUpdate: Props['onUpdateCircuit'];
+    panelHeader?: PanelHeader;
 }) {
     const dropPct = circuit.voltageDropPct;
     const dropV = circuit.voltageDropV;
@@ -735,6 +649,12 @@ function CircuitRow({
         <tr
             className={`border-t border-slate-200 align-top dark:border-slate-800 ${circuit.isPanelSummary ? 'bg-blue-50/70 font-semibold dark:bg-blue-950/20' : 'bg-white dark:bg-[#090d13]'}`}
         >
+            {panelHeader && (
+                <PanelHeaderCell
+                    header={panelHeader}
+                    summary={circuit.isPanelSummary}
+                />
+            )}
             <Mono
                 value={circuit.isPanelSummary ? 'CG1' : circuit.code}
                 accent

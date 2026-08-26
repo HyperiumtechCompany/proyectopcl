@@ -1,5 +1,4 @@
 import { Head, Link } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
 import {
     AlertTriangle,
     Network,
@@ -7,27 +6,29 @@ import {
     TableProperties,
     Trash2,
 } from 'lucide-react';
-import { show as showProject } from '@/actions/App/Http/Controllers/Dialux/V2/ProjectController';
+import { useMemo, useState } from 'react';
 import { update as updateModule } from '@/actions/App/Http/Controllers/Dialux/V2/ModuleController';
+import { show as showProject } from '@/actions/App/Http/Controllers/Dialux/V2/ProjectController';
 import AppLayout from '@/layouts/app-layout';
+import type { ConductorCatalog } from '@/pages/dialux/electrical/engine/types';
+import { pointInPolygon } from '@/pages/dialux/hooks/ambientSpaces';
+import type { Scene } from '@/pages/dialux/hooks/types';
+import { calculateProjectPanelCircuitSummaries } from '@/pages/dialux/hooks/wireLengthCalculations';
 import type { BreadcrumbItem } from '@/types';
+import { GeneralWorkspaceTabs } from './components/GeneralWorkspaceTabs';
 import { ElectricalCanvas } from './electrical-network/components/ElectricalCanvas';
 import { ElectricalCtSummary } from './electrical-network/components/ElectricalCtSummary';
 import { ElectricalCtTable } from './electrical-network/components/ElectricalCtTable';
-import type { ModuleCtCircuit } from './electrical-network/domain/ctTableRows';
 import { ElectricalPalette } from './electrical-network/components/ElectricalPalette';
 import { ElectricalPropertiesPanel } from './electrical-network/components/ElectricalPropertiesPanel';
 import { ElectricalTreeView } from './electrical-network/components/ElectricalTreeView';
+import { VoltageDropAlertPanel } from './electrical-network/components/VoltageDropAlertPanel';
+import type { ModuleCtCircuit } from './electrical-network/domain/ctTableRows';
 import type {
     ElectricalNetworkSnapshot,
     ModuleElectricalPort,
 } from './electrical-network/domain/types';
 import { useElectricalNetwork } from './electrical-network/hooks/useElectricalNetwork';
-import { GeneralWorkspaceTabs } from './components/GeneralWorkspaceTabs';
-import type { ConductorCatalog } from '@/pages/dialux/electrical/engine/types';
-import { calculateProjectPanelCircuitSummaries } from '@/pages/dialux/hooks/wireLengthCalculations';
-import { pointInPolygon } from '@/pages/dialux/hooks/ambientSpaces';
-import type { Scene } from '@/pages/dialux/hooks/types';
 
 const defined = <T extends Record<string, unknown>>(values: T): Partial<T> =>
     Object.fromEntries(
@@ -321,6 +322,9 @@ export default function ElectricalNetworkPage({
             }),
         [modulesData, upstreamVoltageDropVByDevice],
     );
+    const voltageDropAlertCount = editor.calculations.filter((item) =>
+        ['non_compliant', 'warning', 'incomplete'].includes(item.status),
+    ).length;
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'DIALux v2', href: '/dialux-v2' },
         { title: project.name, href: showProject.url(project.id) },
@@ -342,6 +346,11 @@ export default function ElectricalNetworkPage({
                         <strong className="text-sm text-slate-900 dark:text-white">
                             Módulo General
                         </strong>
+                        {voltageDropAlertCount > 0 && (
+                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700 dark:bg-red-950/50 dark:text-red-300">
+                                ⚠ {voltageDropAlertCount} alertas
+                            </span>
+                        )}
                     </div>
                     <span className="text-[10px] text-slate-500">
                         TG → TD → Sub-TD
@@ -420,9 +429,7 @@ export default function ElectricalNetworkPage({
                         moduleCtCircuits={moduleCtCircuits}
                         onUpdateCircuit={updateModuleCircuit}
                         issues={editor.issues}
-                        onUpdateEdge={editor.updateEdge}
                         onUpdateSettings={editor.updateSettings}
-                        onRemove={editor.removeById}
                         onSelect={editor.setSelectedId}
                     />
                 ) : (
@@ -444,9 +451,14 @@ export default function ElectricalNetworkPage({
                                 onRemove={editor.removeById}
                                 ports={ports}
                                 calculations={editor.calculations}
+                                issues={editor.issues}
+                                onViewInCtTable={(nodeId) => {
+                                    editor.setSelectedId(nodeId);
+                                    setWorkspaceView('ct');
+                                }}
                             />
                         </main>
-                        <div className="flex w-full flex-col xl:w-72">
+                        <div className="flex w-full min-h-0 flex-col overflow-y-auto xl:w-80">
                             <ElectricalPropertiesPanel
                                 data={editor.snapshot.data}
                                 selectedId={editor.selectedId}
@@ -455,6 +467,12 @@ export default function ElectricalNetworkPage({
                                 onUpdateNode={editor.updateNode}
                                 onChangeNodeParent={editor.changeNodeParent}
                                 onRemove={editor.removeById}
+                            />
+                            <VoltageDropAlertPanel
+                                data={editor.snapshot.data}
+                                calculations={editor.calculations}
+                                selectedId={editor.selectedId}
+                                onSelect={editor.setSelectedId}
                             />
                             <details className="border-t border-slate-200 bg-white dark:border-white/10 dark:bg-[#101218]">
                                 <summary className="cursor-pointer p-3 text-xs font-semibold text-slate-700 dark:text-slate-300">

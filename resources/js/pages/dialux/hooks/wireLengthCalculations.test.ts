@@ -163,7 +163,45 @@ describe('vínculo lógico de tableros entre pisos', () => {
 
         expect(td).toBeDefined();
         expect(subTd).toBeDefined();
+        expect(td!.upstreamVoltageDropV).toBeCloseTo(6.22);
         expect(subTd!.upstreamVoltageDropV).toBe(td!.voltageDropV);
+    });
+
+    it('calcula la longitud del vínculo TD → TD-01 del mismo piso desde el dibujo', () => {
+        const scene = buildScene({
+            floorHeight: 2.7,
+            electricalDevices: [
+                { id: 'td', type: 'sub_panel', label: 'TD', x: 2, y: 3, mountingHeight: 1.9, connectedDeviceIds: [], properties: { sectionMm2: 16 } },
+                { id: 'td-01', type: 'sub_panel', label: 'TD-01', x: 7, y: 3, mountingHeight: 1.9, connectedDeviceIds: [], properties: { upstreamPanelId: 'td', sectionMm2: 10 } },
+            ],
+        });
+
+        const td01 = calculateProjectPanelCircuitSummaries([scene]).find(
+            (item) => item.panelId === 'td-01' && item.isPanelSummary,
+        )!;
+
+        expect(td01.horizontalLengthM).toBeCloseTo(5);
+        expect(td01.verticalLengthM).toBeCloseTo(2.7);
+        expect(td01.lengthM).toBeCloseTo(7.7);
+    });
+
+    it('calcula el vínculo entre N pisos usando sus elevaciones reales', () => {
+        const piso1 = buildScene({
+            id: 'piso-1', floorElevation: 0,
+            electricalDevices: [{ id: 'tg', type: 'main_panel', label: 'TG', x: 0, y: 0, mountingHeight: 1.9, connectedDeviceIds: [], properties: { sectionMm2: 120 } }],
+        });
+        const piso4 = buildScene({
+            id: 'piso-4', floorIndex: 3, floorElevation: 8.1,
+            electricalDevices: [{ id: 'td-04', type: 'sub_panel', label: 'TD-04', x: 0, y: 0, mountingHeight: 1.9, connectedDeviceIds: [], properties: { upstreamPanelId: 'tg', sectionMm2: 10 } }],
+        });
+
+        const td04 = calculateProjectPanelCircuitSummaries([piso1, piso4]).find(
+            (item) => item.panelId === 'td-04' && item.isPanelSummary,
+        )!;
+
+        expect(td04.horizontalLengthM).toBeCloseTo(0);
+        expect(td04.verticalLengthM).toBeCloseTo(8.1);
+        expect(td04.lengthM).toBeCloseTo(8.1);
     });
 });
 

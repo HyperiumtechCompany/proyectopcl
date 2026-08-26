@@ -74,9 +74,7 @@ export function deriveAutoEdgeLength(
                   geometry.mountingHeightM -
                   (sourceGeometry.floorElevationM + sourceGeometry.mountingHeightM),
           )
-        : geometry.verticalLengthM > 0
-          ? geometry.verticalLengthM
-          : (sourceGeometry?.ceilingRiseM ?? 1.6) + geometry.mountingHeightM;
+        : (sourceGeometry?.ceilingRiseM ?? 1.6) + geometry.mountingHeightM;
     const horizontalLengthM = crossesLevels
         ? Math.hypot(geometry.x - sourceGeometry.x, geometry.y - sourceGeometry.y)
         : geometry.horizontalLengthM > 0
@@ -105,15 +103,21 @@ export function useElectricalNetwork(
     // `useState` (solo corría UNA vez, al primer render): si el usuario
     // corregía la altura de un tablero en su propio módulo y volvía al
     // módulo general, el alimentador se quedaba con la longitud vieja hasta
-    // desconectar y reconectar el módulo a mano. Una longitud editada a mano
-    // (`lengthMode === 'manual'`) nunca se toca aquí.
+    // desconectar y reconectar el módulo a mano. Una longitud manual positiva
+    // nunca se toca; los enlaces antiguos guardados como manuales en 0 m sí se
+    // reparan automáticamente cuando ya existe geometría suficiente.
     useEffect(() => {
         const nodesById = new Map(
             snapshot.data.nodes.map((node) => [node.id, node]),
         );
         let changed = false;
         const edges = snapshot.data.edges.map((edge) => {
-            if (edge.lengthMode === 'manual') return edge;
+            if (
+                edge.lengthMode === 'manual' &&
+                edge.horizontalLengthM + edge.verticalLengthM > 0
+            ) {
+                return edge;
+            }
             const derived = deriveAutoEdgeLength(
                 edge,
                 nodesById.get(edge.sourceNodeId),
@@ -197,6 +201,12 @@ export function useElectricalNetwork(
             if (!canConnect(withoutIncoming, parentId, nodeId)) return data;
             const source = data.nodes.find((node) => node.id === parentId);
             const target = data.nodes.find((node) => node.id === nodeId);
+            const derived = deriveAutoEdgeLength(
+                { horizontalLengthM: 0 },
+                source,
+                target,
+                panelFeederGeometry,
+            );
             return {
                 ...withoutIncoming,
                 edges: [
@@ -206,9 +216,9 @@ export function useElectricalNetwork(
                         sourceNodeId: parentId,
                         targetNodeId: nodeId,
                         label: `${source?.label ?? 'Origen'} → ${target?.label ?? 'Destino'}`,
-                        lengthMode: 'manual',
-                        horizontalLengthM: 0,
-                        verticalLengthM: 0,
+                        lengthMode: derived?.lengthMode ?? 'manual',
+                        horizontalLengthM: derived?.horizontalLengthM ?? 0,
+                        verticalLengthM: derived?.verticalLengthM ?? 0,
                         conductorType: 'N2XOH',
                         conductorMaterial: 'copper',
                         sectionMm2: 10,
@@ -218,9 +228,7 @@ export function useElectricalNetwork(
                 ],
             };
         });
-        setMessage(
-            'Tablero alimentador actualizado. Completa la longitud del tramo.',
-        );
+        setMessage('Tablero alimentador actualizado. Longitud recalculada.');
     };
     const connectModuleToTg = (moduleId: number) => {
         const modulePorts = ports.filter((port) => port.moduleId === moduleId);
@@ -344,61 +352,14 @@ export function useElectricalNetwork(
                     parentId
                         ? `${parentPort?.panelLabel ?? 'Tablero'} → ${port.panelLabel}`
                         : `TG → ${port.moduleName}: ${port.panelLabel}`,
-                    parentId
-                        ? (() => {
-                              const targetGeometry =
-                                  panelFeederGeometry[port.panelId];
-                              const sourceGeometry = port.parentPanelId
-                                  ? panelFeederGeometry[port.parentPanelId]
-                                  : undefined;
-                              const crossesLevels =
-                                  sourceGeometry !== undefined &&
-                                  targetGeometry !== undefined &&
-                                  sourceGeometry.sceneId !==
-                                      targetGeometry.sceneId;
-                              const verticalLengthM = crossesLevels
-                                  ? Math.abs(
-                                        targetGeometry.floorElevationM +
-                                            targetGeometry.mountingHeightM -
-                                            (sourceGeometry.floorElevationM +
-                                                sourceGeometry.mountingHeightM),
-                                    )
-                                  : targetGeometry?.verticalLengthM &&
-                                      targetGeometry.verticalLengthM > 0
-                                    ? targetGeometry.verticalLengthM
-                                    : (sourceGeometry?.ceilingRiseM ?? 1.6) +
-                                      (targetGeometry?.mountingHeightM ?? 1.9);
-                              return {
-                                  horizontalLengthM: crossesLevels
-                                      ? Math.hypot(
-                                            targetGeometry.x - sourceGeometry.x,
-                                            targetGeometry.y - sourceGeometry.y,
-                                        )
-                                      : targetGeometry?.horizontalLengthM &&
-                                          targetGeometry.horizontalLengthM > 0
-                                        ? targetGeometry.horizontalLengthM
-                                        : Math.max(
-                                              0,
-                                              (port.feederLengthM ?? 0) -
-                                                  verticalLengthM,
-                                          ),
-                                  verticalLengthM,
-                              };
-                          })()
-                        : (() => {
-                              const verticalLengthM =
-                                  (panelFeederGeometry[port.panelId]
-                                      ?.floorElevationM ?? 0) +
-                                  (panelFeederGeometry[port.panelId]
-                                      ?.mountingHeightM ?? 1.9);
-                              return {
-                                  horizontalLengthM: Math.max(
-                                      0,
-                                      200 - verticalLengthM,
-                                  ),
-                                  verticalLengthM,
-                              };
-                          })(),
+                    deriveAutoEdgeLength(
+                        { horizontalLengthM: port.feederLengthM ?? 0 },
+                        parentId
+                            ? nodes.find((node) => node.id === parentId)
+                            : tg,
+                        nodes.find((node) => node.id === targetId),
+                        panelFeederGeometry,
+                    ) ?? { horizontalLengthM: 0, verticalLengthM: 0 },
                 );
             }
 
@@ -440,14 +401,20 @@ export function useElectricalNetwork(
             const target = snapshot.data.nodes.find(
                 (node) => node.id === targetId,
             );
+            const derived = deriveAutoEdgeLength(
+                { horizontalLengthM: 0 },
+                source,
+                target,
+                panelFeederGeometry,
+            );
             const edge: ElectricalEdge = {
                 id: id(),
                 sourceNodeId: connectingFrom,
                 targetNodeId: targetId,
                 label: `${source?.label ?? 'Origen'} → ${target?.label ?? 'Destino'}`,
-                lengthMode: 'manual',
-                horizontalLengthM: 0,
-                verticalLengthM: 0,
+                lengthMode: derived?.lengthMode ?? 'manual',
+                horizontalLengthM: derived?.horizontalLengthM ?? 0,
+                verticalLengthM: derived?.verticalLengthM ?? 0,
                 conductorType: 'N2XOH',
                 conductorMaterial: 'copper',
                 sectionMm2: 10,
@@ -463,9 +430,7 @@ export function useElectricalNetwork(
                     edge,
                 ],
             }));
-            setMessage(
-                'Conexión actualizada. Define la longitud del alimentador.',
-            );
+            setMessage('Conexión actualizada. Longitud recalculada.');
         } else {
             setMessage(
                 'Conexión inválida: produciría un ciclo o una referencia incorrecta.',

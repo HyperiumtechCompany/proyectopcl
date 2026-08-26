@@ -64,6 +64,76 @@ describe('deriveAutoEdgeLength', () => {
         expect(derived!.lengthMode).toBe('plan');
     });
 
+    it('TD → TD-01 en el mismo piso: sube al techo y llega a la altura del tablero destino (0.8 + 1.9 = 2.7 m)', () => {
+        const geometry: PanelFeederGeometry = {
+            td: {
+                horizontalLengthM: 0,
+                verticalLengthM: 0,
+                mountingHeightM: 1.9,
+                ceilingRiseM: 0.8,
+                x: 0,
+                y: 0,
+                sceneId: 'piso-1',
+                floorElevationM: 0,
+            },
+            'td-01': {
+                horizontalLengthM: 4,
+                // Este valor pertenece al resumen interno del TD-01 y no
+                // debe reemplazar el recorrido físico desde el TD alimentador.
+                verticalLengthM: 9,
+                mountingHeightM: 1.9,
+                ceilingRiseM: 0.8,
+                x: 4,
+                y: 0,
+                sceneId: 'piso-1',
+                floorElevationM: 0,
+            },
+        };
+        const derived = deriveAutoEdgeLength(
+            { horizontalLengthM: 0 },
+            { type: 'module_panel_port', deviceId: 'td' },
+            { deviceId: 'td-01' },
+            geometry,
+        );
+        expect(derived).not.toBeNull();
+        expect(derived!.verticalLengthM).toBeCloseTo(2.7);
+        expect(derived!.horizontalLengthM).toBeCloseTo(4);
+        expect(derived!.lengthMode).toBe('plan');
+    });
+
+    it('TD del piso 1 → TD del piso 4: acumula automáticamente la elevación para N pisos', () => {
+        const geometry: PanelFeederGeometry = {
+            td: {
+                horizontalLengthM: 0,
+                verticalLengthM: 0,
+                mountingHeightM: 1.9,
+                ceilingRiseM: 0.8,
+                x: 0,
+                y: 0,
+                sceneId: 'piso-1',
+                floorElevationM: 0,
+            },
+            'td-04': {
+                horizontalLengthM: 0,
+                verticalLengthM: 0,
+                mountingHeightM: 1.9,
+                ceilingRiseM: 0.8,
+                x: 0,
+                y: 0,
+                sceneId: 'piso-4',
+                floorElevationM: 8.1,
+            },
+        };
+        const derived = deriveAutoEdgeLength(
+            { horizontalLengthM: 0 },
+            { type: 'module_panel_port', deviceId: 'td' },
+            { deviceId: 'td-04' },
+            geometry,
+        );
+        expect(derived).not.toBeNull();
+        expect(derived!.verticalLengthM).toBeCloseTo(8.1);
+    });
+
     it('sin geometría publicada para el destino, no hay suficiente información: devuelve null y el llamador no debe tocar el valor existente', () => {
         const derived = deriveAutoEdgeLength(
             { horizontalLengthM: 50 },

@@ -92,7 +92,7 @@ export default function DialuxV2Module({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`${module.name} â€” ${project.name}`} />
+            <Head title={`${module.name}” ${project.name}`} />
             <div className="flex h-[calc(100vh-4rem)] min-h-0 overflow-hidden">
                 <ModuleSidebar
                     projectId={project.id}

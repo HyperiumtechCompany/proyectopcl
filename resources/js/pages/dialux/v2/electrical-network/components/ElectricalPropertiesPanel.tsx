@@ -28,6 +28,12 @@ export function ElectricalPropertiesPanel({
     const edge = data.edges.find((item) => item.id === selectedId);
     const node = data.nodes.find((item) => item.id === selectedId);
     const result = calculations.find((item) => item.edgeId === edge?.id);
+    const incomingEdge = node
+        ? data.edges.find((item) => item.targetNodeId === node.id)
+        : undefined;
+    const incomingResult = calculations.find(
+        (item) => item.edgeId === incomingEdge?.id,
+    );
     return (
         <aside className="w-full border-t border-slate-200 bg-white xl:w-72 xl:border-t-0 xl:border-l dark:border-white/10 dark:bg-[#101218]">
             <div className="border-b border-slate-200 p-4 dark:border-white/10">
@@ -120,145 +126,169 @@ export function ElectricalPropertiesPanel({
                                     Reemplaza únicamente el tramo de entrada de
                                     este tablero.
                                 </span>
-                                {data.edges.some(
-                                    (item) => item.targetNodeId === node.id,
-                                ) && (
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            onChangeNodeParent(node.id, '')
-                                        }
-                                        className="mt-2 w-full rounded-md border border-rose-400/60 px-2 py-1.5 text-[10px] font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30"
-                                    >
-                                        Desconectar alimentador
-                                    </button>
-                                )}
                             </label>
+                        )}
+                        {incomingEdge && (
+                            <>
+                                <div className="mt-1 border-t border-slate-200 pt-3 text-xs font-bold text-slate-700 dark:border-white/10 dark:text-slate-300">
+                                    Alimentador entrante
+                                </div>
+                                <EdgeFields
+                                    edge={incomingEdge}
+                                    result={incomingResult}
+                                    onUpdateEdge={onUpdateEdge}
+                                    onRemove={onRemove}
+                                    disconnectLabel="Desconectar alimentador"
+                                    verticalHelperText="Distancia vertical desde el suministro/tablero aguas arriba hasta este equipo (bajada de acometida, altura de montaje, etc.). Necesaria para calcular su caída de tensión."
+                                />
+                            </>
                         )}
                     </>
                 )}
                 {edge && (
-                    <>
-                        <Info
-                            label="Longitud total"
-                            value={`${(edge.horizontalLengthM + edge.verticalLengthM).toFixed(2)} m`}
-                        />
-                        <NumberField
-                            label="Longitud horizontal (m)"
-                            value={edge.horizontalLengthM}
-                            onChange={(value) =>
-                                onUpdateEdge(edge.id, {
-                                    horizontalLengthM: value,
-                                })
-                            }
-                        />
-                        <NumberField
-                            label="Longitud vertical (m)"
-                            value={edge.verticalLengthM}
-                            onChange={(value) =>
-                                onUpdateEdge(edge.id, {
-                                    verticalLengthM: value,
-                                })
-                            }
-                        />
-                        <NumberField
-                            label="Sección (mm²)"
-                            value={edge.sectionMm2}
-                            min={0.1}
-                            onChange={(value) =>
-                                onUpdateEdge(edge.id, { sectionMm2: value })
-                            }
-                        />
-                        <label className="text-[11px] text-slate-500">
-                            Conductor
-                            <input
-                                className={inputClass}
-                                value={edge.conductorType}
-                                onChange={(event) =>
-                                    onUpdateEdge(edge.id, {
-                                        conductorType: event.target.value,
-                                    })
-                                }
-                            />
-                        </label>
-                        {result && (
-                            <div
-                                className={`rounded-lg border p-3 ${result.status === 'non_compliant' ? 'border-red-400 bg-red-50 dark:bg-red-950/20' : result.status === 'incomplete' ? 'border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-900' : 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20'}`}
-                            >
-                                <Info
-                                    label="Potencia instalada"
-                                    value={`${(result.installedPowerW / 1000).toFixed(2)} kW`}
-                                />
-                                <Info
-                                    label="Máxima demanda"
-                                    value={`${(result.demandPowerW / 1000).toFixed(2)} kW`}
-                                />
-                                <Info
-                                    label="Corriente"
-                                    value={`${result.currentA.toFixed(2)} A`}
-                                />
-                                <Info
-                                    label="Corriente de diseño"
-                                    value={`${result.designCurrentA.toFixed(2)} A`}
-                                />
-                                <Info
-                                    label="Ampacidad"
-                                    value={
-                                        result.ampacityA
-                                            ? `${result.ampacityA.toFixed(0)} A`
-                                            : 'Sin catálogo'
-                                    }
-                                />
-                                <Info
-                                    label="ITM sugerido"
-                                    value={`${result.breakerA} A`}
-                                />
-                                <Info
-                                    label="Caída del tramo"
-                                    value={`${result.ownVoltageDropPercent.toFixed(3)} %`}
-                                />
-                                <Info
-                                    label="Caída acumulada"
-                                    value={`${result.accumulatedVoltageDropPercent.toFixed(3)} %`}
-                                />
-                                {result.suggestedSectionMm2 &&
-                                    result.suggestedSectionMm2 !==
-                                        edge.sectionMm2 && (
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                onUpdateEdge(edge.id, {
-                                                    sectionMm2:
-                                                        result.suggestedSectionMm2,
-                                                })
-                                            }
-                                            className="mt-2 w-full rounded-md bg-cyan-600 px-2 py-1.5 text-[10px] font-semibold text-white hover:bg-cyan-500"
-                                        >
-                                            Aplicar sección sugerida:{' '}
-                                            {result.suggestedSectionMm2} mm²
-                                        </button>
-                                    )}
-                                {result.warnings.map((warning) => (
-                                    <p
-                                        key={warning}
-                                        className="mt-1 text-[10px] leading-snug text-red-600 dark:text-red-300"
-                                    >
-                                        {warning}
-                                    </p>
-                                ))}
-                            </div>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => onRemove(edge.id)}
-                            className="w-full rounded-md border border-rose-400/60 px-2 py-1.5 text-[10px] font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30"
-                        >
-                            Desconectar este tramo
-                        </button>
-                    </>
+                    <EdgeFields
+                        edge={edge}
+                        result={result}
+                        onUpdateEdge={onUpdateEdge}
+                        onRemove={onRemove}
+                        disconnectLabel="Desconectar este tramo"
+                    />
                 )}
             </div>
         </aside>
+    );
+}
+
+function EdgeFields({
+    edge,
+    result,
+    onUpdateEdge,
+    onRemove,
+    disconnectLabel,
+    verticalHelperText,
+}: {
+    edge: ElectricalEdge;
+    result?: EdgeCalculation;
+    onUpdateEdge: (id: string, patch: Partial<ElectricalEdge>) => void;
+    onRemove: (id: string) => void;
+    disconnectLabel: string;
+    verticalHelperText?: string;
+}) {
+    return (
+        <>
+            <Info
+                label="Longitud total"
+                value={`${(edge.horizontalLengthM + edge.verticalLengthM).toFixed(2)} m`}
+            />
+            <NumberField
+                label="Longitud horizontal (m)"
+                value={edge.horizontalLengthM}
+                onChange={(value) =>
+                    onUpdateEdge(edge.id, { horizontalLengthM: value })
+                }
+            />
+            <div>
+                <NumberField
+                    label="Longitud vertical (m)"
+                    value={edge.verticalLengthM}
+                    onChange={(value) =>
+                        onUpdateEdge(edge.id, { verticalLengthM: value })
+                    }
+                />
+                {verticalHelperText && (
+                    <span className="mt-1 block text-[11px] leading-relaxed text-slate-400">
+                        {verticalHelperText}
+                    </span>
+                )}
+            </div>
+            <NumberField
+                label="Sección (mm²)"
+                value={edge.sectionMm2}
+                min={0.1}
+                onChange={(value) => onUpdateEdge(edge.id, { sectionMm2: value })}
+            />
+            <label className="text-[11px] text-slate-500">
+                Conductor
+                <input
+                    className={inputClass}
+                    value={edge.conductorType}
+                    onChange={(event) =>
+                        onUpdateEdge(edge.id, {
+                            conductorType: event.target.value,
+                        })
+                    }
+                />
+            </label>
+            {result && (
+                <div
+                    className={`rounded-lg border p-3 ${result.status === 'non_compliant' ? 'border-red-400 bg-red-50 dark:bg-red-950/20' : result.status === 'incomplete' ? 'border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-900' : 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20'}`}
+                >
+                    <Info
+                        label="Potencia instalada"
+                        value={`${(result.installedPowerW / 1000).toFixed(2)} kW`}
+                    />
+                    <Info
+                        label="Máxima demanda"
+                        value={`${(result.demandPowerW / 1000).toFixed(2)} kW`}
+                    />
+                    <Info
+                        label="Corriente"
+                        value={`${result.currentA.toFixed(2)} A`}
+                    />
+                    <Info
+                        label="Corriente de diseño"
+                        value={`${result.designCurrentA.toFixed(2)} A`}
+                    />
+                    <Info
+                        label="Ampacidad"
+                        value={
+                            result.ampacityA
+                                ? `${result.ampacityA.toFixed(0)} A`
+                                : 'Sin catálogo'
+                        }
+                    />
+                    <Info label="ITM sugerido" value={`${result.breakerA} A`} />
+                    <Info
+                        label="Caída del tramo"
+                        value={`${result.ownVoltageDropPercent.toFixed(3)} %`}
+                    />
+                    <Info
+                        label="Caída acumulada"
+                        value={`${result.accumulatedVoltageDropPercent.toFixed(3)} %`}
+                    />
+                    {result.suggestedSectionMm2 &&
+                        result.suggestedSectionMm2 !== edge.sectionMm2 && (
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    onUpdateEdge(edge.id, {
+                                        sectionMm2: result.suggestedSectionMm2,
+                                    })
+                                }
+                                className="mt-2 w-full rounded-md bg-cyan-600 px-2 py-1.5 text-[10px] font-semibold text-white hover:bg-cyan-500"
+                            >
+                                Aplicar sección sugerida:{' '}
+                                {result.suggestedSectionMm2} mm²
+                            </button>
+                        )}
+                    {result.warnings.map((warning) => (
+                        <p
+                            key={warning}
+                            className="mt-1 text-[10px] leading-snug text-red-600 dark:text-red-300"
+                        >
+                            {warning}
+                        </p>
+                    ))}
+                </div>
+            )}
+            <button
+                type="button"
+                onClick={() => onRemove(edge.id)}
+                className="w-full rounded-md border border-rose-400/60 px-2 py-1.5 text-[10px] font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30"
+            >
+                {disconnectLabel}
+            </button>
+        </>
     );
 }
 

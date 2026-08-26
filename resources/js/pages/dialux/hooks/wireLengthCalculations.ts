@@ -1419,6 +1419,13 @@ export function calculatePanelCircuitSummaries(
  */
 export function calculateProjectPanelCircuitSummaries(scenes: Scene[]): PanelCircuitSummary[] {
     const devices = scenes.flatMap((scene) => scene.electricalDevices ?? []);
+    const panelLocationById = new Map(
+        scenes.flatMap((scene) =>
+            (scene.electricalDevices ?? [])
+                .filter((device) => PANEL_TYPES.has(device.type))
+                .map((device) => [device.id, { device, scene }] as const),
+        ),
+    );
     // Tableros que ALGUNA escena declara como su `upstreamPanelId` — deben
     // ser visibles en `calculatePanelCircuitSummaries` aunque, en SU PROPIA
     // escena, no tengan hijos ni sean main_panel (ver el parámetro nuevo de
@@ -1452,6 +1459,9 @@ export function calculateProjectPanelCircuitSummaries(scenes: Scene[]): PanelCir
             .map((tdId) => summaryByPanelId.get(tdId))
             .filter((item): item is PanelCircuitSummary => item !== undefined);
         if (!tg || linkedTds.length === 0) return;
+        // El padre puede ser un TG real o un TD intermedio. Su caída aguas
+        // arriba no debe borrarse al agregar las cargas de sus hijos.
+        const parentUpstreamDropV = tg.upstreamVoltageDropV;
 
         tg.installedPowerW = linkedTds.reduce((sum, td) => sum + td.installedPowerW, 0);
         tg.installedPowerKw = tg.installedPowerW / 1000;
@@ -1472,14 +1482,37 @@ export function calculateProjectPanelCircuitSummaries(scenes: Scene[]): PanelCir
         const tgOwnDropV = tg.sectionMm2 > 0
             ? (tg.phases === 1 ? 2 : Math.sqrt(3)) * Math.max(tg.phaseCurrentR, tg.phaseCurrentS, tg.phaseCurrentT) * tg.copperResistivity * tg.lengthM * tg.powerFactor / tg.sectionMm2
             : 0;
-        tg.upstreamVoltageDropV = 0;
-        tg.voltageDropV = tgOwnDropV;
-        tg.voltageDropPct = tgOwnDropV / tg.circuitVoltageV * 100;
+        tg.upstreamVoltageDropV = parentUpstreamDropV;
+        tg.voltageDropV = tgOwnDropV + parentUpstreamDropV;
+        tg.voltageDropPct = tg.voltageDropV / tg.circuitVoltageV * 100;
         tg.voltageDropOk = tg.voltageDropPct < tg.maxVoltageDropPct;
 
         linkedTds.forEach((td) => {
             const oldTdTotalDropV = td.voltageDropV;
-            const tdOwnDropV = Math.max(0, td.voltageDropV - td.upstreamVoltageDropV);
+            const parentLocation = panelLocationById.get(tgId);
+            const childLocation = panelLocationById.get(td.panelId);
+            // Los vínculos lógicos no tienen un Conductor 2D. Si no hay
+            // longitud manual, se deriva desde las posiciones y cotas reales.
+            if (td.lengthM <= 0 && parentLocation && childLocation) {
+                const parentHeightM = Math.max(0, parentLocation.device.mountingHeight ?? 0);
+                const childHeightM = Math.max(0, childLocation.device.mountingHeight ?? 0);
+                const crossesLevels = parentLocation.scene.id !== childLocation.scene.id;
+                const verticalLengthM = crossesLevels
+                    ? Math.abs(
+                          childLocation.scene.floorElevation + childHeightM -
+                              (parentLocation.scene.floorElevation + parentHeightM),
+                      )
+                    : Math.max(0, roomHeightAt(parentLocation.scene, parentLocation.device) - parentHeightM) + childHeightM;
+                const horizontalLengthM = distance(parentLocation.device, childLocation.device);
+                td.horizontalLengthM = horizontalLengthM;
+                td.verticalLengthM = verticalLengthM;
+                td.lengthM = horizontalLengthM + verticalLengthM;
+                td.panelLengthM = td.lengthM;
+                td.lengthOverridden = false;
+            }
+            const tdOwnDropV = td.sectionMm2 > 0
+                ? (td.phases === 1 ? 2 : Math.sqrt(3)) * Math.max(td.phaseCurrentR, td.phaseCurrentS, td.phaseCurrentT) * td.copperResistivity * td.lengthM * td.powerFactor / td.sectionMm2
+                : 0;
             td.upstreamVoltageDropV = tg.voltageDropV;
             td.voltageDropV = tdOwnDropV + tg.voltageDropV;
             td.voltageDropPct = td.voltageDropV / td.circuitVoltageV * 100;

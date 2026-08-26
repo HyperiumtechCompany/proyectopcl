@@ -394,7 +394,7 @@ export function ElectricalDeviceProps({
                     candidate.type === 'sub_panel',
             ),
     );
-    const wouldCreateCycle = (candidateId: string): boolean => {
+    const wouldCreateCycleWithUpstream = (candidateId: string): boolean => {
         let currentId: string | undefined = candidateId;
         const visited = new Set<string>();
         while (currentId && !visited.has(currentId)) {
@@ -406,10 +406,22 @@ export function ElectricalDeviceProps({
         }
         return false;
     };
+    const wouldCreateCycleWithDownstream = (candidateId: string): boolean => {
+        let currentId = device.properties?.upstreamPanelId;
+        const visited = new Set<string>();
+        while (currentId && !visited.has(currentId)) {
+            if (currentId === candidateId) return true;
+            visited.add(currentId);
+            currentId = allPanels.find(
+                ({ device: candidate }) => candidate.id === currentId,
+            )?.device.properties?.upstreamPanelId;
+        }
+        return false;
+    };
     const upstreamPanelOptions = allPanels
         .filter(
             ({ device: candidate }) =>
-                candidate.id !== device.id && !wouldCreateCycle(candidate.id),
+                candidate.id !== device.id && !wouldCreateCycleWithUpstream(candidate.id),
         )
         .map(({ device: candidate, scene }) => ({
             value: candidate.id,
@@ -659,7 +671,7 @@ export function ElectricalDeviceProps({
                                 {allPanels.filter(
                                     ({ device: candidate }) =>
                                         candidate.id !== device.id &&
-                                        !wouldCreateCycle(candidate.id),
+                                         !wouldCreateCycleWithDownstream(candidate.id),
                                 ).length === 0 ? (
                                     <p className="text-[10px] text-slate-400">
                                         No hay otros tableros disponibles.
@@ -669,7 +681,7 @@ export function ElectricalDeviceProps({
                                         .filter(
                                             ({ device: candidate }) =>
                                                 candidate.id !== device.id &&
-                                                !wouldCreateCycle(candidate.id),
+                                                 !wouldCreateCycleWithDownstream(candidate.id),
                                         )
                                         .map(({ device: child, scene }) => {
                                             const connected =
