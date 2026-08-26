@@ -25,6 +25,7 @@ import Swal from 'sweetalert2';
 import type { ACUComponenteRow, ACURowSummary } from '@/types/presupuestos';
 import type { DelphinRow, InsumosScope } from '../types';
 import { exportInsumosConsolidadosExcel } from '../helpers/exportDelphinExcel';
+import type { DicEntry } from '../hooks/useDiccionario';
 type InsumoType =
     | 'mano_de_obra'
     | 'materiales'
@@ -40,6 +41,7 @@ interface Props {
     scope: InsumosScope;
     projectName: string;
     projectData?: any;
+    diccionario: DicEntry[];
     onClose: () => void;
 }
 
@@ -91,6 +93,29 @@ export interface ConsolidatedInsumo {
     sourceKeys: string[];
     variantes: string[];
     references: InsumoReference[];
+}
+
+export function editableInsumoCode(insumo: ConsolidatedInsumo): string {
+    return insumo.insumo_id
+        ? (insumo.codigo_producto ?? insumo.codigo)
+        : insumo.codigo;
+}
+
+export function filterDiccionario(
+    diccionario: DicEntry[],
+    search: string,
+): DicEntry[] {
+    const normalizedSearch = normalizeText(search);
+
+    if (!normalizedSearch) return diccionario.slice(0, 50);
+
+    return diccionario
+        .filter((entry) =>
+            normalizeText(`${entry.codigo} ${entry.descripcion}`).includes(
+                normalizedSearch,
+            ),
+        )
+        .slice(0, 50);
 }
 
 export interface MergeInsumoSource {
@@ -521,7 +546,7 @@ function SortableHeader({
 }
 
 export function InsumosConsolidadosModal({
-    open, acuRows, delphinRows, scope, projectName, projectData, onClose,
+    open, acuRows, delphinRows, scope, projectName, projectData, diccionario, onClose,
 }: Props) {
     const [activeType, setActiveType] = useState<InsumoType>('mano_de_obra');
     const [search, setSearch] = useState('');
@@ -540,6 +565,8 @@ export function InsumosConsolidadosModal({
     const [referenceRow, setReferenceRow] = useState<ConsolidatedInsumo | null>(null);
     const [editingInsumo, setEditingInsumo] = useState<ConsolidatedInsumo | null>(null);
     const [editCode, setEditCode] = useState('');
+    const [editDictionarySearch, setEditDictionarySearch] = useState('');
+    const [editDiccionarioId, setEditDiccionarioId] = useState<number | null>(null);
     const [editName, setEditName] = useState('');
     const [editUnit, setEditUnit] = useState('');
     const [editPrice, setEditPrice] = useState(0);
@@ -553,6 +580,17 @@ export function InsumosConsolidadosModal({
         originX: number;
         originY: number;
     } | null>(null);
+
+    const filteredDictionary = useMemo(() => {
+        const matches = filterDiccionario(diccionario, editDictionarySearch);
+        const selected = diccionario.find(
+            (entry) => entry.id === editDiccionarioId,
+        );
+
+        return selected && !matches.some((entry) => entry.id === selected.id)
+            ? [selected, ...matches]
+            : matches;
+    }, [diccionario, editDictionarySearch, editDiccionarioId]);
 
     const specialties = useMemo<SpecialtyOption[]>(() => {
         return delphinRows
@@ -741,8 +779,14 @@ export function InsumosConsolidadosModal({
     };
 
     const handleEditClick = (row: ConsolidatedInsumo) => {
+        const currentDictionary = diccionario.find(
+            (entry) => normalizeText(entry.codigo) === normalizeText(row.codigo),
+        );
+
         setEditingInsumo(row);
-        setEditCode(row.codigo);
+        setEditCode(editableInsumoCode(row));
+        setEditDictionarySearch('');
+        setEditDiccionarioId(currentDictionary?.id ?? null);
         setEditName(row.descripcion);
         setEditUnit(row.unidad);
         setEditPrice(row.precio);
@@ -775,7 +819,7 @@ export function InsumosConsolidadosModal({
             if (editingInsumo.insumo_id) {
                 // Caso A: Ya está vinculado al catálogo
                 await axios.put(`/costos/proyectos/${projectData.id}/presupuesto/insumos/${editingInsumo.insumo_id}`, {
-                    codigo_producto: editCode.trim(),
+                    diccionario_id: editDiccionarioId,
                     descripcion: editName,
                     unidad: editUnit.trim(),
                     costo_unitario: editPrice
@@ -1465,16 +1509,45 @@ export function InsumosConsolidadosModal({
                             <div className="p-4 space-y-4">
                                 <div>
                                     <label className="mb-1 block text-xs font-medium text-slate-300">
-                                        Código
+                                        {editingInsumo.insumo_id ? 'Código de diccionario' : 'Código'}
                                     </label>
-                                    <input
-                                        type="text"
-                                        maxLength={50}
-                                        value={editCode}
-                                        onChange={(e) => setEditCode(e.target.value)}
-                                        className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
-                                        disabled={isSaving}
-                                    />
+                                    {editingInsumo.insumo_id ? (
+                                        <div className="flex flex-col gap-2">
+                                            <input
+                                                type="search"
+                                                value={editDictionarySearch}
+                                                onChange={(event) => setEditDictionarySearch(event.target.value)}
+                                                placeholder="Buscar por código o descripción"
+                                                className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-500"
+                                                disabled={isSaving}
+                                            />
+                                            <select
+                                                value={editDiccionarioId ?? ''}
+                                                onChange={(event) => setEditDiccionarioId(Number(event.target.value) || null)}
+                                                className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+                                                disabled={isSaving}
+                                            >
+                                                <option value="">Selecciona un código</option>
+                                                {filteredDictionary.map((entry) => (
+                                                    <option key={entry.id} value={entry.id}>
+                                                        {entry.codigo} - {entry.descripcion}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <p className="text-[11px] text-slate-400">
+                                                El código interno del producto no se modificará.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <input
+                                            type="text"
+                                            maxLength={50}
+                                            value={editCode}
+                                            onChange={(e) => setEditCode(e.target.value)}
+                                            className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+                                            disabled={isSaving}
+                                        />
+                                    )}
                                 </div>
                                 <div>
                                     <label className="mb-1 block text-xs font-medium text-slate-300">
@@ -1529,7 +1602,7 @@ export function InsumosConsolidadosModal({
                                     type="button"
                                     onClick={handleSaveEdit}
                                     className="rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-500 disabled:opacity-50"
-                                    disabled={isSaving || !editCode.trim() || !editName.trim() || !editUnit.trim()}
+                                    disabled={isSaving || (editingInsumo.insumo_id ? !editDiccionarioId : !editCode.trim()) || !editName.trim() || !editUnit.trim()}
                                 >
                                     {isSaving ? 'Guardando...' : 'Guardar y Propagar'}
                                 </button>

@@ -916,7 +916,7 @@ class CostoDatabaseService
                         ];
 
                         if (! empty($insumo->codigo)) {
-                            $updateData['cod_insumo'] = $insumo->codigo;
+                            $updateData['cod_insumo'] = $insumo->diccionario_codigo ?? $insumo->codigo;
                             $updateData['codigo_producto'] = $insumo->codigo;
                         }
 

@@ -107,6 +107,53 @@ it('updates code and unit for a catalog-linked consolidated input', function () 
         ->and((float) $material->parcial)->toBe(51.0);
 });
 
+it('changes only the dictionary assignment and propagates its code to linked ACUs', function () {
+    $connection = DB::connection('costos_tenant');
+    $presupuestoId = $this->dbService->getDefaultPresupuestoId($this->testDbName);
+    $acuId = createTestAcu($presupuestoId);
+    $diccionarioId = $connection->table('diccionario')->insertGetId([
+        'codigo' => '32',
+        'descripcion' => 'Petróleo y derivados',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $insumoId = $connection->table('insumo_productos')->insertGetId([
+        'codigo_producto' => 'CAT-199',
+        'descripcion' => 'Gasolina regular',
+        'tipo' => 'materiales',
+        'costo_unitario' => 20,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $connection->table('acu_materiales')->insert([
+        'acu_id' => $acuId,
+        'insumo_id' => $insumoId,
+        'cod_insumo' => 'OLD',
+        'codigo_producto' => 'CAT-199',
+        'descripcion' => 'Gasolina regular',
+        'unidad' => 'gl',
+        'cantidad' => 2,
+        'precio_unitario' => 20,
+        'parcial' => 40,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $this->actingAs($this->user)
+        ->putJson("/costos/proyectos/{$this->project->id}/presupuesto/insumos/{$insumoId}", [
+            'diccionario_id' => $diccionarioId,
+        ])
+        ->assertSuccessful();
+
+    $producto = $connection->table('insumo_productos')->where('id', $insumoId)->first();
+    $material = $connection->table('acu_materiales')->where('acu_id', $acuId)->first();
+
+    expect($producto->diccionario_id)->toBe($diccionarioId)
+        ->and($producto->codigo_producto)->toBe('CAT-199')
+        ->and($material->cod_insumo)->toBe('32')
+        ->and($material->codigo_producto)->toBe('CAT-199');
+});
+
 it('updates code and unit for an unlinked consolidated input', function () {
     $connection = DB::connection('costos_tenant');
     $presupuestoId = $this->dbService->getDefaultPresupuestoId($this->testDbName);

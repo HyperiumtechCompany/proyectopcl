@@ -1244,6 +1244,7 @@ export default function DelphinView({
                     scope={insumosScope}
                     projectName={project_name}
                     projectData={projectData}
+                    diccionario={diccionario}
                     onClose={() => setInsumosOpen(false)}
                 />
                 <PartidasSinAcuModal

@@ -26,7 +26,7 @@ class UpdateInsumoProductoRequest extends FormRequest
             'especificaciones' => ['nullable', 'string'],
             'unidad_id' => ['sometimes', 'integer'],
             'unidad' => ['sometimes', 'string', 'max:20'],
-            'diccionario_id' => ['sometimes', 'integer'],
+            'diccionario_id' => ['sometimes', 'integer', Rule::exists('costos_tenant.diccionario', 'id')],
             'tipo_proveedor' => ['sometimes', 'string', 'size:3'],
             'costo_unitario_lista' => ['sometimes', 'numeric', 'min:0'],
             'costo_unitario' => ['sometimes', 'numeric', 'min:0'],

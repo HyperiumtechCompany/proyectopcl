@@ -6,6 +6,8 @@ import {
     calculateInsumoUsage,
     calculateReferencePrice,
     buildMergeSources,
+    editableInsumoCode,
+    filterDiccionario,
     type ConsolidatedInsumo,
     consolidateInsumos,
     flattenInsumos,
@@ -14,6 +16,37 @@ import {
     sortInsumos,
     sumInsumoTotals,
 } from './InsumosConsolidadosModal';
+
+it('edita el codigo canonico del catalogo aunque los ACU tengan codigos distintos', () => {
+    const linkedInsumo = {
+        insumo_id: 199,
+        codigo: 'ANT-01, ANT-02',
+        codigo_producto: 'MAT-199',
+    } as ConsolidatedInsumo;
+    const unlinkedInsumo = {
+        insumo_id: null,
+        codigo: 'MANUAL-01',
+        codigo_producto: null,
+    } as ConsolidatedInsumo;
+
+    expect(editableInsumoCode(linkedInsumo)).toBe('MAT-199');
+    expect(editableInsumoCode(unlinkedInsumo)).toBe('MANUAL-01');
+});
+
+it('busca el diccionario sin distinguir mayusculas ni tildes', () => {
+    const diccionario = [
+        { id: 1, codigo: '32', descripcion: 'Petróleo y derivados' },
+        { id: 2, codigo: '43', descripcion: 'Madera para encofrado' },
+    ];
+
+    expect(filterDiccionario(diccionario, 'PETROLEO')).toEqual([
+        diccionario[0],
+    ]);
+    expect(filterDiccionario(diccionario, 'mAdErA')).toEqual([
+        diccionario[1],
+    ]);
+    expect(filterDiccionario(diccionario, '32')).toEqual([diccionario[0]]);
+});
 
 it('construye una fuente única por variante seleccionada para persistir la fusión', () => {
     const rawRows = [

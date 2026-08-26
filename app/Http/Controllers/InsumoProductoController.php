@@ -426,7 +426,10 @@ class InsumoProductoController extends Controller
             $producto = $connection->table('insumo_productos')->where('id', $insumoId)->first();
             if ($producto) {
                 $producto->unidad = $unidad;
-                $producto->codigo = $validated['codigo_producto'] ?? null;
+                $producto->codigo = $producto->codigo_producto;
+                $producto->diccionario_codigo = $producto->diccionario_id
+                    ? $connection->table('diccionario')->where('id', $producto->diccionario_id)->value('codigo')
+                    : null;
             }
 
             return $producto;
