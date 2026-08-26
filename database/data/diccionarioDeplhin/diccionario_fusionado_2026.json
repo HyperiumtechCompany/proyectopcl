@@ -1,0 +1,7918 @@
+[
+    {
+        "descripcion": "Anclaje de acero tipo L",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Agregado fino",
+        "codigo": "04"
+    },
+    {
+        "descripcion": "Agregado grueso",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Alambre de cobre desnudo",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Alambre y cable tipo TW y THW",
+        "codigo": "07"
+    },
+    {
+        "descripcion": "Alambre y cable tipo WP",
+        "codigo": "08"
+    },
+    {
+        "descripcion": "Alcantarilla metálica",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Aparato sanitario",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Artefacto de alumbrado exterior",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Artefacto de alumbrado interior",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Asfalto",
+        "codigo": "13"
+    },
+    {
+        "descripcion": "Baldosa acústica",
+        "codigo": "14"
+    },
+    {
+        "descripcion": "Baldosa vinílica",
+        "codigo": "16"
+    },
+    {
+        "descripcion": "Cable telefónico",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable NKY",
+        "codigo": "19"
+    },
+    {
+        "descripcion": "Cemento asfáltico",
+        "codigo": "20"
+    },
+    {
+        "descripcion": "Cemento Portland tipo I",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Cemento Portland tipo II",
+        "codigo": "22"
+    },
+    {
+        "descripcion": "Cemento Portland tipo V",
+        "codigo": "23"
+    },
+    {
+        "descripcion": "Cerámica esmaltada y sin esmaltar",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Cerrajería importada",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Cerrajería nacional",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Detonante",
+        "codigo": "27"
+    },
+    {
+        "descripcion": "Dinamita",
+        "codigo": "28"
+    },
+    {
+        "descripcion": "Dólar",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Ducto de concreto",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Ducto telefónico de PVC",
+        "codigo": "73"
+    },
+    {
+        "descripcion": "Flete aéreo",
+        "codigo": "33"
+    },
+    {
+        "descripcion": "Flete terrestre",
+        "codigo": "32"
+    },
+    {
+        "descripcion": "Gasolina",
+        "codigo": "34"
+    },
+    {
+        "descripcion": "Gelatina",
+        "codigo": "28"
+    },
+    {
+        "descripcion": "Anfo",
+        "codigo": "28"
+    },
+    {
+        "descripcion": "Herramienta manual",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Hormigón",
+        "codigo": "38"
+    },
+    {
+        "descripcion": "Índice de Precios al Consumidor (INEI)",
+        "codigo": "39"
+    },
+    {
+        "descripcion": "Loseta",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Madera en tiras para piso",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Madera pino amarillo del sur",
+        "codigo": "42"
+    },
+    {
+        "descripcion": "Madera nacional para encofrado y carpintería",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera terciada para encofrado y carpintería",
+        "codigo": "44"
+    },
+    {
+        "descripcion": "Madera terciada para encofrado",
+        "codigo": "45"
+    },
+    {
+        "descripcion": "Malla de acero",
+        "codigo": "46"
+    },
+    {
+        "descripcion": "Leyes sociales de mano de obra",
+        "codigo": "47"
+    },
+    {
+        "descripcion": "Grupo electrógeno de obra",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Mira topográfica",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Marco y tapa de fierro fundido",
+        "codigo": "50"
+    },
+    {
+        "descripcion": "Perfil de acero liviano",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Perfil de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Biodiesel",
+        "codigo": "53"
+    },
+    {
+        "descripcion": "Pintura látex",
+        "codigo": "54"
+    },
+    {
+        "descripcion": "Pintura temple",
+        "codigo": "55"
+    },
+    {
+        "descripcion": "Plancha de acero LAC",
+        "codigo": "56"
+    },
+    {
+        "descripcion": "Plancha de acero LAF",
+        "codigo": "57"
+    },
+    {
+        "descripcion": "Plancha de fibro-cemento",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Plancha de poliuretano",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Plancha galvanizada",
+        "codigo": "61"
+    },
+    {
+        "descripcion": "Cruceta simétrica de concreto",
+        "codigo": "62"
+    },
+    {
+        "descripcion": "Poste de fierro",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Terrazo",
+        "codigo": "64"
+    },
+    {
+        "descripcion": "Tubería de acero negro y\/o galvanizado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Válvula mariposa de PVC",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Tubería de cobre",
+        "codigo": "68"
+    },
+    {
+        "descripcion": "Tubería de concreto reforzado",
+        "codigo": "70"
+    },
+    {
+        "descripcion": "Tubería de concreto simple",
+        "codigo": "69"
+    },
+    {
+        "descripcion": "Collar enchufe de hierro dúctil",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Tubería de PVC para agua",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Válvula de bronce nacional",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula de hierro fundido nacional",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Unión CPVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Plancha de acero mediana LAC",
+        "codigo": "56"
+    },
+    {
+        "descripcion": "Anillo de jebe para tubería",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Válvula de bronce importada",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Afirmado",
+        "codigo": "38"
+    },
+    {
+        "descripcion": "Alambre negro",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Arena fina",
+        "codigo": "04"
+    },
+    {
+        "descripcion": "Bomba de concreto",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Brocha",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Cemento blanco",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Cepillo",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Llave de ajuste",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Clavo",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Cola",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Compactadora vibratoria",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Tubo redondo de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Contrazócalo loseta",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Madera pumaquiro",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Fierro corrugado",
+        "codigo": "03"
+    },
+    {
+        "descripcion": "Formica",
+        "codigo": "84"
+    },
+    {
+        "descripcion": "Imprimante acrílico",
+        "codigo": "54"
+    },
+    {
+        "descripcion": "Ladrillo de arcilla",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Ladrillo pastelero",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Lija",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Mármol",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Mayólica nacional",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Mezcladora de concreto",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Ocre",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Operario",
+        "codigo": "47"
+    },
+    {
+        "descripcion": "Autohormiguera",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Perno",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Piedra chancada",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Piedra mediana",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Pintura esmalte",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Planta de asfalto en caliente",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Planta de asfalto en frío",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Porcelana",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Regla",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Excavadora sobre llantas",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Rodón",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Sierra circular",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Teodolito",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Tierra de chacra",
+        "codigo": "04"
+    },
+    {
+        "descripcion": "Tiza",
+        "codigo": "04"
+    },
+    {
+        "descripcion": "Tractor",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Cargador retroexcavador",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Volquete",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Excavadora sobre orugas",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Yeso",
+        "codigo": "04"
+    },
+    {
+        "descripcion": "Concreto premezclado",
+        "codigo": "80"
+    },
+    {
+        "descripcion": "Sellador",
+        "codigo": "54"
+    },
+    {
+        "descripcion": "Vigía",
+        "codigo": "47"
+    },
+    {
+        "descripcion": "Cargador frontal",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Caja de herramientas",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Inodoro",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Accesorio para tubería de hierro fundido",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Accesorios de continuidad de pantalla",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Accesorios telefónicos de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Acabadora de concreto",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Disipador sísmico",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Baritina",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Licencia de Software",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Adobe",
+        "codigo": "04"
+    },
+    {
+        "descripcion": "Agua",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Aislador carrete",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Reactor para Lámpara de vapor de sodio",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Flete acuático (no incluye Loreto y Ucayali)",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Acero roscado acero galvanizado",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Alambre de cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Alambre de púas",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Tope sísmico",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Alambre pretensor",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Alambrón",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Alcayata",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Alfombra",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Alquitrán",
+        "codigo": "13"
+    },
+    {
+        "descripcion": "Amasadora de asfalto",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Amperímetro",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Cable tipo boa",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Anillo de jebe",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Anticorrosivo",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Apoyos neopreno",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Arandela de cuero",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Plancha de acero LAC estriada",
+        "codigo": "56"
+    },
+    {
+        "descripcion": "Arcilla",
+        "codigo": "04"
+    },
+    {
+        "descripcion": "Arena gruesa",
+        "codigo": "04"
+    },
+    {
+        "descripcion": "Armella",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Arrancador para Lámpara de vapor de sodio",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Artefacto tipo farol",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Placa para interruptor",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Ascensor",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Asfalto industrial sólido",
+        "codigo": "13"
+    },
+    {
+        "descripcion": "Recubrimiento bituminoso",
+        "codigo": "13"
+    },
+    {
+        "descripcion": "Asignación excepcional",
+        "codigo": "47"
+    },
+    {
+        "descripcion": "Automóvil",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Ayudante",
+        "codigo": "47"
+    },
+    {
+        "descripcion": "Azulejo",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Badilejo",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Balanza",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Balde",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Baldosín semigres",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Bambú",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Barniz",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Barredora mecánica",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Barreno",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Barro",
+        "codigo": "04"
+    },
+    {
+        "descripcion": "Batea",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Batería",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Bentonita",
+        "codigo": "04"
+    },
+    {
+        "descripcion": "Berbiquí",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Bidet",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Bisagra importada",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Bisagra nacional",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Aislador sísmico",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Bita",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Ladrillo hueco para techo",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Ladrillo tubular",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Ladrillo king kong",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Bloque de 50 pares para armario",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Bloque de vidrio",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Bobina",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Bolardo",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Nivel de ingeniero",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Bomba de agua Diesel",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Bomba de agua tipo turbina",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Bomba de inyección de cemento",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Bomba neumática para vaciado de concreto",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Borne",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Botas de jebe",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Bote",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Botón con campanilla",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Boya",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Braquete",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Brea",
+        "codigo": "13"
+    },
+    {
+        "descripcion": "Plancha de acero LAC lisa",
+        "codigo": "56"
+    },
+    {
+        "descripcion": "Broca",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Bronce",
+        "codigo": "68"
+    },
+    {
+        "descripcion": "Estación total",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Puntal de acero",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Bushing de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Buzón para ducto de basura",
+        "codigo": "56"
+    },
+    {
+        "descripcion": "Cable de acero",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Cable de acero para concreto pretensado",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Pretensado",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Cable telefónico armado",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable telefónico autosoportado con aislamiento",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable telefónico con aislamiento de papel",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable telefónico con aislamiento de polietileno",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Amortiguador sísmico",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Cable NKBA",
+        "codigo": "19"
+    },
+    {
+        "descripcion": "Cable NYY",
+        "codigo": "19"
+    },
+    {
+        "descripcion": "Cable N2XY",
+        "codigo": "19"
+    },
+    {
+        "descripcion": "Cable TW y THW",
+        "codigo": "07"
+    },
+    {
+        "descripcion": "Cable WP",
+        "codigo": "08"
+    },
+    {
+        "descripcion": "Cabo",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Jalón topógrafico",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Cadena",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Caja cabina eléctrica",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Caja cuadrada eléctrica",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Caja de conexión de agua y desagüe",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Placa para salida de terma",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Placa para salida de fuerza",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Caja eléctrica",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Caja de conexiones de fierro fundido",
+        "codigo": "50"
+    },
+    {
+        "descripcion": "Lámpara halógena",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Caja octogonal liviana eléctrica",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Marco de fierro",
+        "codigo": "50"
+    },
+    {
+        "descripcion": "Caja portafusibles",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Caja prefabricada grifo",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Caja protección concreto prefabricada",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Tubo de acero inoxidable",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Caja sumidero",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Cal",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Calamina de Zinc",
+        "codigo": "56"
+    },
+    {
+        "descripcion": "Caldera",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Cámara neumática",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Cambia vía",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Camión",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Camión cisterna",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Camión concretero",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Camión imprimador",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Equipo de termofusión",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Equipo de granallado",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Camión volquete",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Camioneta",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Campana extractora",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Campana timbre eléctrico",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Campanilla timbre",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Madera quillovara",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Tubo cuadrado de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Placa de yeso (drywall)",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Canaleta zinC",
+        "codigo": "56"
+    },
+    {
+        "descripcion": "Masilla para drywall",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Candado",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Tubo de abasto",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Canto rodado",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Zeta de acero al carbono",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Cantonera de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Madera manchinga",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Capataz",
+        "codigo": "47"
+    },
+    {
+        "descripcion": "Carretilla",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Esparcidora de asfalto",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Cartón",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Casco minero",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Cascote",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Casquete Spot Light",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Cepilladora de pisos",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Cera",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Cerrojo",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Césped",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Chalana",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Chancadora",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Chapa importada",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Chapa nacional",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Elevador de dos baldes",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Cilindro",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Generador eléctrico portátil",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Cincel",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Cinta aislante eléctrica",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Cocina asfáltica",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Brida rompe aguas de hierro dúctil",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Bushing de acero",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Codo PVC agua",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Codo PVC SAL desagüe",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Toma de fondo de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Reducción de PVC sanitaria",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Cola sintética",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Compactador manual",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Compactadora de rodillos",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Cargador sobre orugas",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Compresora Diesel",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Compuerta metálica",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Condensador",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Conductor aéreo",
+        "codigo": "82"
+    },
+    {
+        "descripcion": "Platina de Cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Conector eléctrico",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Piedra seleccionada de rio",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Maceta de arcilla",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Conmutador",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Contracarril",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Losetón",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Contrazócalo terrazo",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Contrazócalo veneciano",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Baldosa de PVC",
+        "codigo": "16"
+    },
+    {
+        "descripcion": "Corcho",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Cordón detonante",
+        "codigo": "27"
+    },
+    {
+        "descripcion": "Cornamusa",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Cinta aislante",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Chancadora cónica",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Criba",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Cristal templado",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Cruceta de concreto",
+        "codigo": "62"
+    },
+    {
+        "descripcion": "Cruceta de madera",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Tubería de acero electrosoldado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tubería de hierro fundido",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Cruz de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Cuarzo",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Cumbrera de fibrocemento",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Cuña de madera",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Codo PVC-U CR para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Defensas de caucho",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Reducción de PVC-U SP para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Mecha de seguridad",
+        "codigo": "27"
+    },
+    {
+        "descripcion": "Dinamo",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Plancha compactadora",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Dobladora de tubos",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Chata flotante",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Plancha zincada lisa",
+        "codigo": "61"
+    },
+    {
+        "descripcion": "Durmiente de concreto",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Durmiente de madera",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Eclisa",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Electrobomba",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Ladrillo pandereta",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Cinta de papel para drywall",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Ladrillo de concreto",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Cargador sobre llantas",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Empaquetadura",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pintarrayas",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Plancha ondulada de fibrocemento",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Enchape cerámico",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Energía eléctrica",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Epóxico",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Escalera",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Escantillón",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Esclusa",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Escoba",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Esmalte",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Esmeril",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Esparcidora de agregados",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Esparcidora de asfalto en frio",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Esparcidora de concreto",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Estabilizadora de suelos",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Estaca de madera",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Estopa",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Eucalipto",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Expanded metal",
+        "codigo": "46"
+    },
+    {
+        "descripcion": "Faja transportadora",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Fanal",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Farol",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Acero roscado acero negro",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Fibra cemento",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Fieltro",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Fierro liso",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Frotacho",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Concreto en bolsa",
+        "codigo": "80"
+    },
+    {
+        "descripcion": "Fusible eléctrico",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Gabinete metálico",
+        "codigo": "56"
+    },
+    {
+        "descripcion": "Gancho",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Ganguil",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Garlopa",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Garrucha",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Gas",
+        "codigo": "53"
+    },
+    {
+        "descripcion": "Gastos generales",
+        "codigo": "39"
+    },
+    {
+        "descripcion": "Gas licuado de petróleo (GLP)",
+        "codigo": "53"
+    },
+    {
+        "descripcion": "Granito",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Grasa",
+        "codigo": "01"
+    },
+    {
+        "descripcion": "Grass",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Grava",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Gres cerámico",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Grifería importada aparatos sanitarios",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Grifo jardín",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Grifo contra incendio",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Jumbo hidráulico de perforación",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Grupo electrógeno",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Guarda cabo",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Guarda riel",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Guarda vía",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Guillotina para planchas de acero",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Gutapercha",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Hacha",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Hojalata",
+        "codigo": "61"
+    },
+    {
+        "descripcion": "Madera machimango",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Impermeabilizante",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Pasta fina",
+        "codigo": "54"
+    },
+    {
+        "descripcion": "Inodoro tanque alto",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Inodoro tanque bajo",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Interruptor de bakelita",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Interruptor de cuchilla",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Interruptor no fuse eléctrico",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Interruptor térmico",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Interruptor eléctrico",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Jabón",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Jabonera",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Balde de pruebas hidráulicas",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Madera copaiba",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Junta water stop cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Junta water stop neopreno",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Junta water stop PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Petróleo diésel",
+        "codigo": "53"
+    },
+    {
+        "descripcion": "Laca",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Ladrillo silico calcáreo",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Laja",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Lampa",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Lámpara",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Reactor para Lámpara de vapor de mercurio",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Luminaria de alumbrado publico",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Lancha",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Lanchón",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Lata",
+        "codigo": "61"
+    },
+    {
+        "descripcion": "Lavadero",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Grifería",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Lavadero de cocina",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Mezcladora monocomando para ducha",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Fluxómetro mecánico para urinario",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Lavadero prefabricado",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Lavatorio",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Leña",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Lima",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Afirmado para subbase",
+        "codigo": "38"
+    },
+    {
+        "descripcion": "Liquido curador",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Llana",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Llanta",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Locomotora",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Terrazo premezclado",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Piso PVC",
+        "codigo": "16"
+    },
+    {
+        "descripcion": "Losetones",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Lubricante",
+        "codigo": "01"
+    },
+    {
+        "descripcion": "Luminaria",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Maceta",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Madera tornillo",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Triplay tornillo",
+        "codigo": "44"
+    },
+    {
+        "descripcion": "Malla de plástico",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Mandril",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Manga",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Triplay para encofrado",
+        "codigo": "44"
+    },
+    {
+        "descripcion": "Marco y tapa de concreto reforzado",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Mármol reconstituido",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Martillo a vapor",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Hincador de postes",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Martillo neumático",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Martinete",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Masa aislante",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Masilla",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Mayólica importada",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Mecha",
+        "codigo": "27"
+    },
+    {
+        "descripcion": "Medidor",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Megómetro",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Migajón",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Calibrador Pie de Rey",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Camión hidrojet",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Camión plataforma",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Motobomba",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Motoniveladora",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Motor eléctrico",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Motosierra",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Motosoldadora",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Compresora neumática",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Muraleta cerámica",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Contrazócalo de cerámico",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Neopreno",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Niple de bronce",
+        "codigo": "68"
+    },
+    {
+        "descripcion": "Niple cromado",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Adaptador de acero",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tubería de acero galvanizado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Codo PVC-U SP para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Nitrato de amonio",
+        "codigo": "28"
+    },
+    {
+        "descripcion": "Madera roble",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Monitor de transito",
+        "codigo": "47"
+    },
+    {
+        "descripcion": "Lavatorio con mueble",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Pabilo",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Paja",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Pala hidráulica",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Pala mecánica",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Pantalla de iluminación",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Pantalón y saco impermeable",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Papel",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Llave temporizada para urinario",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Papelera cromada",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Terminal para cable eléctrico",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Parihuela",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Parquet",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Parquet bálsamo",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Parquet chonta quiro",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Parquet coricaspi",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Parquet diablo fuerte",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Parquet guayacan",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Parquet hualtaco",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Parquet oreja de león",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Parquet quinilla",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Pasamano de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Pasamano de madera",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Paso de madera",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Poste de concreto centrifugado",
+        "codigo": "62"
+    },
+    {
+        "descripcion": "Acople de acero",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Pavimentadora de concreto",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Asfalto liquido SC",
+        "codigo": "13"
+    },
+    {
+        "descripcion": "Peón",
+        "codigo": "47"
+    },
+    {
+        "descripcion": "Pepelma",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Picaporte",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Picota",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Piedra",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Madera pino radiata",
+        "codigo": "42"
+    },
+    {
+        "descripcion": "Pintura anticorrosiva",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pintura látex vinílico",
+        "codigo": "54"
+    },
+    {
+        "descripcion": "Pintura látex acrílico",
+        "codigo": "54"
+    },
+    {
+        "descripcion": "Imprimante (pintura)",
+        "codigo": "54"
+    },
+    {
+        "descripcion": "Piso cerámico",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Cerámico piso pared",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Pisón manual",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Pisón mecánico",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Placa de PVC SAL eléctrica",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Placa para tomacorriente",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Placa salida therma",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Placa salida TV-teléfono",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Plancha de acero inoxidable",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Plancha de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Plancha de cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Plancha magnética de grano orientado",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Manta de aislamiento elastómero",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Amolador",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Plataforma remolque",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Platina de cobre electrolítico",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Plomada",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Plomo",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Poliestireno",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Poliuretano",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Pólvora",
+        "codigo": "28"
+    },
+    {
+        "descripcion": "Portafusible",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Porta lámpara",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Tubería EMT",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Poste de madera nacional",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Probeta de ensayos",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Punta muerta",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Punzón",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Ramal y de PVC desagüe",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Dado de ajuste",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Reactor P\/HPL",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Reactor P\/V sodio",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Reducción de hierro fundido",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Reducción de acero",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Reducción de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Luminaria de emergencia",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Pistola de calor",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Relay",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Reloj",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Remolcador",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Reóstato",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Resina epóxica",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Resina para sellado de caja terminal",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Retro excavadora",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Riel",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Ripio",
+        "codigo": "38"
+    },
+    {
+        "descripcion": "Ripper",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Madera capinuri",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Roca",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Rompepavimento",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Seccionador tripolar",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Sellador para juntas de expansión",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Asfalto liquido MC",
+        "codigo": "13"
+    },
+    {
+        "descripcion": "Serrucho",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Setos vivos",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Sierra manual",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Camión baranda",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Silicona",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Sillar",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Sismógrafo",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Soga",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Soldadora eléctrica",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Soldadura",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Tarugo de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Codo de cobre",
+        "codigo": "68"
+    },
+    {
+        "descripcion": "Soplete",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Varilla de acero galvanizado",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Sumidero de bronce",
+        "codigo": "68"
+    },
+    {
+        "descripcion": "Tabla de madera importada",
+        "codigo": "42"
+    },
+    {
+        "descripcion": "Tabla de madera nacional",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Tablero eléctrico",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Tablestaca metálica",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Tablón madera importada",
+        "codigo": "42"
+    },
+    {
+        "descripcion": "Tablón madera nacional",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Tachuela",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Taladro",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Caja sumidero de concreto",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Banco de ducto de concreto",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Caja para medidor de fierro",
+        "codigo": "50"
+    },
+    {
+        "descripcion": "Cruz de fierro galvanizado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Lámpara tipo bulbo",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Pulsador",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Tapa onda canal fibrocemento",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Perfil de acero al carbono",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Tubo rectangular de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Tapizón",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Tee de acero",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tapón de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Reducción de hierro",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Tarraja",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Madera caraña",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Tecnopor",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Adaptador brida campana de hierro dúctil",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Unión de acero",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tee PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Teja de arcilla",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Teja de fibrocemento",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Cinta autoadhesiva para drywall",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Tenaza",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Terminal mayólica",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Termostato",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Testigo ensayo",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Tina",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Tirafondo rieles",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Llave temporizada para lavatorio",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Tomacorriente",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Tope para puerta",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Tornillo de banco",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Torno",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Traílla",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Granalla de acero",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Inodoro dos piezas",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Bushing PVC-U CR para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Transformador",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Transporte acuático",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Transporte aéreo",
+        "codigo": "33"
+    },
+    {
+        "descripcion": "Transporte terrestre",
+        "codigo": "32"
+    },
+    {
+        "descripcion": "Travesaño de madera",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Travieza de concreto",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Madera quinilla colorada",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Trefilado (acero para pretensado)",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Guardacabo",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Triplay capinuri",
+        "codigo": "44"
+    },
+    {
+        "descripcion": "Triturador",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Tubería Armco",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Tubería de acero soldada",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tubería de hierro negro estándar",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tubería de PVC para desagüe",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Tuerca",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Tupi",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Unión de PVC agua",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Codo PVC sanitaria",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Tubería PVC SEL eléctrica",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Tubería de acero negro sin costura SCH",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tubería de acero negro",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tubería PVC telefónico",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Urinario",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Utilidad",
+        "codigo": "39"
+    },
+    {
+        "descripcion": "Vagón",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Llave temporizada para ducha",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Ventilador",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Vidrio laminado",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio templado",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio importado",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Cocina de asfalto",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Varilla para tierra, de cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Varilla para tierra, de bronce",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Varilla para tierra, de acero galvanizado",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "W.C. tanque alto",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "W.C. tanque bajo",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Accesorio para tubería de hierro dúctil",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Yee PVC desagüe",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Yunque",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Zaranda mecánica",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Travesaño de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Madera ishpingo",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Zócalo vinílico",
+        "codigo": "16"
+    },
+    {
+        "descripcion": "Zócalo veneciano",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Oficial",
+        "codigo": "47"
+    },
+    {
+        "descripcion": "Arandela de presión",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Barra recta de acero para SSHH",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Soldadura por electrodo",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Linterna",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Chata flotante de acero",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Madera lupuna",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Cemento hidráulico tipo MH",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Reducción de PVC-U CR para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Unión de PVC-U SP para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Tapa de fierro para buzón",
+        "codigo": "50"
+    },
+    {
+        "descripcion": "Curva PVC SAP eléctrica",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Extintor",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Equipo de oxicorte",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Accesorio PVC SEL eléctrica",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Cable N2XSY",
+        "codigo": "19"
+    },
+    {
+        "descripcion": "Acero corrugado ASTM A706",
+        "codigo": "03"
+    },
+    {
+        "descripcion": "Acero liso redondo",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Mapresa nacional",
+        "codigo": "44"
+    },
+    {
+        "descripcion": "Bonificaciones mano de obra",
+        "codigo": "47"
+    },
+    {
+        "descripcion": "Trampa de PVC para desagüe",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Caja de fierro galvanizado eléctrica",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Unión de PVC SAP eléctrica",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Unión de PVC-U CR para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Hidrolavadora",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Acrílico",
+        "codigo": "88"
+    },
+    {
+        "descripcion": "Acero para pretensado",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Acero de construcción corrugado",
+        "codigo": "03"
+    },
+    {
+        "descripcion": "Aceite para transformadores",
+        "codigo": "01"
+    },
+    {
+        "descripcion": "Aceite linaza",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Minicargador multipropósito",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Barra angular de acero para SSHH",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Abrazadera de hierro dúctil",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Material filtrante",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Hormigón de rio",
+        "codigo": "38"
+    },
+    {
+        "descripcion": "Lámpara de halogenuro metálico",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Luminaria para Lámpara de vapor de mercurio",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Grillete de sujeción",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Terminal de compresión de cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Arandela",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Tuerca mariposa",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Acero roscado zincado",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Tornillo autorroscante",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Diesel",
+        "codigo": "53"
+    },
+    {
+        "descripcion": "Manipulador telescópico (Telehandler)",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Anclaje para pretensado",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Arandela de fierro",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Piedra grande",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Arena fina de rio",
+        "codigo": "04"
+    },
+    {
+        "descripcion": "Arena gruesa de rio",
+        "codigo": "04"
+    },
+    {
+        "descripcion": "Cierrapuertas",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Pararrayos",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Luminaria tipo LED para alumbrado publico",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Artefacto fluorescente",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Tractor de tiro",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Brea industrial",
+        "codigo": "13"
+    },
+    {
+        "descripcion": "Asfalto liquido RC",
+        "codigo": "13"
+    },
+    {
+        "descripcion": "Pistola de clavos",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Cerámico para piso",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Cuchilla",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Cruceta para cerámicos",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Cerámico piscina",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Madera lagarto caspi",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Tractor sobre orugas",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Anfo pesado",
+        "codigo": "28"
+    },
+    {
+        "descripcion": "Alicate",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Cortadora de concreto",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Cortadora de mayólica",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Barra angular abatible de acero para SSHH",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Bisagra de extensión",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Bloque de concreto",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Ladrillo bovedilla",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Placa sílico calcáreo",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Pluma de izado",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Bomba centrífuga",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Pistola de silicona",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Dremel",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Planta de asfalto",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Comba de inyección de cemento",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Prensa empalmadora",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Electrodo",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "GPS diferencial",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Porta Lámpara plafón",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Placa de salida para ethernet",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Tapajuntas de acero LAC",
+        "codigo": "56"
+    },
+    {
+        "descripcion": "Destornillador",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Bujía",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Bushing de fierro galvanizado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Unión de PVC SEL eléctrica",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Brida rompe aguas de acero LAC",
+        "codigo": "56"
+    },
+    {
+        "descripcion": "Cable UTP",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Conector RJ",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable CCT-B",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable coaxial",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable multipar",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Conductor N2XSY",
+        "codigo": "19"
+    },
+    {
+        "descripcion": "Cable NPT",
+        "codigo": "19"
+    },
+    {
+        "descripcion": "Alambre y cable GPT",
+        "codigo": "07"
+    },
+    {
+        "descripcion": "Alambre y cable CPI (WP)",
+        "codigo": "08"
+    },
+    {
+        "descripcion": "Cabría",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Placa de tecnopolímero",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Lámpara tipo globo",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Panel de concreto prefabricado",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Placa de salida para TV",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Caja de madera para tablero eléctrico",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Luminaria tipo rejilla",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Marco y tapa de fierro",
+        "codigo": "50"
+    },
+    {
+        "descripcion": "Wall socket",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Tubo LED",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Caja para medidor de agua de fierro fundido",
+        "codigo": "50"
+    },
+    {
+        "descripcion": "Luminaria high bay",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Caja de registro de agua",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Caja de pozo a tierra de concreto",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Cable de control multipar",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable mensajero",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Dintel prefabricado de concreto",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Calamina de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Brida de acero",
+        "codigo": "56"
+    },
+    {
+        "descripcion": "Perforadora sobre orugas",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Atornillador eléctrico",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Aspirador",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Monorraíl",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Pavimentadora sobre orugas",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Martillo eléctrico demoledor",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Camión tractor",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Bastón desnivelador topográfico",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Cortadora de pavimento",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Llave de impacto eléctrico",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Caja condulet",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Luminaria downlight",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Caballete de madera",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Canaleta de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Canaleta fibro-cemento",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Brida de acero LAC",
+        "codigo": "56"
+    },
+    {
+        "descripcion": "Canalón fibro-cemento",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Manija",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Asiento para inodoro",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Perfil W de acero al carbono",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Marco de ventana de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Rollizo de madera",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Secador de áridos",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Rodillo para pintar",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Tractor sobre llantas",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Herramienta de construcción",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Bloque de concreto para techos",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Interruptor",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Carbón vegetal",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Torre grúa",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Pala",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Chapa",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Ruteador eléctrico",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Torre de iluminación",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Cerrojo digital",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Receptor GPS",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Pulverizadora de pintura airless",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Compresora de aire eléctrica",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Wincha",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Escofina",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Tornillo para drywall",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Compresora horizontal",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Codo de fierro fundido",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Codo de fierro negro y\/o galvanizado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Trampa \"P\" de PVC sanitaria",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Niple de CPVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Codo PVC SAP eléctrica",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Niple de PVC-U CR para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Formón",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Mototraílla autocargable",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Mototraílla cargable",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Rodillo neumático autopropulsado",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Rodillo pata de cabra vibratorio autopropulsado",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Placa de acero corrugado",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Luz de balizaje",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Alambre para devanado de cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Barra equipotencial de cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Unión de PVC sanitaria",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Confitillo",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Confitillo o cascajo de ladrillo",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Luminaria spotlight",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Madera catahua amarilla",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Contrazócalo de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Loseta de mármol",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Caña Guayaquil",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Zócalo de terrazo",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Loseta veneciana",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Piso vinílico",
+        "codigo": "16"
+    },
+    {
+        "descripcion": "Cordel",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Fulminante común",
+        "codigo": "27"
+    },
+    {
+        "descripcion": "Cortadora de fierro de construcción",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Crawler Drill",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Cepilladora de madera",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Pastoral de concreto",
+        "codigo": "62"
+    },
+    {
+        "descripcion": "Madera rollizo",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Tapón de acero",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Cruz de fierro fundido",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Tubería CPVC para agua caliente",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Rollizo de eucalipto",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Curva de PVC eléctrica",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Decorpanel",
+        "codigo": "84"
+    },
+    {
+        "descripcion": "Detonador eléctrico",
+        "codigo": "27"
+    },
+    {
+        "descripcion": "Pulidora eléctrica",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Dobladora de fierro",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Lijadora eléctrica",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Dosificadora de concreto",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Plancha zincada ondulada (calamina)",
+        "codigo": "61"
+    },
+    {
+        "descripcion": "Listón de madera",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Rotomartillo",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Elemento de arcilla para celosía",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Elementos fibro-cemento para celosías",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Elemento de concreto para celosía",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Rodillo tándem vibratorio autopropulsado",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Encofrado metálico",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Encuentro fibro-cemento",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Brick cerámico",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Mochila micropulverizadora",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Barrera de contención metálico",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Barra retráctil",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Rodillo vibratorio liso autopropulsado",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Rodillo vibratorio liso de tiro",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Pavimentadora sobre neumáticos",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Espejo",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Madera quillosisa o cedrillo",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera sapote",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Luminaria hermética",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Farola",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Tornillo para madera",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Cemento hidráulico tipo MS (MH)",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Acero corrugado ASTM A615",
+        "codigo": "03"
+    },
+    {
+        "descripcion": "Tornillo wafer",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Manguera",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Fulminante",
+        "codigo": "27"
+    },
+    {
+        "descripcion": "Seccionador cut out",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Brida de hierro dúctil",
+        "codigo": "56"
+    },
+    {
+        "descripcion": "Anillo de cera para inodoro",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Escalera telescópica",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Cerrojo sapito",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Generador",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Grafito",
+        "codigo": "53"
+    },
+    {
+        "descripcion": "Carbón mineral",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Cerámico",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Grifería nacional aparatos sanitarios",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Válvula esférica de hierro dúctil",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Grúa",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Esponja",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Madera cachimbo colorado",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Llave para urinario",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Sumidero",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Instrumento topográfico",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Tubo fluorescente",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Zumbador",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Caja metálica para tablero eléctrico",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Placa de salida para teléfono",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Interruptor automático",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Inodoro one piece",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Comba",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Madera moena amarilla",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera misa",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Ladrillo de arcilla tipo tabique",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Bloque de concreto para muros",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Ladrillo refractario",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Rejilla de concreto",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Remachadora",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Interruptor de 3 vías",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Lámpara de vapor de mercurio",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Luz de emergencia",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Soplador de aire",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Latón",
+        "codigo": "61"
+    },
+    {
+        "descripcion": "Lavadero de fibra de vidrio",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Lavadero de loza",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Lavadero de fierro enlozado",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Lavadero de granito",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Lavadero de acero inoxidable",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Llave sensor para lavatorio",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Lavatorio fierro aporcelanado",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Madera shihuahuaco marrón",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Disco de desbaste",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Arco de sierra",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Cizalla manual",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Loseta de concreto",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Loseta vinílica",
+        "codigo": "16"
+    },
+    {
+        "descripcion": "Aceite dieléctrico",
+        "codigo": "01"
+    },
+    {
+        "descripcion": "Aislador tipo pin",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Adoquín de concreto",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Madera casho moena (canela moena)",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Triplay lupuna",
+        "codigo": "44"
+    },
+    {
+        "descripcion": "Winche eléctrico",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Triplay de madera nacional",
+        "codigo": "44"
+    },
+    {
+        "descripcion": "Caja prefabricada",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Loseta podotáctil",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Martillo",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Martillo hincapilotes",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Inserto decorado cerámico",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Multiplicador sensible al detonador",
+        "codigo": "27"
+    },
+    {
+        "descripcion": "Alisadora de concreto",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Flexómetro",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Montacargas",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Mosaico",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Prisma reflectivo",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Vibrador de concreto",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Sierra eléctrica",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Calentador de aceite",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Fachaleta",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Porcelánico",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Accesorio para tubería de cobre",
+        "codigo": "68"
+    },
+    {
+        "descripcion": "Asiendo de ducha de acero",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Niple de fierro galvanizado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Niple de fierro negro",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Niple de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Emulsión explosiva",
+        "codigo": "28"
+    },
+    {
+        "descripcion": "Nivel óptico",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Nivel topográfico",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Madera cumala",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Urinario de loza",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Lámpara de vapor de sodio",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Dispensador de papel",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Dispensador de jabón",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Cable de cobre desnudo",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Madera yacushapana",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera nacional en tiras para piso",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Parquet de madera",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Contrazócalo de madera",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Rodón de madera",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Madera machihembrada",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Machihembrado de madera",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Contrapaso de madera",
+        "codigo": "41"
+    },
+    {
+        "descripcion": "Platina de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Madera bolaina blanca",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Tarugo de madera",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Palomilla simple",
+        "codigo": "62"
+    },
+    {
+        "descripcion": "Pastoral para poste de fierro",
+        "codigo": "63"
+    },
+    {
+        "descripcion": "Pavimentación de asfalto sobre neumático",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Pavimentación de asfalto sobre oruga",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Pegamento asfaltico",
+        "codigo": "13"
+    },
+    {
+        "descripcion": "Mayólica",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Perfil de acero pesado",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Tuerca hexagonal",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Bisagra roller",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Pico",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Waype",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Piedra grande de rio",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Piedra mediana de cantera o de rio",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Madera pino tadea",
+        "codigo": "42"
+    },
+    {
+        "descripcion": "Taco cerámico",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Espátula",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Cautín eléctrico",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Selector manual",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Placa de bakelita SAL eléctrica",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Terminal socket",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Timbre puerta",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Perfil de acero inoxidable",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Cordón de respaldo",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Apisonadora",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Soldadora monofásica",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Water stop de cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Estera",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Lana de roca",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Dinamita gelatina",
+        "codigo": "28"
+    },
+    {
+        "descripcion": "Seccionador portafusible",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Aislador eléctrico de pin",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Poste de acero",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Poste de madera importada",
+        "codigo": "42"
+    },
+    {
+        "descripcion": "Madera huayruro",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Cable N2XOH",
+        "codigo": "19"
+    },
+    {
+        "descripcion": "Disco de corte",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Buje CPVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Rastillo",
+        "codigo": "37"
+    },
+    {
+        "descripcion": "Aislador polimérico",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Aislador eléctrico",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Abrazadera de hierro",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Reducción galvanizada",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Unión universal de CPVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Reflector",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Soldadora trifásica",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Madera huimba",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera estoraque",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Tirador para puertas",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Cerrajería",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Emulsión bitumen",
+        "codigo": "13"
+    },
+    {
+        "descripcion": "Fresadora eléctrica",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Curva PVC SEL eléctrica",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Sombrero de ventilación de bronce",
+        "codigo": "68"
+    },
+    {
+        "descripcion": "Soporte de acero",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Reducción de cobre",
+        "codigo": "68"
+    },
+    {
+        "descripcion": "Viga de madera importada",
+        "codigo": "42"
+    },
+    {
+        "descripcion": "Madera eucalipto",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Toma telefónica",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Madera pino insigne",
+        "codigo": "42"
+    },
+    {
+        "descripcion": "Madera huacapu",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Tuerca flange",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Cilindro de concreto",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Sardinel prefabricado de concreto",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Tapa de fierro fundido",
+        "codigo": "50"
+    },
+    {
+        "descripcion": "Codo de acero",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tablero eléctrico de resina",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Rejilla de aluminio para alumbrado",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Canal U de acero al carbono",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Marco de mampara de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Tapón de fierro galvanizado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Junta de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Tapón de fierro fundido",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Madera utucuro",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Tee de fierro fundido",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Tee de fierro galvanizado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Unión universal de PVC-U CR para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Confitillo de arcilla",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Tierra vegetal",
+        "codigo": "04"
+    },
+    {
+        "descripcion": "Desagüe tapón y cadena",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Desagüe push up",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Reactor para fluorescente",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Bisagra de acero",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Yee de hierro dúctil",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Canopla",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Caja de pase PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Prensa hidráulica",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Madera panguana",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera higuerilla",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Tuerca cuadrada",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Triplay para carpintería",
+        "codigo": "44"
+    },
+    {
+        "descripcion": "Placa metálica corrugada",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Accesorio de tubería de acero",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Unión universal de PVC-U SP para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Cerradura eléctrica",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Accesorio PVC SAP eléctrica",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Accesorio PVC sanitaria",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Tubería PVC-U SP para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Unión simple de fierro galvanizado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Unión universal galvanizado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Unión universal de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Porta papel",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Taza turca sanitaria",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Canguilón",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Tirfor",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Voltímetro",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Tornillo autoperforante",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Salida de ducha",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Taza sanitaria",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Yee fierro fundido desagüe",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Tubería PVC-U CR para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Sierra de banco eléctrico",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Zócalo de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Zócalo de madera",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Loseta asfáltica",
+        "codigo": "16"
+    },
+    {
+        "descripcion": "Loseta de cemento",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Válvula para ingreso y descarga para tanques",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Poza de acero inoxidable",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Portacepillos",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Mezcladora para lavatorio",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Llave para lavatorio",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Llave para ducha",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Mezcladora para ducha",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Ducha para bidet",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Tina bañera",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Registro de bronce",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Ovalín",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Tapa sanitaria",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Lavatorio de loza",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Papelera",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Ducha",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Cascote de arcilla",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Ladrillo caravista",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Viga prefabricada de concreto",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Cemento hidráulico tipo V",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Cemento hidráulico tipo MS",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Cemento hidráulico tipo IP(M)",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Cemento hidráulico tipo HE",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Cemento hidráulico tipo Ico",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Cemento hidráulico tipo HS (MH)",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Cemento hidráulico tipo HS",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Cemento hidráulico tipo GU",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Porcelanato",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Dinamita pulverulenta",
+        "codigo": "28"
+    },
+    {
+        "descripcion": "Tanque de polietileno",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Esquinero",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Canal de concreto",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Tapa de concreto para caja de agua",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Caja de registro de desagüe",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Tapa de fierro galvanizado",
+        "codigo": "61"
+    },
+    {
+        "descripcion": "Marco y tapa de concreto",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Tapa de concreto para caja de desagüe",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Buzón eléctrico",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Buzón de concreto prefabricado",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Vigueta prefabricada de concreto",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Triplay copaiba",
+        "codigo": "44"
+    },
+    {
+        "descripcion": "Madera prensada nacional",
+        "codigo": "44"
+    },
+    {
+        "descripcion": "Tripode topográfico",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Barra cuadrada de acero al carbono",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Cantonera de acero",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Viga de acero al carbono",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Angulo de acero al carbono",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Rejilla de acero negro",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Tee de acero al carbono",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Canal C de acero al carbono",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Platina de acero al carbono",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Correa de acero al carbono",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Tapajuntas de acero",
+        "codigo": "51"
+    },
+    {
+        "descripcion": "Tapajuntas de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Lístelo de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Ángulo de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Parasol de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Canal de aluminio",
+        "codigo": "52"
+    },
+    {
+        "descripcion": "Thinner",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Placa de fibrocemento",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Poliuretano expandido",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Sellador intumescente",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Sello elastomérico",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Lana de fibra de vidrio",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Caja galvanizada",
+        "codigo": "61"
+    },
+    {
+        "descripcion": "Ménsula de concreto",
+        "codigo": "62"
+    },
+    {
+        "descripcion": "Cruceta asimétrica de concreto",
+        "codigo": "62"
+    },
+    {
+        "descripcion": "Tubo redondo de acero galvanizado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tubo rectangular de acero negro",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tubo redondo de acero negro",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tubo redondo de acero electrosoldado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tubo rectangular de acero electrosoldado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Pastoral de acero",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tubo rectangular de acero galvanizado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tubo cuadrado de acero negro",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Niple de acero",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tubo cuadrado de acero electrosoldado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Tubería de hierro dúctil",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Codo de hierro dúctil",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Reducción de hierro dúctil",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Tee de hierro dúctil",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Trampa de fierro fundido desagüe",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Microaspersor de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Water stop de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Desvió de PVC para desagüe",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Válvula esférica PVC CR para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Tee PVC-U SP para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Válvula esférica PVC SP para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Yee PVC sanitaria",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Alambre y cable LSOHX",
+        "codigo": "07"
+    },
+    {
+        "descripcion": "Tee PVC-U CR para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Tee PVC sanitaria",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Accesorio PVC-U SP para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Tubería de PVC para eléctrica",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Accesorio PVC telefónico",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Codo ventilación PVC desagüe",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Unión de PVC eléctrica",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Codo CPVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Aspersor de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Tee CPVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Reducción CPVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Desnatador",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Unión de PVC desagüe",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Conector PVC SEL eléctrica",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Abrazadera de polipropileno",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Conector PVC SAP eléctrica",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Cinta teflón",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Canaleta de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Canastilla de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Cantonera de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Sombrero de ventilación de PVC sanitaria",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Accesorio CPVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Válvula compuerta de latón",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula siamesa de latón",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Canastilla de bronce",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula siamesa de bronce",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula reductora de presión en PVC",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Toma de fondo de latón",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula compuerta de bronce",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Canastilla de latón",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula flotadora",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Toma de fondo de bronce",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula reductora de presión en hierro dúctil",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula reductora de presión de latón",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula reductora de presión de bronce",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula de purga bronce",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula check canastilla de latón",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Motoperforador",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Mototraílla",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Minicargador",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Zaranda vibratoria",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Recicladora en frio",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Fresadora",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Semi-trailer",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Perno de convergencia corrugado",
+        "codigo": "03"
+    },
+    {
+        "descripcion": "Elevador eléctrico",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Tubo conduit de acero galvanizado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Gravilla",
+        "codigo": "05"
+    },
+    {
+        "descripcion": "Madera azúcar huayo",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Caja terminal de 10 ó 20 pares",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Cemento portland",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Caja rectangular liviana eléctrica",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Madera capirona",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Válvula check canastilla de bronce",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula esférica de latón",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula check de latón",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula esférica de bronce",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula angular de bronce",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Abrazadera de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Tubo cuadrado de acero galvanizado",
+        "codigo": "65"
+    },
+    {
+        "descripcion": "Madera nacional tratada",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera terciada nacional",
+        "codigo": "44"
+    },
+    {
+        "descripcion": "Aceite lubricante",
+        "codigo": "01"
+    },
+    {
+        "descripcion": "Grasa base litio",
+        "codigo": "01"
+    },
+    {
+        "descripcion": "Grasa base calcio",
+        "codigo": "01"
+    },
+    {
+        "descripcion": "Aceite",
+        "codigo": "01"
+    },
+    {
+        "descripcion": "Aceite aislante",
+        "codigo": "01"
+    },
+    {
+        "descripcion": "Grasa lubricante",
+        "codigo": "01"
+    },
+    {
+        "descripcion": "Tirafón de acero",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Tuerca ciega",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Trefilado (acero de refuerzo)",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Grapa",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Tirafondo de acero",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Adaptador integral para barra helicoidal",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Templador",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Estrobo",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Pin de expansión",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Alambre de acero",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Perno maquinado",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Alambre galvanizado",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Perno hexagonal estructural",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Perno flange",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Perno de expansión",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Perno cabeza choque",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Alambre",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Polea de acero",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Remache",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Fibra de acero",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Anclaje de acero tipo J",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Alambre de púas zincado",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Anclaje de acero",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Alambrón para trefilado",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Espiga de acero",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Barra de acero liso",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Clavo de acero sin cabeza",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Clavo de acero para calamina",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Clavo de acero galvanizado",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Clavo de acero con cabeza",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Pasador tipo horquilla",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Abrazadera de acero",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Perno hexagonal inoxidable",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Perno hexagonal zincado",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Alambre negro recocido",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Cadena de acero",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Acero corrugado ASTM A496",
+        "codigo": "03"
+    },
+    {
+        "descripcion": "Barra helicoidal",
+        "codigo": "03"
+    },
+    {
+        "descripcion": "Dowel de acero corrugado",
+        "codigo": "03"
+    },
+    {
+        "descripcion": "Acero corrugado dimensionado",
+        "codigo": "03"
+    },
+    {
+        "descripcion": "Borne de cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Cable de acero con recubrimiento de cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Electrodo de cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Conductor de cobre desnudo",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Conector de cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Electrodo de acero recubierto de cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Varilla de cobre",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Alambre y cable tipo TW",
+        "codigo": "07"
+    },
+    {
+        "descripcion": "Alambre y cable LSOH",
+        "codigo": "07"
+    },
+    {
+        "descripcion": "Alambre y cable THW",
+        "codigo": "07"
+    },
+    {
+        "descripcion": "Alambre y cable NHX",
+        "codigo": "07"
+    },
+    {
+        "descripcion": "Alambre y cable NH",
+        "codigo": "07"
+    },
+    {
+        "descripcion": "Alambre y cable CPI",
+        "codigo": "08"
+    },
+    {
+        "descripcion": "Alcantarilla TMC media caña",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Guardavía metálico",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Guardarraíl",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Alcantarilla TMC",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Alcantarilla TMC circular",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Esclusa metálica",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Papelera de loza",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Percha",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Lavatorio de fierro enlozado",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Fluxómetro mecánico para inodoro",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Mezcladora monocomando para lavatorio",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Rejilla de ventilación",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Registro cromado",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Toallero",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Luminaria para Lámpara de vapor de sodio",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Aislador de porcelana vidriada",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Arrancador para Lámpara de vapor de mercurio",
+        "codigo": "11"
+    },
+    {
+        "descripcion": "Caja portamedidor polimérico",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Luminaria de panel",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Interruptor conmutador",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Sirena LED",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Socket",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Socket de baquelita",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Interruptor diferencial",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Placa de aluminio",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Tapa ciega",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Interruptor unipolar",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Enchufe",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Interruptor termomagnético",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Placa ciega",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Artefacto LED",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Contactor",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Toma TV",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Socket porta arrancador",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Tablero eléctrico metálico",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Dimmer",
+        "codigo": "12"
+    },
+    {
+        "descripcion": "Imprimante asfaltico",
+        "codigo": "13"
+    },
+    {
+        "descripcion": "Brea liquida",
+        "codigo": "13"
+    },
+    {
+        "descripcion": "Sello asfaltico",
+        "codigo": "13"
+    },
+    {
+        "descripcion": "Asfalto liquido",
+        "codigo": "13"
+    },
+    {
+        "descripcion": "Baldosa de yeso multiplaca",
+        "codigo": "14"
+    },
+    {
+        "descripcion": "Baldosa acústica de fibra mineral",
+        "codigo": "14"
+    },
+    {
+        "descripcion": "Zócalo de PVC",
+        "codigo": "16"
+    },
+    {
+        "descripcion": "Contrazócalo de vinílico",
+        "codigo": "16"
+    },
+    {
+        "descripcion": "Deck de PVC",
+        "codigo": "16"
+    },
+    {
+        "descripcion": "Contrazócalo de PVC",
+        "codigo": "16"
+    },
+    {
+        "descripcion": "Cable PECSAT",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable telefónico para formas con PVC",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable mensajero de 6,000, 10,000 y 16,000 lb",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable XPT",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Fibra óptica",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable multiconductor para control y señalización",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Bandeja de fibra óptica",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable PEAT",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable de red",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable ethernet",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable PROFIBUS",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable SFTP",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable patch cord",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable para teléfono",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable para seguridad y alarma",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable para control y señalización",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable HDMI",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Patch panel",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable de fibra óptica",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable FPLR",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cemento hidráulico",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Cemento blanco tipo I",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Cemento hidráulico tipo LH",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Filler mineral",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Cemento hidráulico tipo IP",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Cerradura tipo tranca",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Aldaba",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Bisagra vaivén",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Bisagra de acero tipo capuchina",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Riel para sistema corredizo",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Barra antipánico",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Cerradura de embutir",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Cerradura de manija",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Cerradura de perilla",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Cerradura de sobreponer",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Cerradura digital",
+        "codigo": "26"
+    },
+    {
+        "descripcion": "Detonador no eléctrico",
+        "codigo": "27"
+    },
+    {
+        "descripcion": "Cordón de ignición",
+        "codigo": "27"
+    },
+    {
+        "descripcion": "Conector para cordón de ignición",
+        "codigo": "27"
+    },
+    {
+        "descripcion": "Dinamita semigelatina",
+        "codigo": "28"
+    },
+    {
+        "descripcion": "Hidrogel",
+        "codigo": "28"
+    },
+    {
+        "descripcion": "Barrera de concreto",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Tapa de concreto para buzón",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Gasohol",
+        "codigo": "34"
+    },
+    {
+        "descripcion": "Material para subbase",
+        "codigo": "38"
+    },
+    {
+        "descripcion": "Over",
+        "codigo": "38"
+    },
+    {
+        "descripcion": "Material para base",
+        "codigo": "38"
+    },
+    {
+        "descripcion": "Madera importada para encofrado y carpintería",
+        "codigo": "42"
+    },
+    {
+        "descripcion": "Madera pino importada",
+        "codigo": "42"
+    },
+    {
+        "descripcion": "Madera pino oregón",
+        "codigo": "42"
+    },
+    {
+        "descripcion": "Madera mashonaste",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera caoba",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera oje renaco",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera nogal",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera nacional de uso no estructural",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera pino nacional",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera diablo fuerte",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera aguanillo",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera aguano masha",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera moena rosada",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera paujilruro blanco",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Jamba de madera",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera pashaco",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera achihua",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera nacional de uso estructural",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Madera ana caspi",
+        "codigo": "43"
+    },
+    {
+        "descripcion": "Malla triple torsión de acero",
+        "codigo": "46"
+    },
+    {
+        "descripcion": "Malla tejida olímpica galvanizada",
+        "codigo": "46"
+    },
+    {
+        "descripcion": "Malla de acero tejida olímpica",
+        "codigo": "46"
+    },
+    {
+        "descripcion": "Malla talud de acero",
+        "codigo": "46"
+    },
+    {
+        "descripcion": "Malla expanded metal",
+        "codigo": "46"
+    },
+    {
+        "descripcion": "Malla gavión de acero",
+        "codigo": "46"
+    },
+    {
+        "descripcion": "Malla soldada galvanizada",
+        "codigo": "46"
+    },
+    {
+        "descripcion": "Malla electrosoldada",
+        "codigo": "46"
+    },
+    {
+        "descripcion": "Operario de alta especialización",
+        "codigo": "47-1"
+    },
+    {
+        "descripcion": "Operario soldador homologado",
+        "codigo": "47-1"
+    },
+    {
+        "descripcion": "Operador electromecánico",
+        "codigo": "47-1"
+    },
+    {
+        "descripcion": "Operador de equipo mediano",
+        "codigo": "47-1"
+    },
+    {
+        "descripcion": "Operario topógrafo",
+        "codigo": "47-1"
+    },
+    {
+        "descripcion": "Operador de equipo pesado",
+        "codigo": "47-1"
+    },
+    {
+        "descripcion": "Tronzadora",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Temple",
+        "codigo": "55"
+    },
+    {
+        "descripcion": "Temple fino",
+        "codigo": "55"
+    },
+    {
+        "descripcion": "Bobina de acero LAF",
+        "codigo": "57"
+    },
+    {
+        "descripcion": "Plancha de poliestireno",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Sellador elastomérico a base de poliuretano",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Lana mineral de roca",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Banda elástica elastomérica",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Espuma expansiva",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Aislamiento elastómero",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Panel cortafuego",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Panel de lana mineral de roca",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Panel de poliestireno",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Panel de lana de fibra de vidrio",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Panel termoaislante",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Ladrillo de poliestireno expandido",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Bloque de poliestireno expandido",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Plancha de tecnopor",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Poliestireno expandido",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Panel de poliuretano",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Caja de pase galvanizada",
+        "codigo": "61"
+    },
+    {
+        "descripcion": "Platina de acero galvanizado",
+        "codigo": "61"
+    },
+    {
+        "descripcion": "Junta water stop fierro galvanizado",
+        "codigo": "61"
+    },
+    {
+        "descripcion": "Ducto de plancha de fierro galvanizado",
+        "codigo": "61"
+    },
+    {
+        "descripcion": "Placa colaborante de acero galvanizado",
+        "codigo": "61"
+    },
+    {
+        "descripcion": "Canaleta galvanizada",
+        "codigo": "61"
+    },
+    {
+        "descripcion": "Ducto de plancha de acero galvanizado",
+        "codigo": "61"
+    },
+    {
+        "descripcion": "Accesorio PVC-U para drenaje y alcantarillado",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Válvula bridada de PVC",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Empaquetadura de jebe",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Anillo de jebe presión para agua potable",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Accesorio PVC-O para redes de agua",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Unión de PVC-U para redes de agua",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Codo PVC-U para drenaje y alcantarillado",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Accesorio PVC-U para redes de agua",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Tapón PVC-U para redes de agua",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Lubricante para tubería",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Silla PVC-U para drenaje y alcantarillado",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Tubería de PVC para red de alcantarillado",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Tee PVC-U para redes de agua",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Curva PVC-U para redes de agua",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Tubería de PVC para red de agua potable",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Tubería PVC-U para drenaje y alcantarillado",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Tubería PVC-U a presión para redes de agua",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Tubería PVC-O a presión para redes de agua",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Anillo de jebe presión para alcantarillado",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Niple de cobre",
+        "codigo": "68"
+    },
+    {
+        "descripcion": "Tubería de cobre desnudo",
+        "codigo": "68"
+    },
+    {
+        "descripcion": "Tubería de cobre felxible",
+        "codigo": "68"
+    },
+    {
+        "descripcion": "Tubería de cobre rígido",
+        "codigo": "68"
+    },
+    {
+        "descripcion": "Tee de cobre",
+        "codigo": "68"
+    },
+    {
+        "descripcion": "Unión de cobre",
+        "codigo": "68"
+    },
+    {
+        "descripcion": "Sombrero de ventilación de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Tubería PVC SAP eléctrica",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Tubería PVC sanitaria pesada",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Tubería PVC sanitaria liviana",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Accesorio PVC-U CR para agua fría",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Válvula de aire de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Toma barredera de PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Válvula de purga PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Conexión PVC",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Sifón PVC sanitaria",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Grifo jardín de bronce",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula check de bronce",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula globo de bronce",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula angular de latón",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula globo de latón",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Grifo jardín de latón",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula de hierro fundido importado",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula esférica de hierro fundido",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula de globo de hierro fundido",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula check de hierro fundido",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula compuerta de acero",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula check de hierro dúctil",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula check de acero",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula de globo de acero",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula esférica de acero",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula de globo de hierro dúctil",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula cuchilla de hierro dúctil",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula compuerta de hierro fundido",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula compuerta de hierro dúctil",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula cuchilla de acero",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Hidrante contraincendios",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula mariposa de hierro fundido",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Manifold de acero",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Medidor de caudal de hierro fundido",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula mariposa de acero",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Medidor de caudal de hierro dúctil",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Medidor de caudal de acero",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula mariposa de hierro dúctil",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula cuchilla de hierro fundido",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Válvula de aire de hierro dúctil",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Vidrio templado gris",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio nacional",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio templado incoloro",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio templado ultra claro",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio templado reflectante",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio laminado importado",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio crudo gris",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio catedral",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio crudo incoloro",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio templado bronce",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio crudo bronce",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio blindado",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Baldosa de vidrio",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio simple",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio laminado nacional",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Vidrio insulado",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Mortero en bolsa",
+        "codigo": "80"
+    },
+    {
+        "descripcion": "Concreto premezclado en planta",
+        "codigo": "80"
+    },
+    {
+        "descripcion": "Tarrajeo en bolsa",
+        "codigo": "80"
+    },
+    {
+        "descripcion": "Microcemento",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Desmoldador para encofrado",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Microfibra sintética",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Thor gel",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Endurecedor de pisos",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Removedor de óxido",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Pegamento blanco flexible para cerámicos",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Aditivo superplastificante",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Dosis química ecogel",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Microesferas de vidrio",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Pegamento epóxico",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Fragua para rellenar juntas",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Pegamento gris para cerámicos",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Gel Conductivo",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Recubrimiento cementicio impermeabilizante",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Mortero epóxico",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Aditivo plastificante",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Mortero reforzado con fibras",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Aditivo curador",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Aditivo impermeabilizante",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Aditivo incorporador de aire",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Grouting",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Reductor de agua",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Adhesivo epóxico multipropósito",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Aditivo retardante",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Aditivo inhibidor de corrosión",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Puente de adherencia epóxico",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Aditivo acelerante de fragua",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Pegamento para adherir block",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Aditivo para concreto",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Cemento conductivo",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Cemento con aditivo",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Aditivo endurecedor de superficies",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Alambre y cable CAI de aluminio",
+        "codigo": "82"
+    },
+    {
+        "descripcion": "Conductor de aleación de aluminio",
+        "codigo": "82"
+    },
+    {
+        "descripcion": "Alambre y cable CAAI de aluminio",
+        "codigo": "82"
+    },
+    {
+        "descripcion": "Conductor autoportante de aluminio",
+        "codigo": "82"
+    },
+    {
+        "descripcion": "Cable de guarda",
+        "codigo": "82"
+    },
+    {
+        "descripcion": "Conductor desnudo de aluminio",
+        "codigo": "82"
+    },
+    {
+        "descripcion": "Alambre de aluminio",
+        "codigo": "82"
+    },
+    {
+        "descripcion": "Conductor de aluminio",
+        "codigo": "82"
+    },
+    {
+        "descripcion": "Overol",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Respirador",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Arnés de seguridad",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Mascarilla",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Guantes",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Lámina reflectante",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Collarín cervical",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Barrera de tráfico",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Señal de seguridad",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Malla de seguridad",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Baliza",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Faja lumbar",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Señal de transito",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Casco de seguridad",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Cono de seguridad",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Cinta plástica de seguridad",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Malla plástica",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Cinta antideslizante",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Protector auditivo",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Cachaco de concreto",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Captafaro",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Triangulo de seguridad",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Botiquín",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Botín de seguridad",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Chaleco de seguridad",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Cachaco de PVC",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Zapatos de seguridad",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Tacha reflectiva",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Tapón auditivo",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Equipo de protección personal",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Equipo de protección colectiva",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Línea de vida",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Lentes de seguridad",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Máscara protectora",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Malla raschel",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Camilla de seguridad",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Tablero MDP",
+        "codigo": "84"
+    },
+    {
+        "descripcion": "Tablero OSB",
+        "codigo": "84"
+    },
+    {
+        "descripcion": "Deck HDF",
+        "codigo": "84"
+    },
+    {
+        "descripcion": "Piso laminado HDF",
+        "codigo": "84"
+    },
+    {
+        "descripcion": "Tablero MDF",
+        "codigo": "84"
+    },
+    {
+        "descripcion": "Tablero aglomerado",
+        "codigo": "84"
+    },
+    {
+        "descripcion": "Triplay fenólico importado",
+        "codigo": "84"
+    },
+    {
+        "descripcion": "Tablero de melamina",
+        "codigo": "84"
+    },
+    {
+        "descripcion": "Relleno Sauerland",
+        "codigo": "84"
+    },
+    {
+        "descripcion": "Relleno Honeycomb",
+        "codigo": "84"
+    },
+    {
+        "descripcion": "Contrazócalo HDF",
+        "codigo": "84"
+    },
+    {
+        "descripcion": "Angulo perimetral",
+        "codigo": "85"
+    },
+    {
+        "descripcion": "Riel de acero galvanizado",
+        "codigo": "85"
+    },
+    {
+        "descripcion": "Perfil de acero galvanizado",
+        "codigo": "85"
+    },
+    {
+        "descripcion": "Perfil T principal",
+        "codigo": "85"
+    },
+    {
+        "descripcion": "Perfil omega de acero galvanizado",
+        "codigo": "85"
+    },
+    {
+        "descripcion": "Esquinero de acero galvanizado",
+        "codigo": "85"
+    },
+    {
+        "descripcion": "Perfil T secundario",
+        "codigo": "85"
+    },
+    {
+        "descripcion": "Perfil T terciario",
+        "codigo": "85"
+    },
+    {
+        "descripcion": "Omega de acero galvanizado",
+        "codigo": "85"
+    },
+    {
+        "descripcion": "Parante de acero galvanizado",
+        "codigo": "85"
+    },
+    {
+        "descripcion": "Bandeja portacable de acero galvanizado",
+        "codigo": "85"
+    },
+    {
+        "descripcion": "Perfil ranurado de acero galvanizado",
+        "codigo": "85"
+    },
+    {
+        "descripcion": "Catalizador epóxico",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Barniz marino",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Barniz poliuretano",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Formador de empaquetadura",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pegamento para plástico PVC",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Disolvente de pintura",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Laca selladora",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pegamento para tubería de PVC eléctrica",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pegamento para PVC",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Disolvente epóxico",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Solvente xilol",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Laca desmoldeante",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pintura de resina epóxica",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pintura base epóxica",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Thinner acrílico",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pintura zincromato",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pintura super gloss",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pintura bituminosa",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pintura poliuretano",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pintura epóxica",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pintura para trafico",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pintura oleo mate sintético",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pintura oleo",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Preservante de madera",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Pintura esmalte super gloss",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Tinta serigráfica",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Plancha de aluzinc",
+        "codigo": "87"
+    },
+    {
+        "descripcion": "Plancha de aluzinc para techos",
+        "codigo": "87"
+    },
+    {
+        "descripcion": "Plancha curva de aluzinC",
+        "codigo": "87"
+    },
+    {
+        "descripcion": "Tapa termoplástica",
+        "codigo": "88"
+    },
+    {
+        "descripcion": "Plancha termoacústica de PVC",
+        "codigo": "88"
+    },
+    {
+        "descripcion": "Plancha de fibra de vidrio",
+        "codigo": "88"
+    },
+    {
+        "descripcion": "Plancha de policarbonato",
+        "codigo": "88"
+    },
+    {
+        "descripcion": "Policarbonato",
+        "codigo": "88"
+    },
+    {
+        "descripcion": "Caja termoplástica",
+        "codigo": "88"
+    },
+    {
+        "descripcion": "Plancha de acrílico",
+        "codigo": "88"
+    },
+    {
+        "descripcion": "Marco y tapa termoplástica",
+        "codigo": "88"
+    },
+    {
+        "descripcion": "Plancha de PVC",
+        "codigo": "88"
+    },
+    {
+        "descripcion": "Plancha de polipropileno",
+        "codigo": "88"
+    },
+    {
+        "descripcion": "Placa de vinilona de poliéster",
+        "codigo": "88"
+    },
+    {
+        "descripcion": "Accesorios de tubería de PRFV",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Tubería de fibra de vidrio",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Poste PFV",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Tobogán de fibra de vidrio",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Poste PRFV",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Bandeja de fibra de vidrio",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Contenedor de fibra de vidrio",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Tanque PRFV",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Poste de fibra de vidrio",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Tubería PRFV",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Juegos de fibra de vidrio",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Tanque de fibra de vidrio",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Canal de medición Parshall de fibra de vidrio",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Fibra de vidrio",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Compuerta de fibra de vidrio",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Accesorios tubería PP-R",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Biodepurador de polietileno",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Tee HDPE",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Biodigestor de polietileno",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Registro de lodos de polietileno",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Codo HDPE",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Cisterna de polietileno",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Manga de polietileno",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Accesorios tubería HDPE",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Tubo de polietileno",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Tubería multiplaca para gas",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Gotero HDPE",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Tubería HDPE",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Tubería HDPE a presión",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Curva HDPE",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Tubería PE-AL-PE",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Tubería PP-R",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Tubería HDPE drenaje y alcantarillado",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Válvula de polietileno",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Tubería de polietileno",
+        "codigo": "90"
+    },
+    {
+        "descripcion": "Geomembrana",
+        "codigo": "91"
+    },
+    {
+        "descripcion": "Lona",
+        "codigo": "91"
+    },
+    {
+        "descripcion": "Manto plástico",
+        "codigo": "91"
+    },
+    {
+        "descripcion": "Geomalla",
+        "codigo": "91"
+    },
+    {
+        "descripcion": "Geobolsa",
+        "codigo": "91"
+    },
+    {
+        "descripcion": "Geotextil",
+        "codigo": "91"
+    },
+    {
+        "descripcion": "Geocompuesto",
+        "codigo": "91"
+    },
+    {
+        "descripcion": "Membrana impermeable de asfalto",
+        "codigo": "91"
+    },
+    {
+        "descripcion": "Transporte fluvial",
+        "codigo": "92"
+    },
+    {
+        "descripcion": "Flete fluvial",
+        "codigo": "92"
+    },
+    {
+        "descripcion": "Prueba eléctricas",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Prueba de comunicación para Scada",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Prueba de carga",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Prueba de calidad",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Internet",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Gas natural vehicular",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Impresiones y copias",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Prueba hidráulica",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Derecho de autorizaciones",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Alcohol",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Telefonía",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Humus",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Derecho de cantera",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Cortina de tela",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Bloqueador solar",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Trámite TUPA",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Hipoclorito de calcio",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Cortina tipo persiana",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Acetileno",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Compost",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Ácido muriático",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Yute",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Semilla",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Ensayo de laboratorio",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Sal",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Alquiler de oficina",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Cloro",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Lejía",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Árbol",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Alquiler de baños portátiles",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Gas natural",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Tubo de papel",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Capacitación profesional",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Monitoreo arqueológico",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Examen medico",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Monitoreo de calidad de suelo",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Monitoreo de calidad de ruido",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Monitoreo de calidad de aire",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Monitoreo de calidad de agua",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Monitoreo de calidad",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Monitoreo biológico",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Fertilizante",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Oxigeno",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Pago por disposición final de residuos sólidos",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Servicio profesional",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Monitoreo ambiental",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Piso técnico",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Encofrado prefabricado",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Puntal metálico telescópico",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Tarima flotante",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Cimbra metálica",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Tablestacado prefabricado",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Cruz de arriostre de andamio",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Andamio metálico",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Baranda modular",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Andamio prefabricado",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Panel de entibado metálico",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Escalera modular",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Tablaestacado prefabricado",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Cámara de seguridad",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Access point",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Pasarela móvil",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Equipo de cloración",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Turbocomprensor",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Equipo UV para desinfección",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Escalera mecánica eléctrica",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Cámara domo IP",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Unidad mejoradora de aire",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Anemómetro",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Eco enfriador",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Equipo de presurización",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Agitador hiperbólico",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Regulador de tensión",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Soplador en tanque desarenador",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Celda de protección con seccionador",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Servidor de comando y control",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Switch",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Centro de distribución Clusters",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Sensor de flujo electromagnético",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Macromedidor electromecánico",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Sensor",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Cerradura inteligente",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Seccionalizador electrónico",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Panel solar",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Semáforo",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Espira sensor",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Estufa",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Estación de toma de datos (ETD)",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Digestor",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Difusor de aire",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Detector térmico",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Detector de humo",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Alarma audible",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Bureta",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Pinza hidráulica",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Deshumidificador eléctrico",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Triturador de lodos",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Buzone termoplástico",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Datalogger con sensor de presión",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Cuchara bivalva",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Cronómetro",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Transformador eléctrico",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Transformador de corriente y tensión mixto",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Transformador de aislamiento",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Estación meteorológica",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Nivel electrónico de precisión (tipo Alphameter)",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Estufa a gas",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Network Video Recorder (NVR)",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Extensómetro",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "UPS",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Panel de velocidad",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Altavoz",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Disco duro",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Calentador eléctrico",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Tornillo transportador",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Calentador de agua",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Sistema de control distribuido",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Intercomunicador",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Sistema de sensores inteligentes",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Monitor de CO2",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Inversor",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Módulo fotovoltaico",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Módulo de acumulación de LiFePO4",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Medidor para conexión domiciliaria",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Mezclador de tanque digestor",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Horno de secado",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Humidificador eléctrico",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Grabador de red - NVR",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Medidor de agua",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Manómetro",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Videoportero",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Bomba contraincendios",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Cámara bullet IP",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Banco de baterías",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Luminancímetro",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Ventilador helicoidal",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Antena de telemetría",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Bomba para sistema contraincendios",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Lavador de arenas",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Bomba sumergible",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Monta vehículos",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Bomba de agua solar",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Filtro de grava",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Ventilador mecánico",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Bomba de concentrado",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Bomba de lodos",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Medidor de Oxígeno",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Aire acondicionado",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Portero automático",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Acelerógrafo",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Rampa mecánica eléctrica",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Controlador de carga",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Planta eléctrica",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Cámara PTZ IP",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Termotanque",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Compactador de solidos",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Colorímetro",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Agitador sumergible",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Controlador inteligente",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Sistema de parqueo",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Concentrador de grasas",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Terma eléctrica",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Bomba dosificadora",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Bomba de cavidad progresiva",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Medidor de energía",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Medidor de caudal electromagnético",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Medidor electrónico de tensión",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Ventiloconvector (fan coil)",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Terma solar",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Sistema de video vigilancia",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Quemador de biogas",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Purificador y alcalinizador",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Purificador de aire",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Purificador de agua",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Pulsador de alarma contraincendios",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Terma a gas",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Extractor de aire",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Macromedidor de agua",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Acero de construcción liso",
+        "codigo": "02"
+    },
+    {
+        "descripcion": "Mano de obra (incluye leyes sociales)",
+        "codigo": "47"
+    },
+    {
+        "descripcion": "Aceite y lubricante",
+        "codigo": "01"
+    },
+    {
+        "descripcion": "Maquinaria y equipo de construcción liviano",
+        "codigo": "48"
+    },
+    {
+        "descripcion": "Maquinaria y equipo de construcción pesado",
+        "codigo": "49"
+    },
+    {
+        "descripcion": "Alambre y cable de cobre desnudo",
+        "codigo": "06"
+    },
+    {
+        "descripcion": "Alambre y cable tipo TW, THW, LSOH",
+        "codigo": "07"
+    },
+    {
+        "descripcion": "Alambre y cable tipo WP, CPI",
+        "codigo": "08"
+    },
+    {
+        "descripcion": "Aparato sanitario con grifería",
+        "codigo": "10"
+    },
+    {
+        "descripcion": "Poste de concreto",
+        "codigo": "62"
+    },
+    {
+        "descripcion": "Hormigón y afirmado",
+        "codigo": "38"
+    },
+    {
+        "descripcion": "Loseta y terrazo",
+        "codigo": "40"
+    },
+    {
+        "descripcion": "Alcantarilla metálica y guardavías",
+        "codigo": "09"
+    },
+    {
+        "descripcion": "Baldosa vinílica y PVC",
+        "codigo": "16"
+    },
+    {
+        "descripcion": "Bloque y ladrillo",
+        "codigo": "17"
+    },
+    {
+        "descripcion": "Cable telefónico y de red",
+        "codigo": "18"
+    },
+    {
+        "descripcion": "Cable NYY, N2XY, NPT, N2XOH, N2XSY",
+        "codigo": "19"
+    },
+    {
+        "descripcion": "Cemento Portland e hidráulico",
+        "codigo": "21"
+    },
+    {
+        "descripcion": "Cerámica y porcelanato",
+        "codigo": "24"
+    },
+    {
+        "descripcion": "Dólar más inflación mercado USA",
+        "codigo": "30"
+    },
+    {
+        "descripcion": "Prefabricado de concreto",
+        "codigo": "31"
+    },
+    {
+        "descripcion": "Gasohol y gasolina",
+        "codigo": "34"
+    },
+    {
+        "descripcion": "Plancha de fibrocemento y yeso",
+        "codigo": "59"
+    },
+    {
+        "descripcion": "Plancha de poliuretano, poliestireno y termoaislante",
+        "codigo": "60"
+    },
+    {
+        "descripcion": "Tubería de PVC para la red de agua potable y alcantarillado",
+        "codigo": "66"
+    },
+    {
+        "descripcion": "Tubería de hierro fundido y dúctil",
+        "codigo": "71"
+    },
+    {
+        "descripcion": "Tubería de PVC para redes interiores",
+        "codigo": "72"
+    },
+    {
+        "descripcion": "Válvula de bronce y latón",
+        "codigo": "77"
+    },
+    {
+        "descripcion": "Válvula de hierro y acero",
+        "codigo": "78"
+    },
+    {
+        "descripcion": "Vidrio",
+        "codigo": "79"
+    },
+    {
+        "descripcion": "Aditivo de concreto y similar",
+        "codigo": "81"
+    },
+    {
+        "descripcion": "Alambre y cable de aluminio",
+        "codigo": "82"
+    },
+    {
+        "descripcion": "Implemento y accesorio de seguridad",
+        "codigo": "83"
+    },
+    {
+        "descripcion": "Madera terciada importada",
+        "codigo": "84"
+    },
+    {
+        "descripcion": "Pintura esmalte y epóxica",
+        "codigo": "86"
+    },
+    {
+        "descripcion": "Plancha con cubierta aluzinc",
+        "codigo": "87"
+    },
+    {
+        "descripcion": "Plancha y cobertura plástica",
+        "codigo": "88"
+    },
+    {
+        "descripcion": "Poste y tubería de fibra de vidrio",
+        "codigo": "89"
+    },
+    {
+        "descripcion": "Geomembrana y geotextil",
+        "codigo": "91"
+    },
+    {
+        "descripcion": "Bienes y servicios auxiliares",
+        "codigo": "93"
+    },
+    {
+        "descripcion": "Encofrado y andamio prefabricado",
+        "codigo": "94"
+    },
+    {
+        "descripcion": "Equipamiento permanente de obra",
+        "codigo": "95"
+    },
+    {
+        "descripcion": "Mano de obra de alta especialización (incluye leyes sociales)",
+        "codigo": "47-1"
+    }
+]

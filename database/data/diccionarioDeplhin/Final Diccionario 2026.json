@@ -1,0 +1,1936 @@
+﻿{"id":"EL0000000009","descripcion":"Anclaje de acero tipo L","codigo_clase":"02","nota":null}
+{"id":"EL0000000017","descripcion":"Agregado fino","codigo_clase":"04","nota":null}
+{"id":"EL0000000018","descripcion":"Agregado grueso","codigo_clase":"05","nota":null}
+{"id":"EL0000000029","descripcion":"Alambre de cobre desnudo","codigo_clase":"06","nota":null}
+{"id":"EL0000000030","descripcion":"Alambre y cable tipo TW y THW","codigo_clase":"07","nota":null}
+{"id":"EL0000000031","descripcion":"Alambre y cable tipo WP","codigo_clase":"08","nota":null}
+{"id":"EL0000000033","descripcion":"Alcantarilla metálica","codigo_clase":"09","nota":null}
+{"id":"EL0000000042","descripcion":"Aparato sanitario","codigo_clase":"10","nota":null}
+{"id":"EL0000000052","descripcion":"Artefacto de alumbrado exterior","codigo_clase":"11","nota":null}
+{"id":"EL0000000053","descripcion":"Artefacto de alumbrado interior","codigo_clase":"12","nota":null}
+{"id":"EL0000000057","descripcion":"Asfalto","codigo_clase":"13","nota":null}
+{"id":"EL0000000068","descripcion":"Baldosa acústica","codigo_clase":"14","nota":null}
+{"id":"EL0000000070","descripcion":"Baldosa vinílica","codigo_clase":"16","nota":null}
+{"id":"EL0000000118","descripcion":"Cable telefónico","codigo_clase":"18","nota":null}
+{"id":"EL0000000125","descripcion":"Cable NKY","codigo_clase":"19","nota":null}
+{"id":"EL0000000189","descripcion":"Cemento asfáltico","codigo_clase":"20","nota":null}
+{"id":"EL0000000191","descripcion":"Cemento Portland tipo I","codigo_clase":"21","nota":null}
+{"id":"EL0000000192","descripcion":"Cemento Portland tipo II","codigo_clase":"21","nota":"1/,2/"}
+{"id":"EL0000000193","descripcion":"Cemento Portland tipo V","codigo_clase":"21","nota":null}
+{"id":"EL0000000197","descripcion":"Cerámica esmaltada y sin esmaltar","codigo_clase":"24","nota":null}
+{"id":"EL0000000198","descripcion":"Cerrajería importada","codigo_clase":"26","nota":"3/"}
+{"id":"EL0000000199","descripcion":"Cerrajería nacional","codigo_clase":"26","nota":null}
+{"id":"EL0000000266","descripcion":"Detonante","codigo_clase":"27","nota":null}
+{"id":"EL0000000267","descripcion":"Dinamita","codigo_clase":"28","nota":null}
+{"id":"EL0000000271","descripcion":"Dólar","codigo_clase":"30","nota":null}
+{"id":"EL0000000274","descripcion":"Ducto de concreto","codigo_clase":"31","nota":null}
+{"id":"EL0000000276","descripcion":"Ducto telefónico de PVC","codigo_clase":"72","nota":"2/"}
+{"id":"EL0000000320","descripcion":"Flete aéreo","codigo_clase":"33","nota":null}
+{"id":"EL0000000321","descripcion":"Flete terrestre","codigo_clase":"32","nota":null}
+{"id":"EL0000000332","descripcion":"Gasolina","codigo_clase":"34","nota":null}
+{"id":"EL0000000334","descripcion":"Gelatina","codigo_clase":"28","nota":null}
+{"id":"EL0000000335","descripcion":"Anfo","codigo_clase":"28","nota":null}
+{"id":"EL0000000354","descripcion":"Herramienta manual","codigo_clase":"37","nota":null}
+{"id":"EL0000000356","descripcion":"Hormigón","codigo_clase":"38","nota":null}
+{"id":"EL0000000361","descripcion":"Índice de Precios al Consumidor (INEI)","codigo_clase":"39","nota":null}
+{"id":"EL0000000408","descripcion":"Loseta","codigo_clase":"40","nota":null}
+{"id":"EL0000000415","descripcion":"Madera en tiras para piso","codigo_clase":"41","nota":null}
+{"id":"EL0000000416","descripcion":"Madera pino amarillo del sur","codigo_clase":"42","nota":null}
+{"id":"EL0000000417","descripcion":"Madera nacional para encofrado y carpintería","codigo_clase":"43","nota":null}
+{"id":"EL0000000418","descripcion":"Madera terciada para encofrado y carpintería","codigo_clase":"44","nota":null}
+{"id":"EL0000000419","descripcion":"Madera terciada para encofrado","codigo_clase":"44","nota":"2/"}
+{"id":"EL0000000422","descripcion":"Malla de acero","codigo_clase":"46","nota":null}
+{"id":"EL0000000426","descripcion":"Leyes sociales de mano de obra","codigo_clase":"47","nota":null}
+{"id":"EL0000000428","descripcion":"Grupo electrógeno de obra","codigo_clase":"49","nota":null}
+{"id":"EL0000000429","descripcion":"Mira topográfica","codigo_clase":"48","nota":null}
+{"id":"EL0000000431","descripcion":"Marco y tapa de fierro fundido","codigo_clase":"50","nota":null}
+{"id":"EL0000000509","descripcion":"Perfil de acero liviano","codigo_clase":"51","nota":null}
+{"id":"EL0000000511","descripcion":"Perfil de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000000514","descripcion":"Biodiesel","codigo_clase":"53","nota":null}
+{"id":"EL0000000525","descripcion":"Pintura látex","codigo_clase":"54","nota":null}
+{"id":"EL0000000529","descripcion":"Pintura temple","codigo_clase":"55","nota":null}
+{"id":"EL0000000539","descripcion":"Plancha de acero LAC","codigo_clase":"56","nota":null}
+{"id":"EL0000000540","descripcion":"Plancha de acero LAF","codigo_clase":"57","nota":null}
+{"id":"EL0000000543","descripcion":"Plancha de fibro-cemento","codigo_clase":"59","nota":null}
+{"id":"EL0000000545","descripcion":"Plancha de poliuretano","codigo_clase":"60","nota":null}
+{"id":"EL0000000546","descripcion":"Plancha galvanizada","codigo_clase":"61","nota":null}
+{"id":"EL0000000565","descripcion":"Cruceta simétrica de concreto","codigo_clase":"62","nota":null}
+{"id":"EL0000000566","descripcion":"Poste de fierro","codigo_clase":"65","nota":null}
+{"id":"EL0000000654","descripcion":"Terrazo","codigo_clase":"40","nota":"2/"}
+{"id":"EL0000000684","descripcion":"Tubería de acero negro y/o galvanizado","codigo_clase":"65","nota":null}
+{"id":"EL0000000686","descripcion":"Válvula mariposa de PVC","codigo_clase":"66","nota":null}
+{"id":"EL0000000687","descripcion":"Tubería de cobre","codigo_clase":"68","nota":null}
+{"id":"EL0000000688","descripcion":"Tubería de concreto reforzado","codigo_clase":"31","nota":"2/"}
+{"id":"EL0000000689","descripcion":"Tubería de concreto simple","codigo_clase":"31","nota":"2/"}
+{"id":"EL0000000690","descripcion":"Collar enchufe de hierro dúctil","codigo_clase":"71","nota":null}
+{"id":"EL0000000692","descripcion":"Tubería de PVC para agua","codigo_clase":"72","nota":null}
+{"id":"EL0000000710","descripcion":"Válvula de bronce nacional","codigo_clase":"77","nota":null}
+{"id":"EL0000000712","descripcion":"Válvula de hierro fundido nacional","codigo_clase":"78","nota":null}
+{"id":"EL0000000694","descripcion":"Unión CPVC","codigo_clase":"72","nota":null}
+{"id":"EL0000000541","descripcion":"Plancha de acero mediana LAC","codigo_clase":"56","nota":null}
+{"id":"EL0000000685","descripcion":"Anillo de jebe para tubería","codigo_clase":"66","nota":null}
+{"id":"EL0000000272","descripcion":"Válvula de bronce importada","codigo_clase":"77","nota":"3/"}
+{"id":"EL0000001004","descripcion":"Afirmado","codigo_clase":"38","nota":null}
+{"id":"EL0000001005","descripcion":"Alambre negro","codigo_clase":"02","nota":null}
+{"id":"EL0000001006","descripcion":"Arena fina","codigo_clase":"04","nota":null}
+{"id":"EL0000001007","descripcion":"Bomba de concreto","codigo_clase":"49","nota":null}
+{"id":"EL0000001008","descripcion":"Brocha","codigo_clase":"37","nota":null}
+{"id":"EL0000001009","descripcion":"Cemento blanco","codigo_clase":"21","nota":"3/"}
+{"id":"EL0000001010","descripcion":"Cepillo","codigo_clase":"37","nota":"3/"}
+{"id":"EL0000001011","descripcion":"Llave de ajuste","codigo_clase":"37","nota":null}
+{"id":"EL0000001012","descripcion":"Clavo","codigo_clase":"02","nota":null}
+{"id":"EL0000001013","descripcion":"Cola","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000001014","descripcion":"Compactadora vibratoria","codigo_clase":"49","nota":null}
+{"id":"EL0000001015","descripcion":"Tubo redondo de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000001016","descripcion":"Contrazócalo loseta","codigo_clase":"40","nota":null}
+{"id":"EL0000001017","descripcion":"Madera pumaquiro","codigo_clase":"43","nota":null}
+{"id":"EL0000001018","descripcion":"Fierro corrugado","codigo_clase":"03","nota":null}
+{"id":"EL0000001019","descripcion":"Formica","codigo_clase":"84","nota":"1/,3/"}
+{"id":"EL0000001020","descripcion":"Imprimante acrílico","codigo_clase":"54","nota":"3/"}
+{"id":"EL0000001021","descripcion":"Ladrillo de arcilla","codigo_clase":"17","nota":null}
+{"id":"EL0000001022","descripcion":"Ladrillo pastelero","codigo_clase":"17","nota":null}
+{"id":"EL0000001023","descripcion":"Lija","codigo_clase":"37","nota":"3/"}
+{"id":"EL0000001024","descripcion":"Mármol","codigo_clase":"05","nota":null}
+{"id":"EL0000001025","descripcion":"Mayólica nacional","codigo_clase":"24","nota":null}
+{"id":"EL0000001026","descripcion":"Mezcladora de concreto","codigo_clase":"48","nota":null}
+{"id":"EL0000001027","descripcion":"Ocre","codigo_clase":"81","nota":"1/,3/"}
+{"id":"EL0000001028","descripcion":"Operario","codigo_clase":"47","nota":null}
+{"id":"EL0000001029","descripcion":"Autohormiguera","codigo_clase":"49","nota":null}
+{"id":"EL0000001030","descripcion":"Perno","codigo_clase":"02","nota":null}
+{"id":"EL0000001031","descripcion":"Piedra chancada","codigo_clase":"05","nota":null}
+{"id":"EL0000001032","descripcion":"Piedra mediana","codigo_clase":"05","nota":null}
+{"id":"EL0000001033","descripcion":"Pintura esmalte","codigo_clase":"86","nota":"1/,3/"}
+{"id":"EL0000001034","descripcion":"Planta de asfalto en caliente","codigo_clase":"49","nota":null}
+{"id":"EL0000001035","descripcion":"Planta de asfalto en frío","codigo_clase":"49","nota":null}
+{"id":"EL0000001036","descripcion":"Porcelana","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000001037","descripcion":"Regla","codigo_clase":"37","nota":null}
+{"id":"EL0000001038","descripcion":"Excavadora sobre llantas","codigo_clase":"49","nota":null}
+{"id":"EL0000001039","descripcion":"Rodón","codigo_clase":"41","nota":"3/"}
+{"id":"EL0000001040","descripcion":"Sierra circular","codigo_clase":"48","nota":"3/"}
+{"id":"EL0000001041","descripcion":"Teodolito","codigo_clase":"48","nota":"3/"}
+{"id":"EL0000001042","descripcion":"Tierra de chacra","codigo_clase":"04","nota":null}
+{"id":"EL0000001043","descripcion":"Tiza","codigo_clase":"04","nota":"3/"}
+{"id":"EL0000001044","descripcion":"Tractor","codigo_clase":"49","nota":null}
+{"id":"EL0000001046","descripcion":"Cargador retroexcavador","codigo_clase":"49","nota":null}
+{"id":"EL0000001047","descripcion":"Volquete","codigo_clase":"49","nota":"3/"}
+{"id":"EL0000001048","descripcion":"Excavadora sobre orugas","codigo_clase":"49","nota":null}
+{"id":"EL0000001049","descripcion":"Yeso","codigo_clase":"04","nota":"3/"}
+{"id":"EL0000001050","descripcion":"Concreto premezclado","codigo_clase":"80","nota":null}
+{"id":"EL0000001053","descripcion":"Sellador","codigo_clase":"54","nota":null}
+{"id":"EL0000001056","descripcion":"Vigía","codigo_clase":"47","nota":null}
+{"id":"EL0000001057","descripcion":"Cargador frontal","codigo_clase":"49","nota":null}
+{"id":"EL0000001059","descripcion":"Caja de herramientas","codigo_clase":"37","nota":null}
+{"id":"EL0000001075","descripcion":"Inodoro","codigo_clase":"10","nota":null}
+{"id":"EL0000001076","descripcion":"Accesorio para tubería de hierro fundido","codigo_clase":"71","nota":null}
+{"id":"EL0000001077","descripcion":"Accesorios de continuidad de pantalla","codigo_clase":"11","nota":"3/"}
+{"id":"EL0000001078","descripcion":"Accesorios telefónicos de PVC","codigo_clase":"72","nota":"2/"}
+{"id":"EL0000001079","descripcion":"Acabadora de concreto","codigo_clase":"48","nota":"3/"}
+{"id":"EL0000001082","descripcion":"Disipador sísmico","codigo_clase":"30","nota":null}
+{"id":"EL0000001084","descripcion":"Baritina","codigo_clase":"30","nota":null}
+{"id":"EL0000001086","descripcion":"Licencia de Software","codigo_clase":"30","nota":null}
+{"id":"EL0000001087","descripcion":"Adobe","codigo_clase":"04","nota":"3/"}
+{"id":"EL0000001088","descripcion":"Agua","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000001089","descripcion":"Aislador carrete","codigo_clase":"11","nota":null}
+{"id":"EL0000001090","descripcion":"Reactor para Lámpara de vapor de sodio","codigo_clase":"11","nota":null}
+{"id":"EL0000001091","descripcion":"Flete acuático (no incluye Loreto y Ucayali)","codigo_clase":"30","nota":null}
+{"id":"EL0000001092","descripcion":"Acero roscado acero galvanizado","codigo_clase":"02","nota":null}
+{"id":"EL0000001093","descripcion":"Alambre de cobre","codigo_clase":"06","nota":null}
+{"id":"EL0000001094","descripcion":"Alambre de púas","codigo_clase":"02","nota":null}
+{"id":"EL0000001095","descripcion":"Tope sísmico","codigo_clase":"30","nota":null}
+{"id":"EL0000001096","descripcion":"Alambre pretensor","codigo_clase":"30","nota":null}
+{"id":"EL0000001097","descripcion":"Alambrón","codigo_clase":"02","nota":null}
+{"id":"EL0000001098","descripcion":"Alcayata","codigo_clase":"02","nota":null}
+{"id":"EL0000001099","descripcion":"Alfombra","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000001100","descripcion":"Alquitrán","codigo_clase":"13","nota":"3/"}
+{"id":"EL0000001101","descripcion":"Amasadora de asfalto","codigo_clase":"49","nota":null}
+{"id":"EL0000001102","descripcion":"Amperímetro","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001103","descripcion":"Cable tipo boa","codigo_clase":"30","nota":null}
+{"id":"EL0000001104","descripcion":"Anillo de jebe","codigo_clase":"66","nota":null}
+{"id":"EL0000001105","descripcion":"Anticorrosivo","codigo_clase":"86","nota":"1/,3/"}
+{"id":"EL0000001106","descripcion":"Apoyos neopreno","codigo_clase":"30","nota":null}
+{"id":"EL0000001107","descripcion":"Arandela de cuero","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000001108","descripcion":"Plancha de acero LAC estriada","codigo_clase":"56","nota":null}
+{"id":"EL0000001110","descripcion":"Arcilla","codigo_clase":"04","nota":"3/"}
+{"id":"EL0000001111","descripcion":"Arena gruesa","codigo_clase":"04","nota":null}
+{"id":"EL0000001112","descripcion":"Armella","codigo_clase":"02","nota":"3/"}
+{"id":"EL0000001113","descripcion":"Arrancador para Lámpara de vapor de sodio","codigo_clase":"11","nota":null}
+{"id":"EL0000001114","descripcion":"Artefacto tipo farol","codigo_clase":"11","nota":null}
+{"id":"EL0000001115","descripcion":"Placa para interruptor","codigo_clase":"12","nota":null}
+{"id":"EL0000001116","descripcion":"Ascensor","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001117","descripcion":"Asfalto industrial sólido","codigo_clase":"13","nota":null}
+{"id":"EL0000001118","descripcion":"Recubrimiento bituminoso","codigo_clase":"13","nota":null}
+{"id":"EL0000001119","descripcion":"Asignación excepcional","codigo_clase":"47","nota":null}
+{"id":"EL0000001120","descripcion":"Automóvil","codigo_clase":"49","nota":"3/"}
+{"id":"EL0000001121","descripcion":"Ayudante","codigo_clase":"47","nota":null}
+{"id":"EL0000001123","descripcion":"Azulejo","codigo_clase":"24","nota":null}
+{"id":"EL0000001124","descripcion":"Badilejo","codigo_clase":"37","nota":null}
+{"id":"EL0000001125","descripcion":"Balanza","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001126","descripcion":"Balde","codigo_clase":"37","nota":null}
+{"id":"EL0000001127","descripcion":"Baldosín semigres","codigo_clase":"40","nota":"2/"}
+{"id":"EL0000001128","descripcion":"Bambú","codigo_clase":"43","nota":null}
+{"id":"EL0000001129","descripcion":"Barniz","codigo_clase":"86","nota":"1/,3/"}
+{"id":"EL0000001130","descripcion":"Barredora mecánica","codigo_clase":"49","nota":null}
+{"id":"EL0000001131","descripcion":"Barreno","codigo_clase":"37","nota":"3/"}
+{"id":"EL0000001132","descripcion":"Barro","codigo_clase":"04","nota":null}
+{"id":"EL0000001133","descripcion":"Batea","codigo_clase":"37","nota":null}
+{"id":"EL0000001134","descripcion":"Batería","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001135","descripcion":"Bentonita","codigo_clase":"04","nota":"3/"}
+{"id":"EL0000001136","descripcion":"Berbiquí","codigo_clase":"37","nota":null}
+{"id":"EL0000001137","descripcion":"Bidet","codigo_clase":"10","nota":null}
+{"id":"EL0000001138","descripcion":"Bisagra importada","codigo_clase":"26","nota":"3/"}
+{"id":"EL0000001139","descripcion":"Bisagra nacional","codigo_clase":"26","nota":null}
+{"id":"EL0000001140","descripcion":"Aislador sísmico","codigo_clase":"30","nota":null}
+{"id":"EL0000001142","descripcion":"Bita","codigo_clase":"65","nota":"3/"}
+{"id":"EL0000001143","descripcion":"Ladrillo hueco para techo","codigo_clase":"17","nota":null}
+{"id":"EL0000001144","descripcion":"Ladrillo tubular","codigo_clase":"17","nota":null}
+{"id":"EL0000001145","descripcion":"Ladrillo king kong","codigo_clase":"17","nota":null}
+{"id":"EL0000001146","descripcion":"Bloque de 50 pares para armario","codigo_clase":"18","nota":"3/"}
+{"id":"EL0000001147","descripcion":"Bloque de vidrio","codigo_clase":"79","nota":"3/"}
+{"id":"EL0000001148","descripcion":"Bobina","codigo_clase":"06","nota":"3/"}
+{"id":"EL0000001149","descripcion":"Bolardo","codigo_clase":"83","nota":"1/,3/"}
+{"id":"EL0000001150","descripcion":"Nivel de ingeniero","codigo_clase":"48","nota":null}
+{"id":"EL0000001151","descripcion":"Bomba de agua Diesel","codigo_clase":"48","nota":null}
+{"id":"EL0000001152","descripcion":"Bomba de agua tipo turbina","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001153","descripcion":"Bomba de inyección de cemento","codigo_clase":"49","nota":null}
+{"id":"EL0000001154","descripcion":"Bomba neumática para vaciado de concreto","codigo_clase":"49","nota":null}
+{"id":"EL0000001155","descripcion":"Borne","codigo_clase":"06","nota":null}
+{"id":"EL0000001156","descripcion":"Botas de jebe","codigo_clase":"83","nota":"1/,3/"}
+{"id":"EL0000001157","descripcion":"Bote","codigo_clase":"49","nota":"3/"}
+{"id":"EL0000001158","descripcion":"Botón con campanilla","codigo_clase":"12","nota":null}
+{"id":"EL0000001159","descripcion":"Boya","codigo_clase":"83","nota":"1/,3/"}
+{"id":"EL0000001160","descripcion":"Braquete","codigo_clase":"12","nota":null}
+{"id":"EL0000001161","descripcion":"Brea","codigo_clase":"13","nota":"3/"}
+{"id":"EL0000001162","descripcion":"Plancha de acero LAC lisa","codigo_clase":"56","nota":null}
+{"id":"EL0000001163","descripcion":"Broca","codigo_clase":"37","nota":"3/"}
+{"id":"EL0000001164","descripcion":"Bronce","codigo_clase":"68","nota":"3/"}
+{"id":"EL0000001165","descripcion":"Estación total","codigo_clase":"48","nota":null}
+{"id":"EL0000001166","descripcion":"Puntal de acero","codigo_clase":"65","nota":null}
+{"id":"EL0000001167","descripcion":"Bushing de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000001168","descripcion":"Buzón para ducto de basura","codigo_clase":"56","nota":null}
+{"id":"EL0000001169","descripcion":"Cable de acero","codigo_clase":"30","nota":null}
+{"id":"EL0000001170","descripcion":"Cable de acero para concreto pretensado","codigo_clase":"30","nota":null}
+{"id":"EL0000001171","descripcion":"Pretensado","codigo_clase":"30","nota":null}
+{"id":"EL0000001172","descripcion":"Cable telefónico armado","codigo_clase":"18","nota":null}
+{"id":"EL0000001173","descripcion":"Cable telefónico autosoportado con aislamiento","codigo_clase":"18","nota":null}
+{"id":"EL0000001174","descripcion":"Cable telefónico con aislamiento de papel","codigo_clase":"18","nota":null}
+{"id":"EL0000001175","descripcion":"Cable telefónico con aislamiento de polietileno","codigo_clase":"18","nota":null}
+{"id":"EL0000001176","descripcion":"Amortiguador sísmico","codigo_clase":"30","nota":null}
+{"id":"EL0000001177","descripcion":"Cable NKBA","codigo_clase":"19","nota":null}
+{"id":"EL0000001178","descripcion":"Cable NYY","codigo_clase":"19","nota":null}
+{"id":"EL0000001179","descripcion":"Cable N2XY","codigo_clase":"19","nota":null}
+{"id":"EL0000001180","descripcion":"Cable TW y THW","codigo_clase":"07","nota":null}
+{"id":"EL0000001181","descripcion":"Cable WP","codigo_clase":"08","nota":null}
+{"id":"EL0000001182","descripcion":"Cabo","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000001183","descripcion":"Jalón topógrafico","codigo_clase":"48","nota":null}
+{"id":"EL0000001184","descripcion":"Cadena","codigo_clase":"02","nota":"3/"}
+{"id":"EL0000001185","descripcion":"Caja cabina eléctrica","codigo_clase":"12","nota":null}
+{"id":"EL0000001186","descripcion":"Caja cuadrada eléctrica","codigo_clase":"12","nota":null}
+{"id":"EL0000001187","descripcion":"Caja de conexión de agua y desagüe","codigo_clase":"31","nota":null}
+{"id":"EL0000001188","descripcion":"Placa para salida de terma","codigo_clase":"12","nota":null}
+{"id":"EL0000001189","descripcion":"Placa para salida de fuerza","codigo_clase":"12","nota":null}
+{"id":"EL0000001190","descripcion":"Caja eléctrica","codigo_clase":"12","nota":null}
+{"id":"EL0000001191","descripcion":"Caja de conexiones de fierro fundido","codigo_clase":"50","nota":null}
+{"id":"EL0000001192","descripcion":"Lámpara halógena","codigo_clase":"12","nota":null}
+{"id":"EL0000001193","descripcion":"Caja octogonal liviana eléctrica","codigo_clase":"12","nota":null}
+{"id":"EL0000001194","descripcion":"Marco de fierro","codigo_clase":"50","nota":null}
+{"id":"EL0000001195","descripcion":"Caja portafusibles","codigo_clase":"12","nota":null}
+{"id":"EL0000001196","descripcion":"Caja prefabricada grifo","codigo_clase":"31","nota":null}
+{"id":"EL0000001197","descripcion":"Caja protección concreto prefabricada","codigo_clase":"31","nota":null}
+{"id":"EL0000001198","descripcion":"Tubo de acero inoxidable","codigo_clase":"30","nota":null}
+{"id":"EL0000001201","descripcion":"Caja sumidero","codigo_clase":"31","nota":null}
+{"id":"EL0000001202","descripcion":"Cal","codigo_clase":"21","nota":"3/"}
+{"id":"EL0000001204","descripcion":"Calamina de Zinc","codigo_clase":"56","nota":null}
+{"id":"EL0000001205","descripcion":"Caldera","codigo_clase":"49","nota":null}
+{"id":"EL0000001206","descripcion":"Cámara neumática","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000001207","descripcion":"Cambia vía","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001208","descripcion":"Camión","codigo_clase":"49","nota":"3/"}
+{"id":"EL0000001209","descripcion":"Camión cisterna","codigo_clase":"49","nota":null}
+{"id":"EL0000001210","descripcion":"Camión concretero","codigo_clase":"49","nota":null}
+{"id":"EL0000001211","descripcion":"Camión imprimador","codigo_clase":"49","nota":null}
+{"id":"EL0000001212","descripcion":"Equipo de termofusión","codigo_clase":"48","nota":null}
+{"id":"EL0000001213","descripcion":"Equipo de granallado","codigo_clase":"48","nota":null}
+{"id":"EL0000001214","descripcion":"Camión volquete","codigo_clase":"49","nota":null}
+{"id":"EL0000001215","descripcion":"Camioneta","codigo_clase":"49","nota":null}
+{"id":"EL0000001216","descripcion":"Campana extractora","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000001217","descripcion":"Campana timbre eléctrico","codigo_clase":"12","nota":null}
+{"id":"EL0000001218","descripcion":"Campanilla timbre","codigo_clase":"12","nota":null}
+{"id":"EL0000001219","descripcion":"Madera quillovara","codigo_clase":"43","nota":null}
+{"id":"EL0000001220","descripcion":"Tubo cuadrado de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000001221","descripcion":"Placa de yeso (drywall)","codigo_clase":"59","nota":null}
+{"id":"EL0000001222","descripcion":"Canaleta zinC","codigo_clase":"56","nota":null}
+{"id":"EL0000001223","descripcion":"Masilla para drywall","codigo_clase":"59","nota":null}
+{"id":"EL0000001224","descripcion":"Candado","codigo_clase":"26","nota":null}
+{"id":"EL0000001227","descripcion":"Tubo de abasto","codigo_clase":"10","nota":null}
+{"id":"EL0000001228","descripcion":"Canto rodado","codigo_clase":"05","nota":"3/"}
+{"id":"EL0000001229","descripcion":"Zeta de acero al carbono","codigo_clase":"51","nota":null}
+{"id":"EL0000001230","descripcion":"Cantonera de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000001231","descripcion":"Madera manchinga","codigo_clase":"43","nota":null}
+{"id":"EL0000001232","descripcion":"Capataz","codigo_clase":"47","nota":null}
+{"id":"EL0000001233","descripcion":"Carretilla","codigo_clase":"37","nota":null}
+{"id":"EL0000001234","descripcion":"Esparcidora de asfalto","codigo_clase":"49","nota":null}
+{"id":"EL0000001235","descripcion":"Cartón","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000001237","descripcion":"Casco minero","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000001238","descripcion":"Cascote","codigo_clase":"17","nota":null}
+{"id":"EL0000001239","descripcion":"Casquete Spot Light","codigo_clase":"12","nota":null}
+{"id":"EL0000001242","descripcion":"Cepilladora de pisos","codigo_clase":"48","nota":"3/"}
+{"id":"EL0000001243","descripcion":"Cera","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000001244","descripcion":"Cerrojo","codigo_clase":"26","nota":null}
+{"id":"EL0000001245","descripcion":"Césped","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000001246","descripcion":"Chalana","codigo_clase":"48","nota":null}
+{"id":"EL0000001247","descripcion":"Chancadora","codigo_clase":"49","nota":null}
+{"id":"EL0000001248","descripcion":"Chapa importada","codigo_clase":"26","nota":"3/"}
+{"id":"EL0000001249","descripcion":"Chapa nacional","codigo_clase":"26","nota":null}
+{"id":"EL0000001250","descripcion":"Elevador de dos baldes","codigo_clase":"48","nota":null}
+{"id":"EL0000001251","descripcion":"Cilindro","codigo_clase":"37","nota":null}
+{"id":"EL0000001252","descripcion":"Generador eléctrico portátil","codigo_clase":"48","nota":null}
+{"id":"EL0000001253","descripcion":"Cincel","codigo_clase":"37","nota":null}
+{"id":"EL0000001254","descripcion":"Cinta aislante eléctrica","codigo_clase":"37","nota":null}
+{"id":"EL0000001255","descripcion":"Cobre","codigo_clase":"06","nota":"3/"}
+{"id":"EL0000001256","descripcion":"Cocina asfáltica","codigo_clase":"49","nota":null}
+{"id":"EL0000001257","descripcion":"Brida rompe aguas de hierro dúctil","codigo_clase":"71","nota":null}
+{"id":"EL0000001258","descripcion":"Bushing de acero","codigo_clase":"65","nota":null}
+{"id":"EL0000001259","descripcion":"Codo PVC agua","codigo_clase":"72","nota":null}
+{"id":"EL0000001260","descripcion":"Codo PVC SAL desagüe","codigo_clase":"72","nota":null}
+{"id":"EL0000001261","descripcion":"Toma de fondo de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000001262","descripcion":"Reducción de PVC sanitaria","codigo_clase":"72","nota":null}
+{"id":"EL0000001263","descripcion":"Cola sintética","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000001264","descripcion":"Compactador manual","codigo_clase":"37","nota":null}
+{"id":"EL0000001265","descripcion":"Compactadora de rodillos","codigo_clase":"49","nota":null}
+{"id":"EL0000001266","descripcion":"Cargador sobre orugas","codigo_clase":"49","nota":null}
+{"id":"EL0000001267","descripcion":"Compresora Diesel","codigo_clase":"49","nota":null}
+{"id":"EL0000001268","descripcion":"Compuerta metálica","codigo_clase":"09","nota":null}
+{"id":"EL0000001269","descripcion":"Condensador","codigo_clase":"11","nota":null}
+{"id":"EL0000001270","descripcion":"Conductor aéreo","codigo_clase":"82","nota":"1/,3/"}
+{"id":"EL0000001271","descripcion":"Platina de Cobre","codigo_clase":"06","nota":null}
+{"id":"EL0000001272","descripcion":"Conector eléctrico","codigo_clase":"06","nota":null}
+{"id":"EL0000001273","descripcion":"Piedra seleccionada de rio","codigo_clase":"05","nota":null}
+{"id":"EL0000001274","descripcion":"Maceta de arcilla","codigo_clase":"17","nota":null}
+{"id":"EL0000001275","descripcion":"Conmutador","codigo_clase":"12","nota":null}
+{"id":"EL0000001276","descripcion":"Contracarril","codigo_clase":"51","nota":"3/"}
+{"id":"EL0000001277","descripcion":"Losetón","codigo_clase":"40","nota":null}
+{"id":"EL0000001278","descripcion":"Contrazócalo terrazo","codigo_clase":"40","nota":"2/"}
+{"id":"EL0000001279","descripcion":"Contrazócalo veneciano","codigo_clase":"40","nota":null}
+{"id":"EL0000001280","descripcion":"Baldosa de PVC","codigo_clase":"16","nota":null}
+{"id":"EL0000001281","descripcion":"Corcho","codigo_clase":"83","nota":"1/,3/"}
+{"id":"EL0000001283","descripcion":"Cordón detonante","codigo_clase":"27","nota":null}
+{"id":"EL0000001284","descripcion":"Cornamusa","codigo_clase":"94","nota":"1/,3/"}
+{"id":"EL0000001285","descripcion":"Cinta aislante","codigo_clase":"37","nota":"3/"}
+{"id":"EL0000001286","descripcion":"Chancadora cónica","codigo_clase":"49","nota":null}
+{"id":"EL0000001287","descripcion":"Criba","codigo_clase":"37","nota":"3/"}
+{"id":"EL0000001288","descripcion":"Cristal templado","codigo_clase":"79","nota":"3/"}
+{"id":"EL0000001289","descripcion":"Cruceta de concreto","codigo_clase":"62","nota":null}
+{"id":"EL0000001290","descripcion":"Cruceta de madera","codigo_clase":"41","nota":"3/"}
+{"id":"EL0000001291","descripcion":"Tubería de acero electrosoldado","codigo_clase":"65","nota":null}
+{"id":"EL0000001292","descripcion":"Tubería de hierro fundido","codigo_clase":"71","nota":null}
+{"id":"EL0000001293","descripcion":"Cruz de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000001294","descripcion":"Cuarzo","codigo_clase":"05","nota":"3/"}
+{"id":"EL0000001295","descripcion":"Cumbrera de fibrocemento","codigo_clase":"59","nota":null}
+{"id":"EL0000001296","descripcion":"Cuña de madera","codigo_clase":"43","nota":null}
+{"id":"EL0000001297","descripcion":"Codo PVC-U CR para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000001299","descripcion":"Defensas de caucho","codigo_clase":"30","nota":null}
+{"id":"EL0000001300","descripcion":"Reducción de PVC-U SP para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000001301","descripcion":"Mecha de seguridad","codigo_clase":"27","nota":null}
+{"id":"EL0000001302","descripcion":"Dinamo","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001303","descripcion":"Plancha compactadora","codigo_clase":"48","nota":null}
+{"id":"EL0000001304","descripcion":"Dobladora de tubos","codigo_clase":"48","nota":null}
+{"id":"EL0000001306","descripcion":"Chata flotante","codigo_clase":"49","nota":null}
+{"id":"EL0000001307","descripcion":"Plancha zincada lisa","codigo_clase":"61","nota":null}
+{"id":"EL0000001308","descripcion":"Durmiente de concreto","codigo_clase":"31","nota":"2/"}
+{"id":"EL0000001309","descripcion":"Durmiente de madera","codigo_clase":"43","nota":null}
+{"id":"EL0000001310","descripcion":"Eclisa","codigo_clase":"51","nota":"3/"}
+{"id":"EL0000001311","descripcion":"Electrobomba","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001313","descripcion":"Ladrillo pandereta","codigo_clase":"17","nota":null}
+{"id":"EL0000001314","descripcion":"Cinta de papel para drywall","codigo_clase":"59","nota":null}
+{"id":"EL0000001315","descripcion":"Ladrillo de concreto","codigo_clase":"17","nota":null}
+{"id":"EL0000001316","descripcion":"Cargador sobre llantas","codigo_clase":"49","nota":null}
+{"id":"EL0000001318","descripcion":"Empaquetadura","codigo_clase":"86","nota":"1/,3/"}
+{"id":"EL0000001319","descripcion":"Pintarrayas","codigo_clase":"48","nota":null}
+{"id":"EL0000001320","descripcion":"Plancha ondulada de fibrocemento","codigo_clase":"59","nota":null}
+{"id":"EL0000001321","descripcion":"Enchape cerámico","codigo_clase":"24","nota":null}
+{"id":"EL0000001322","descripcion":"Energía eléctrica","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000001323","descripcion":"Epóxico","codigo_clase":"86","nota":"1/,3/"}
+{"id":"EL0000001324","descripcion":"Escalera","codigo_clase":"37","nota":null}
+{"id":"EL0000001325","descripcion":"Escantillón","codigo_clase":"37","nota":null}
+{"id":"EL0000001326","descripcion":"Esclusa","codigo_clase":"09","nota":null}
+{"id":"EL0000001327","descripcion":"Escoba","codigo_clase":"37","nota":"3/"}
+{"id":"EL0000001328","descripcion":"Esmalte","codigo_clase":"86","nota":"1/,3/"}
+{"id":"EL0000001329","descripcion":"Esmeril","codigo_clase":"48","nota":"3/"}
+{"id":"EL0000001330","descripcion":"Esparcidora de agregados","codigo_clase":"49","nota":null}
+{"id":"EL0000001331","descripcion":"Esparcidora de asfalto en frio","codigo_clase":"49","nota":null}
+{"id":"EL0000001332","descripcion":"Esparcidora de concreto","codigo_clase":"49","nota":null}
+{"id":"EL0000001334","descripcion":"Estabilizadora de suelos","codigo_clase":"49","nota":null}
+{"id":"EL0000001335","descripcion":"Estaca de madera","codigo_clase":"43","nota":null}
+{"id":"EL0000001338","descripcion":"Estopa","codigo_clase":"37","nota":"3/"}
+{"id":"EL0000001339","descripcion":"Eucalipto","codigo_clase":"43","nota":null}
+{"id":"EL0000001340","descripcion":"Expanded metal","codigo_clase":"46","nota":"3/"}
+{"id":"EL0000001341","descripcion":"Faja transportadora","codigo_clase":"49","nota":null}
+{"id":"EL0000001342","descripcion":"Fanal","codigo_clase":"11","nota":"3/"}
+{"id":"EL0000001343","descripcion":"Farol","codigo_clase":"11","nota":null}
+{"id":"EL0000001344","descripcion":"Acero roscado acero negro","codigo_clase":"02","nota":null}
+{"id":"EL0000001345","descripcion":"Fibra cemento","codigo_clase":"81","nota":"1/,3/"}
+{"id":"EL0000001347","descripcion":"Fieltro","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000001348","descripcion":"Fierro liso","codigo_clase":"02","nota":null}
+{"id":"EL0000001351","descripcion":"Frotacho","codigo_clase":"37","nota":null}
+{"id":"EL0000001352","descripcion":"Concreto en bolsa","codigo_clase":"80","nota":null}
+{"id":"EL0000001353","descripcion":"Fusible eléctrico","codigo_clase":"11","nota":null}
+{"id":"EL0000001354","descripcion":"Gabinete metálico","codigo_clase":"56","nota":null}
+{"id":"EL0000001355","descripcion":"Gancho","codigo_clase":"10","nota":null}
+{"id":"EL0000001356","descripcion":"Ganguil","codigo_clase":"49","nota":null}
+{"id":"EL0000001357","descripcion":"Garlopa","codigo_clase":"37","nota":null}
+{"id":"EL0000001358","descripcion":"Garrucha","codigo_clase":"26","nota":null}
+{"id":"EL0000001359","descripcion":"Gas","codigo_clase":"53","nota":null}
+{"id":"EL0000001360","descripcion":"Gastos generales","codigo_clase":"39","nota":null}
+{"id":"EL0000001362","descripcion":"Gas licuado de petróleo (GLP)","codigo_clase":"53","nota":null}
+{"id":"EL0000001363","descripcion":"Granito","codigo_clase":"05","nota":null}
+{"id":"EL0000001364","descripcion":"Grasa","codigo_clase":"01","nota":"3/"}
+{"id":"EL0000001365","descripcion":"Grass","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000001366","descripcion":"Grava","codigo_clase":"05","nota":null}
+{"id":"EL0000001367","descripcion":"Gres cerámico","codigo_clase":"24","nota":null}
+{"id":"EL0000001368","descripcion":"Grifería importada aparatos sanitarios","codigo_clase":"10","nota":"3/"}
+{"id":"EL0000001369","descripcion":"Grifo jardín","codigo_clase":"10","nota":null}
+{"id":"EL0000001370","descripcion":"Grifo contra incendio","codigo_clase":"78","nota":null}
+{"id":"EL0000001371","descripcion":"Jumbo hidráulico de perforación","codigo_clase":"49","nota":null}
+{"id":"EL0000001372","descripcion":"Grupo electrógeno","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001373","descripcion":"Guarda cabo","codigo_clase":"02","nota":"3/"}
+{"id":"EL0000001374","descripcion":"Guarda riel","codigo_clase":"09","nota":"3/"}
+{"id":"EL0000001375","descripcion":"Guarda vía","codigo_clase":"09","nota":"3/"}
+{"id":"EL0000001376","descripcion":"Guillotina para planchas de acero","codigo_clase":"49","nota":null}
+{"id":"EL0000001377","descripcion":"Gutapercha","codigo_clase":"37","nota":"3/"}
+{"id":"EL0000001378","descripcion":"Hacha","codigo_clase":"37","nota":null}
+{"id":"EL0000001379","descripcion":"Hojalata","codigo_clase":"61","nota":"3/"}
+{"id":"EL0000001380","descripcion":"Madera machimango","codigo_clase":"43","nota":null}
+{"id":"EL0000001381","descripcion":"Impermeabilizante","codigo_clase":"81","nota":"1/,3/"}
+{"id":"EL0000001382","descripcion":"Pasta fina","codigo_clase":"54","nota":null}
+{"id":"EL0000001383","descripcion":"Inodoro tanque alto","codigo_clase":"10","nota":null}
+{"id":"EL0000001384","descripcion":"Inodoro tanque bajo","codigo_clase":"10","nota":null}
+{"id":"EL0000001386","descripcion":"Interruptor de bakelita","codigo_clase":"12","nota":null}
+{"id":"EL0000001387","descripcion":"Interruptor de cuchilla","codigo_clase":"12","nota":null}
+{"id":"EL0000001388","descripcion":"Interruptor no fuse eléctrico","codigo_clase":"12","nota":null}
+{"id":"EL0000001389","descripcion":"Interruptor térmico","codigo_clase":"12","nota":null}
+{"id":"EL0000001390","descripcion":"Interruptor eléctrico","codigo_clase":"12","nota":null}
+{"id":"EL0000001391","descripcion":"Jabón","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000001392","descripcion":"Jabonera","codigo_clase":"10","nota":null}
+{"id":"EL0000001393","descripcion":"Balde de pruebas hidráulicas","codigo_clase":"37","nota":null}
+{"id":"EL0000001394","descripcion":"Madera copaiba","codigo_clase":"43","nota":null}
+{"id":"EL0000001395","descripcion":"Junta water stop cobre","codigo_clase":"06","nota":"3/"}
+{"id":"EL0000001396","descripcion":"Junta water stop neopreno","codigo_clase":"30","nota":null}
+{"id":"EL0000001397","descripcion":"Junta water stop PVC","codigo_clase":"72","nota":"3/"}
+{"id":"EL0000001398","descripcion":"Petróleo diésel","codigo_clase":"53","nota":null}
+{"id":"EL0000001399","descripcion":"Laca","codigo_clase":"86","nota":"1/,3/"}
+{"id":"EL0000001401","descripcion":"Ladrillo silico calcáreo","codigo_clase":"17","nota":null}
+{"id":"EL0000001402","descripcion":"Laja","codigo_clase":"05","nota":null}
+{"id":"EL0000001403","descripcion":"Lampa","codigo_clase":"37","nota":null}
+{"id":"EL0000001404","descripcion":"Lámpara","codigo_clase":"12","nota":null}
+{"id":"EL0000001405","descripcion":"Reactor para Lámpara de vapor de mercurio","codigo_clase":"11","nota":null}
+{"id":"EL0000001406","descripcion":"Luminaria de alumbrado publico","codigo_clase":"11","nota":null}
+{"id":"EL0000001407","descripcion":"Lancha","codigo_clase":"49","nota":null}
+{"id":"EL0000001408","descripcion":"Lanchón","codigo_clase":"49","nota":"3/"}
+{"id":"EL0000001409","descripcion":"Lata","codigo_clase":"61","nota":"3/"}
+{"id":"EL0000001411","descripcion":"Lavadero","codigo_clase":"10","nota":null}
+{"id":"EL0000001412","descripcion":"Grifería","codigo_clase":"10","nota":null}
+{"id":"EL0000001413","descripcion":"Lavadero de cocina","codigo_clase":"10","nota":null}
+{"id":"EL0000001414","descripcion":"Mezcladora monocomando para ducha","codigo_clase":"10","nota":null}
+{"id":"EL0000001415","descripcion":"Fluxómetro mecánico para urinario","codigo_clase":"10","nota":null}
+{"id":"EL0000001416","descripcion":"Lavadero prefabricado","codigo_clase":"10","nota":null}
+{"id":"EL0000001417","descripcion":"Lavatorio","codigo_clase":"10","nota":null}
+{"id":"EL0000001418","descripcion":"Leña","codigo_clase":"43","nota":null}
+{"id":"EL0000001419","descripcion":"Lima","codigo_clase":"37","nota":null}
+{"id":"EL0000001420","descripcion":"Afirmado para subbase","codigo_clase":"38","nota":null}
+{"id":"EL0000001421","descripcion":"Liquido curador","codigo_clase":"81","nota":"1/,3/"}
+{"id":"EL0000001422","descripcion":"Llana","codigo_clase":"37","nota":null}
+{"id":"EL0000001423","descripcion":"Llanta","codigo_clase":"49","nota":"3/"}
+{"id":"EL0000001424","descripcion":"Locomotora","codigo_clase":"49","nota":null}
+{"id":"EL0000001425","descripcion":"Terrazo premezclado","codigo_clase":"40","nota":null}
+{"id":"EL0000001426","descripcion":"Piso PVC","codigo_clase":"16","nota":null}
+{"id":"EL0000001427","descripcion":"Losetones","codigo_clase":"40","nota":null}
+{"id":"EL0000001428","descripcion":"Lubricante","codigo_clase":"01","nota":null}
+{"id":"EL0000001429","descripcion":"Luminaria","codigo_clase":"11","nota":null}
+{"id":"EL0000001430","descripcion":"Maceta","codigo_clase":"17","nota":null}
+{"id":"EL0000001431","descripcion":"Madera tornillo","codigo_clase":"43","nota":null}
+{"id":"EL0000001432","descripcion":"Triplay tornillo","codigo_clase":"44","nota":null}
+{"id":"EL0000001433","descripcion":"Malla de plástico","codigo_clase":"83","nota":"1/,3/"}
+{"id":"EL0000001434","descripcion":"Mandril","codigo_clase":"49","nota":null}
+{"id":"EL0000001435","descripcion":"Manga","codigo_clase":"48","nota":null}
+{"id":"EL0000001436","descripcion":"Triplay para encofrado","codigo_clase":"44","nota":"2/"}
+{"id":"EL0000001437","descripcion":"Marco y tapa de concreto reforzado","codigo_clase":"31","nota":null}
+{"id":"EL0000001438","descripcion":"Mármol reconstituido","codigo_clase":"40","nota":null}
+{"id":"EL0000001439","descripcion":"Martillo a vapor","codigo_clase":"49","nota":null}
+{"id":"EL0000001440","descripcion":"Hincador de postes","codigo_clase":"49","nota":null}
+{"id":"EL0000001441","descripcion":"Martillo neumático","codigo_clase":"49","nota":null}
+{"id":"EL0000001442","descripcion":"Martinete","codigo_clase":"49","nota":null}
+{"id":"EL0000001443","descripcion":"Masa aislante","codigo_clase":"60","nota":"3/"}
+{"id":"EL0000001444","descripcion":"Masilla","codigo_clase":"59","nota":"3/"}
+{"id":"EL0000001446","descripcion":"Mayólica importada","codigo_clase":"24","nota":"3/"}
+{"id":"EL0000001447","descripcion":"Mecha","codigo_clase":"27","nota":null}
+{"id":"EL0000001448","descripcion":"Medidor","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001449","descripcion":"Megómetro","codigo_clase":"48","nota":"3/"}
+{"id":"EL0000001450","descripcion":"Migajón","codigo_clase":"05","nota":null}
+{"id":"EL0000001451","descripcion":"Calibrador Pie de Rey","codigo_clase":"37","nota":null}
+{"id":"EL0000001452","descripcion":"Camión hidrojet","codigo_clase":"49","nota":null}
+{"id":"EL0000001453","descripcion":"Camión plataforma","codigo_clase":"49","nota":null}
+{"id":"EL0000001455","descripcion":"Motobomba","codigo_clase":"48","nota":null}
+{"id":"EL0000001456","descripcion":"Motoniveladora","codigo_clase":"49","nota":null}
+{"id":"EL0000001457","descripcion":"Motor eléctrico","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001458","descripcion":"Motosierra","codigo_clase":"48","nota":null}
+{"id":"EL0000001459","descripcion":"Motosoldadora","codigo_clase":"48","nota":"3/"}
+{"id":"EL0000001460","descripcion":"Compresora neumática","codigo_clase":"49","nota":null}
+{"id":"EL0000001461","descripcion":"Muraleta cerámica","codigo_clase":"24","nota":null}
+{"id":"EL0000001462","descripcion":"Contrazócalo de cerámico","codigo_clase":"24","nota":"3/"}
+{"id":"EL0000001463","descripcion":"Neopreno","codigo_clase":"30","nota":null}
+{"id":"EL0000001464","descripcion":"Niple de bronce","codigo_clase":"68","nota":null}
+{"id":"EL0000001465","descripcion":"Niple cromado","codigo_clase":"10","nota":null}
+{"id":"EL0000001466","descripcion":"Adaptador de acero","codigo_clase":"65","nota":null}
+{"id":"EL0000001467","descripcion":"Tubería de acero galvanizado","codigo_clase":"65","nota":null}
+{"id":"EL0000001468","descripcion":"Codo PVC-U SP para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000001470","descripcion":"Nitrato de amonio","codigo_clase":"28","nota":null}
+{"id":"EL0000001473","descripcion":"Madera roble","codigo_clase":"43","nota":null}
+{"id":"EL0000001474","descripcion":"Monitor de transito","codigo_clase":"47","nota":null}
+{"id":"EL0000001475","descripcion":"Lavatorio con mueble","codigo_clase":"10","nota":null}
+{"id":"EL0000001476","descripcion":"Pabilo","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000001477","descripcion":"Paja","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000001478","descripcion":"Pala hidráulica","codigo_clase":"49","nota":null}
+{"id":"EL0000001479","descripcion":"Pala mecánica","codigo_clase":"49","nota":null}
+{"id":"EL0000001480","descripcion":"Pantalla de iluminación","codigo_clase":"11","nota":null}
+{"id":"EL0000001481","descripcion":"Pantalón y saco impermeable","codigo_clase":"83","nota":"1/,3/"}
+{"id":"EL0000001482","descripcion":"Papel","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000001483","descripcion":"Llave temporizada para urinario","codigo_clase":"10","nota":null}
+{"id":"EL0000001484","descripcion":"Papelera cromada","codigo_clase":"10","nota":null}
+{"id":"EL0000001485","descripcion":"Terminal para cable eléctrico","codigo_clase":"06","nota":null}
+{"id":"EL0000001486","descripcion":"Parihuela","codigo_clase":"43","nota":null}
+{"id":"EL0000001487","descripcion":"Parquet","codigo_clase":"41","nota":null}
+{"id":"EL0000001488","descripcion":"Parquet bálsamo","codigo_clase":"41","nota":null}
+{"id":"EL0000001489","descripcion":"Parquet chonta quiro","codigo_clase":"41","nota":null}
+{"id":"EL0000001490","descripcion":"Parquet coricaspi","codigo_clase":"41","nota":null}
+{"id":"EL0000001491","descripcion":"Parquet diablo fuerte","codigo_clase":"41","nota":null}
+{"id":"EL0000001492","descripcion":"Parquet guayacan","codigo_clase":"41","nota":null}
+{"id":"EL0000001493","descripcion":"Parquet hualtaco","codigo_clase":"41","nota":null}
+{"id":"EL0000001494","descripcion":"Parquet oreja de león","codigo_clase":"41","nota":null}
+{"id":"EL0000001495","descripcion":"Parquet quinilla","codigo_clase":"41","nota":null}
+{"id":"EL0000001496","descripcion":"Pasamano de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000001497","descripcion":"Pasamano de madera","codigo_clase":"43","nota":null}
+{"id":"EL0000001498","descripcion":"Paso de madera","codigo_clase":"41","nota":"3/"}
+{"id":"EL0000001499","descripcion":"Poste de concreto centrifugado","codigo_clase":"62","nota":null}
+{"id":"EL0000001500","descripcion":"Acople de acero","codigo_clase":"65","nota":null}
+{"id":"EL0000001501","descripcion":"Pavimentadora de concreto","codigo_clase":"49","nota":null}
+{"id":"EL0000001502","descripcion":"Asfalto liquido SC","codigo_clase":"13","nota":null}
+{"id":"EL0000001505","descripcion":"Peón","codigo_clase":"47","nota":null}
+{"id":"EL0000001506","descripcion":"Pepelma","codigo_clase":"24","nota":null}
+{"id":"EL0000001508","descripcion":"Picaporte","codigo_clase":"26","nota":null}
+{"id":"EL0000001509","descripcion":"Picota","codigo_clase":"37","nota":null}
+{"id":"EL0000001510","descripcion":"Piedra","codigo_clase":"05","nota":null}
+{"id":"EL0000001511","descripcion":"Madera pino radiata","codigo_clase":"42","nota":null}
+{"id":"EL0000001512","descripcion":"Pintura anticorrosiva","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000001513","descripcion":"Pintura látex vinílico","codigo_clase":"54","nota":null}
+{"id":"EL0000001514","descripcion":"Pintura látex acrílico","codigo_clase":"54","nota":null}
+{"id":"EL0000001515","descripcion":"Imprimante (pintura)","codigo_clase":"54","nota":null}
+{"id":"EL0000001516","descripcion":"Piso cerámico","codigo_clase":"24","nota":null}
+{"id":"EL0000001517","descripcion":"Cerámico piso pared","codigo_clase":"24","nota":null}
+{"id":"EL0000001518","descripcion":"Pisón manual","codigo_clase":"37","nota":null}
+{"id":"EL0000001519","descripcion":"Pisón mecánico","codigo_clase":"48","nota":null}
+{"id":"EL0000001521","descripcion":"Placa de PVC SAL eléctrica","codigo_clase":"12","nota":null}
+{"id":"EL0000001522","descripcion":"Placa para tomacorriente","codigo_clase":"12","nota":null}
+{"id":"EL0000001523","descripcion":"Placa salida therma","codigo_clase":"12","nota":null}
+{"id":"EL0000001524","descripcion":"Placa salida TV-teléfono","codigo_clase":"12","nota":null}
+{"id":"EL0000001525","descripcion":"Plancha de acero inoxidable","codigo_clase":"30","nota":null}
+{"id":"EL0000001526","descripcion":"Plancha de aluminio","codigo_clase":"52","nota":"3/"}
+{"id":"EL0000001527","descripcion":"Plancha de cobre","codigo_clase":"06","nota":"3/"}
+{"id":"EL0000001528","descripcion":"Plancha magnética de grano orientado","codigo_clase":"30","nota":null}
+{"id":"EL0000001529","descripcion":"Manta de aislamiento elastómero","codigo_clase":"60","nota":null}
+{"id":"EL0000001530","descripcion":"Amolador","codigo_clase":"48","nota":null}
+{"id":"EL0000001531","descripcion":"Plataforma remolque","codigo_clase":"49","nota":null}
+{"id":"EL0000001532","descripcion":"Platina de cobre electrolítico","codigo_clase":"06","nota":null}
+{"id":"EL0000001533","descripcion":"Plomada","codigo_clase":"37","nota":null}
+{"id":"EL0000001534","descripcion":"Plomo","codigo_clase":"30","nota":null}
+{"id":"EL0000001535","descripcion":"Poliestireno","codigo_clase":"60","nota":"3/"}
+{"id":"EL0000001538","descripcion":"Poliuretano","codigo_clase":"60","nota":null}
+{"id":"EL0000001539","descripcion":"Pólvora","codigo_clase":"28","nota":null}
+{"id":"EL0000001540","descripcion":"Portafusible","codigo_clase":"11","nota":null}
+{"id":"EL0000001541","descripcion":"Porta lámpara","codigo_clase":"11","nota":null}
+{"id":"EL0000001542","descripcion":"Tubería EMT","codigo_clase":"65","nota":null}
+{"id":"EL0000001543","descripcion":"Poste de madera nacional","codigo_clase":"43","nota":null}
+{"id":"EL0000001544","descripcion":"Probeta de ensayos","codigo_clase":"37","nota":"3/"}
+{"id":"EL0000001545","descripcion":"Punta muerta","codigo_clase":"06","nota":"3/"}
+{"id":"EL0000001546","descripcion":"Punzón","codigo_clase":"37","nota":null}
+{"id":"EL0000001547","descripcion":"Ramal y de PVC desagüe","codigo_clase":"72","nota":null}
+{"id":"EL0000001548","descripcion":"Dado de ajuste","codigo_clase":"37","nota":null}
+{"id":"EL0000001549","descripcion":"Reactor P/HPL","codigo_clase":"11","nota":null}
+{"id":"EL0000001550","descripcion":"Reactor P/V sodio","codigo_clase":"11","nota":null}
+{"id":"EL0000001551","descripcion":"Reducción de hierro fundido","codigo_clase":"71","nota":null}
+{"id":"EL0000001552","descripcion":"Reducción de acero","codigo_clase":"65","nota":null}
+{"id":"EL0000001553","descripcion":"Reducción de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000001554","descripcion":"Luminaria de emergencia","codigo_clase":"11","nota":null}
+{"id":"EL0000001555","descripcion":"Pistola de calor","codigo_clase":"48","nota":null}
+{"id":"EL0000001556","descripcion":"Relay","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001557","descripcion":"Reloj","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000001558","descripcion":"Remolcador","codigo_clase":"49","nota":null}
+{"id":"EL0000001559","descripcion":"Reóstato","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001560","descripcion":"Resina epóxica","codigo_clase":"86","nota":"1/,3/"}
+{"id":"EL0000001561","descripcion":"Resina para sellado de caja terminal","codigo_clase":"86","nota":"1/,3/"}
+{"id":"EL0000001562","descripcion":"Retro excavadora","codigo_clase":"49","nota":null}
+{"id":"EL0000001563","descripcion":"Riel","codigo_clase":"51","nota":"3/"}
+{"id":"EL0000001564","descripcion":"Ripio","codigo_clase":"38","nota":"3/"}
+{"id":"EL0000001565","descripcion":"Ripper","codigo_clase":"49","nota":null}
+{"id":"EL0000001566","descripcion":"Madera capinuri","codigo_clase":"43","nota":null}
+{"id":"EL0000001567","descripcion":"Roca","codigo_clase":"05","nota":null}
+{"id":"EL0000001568","descripcion":"Rompepavimento","codigo_clase":"49","nota":null}
+{"id":"EL0000001569","descripcion":"Seccionador tripolar","codigo_clase":"11","nota":"3/"}
+{"id":"EL0000001571","descripcion":"Sellador para juntas de expansión","codigo_clase":"60","nota":"3/"}
+{"id":"EL0000001572","descripcion":"Asfalto liquido MC","codigo_clase":"13","nota":null}
+{"id":"EL0000001573","descripcion":"Serrucho","codigo_clase":"37","nota":null}
+{"id":"EL0000001574","descripcion":"Setos vivos","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000001575","descripcion":"Sierra manual","codigo_clase":"37","nota":null}
+{"id":"EL0000001576","descripcion":"Camión baranda","codigo_clase":"49","nota":null}
+{"id":"EL0000001578","descripcion":"Silicona","codigo_clase":"60","nota":"3/"}
+{"id":"EL0000001579","descripcion":"Sillar","codigo_clase":"05","nota":null}
+{"id":"EL0000001580","descripcion":"Sismógrafo","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001581","descripcion":"Soga","codigo_clase":"37","nota":"3/"}
+{"id":"EL0000001582","descripcion":"Soldadora eléctrica","codigo_clase":"48","nota":null}
+{"id":"EL0000001583","descripcion":"Soldadura","codigo_clase":"51","nota":"3/"}
+{"id":"EL0000001584","descripcion":"Tarugo de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000001585","descripcion":"Codo de cobre","codigo_clase":"68","nota":null}
+{"id":"EL0000001587","descripcion":"Soplete","codigo_clase":"37","nota":null}
+{"id":"EL0000001588","descripcion":"Varilla de acero galvanizado","codigo_clase":"02","nota":null}
+{"id":"EL0000001589","descripcion":"Sumidero de bronce","codigo_clase":"68","nota":null}
+{"id":"EL0000001590","descripcion":"Tabla de madera importada","codigo_clase":"42","nota":null}
+{"id":"EL0000001591","descripcion":"Tabla de madera nacional","codigo_clase":"43","nota":null}
+{"id":"EL0000001592","descripcion":"Tablero eléctrico","codigo_clase":"12","nota":null}
+{"id":"EL0000001593","descripcion":"Tablestaca metálica","codigo_clase":"94","nota":"1/,3/"}
+{"id":"EL0000001594","descripcion":"Tablón madera importada","codigo_clase":"42","nota":null}
+{"id":"EL0000001595","descripcion":"Tablón madera nacional","codigo_clase":"43","nota":null}
+{"id":"EL0000001596","descripcion":"Tachuela","codigo_clase":"02","nota":null}
+{"id":"EL0000001597","descripcion":"Taladro","codigo_clase":"48","nota":"3/"}
+{"id":"EL0000001598","descripcion":"Caja sumidero de concreto","codigo_clase":"31","nota":null}
+{"id":"EL0000001599","descripcion":"Banco de ducto de concreto","codigo_clase":"31","nota":null}
+{"id":"EL0000001600","descripcion":"Caja para medidor de fierro","codigo_clase":"50","nota":null}
+{"id":"EL0000001601","descripcion":"Cruz de fierro galvanizado","codigo_clase":"65","nota":null}
+{"id":"EL0000001602","descripcion":"Lámpara tipo bulbo","codigo_clase":"12","nota":null}
+{"id":"EL0000001603","descripcion":"Pulsador","codigo_clase":"12","nota":null}
+{"id":"EL0000001604","descripcion":"Tapa onda canal fibrocemento","codigo_clase":"59","nota":null}
+{"id":"EL0000001605","descripcion":"Perfil de acero al carbono","codigo_clase":"51","nota":null}
+{"id":"EL0000001606","descripcion":"Tubo rectangular de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000001607","descripcion":"Tapizón","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000001608","descripcion":"Tee de acero","codigo_clase":"65","nota":null}
+{"id":"EL0000001609","descripcion":"Tapón de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000001610","descripcion":"Reducción de hierro","codigo_clase":"71","nota":null}
+{"id":"EL0000001611","descripcion":"Tarraja","codigo_clase":"37","nota":null}
+{"id":"EL0000001612","descripcion":"Madera caraña","codigo_clase":"43","nota":null}
+{"id":"EL0000001613","descripcion":"Tecnopor","codigo_clase":"60","nota":null}
+{"id":"EL0000001614","descripcion":"Adaptador brida campana de hierro dúctil","codigo_clase":"71","nota":null}
+{"id":"EL0000001615","descripcion":"Unión de acero","codigo_clase":"65","nota":null}
+{"id":"EL0000001616","descripcion":"Tee PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000001617","descripcion":"Teja de arcilla","codigo_clase":"17","nota":null}
+{"id":"EL0000001618","descripcion":"Teja de fibrocemento","codigo_clase":"59","nota":null}
+{"id":"EL0000001619","descripcion":"Cinta autoadhesiva para drywall","codigo_clase":"59","nota":null}
+{"id":"EL0000001620","descripcion":"Tenaza","codigo_clase":"37","nota":null}
+{"id":"EL0000001621","descripcion":"Terminal mayólica","codigo_clase":"24","nota":null}
+{"id":"EL0000001622","descripcion":"Termostato","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001623","descripcion":"Testigo ensayo","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000001624","descripcion":"Tina","codigo_clase":"10","nota":null}
+{"id":"EL0000001625","descripcion":"Tirafondo rieles","codigo_clase":"02","nota":"3/"}
+{"id":"EL0000001626","descripcion":"Llave temporizada para lavatorio","codigo_clase":"10","nota":null}
+{"id":"EL0000001627","descripcion":"Tomacorriente","codigo_clase":"12","nota":null}
+{"id":"EL0000001628","descripcion":"Tope para puerta","codigo_clase":"26","nota":null}
+{"id":"EL0000001629","descripcion":"Tornillo de banco","codigo_clase":"37","nota":"3/"}
+{"id":"EL0000001630","descripcion":"Torno","codigo_clase":"49","nota":null}
+{"id":"EL0000001631","descripcion":"Traílla","codigo_clase":"49","nota":null}
+{"id":"EL0000001632","descripcion":"Granalla de acero","codigo_clase":"71","nota":null}
+{"id":"EL0000001633","descripcion":"Inodoro dos piezas","codigo_clase":"10","nota":null}
+{"id":"EL0000001634","descripcion":"Bushing PVC-U CR para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000001635","descripcion":"Transformador","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001636","descripcion":"Transporte acuático","codigo_clase":"30","nota":null}
+{"id":"EL0000001637","descripcion":"Transporte aéreo","codigo_clase":"33","nota":null}
+{"id":"EL0000001638","descripcion":"Transporte terrestre","codigo_clase":"32","nota":null}
+{"id":"EL0000001639","descripcion":"Travesaño de madera","codigo_clase":"43","nota":null}
+{"id":"EL0000001640","descripcion":"Travieza de concreto","codigo_clase":"31","nota":"2/"}
+{"id":"EL0000001641","descripcion":"Madera quinilla colorada","codigo_clase":"43","nota":null}
+{"id":"EL0000001642","descripcion":"Trefilado (acero para pretensado)","codigo_clase":"30","nota":null}
+{"id":"EL0000001643","descripcion":"Guardacabo","codigo_clase":"02","nota":null}
+{"id":"EL0000001644","descripcion":"Triplay capinuri","codigo_clase":"44","nota":null}
+{"id":"EL0000001645","descripcion":"Triturador","codigo_clase":"49","nota":null}
+{"id":"EL0000001646","descripcion":"Tubería Armco","codigo_clase":"09","nota":null}
+{"id":"EL0000001647","descripcion":"Tubería de acero soldada","codigo_clase":"65","nota":null}
+{"id":"EL0000001648","descripcion":"Tubería de hierro negro estándar","codigo_clase":"65","nota":null}
+{"id":"EL0000001649","descripcion":"Tubería de PVC para desagüe","codigo_clase":"72","nota":null}
+{"id":"EL0000001653","descripcion":"Tuerca","codigo_clase":"02","nota":null}
+{"id":"EL0000001654","descripcion":"Tupi","codigo_clase":"48","nota":"3/"}
+{"id":"EL0000001655","descripcion":"Unión de PVC agua","codigo_clase":"72","nota":null}
+{"id":"EL0000001656","descripcion":"Codo PVC sanitaria","codigo_clase":"72","nota":null}
+{"id":"EL0000001657","descripcion":"Tubería PVC SEL eléctrica","codigo_clase":"72","nota":null}
+{"id":"EL0000001658","descripcion":"Tubería de acero negro sin costura SCH","codigo_clase":"65","nota":null}
+{"id":"EL0000001659","descripcion":"Tubería de acero negro","codigo_clase":"65","nota":null}
+{"id":"EL0000001660","descripcion":"Tubería PVC telefónico","codigo_clase":"72","nota":null}
+{"id":"EL0000001661","descripcion":"Urinario","codigo_clase":"10","nota":null}
+{"id":"EL0000001662","descripcion":"Utilidad","codigo_clase":"39","nota":null}
+{"id":"EL0000001663","descripcion":"Vagón","codigo_clase":"49","nota":null}
+{"id":"EL0000001665","descripcion":"Llave temporizada para ducha","codigo_clase":"10","nota":null}
+{"id":"EL0000001666","descripcion":"Ventilador","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000001667","descripcion":"Vidrio laminado","codigo_clase":"79","nota":null}
+{"id":"EL0000001668","descripcion":"Vidrio templado","codigo_clase":"79","nota":"3/"}
+{"id":"EL0000001669","descripcion":"Vidrio importado","codigo_clase":"79","nota":"3/"}
+{"id":"EL0000001670","descripcion":"Cocina de asfalto","codigo_clase":"49","nota":"3/"}
+{"id":"EL0000001672","descripcion":"Varilla para tierra, de cobre","codigo_clase":"06","nota":"3/"}
+{"id":"EL0000001673","descripcion":"Varilla para tierra, de bronce","codigo_clase":"06","nota":"3/"}
+{"id":"EL0000001674","descripcion":"Varilla para tierra, de acero galvanizado","codigo_clase":"02","nota":null}
+{"id":"EL0000001675","descripcion":"W.C. tanque alto","codigo_clase":"10","nota":null}
+{"id":"EL0000001676","descripcion":"W.C. tanque bajo","codigo_clase":"10","nota":null}
+{"id":"EL0000001678","descripcion":"Accesorio para tubería de hierro dúctil","codigo_clase":"71","nota":null}
+{"id":"EL0000001679","descripcion":"Yee PVC desagüe","codigo_clase":"72","nota":null}
+{"id":"EL0000001680","descripcion":"Yunque","codigo_clase":"37","nota":null}
+{"id":"EL0000001682","descripcion":"Zaranda mecánica","codigo_clase":"49","nota":"3/"}
+{"id":"EL0000001683","descripcion":"Travesaño de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000001684","descripcion":"Madera ishpingo","codigo_clase":"43","nota":null}
+{"id":"EL0000001685","descripcion":"Zócalo vinílico","codigo_clase":"16","nota":null}
+{"id":"EL0000001686","descripcion":"Zócalo veneciano","codigo_clase":"40","nota":null}
+{"id":"EL0000001688","descripcion":"Oficial","codigo_clase":"47","nota":null}
+{"id":"EL0000001689","descripcion":"Arandela de presión","codigo_clase":"02","nota":null}
+{"id":"EL0000001690","descripcion":"Barra recta de acero para SSHH","codigo_clase":"10","nota":null}
+{"id":"EL0000001691","descripcion":"Soldadura por electrodo","codigo_clase":"51","nota":null}
+{"id":"EL0000001692","descripcion":"Linterna","codigo_clase":"37","nota":null}
+{"id":"EL0000001693","descripcion":"Chata flotante de acero","codigo_clase":"49","nota":"3/"}
+{"id":"EL0000001694","descripcion":"Madera lupuna","codigo_clase":"43","nota":null}
+{"id":"EL0000001698","descripcion":"Cemento hidráulico tipo MH","codigo_clase":"21","nota":null}
+{"id":"EL0000001701","descripcion":"Reducción de PVC-U CR para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000001702","descripcion":"Unión de PVC-U SP para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000001703","descripcion":"Tapa de fierro para buzón","codigo_clase":"50","nota":null}
+{"id":"EL0000001704","descripcion":"Curva PVC SAP eléctrica","codigo_clase":"72","nota":null}
+{"id":"EL0000001705","descripcion":"Extintor","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000001706","descripcion":"Equipo de oxicorte","codigo_clase":"48","nota":null}
+{"id":"EL0000001707","descripcion":"Accesorio PVC SEL eléctrica","codigo_clase":"72","nota":null}
+{"id":"EL0000001708","descripcion":"Cable N2XSY","codigo_clase":"19","nota":null}
+{"id":"EL0000001709","descripcion":"Acero corrugado ASTM A706","codigo_clase":"03","nota":null}
+{"id":"EL0000001710","descripcion":"Acero liso redondo","codigo_clase":"02","nota":null}
+{"id":"EL0000001711","descripcion":"Mapresa nacional","codigo_clase":"44","nota":"2/"}
+{"id":"EL0000001712","descripcion":"Bonificaciones mano de obra","codigo_clase":"47","nota":null}
+{"id":"EL0000001714","descripcion":"Trampa de PVC para desagüe","codigo_clase":"72","nota":null}
+{"id":"EL0000001715","descripcion":"Caja de fierro galvanizado eléctrica","codigo_clase":"12","nota":null}
+{"id":"EL0000001716","descripcion":"Unión de PVC SAP eléctrica","codigo_clase":"72","nota":null}
+{"id":"EL0000001717","descripcion":"Unión de PVC-U CR para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000003157","descripcion":"Hidrolavadora","codigo_clase":"48","nota":null}
+{"id":"EL0000003158","descripcion":"Acrílico","codigo_clase":"88","nota":"1/,3/"}
+{"id":"EL0000003159","descripcion":"Acero para pretensado","codigo_clase":"30","nota":null}
+{"id":"EL0000003161","descripcion":"Acero de construcción corrugado","codigo_clase":"03","nota":null}
+{"id":"EL0000003162","descripcion":"Aceite para transformadores","codigo_clase":"01","nota":null}
+{"id":"EL0000003163","descripcion":"Aceite linaza","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000003164","descripcion":"Minicargador multipropósito","codigo_clase":"49","nota":null}
+{"id":"EL0000003165","descripcion":"Barra angular de acero para SSHH","codigo_clase":"10","nota":null}
+{"id":"EL0000003167","descripcion":"Abrazadera de hierro dúctil","codigo_clase":"71","nota":null}
+{"id":"EL0000003168","descripcion":"Material filtrante","codigo_clase":"05","nota":null}
+{"id":"EL0000003169","descripcion":"Hormigón de rio","codigo_clase":"38","nota":null}
+{"id":"EL0000003171","descripcion":"Lámpara de halogenuro metálico","codigo_clase":"11","nota":null}
+{"id":"EL0000003172","descripcion":"Luminaria para Lámpara de vapor de mercurio","codigo_clase":"11","nota":null}
+{"id":"EL0000003174","descripcion":"Grillete de sujeción","codigo_clase":"02","nota":null}
+{"id":"EL0000003175","descripcion":"Terminal de compresión de cobre","codigo_clase":"06","nota":null}
+{"id":"EL0000003176","descripcion":"Arandela","codigo_clase":"02","nota":null}
+{"id":"EL0000003177","descripcion":"Tuerca mariposa","codigo_clase":"02","nota":null}
+{"id":"EL0000003180","descripcion":"Acero roscado zincado","codigo_clase":"02","nota":null}
+{"id":"EL0000003181","descripcion":"Tornillo autorroscante","codigo_clase":"02","nota":null}
+{"id":"EL0000003183","descripcion":"Diesel","codigo_clase":"53","nota":null}
+{"id":"EL0000003184","descripcion":"Manipulador telescópico (Telehandler)","codigo_clase":"49","nota":null}
+{"id":"EL0000003186","descripcion":"Anclaje para pretensado","codigo_clase":"30","nota":null}
+{"id":"EL0000003191","descripcion":"Arandela de fierro","codigo_clase":"02","nota":"3/"}
+{"id":"EL0000003193","descripcion":"Piedra grande","codigo_clase":"05","nota":null}
+{"id":"EL0000003194","descripcion":"Arena fina de rio","codigo_clase":"04","nota":null}
+{"id":"EL0000003195","descripcion":"Arena gruesa de rio","codigo_clase":"04","nota":null}
+{"id":"EL0000003196","descripcion":"Cierrapuertas","codigo_clase":"26","nota":null}
+{"id":"EL0000003197","descripcion":"Pararrayos","codigo_clase":"11","nota":"3/"}
+{"id":"EL0000003198","descripcion":"Luminaria tipo LED para alumbrado publico","codigo_clase":"11","nota":null}
+{"id":"EL0000003199","descripcion":"Artefacto fluorescente","codigo_clase":"12","nota":null}
+{"id":"EL0000003200","descripcion":"Tractor de tiro","codigo_clase":"49","nota":null}
+{"id":"EL0000003201","descripcion":"Brea industrial","codigo_clase":"13","nota":null}
+{"id":"EL0000003202","descripcion":"Asfalto liquido RC","codigo_clase":"13","nota":null}
+{"id":"EL0000003204","descripcion":"Pistola de clavos","codigo_clase":"48","nota":null}
+{"id":"EL0000003207","descripcion":"Cerámico para piso","codigo_clase":"24","nota":null}
+{"id":"EL0000003208","descripcion":"Cuchilla","codigo_clase":"37","nota":null}
+{"id":"EL0000003210","descripcion":"Cruceta para cerámicos","codigo_clase":"37","nota":null}
+{"id":"EL0000003211","descripcion":"Cerámico piscina","codigo_clase":"24","nota":null}
+{"id":"EL0000003212","descripcion":"Madera lagarto caspi","codigo_clase":"43","nota":null}
+{"id":"EL0000003214","descripcion":"Tractor sobre orugas","codigo_clase":"49","nota":null}
+{"id":"EL0000003215","descripcion":"Anfo pesado","codigo_clase":"28","nota":null}
+{"id":"EL0000003217","descripcion":"Alicate","codigo_clase":"37","nota":null}
+{"id":"EL0000003218","descripcion":"Cortadora de concreto","codigo_clase":"48","nota":null}
+{"id":"EL0000003220","descripcion":"Cortadora de mayólica","codigo_clase":"37","nota":null}
+{"id":"EL0000003221","descripcion":"Barra angular abatible de acero para SSHH","codigo_clase":"10","nota":null}
+{"id":"EL0000003223","descripcion":"Bisagra de extensión","codigo_clase":"26","nota":"3/"}
+{"id":"EL0000003227","descripcion":"Bloque de concreto","codigo_clase":"17","nota":null}
+{"id":"EL0000003228","descripcion":"Ladrillo bovedilla","codigo_clase":"17","nota":null}
+{"id":"EL0000003229","descripcion":"Placa sílico calcáreo","codigo_clase":"17","nota":null}
+{"id":"EL0000003232","descripcion":"Pluma de izado","codigo_clase":"49","nota":null}
+{"id":"EL0000003234","descripcion":"Bomba centrífuga","codigo_clase":"95","nota":"1/,3/"}
+{"id":"EL0000003235","descripcion":"Pistola de silicona","codigo_clase":"48","nota":null}
+{"id":"EL0000003236","descripcion":"Dremel","codigo_clase":"48","nota":null}
+{"id":"EL0000003237","descripcion":"Planta de asfalto","codigo_clase":"49","nota":null}
+{"id":"EL0000003238","descripcion":"Comba de inyección de cemento","codigo_clase":"49","nota":null}
+{"id":"EL0000003239","descripcion":"Prensa empalmadora","codigo_clase":"49","nota":null}
+{"id":"EL0000003240","descripcion":"Electrodo","codigo_clase":"06","nota":"3/"}
+{"id":"EL0000003242","descripcion":"GPS diferencial","codigo_clase":"48","nota":null}
+{"id":"EL0000003243","descripcion":"Porta Lámpara plafón","codigo_clase":"12","nota":null}
+{"id":"EL0000003245","descripcion":"Placa de salida para ethernet","codigo_clase":"12","nota":null}
+{"id":"EL0000003247","descripcion":"Tapajuntas de acero LAC","codigo_clase":"56","nota":null}
+{"id":"EL0000003249","descripcion":"Destornillador","codigo_clase":"37","nota":null}
+{"id":"EL0000003251","descripcion":"Bujía","codigo_clase":"48","nota":null}
+{"id":"EL0000003252","descripcion":"Bushing de fierro galvanizado","codigo_clase":"65","nota":null}
+{"id":"EL0000003253","descripcion":"Unión de PVC SEL eléctrica","codigo_clase":"72","nota":null}
+{"id":"EL0000003254","descripcion":"Brida rompe aguas de acero LAC","codigo_clase":"56","nota":null}
+{"id":"EL0000003256","descripcion":"Cable UTP","codigo_clase":"18","nota":null}
+{"id":"EL0000003257","descripcion":"Conector RJ","codigo_clase":"18","nota":null}
+{"id":"EL0000003258","descripcion":"Cable CCT-B","codigo_clase":"18","nota":null}
+{"id":"EL0000003259","descripcion":"Cable coaxial","codigo_clase":"18","nota":null}
+{"id":"EL0000003260","descripcion":"Cable multipar","codigo_clase":"18","nota":null}
+{"id":"EL0000003261","descripcion":"Conductor N2XSY","codigo_clase":"19","nota":null}
+{"id":"EL0000003262","descripcion":"Cable NPT","codigo_clase":"19","nota":null}
+{"id":"EL0000003263","descripcion":"Alambre y cable GPT","codigo_clase":"07","nota":null}
+{"id":"EL0000003264","descripcion":"Alambre y cable CPI (WP)","codigo_clase":"08","nota":null}
+{"id":"EL0000003266","descripcion":"Cabría","codigo_clase":"94","nota":"1/,3/"}
+{"id":"EL0000003268","descripcion":"Placa de tecnopolímero","codigo_clase":"12","nota":null}
+{"id":"EL0000003269","descripcion":"Lámpara tipo globo","codigo_clase":"12","nota":null}
+{"id":"EL0000003270","descripcion":"Panel de concreto prefabricado","codigo_clase":"31","nota":null}
+{"id":"EL0000003271","descripcion":"Placa de salida para TV","codigo_clase":"12","nota":null}
+{"id":"EL0000003272","descripcion":"Caja de madera para tablero eléctrico","codigo_clase":"12","nota":null}
+{"id":"EL0000003273","descripcion":"Luminaria tipo rejilla","codigo_clase":"12","nota":null}
+{"id":"EL0000003274","descripcion":"Marco y tapa de fierro","codigo_clase":"50","nota":null}
+{"id":"EL0000003275","descripcion":"Wall socket","codigo_clase":"12","nota":null}
+{"id":"EL0000003276","descripcion":"Tubo LED","codigo_clase":"12","nota":null}
+{"id":"EL0000003277","descripcion":"Caja para medidor de agua de fierro fundido","codigo_clase":"50","nota":null}
+{"id":"EL0000003278","descripcion":"Luminaria high bay","codigo_clase":"12","nota":null}
+{"id":"EL0000003279","descripcion":"Caja de registro de agua","codigo_clase":"31","nota":null}
+{"id":"EL0000003280","descripcion":"Caja de pozo a tierra de concreto","codigo_clase":"31","nota":null}
+{"id":"EL0000003281","descripcion":"Cable de control multipar","codigo_clase":"18","nota":null}
+{"id":"EL0000003282","descripcion":"Cable mensajero","codigo_clase":"18","nota":null}
+{"id":"EL0000003284","descripcion":"Dintel prefabricado de concreto","codigo_clase":"31","nota":null}
+{"id":"EL0000003286","descripcion":"Calamina de aluminio","codigo_clase":"52","nota":"3/"}
+{"id":"EL0000003287","descripcion":"Brida de acero","codigo_clase":"56","nota":null}
+{"id":"EL0000003288","descripcion":"Perforadora sobre orugas","codigo_clase":"49","nota":null}
+{"id":"EL0000003291","descripcion":"Atornillador eléctrico","codigo_clase":"48","nota":null}
+{"id":"EL0000003292","descripcion":"Aspirador","codigo_clase":"48","nota":null}
+{"id":"EL0000003293","descripcion":"Monorraíl","codigo_clase":"49","nota":null}
+{"id":"EL0000003294","descripcion":"Pavimentadora sobre orugas","codigo_clase":"49","nota":null}
+{"id":"EL0000003295","descripcion":"Martillo eléctrico demoledor","codigo_clase":"48","nota":null}
+{"id":"EL0000003296","descripcion":"Camión tractor","codigo_clase":"49","nota":null}
+{"id":"EL0000003297","descripcion":"Bastón desnivelador topográfico","codigo_clase":"48","nota":null}
+{"id":"EL0000003298","descripcion":"Cortadora de pavimento","codigo_clase":"48","nota":null}
+{"id":"EL0000003299","descripcion":"Llave de impacto eléctrico","codigo_clase":"48","nota":null}
+{"id":"EL0000003300","descripcion":"Caja condulet","codigo_clase":"12","nota":null}
+{"id":"EL0000003301","descripcion":"Luminaria downlight","codigo_clase":"12","nota":null}
+{"id":"EL0000003302","descripcion":"Caballete de madera","codigo_clase":"43","nota":null}
+{"id":"EL0000003303","descripcion":"Canaleta de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000003304","descripcion":"Canaleta fibro-cemento","codigo_clase":"59","nota":null}
+{"id":"EL0000003305","descripcion":"Brida de acero LAC","codigo_clase":"56","nota":null}
+{"id":"EL0000003306","descripcion":"Canalón fibro-cemento","codigo_clase":"59","nota":null}
+{"id":"EL0000003307","descripcion":"Manija","codigo_clase":"26","nota":null}
+{"id":"EL0000003310","descripcion":"Asiento para inodoro","codigo_clase":"10","nota":null}
+{"id":"EL0000003312","descripcion":"Perfil W de acero al carbono","codigo_clase":"51","nota":null}
+{"id":"EL0000003313","descripcion":"Marco de ventana de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000003314","descripcion":"Rollizo de madera","codigo_clase":"43","nota":null}
+{"id":"EL0000003316","descripcion":"Secador de áridos","codigo_clase":"49","nota":null}
+{"id":"EL0000003317","descripcion":"Rodillo para pintar","codigo_clase":"37","nota":null}
+{"id":"EL0000003318","descripcion":"Tractor sobre llantas","codigo_clase":"49","nota":null}
+{"id":"EL0000003321","descripcion":"Herramienta de construcción","codigo_clase":"37","nota":null}
+{"id":"EL0000003322","descripcion":"Bloque de concreto para techos","codigo_clase":"17","nota":null}
+{"id":"EL0000003323","descripcion":"Interruptor","codigo_clase":"12","nota":null}
+{"id":"EL0000003325","descripcion":"Carbón vegetal","codigo_clase":"43","nota":null}
+{"id":"EL0000003327","descripcion":"Torre grúa","codigo_clase":"49","nota":null}
+{"id":"EL0000003328","descripcion":"Pala","codigo_clase":"37","nota":null}
+{"id":"EL0000003330","descripcion":"Chapa","codigo_clase":"26","nota":null}
+{"id":"EL0000003332","descripcion":"Ruteador eléctrico","codigo_clase":"48","nota":null}
+{"id":"EL0000003333","descripcion":"Torre de iluminación","codigo_clase":"49","nota":null}
+{"id":"EL0000003335","descripcion":"Cerrojo digital","codigo_clase":"26","nota":null}
+{"id":"EL0000003336","descripcion":"Receptor GPS","codigo_clase":"48","nota":null}
+{"id":"EL0000003337","descripcion":"Pulverizadora de pintura airless","codigo_clase":"48","nota":null}
+{"id":"EL0000003338","descripcion":"Compresora de aire eléctrica","codigo_clase":"48","nota":null}
+{"id":"EL0000003339","descripcion":"Wincha","codigo_clase":"37","nota":null}
+{"id":"EL0000003341","descripcion":"Escofina","codigo_clase":"37","nota":null}
+{"id":"EL0000003342","descripcion":"Tornillo para drywall","codigo_clase":"02","nota":null}
+{"id":"EL0000003344","descripcion":"Compresora horizontal","codigo_clase":"48","nota":null}
+{"id":"EL0000003345","descripcion":"Codo de fierro fundido","codigo_clase":"71","nota":null}
+{"id":"EL0000003346","descripcion":"Codo de fierro negro y/o galvanizado","codigo_clase":"65","nota":null}
+{"id":"EL0000003347","descripcion":"Trampa \"P\" de PVC sanitaria","codigo_clase":"72","nota":null}
+{"id":"EL0000003348","descripcion":"Niple de CPVC","codigo_clase":"72","nota":null}
+{"id":"EL0000003349","descripcion":"Codo PVC SAP eléctrica","codigo_clase":"72","nota":null}
+{"id":"EL0000003350","descripcion":"Niple de PVC-U CR para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000003353","descripcion":"Formón","codigo_clase":"37","nota":null}
+{"id":"EL0000003354","descripcion":"Mototraílla autocargable","codigo_clase":"49","nota":null}
+{"id":"EL0000003355","descripcion":"Mototraílla cargable","codigo_clase":"49","nota":null}
+{"id":"EL0000003356","descripcion":"Rodillo neumático autopropulsado","codigo_clase":"49","nota":null}
+{"id":"EL0000003357","descripcion":"Rodillo pata de cabra vibratorio autopropulsado","codigo_clase":"49","nota":null}
+{"id":"EL0000003358","descripcion":"Placa de acero corrugado","codigo_clase":"09","nota":null}
+{"id":"EL0000003359","descripcion":"Luz de balizaje","codigo_clase":"11","nota":null}
+{"id":"EL0000003360","descripcion":"Alambre para devanado de cobre","codigo_clase":"06","nota":"3/"}
+{"id":"EL0000003361","descripcion":"Barra equipotencial de cobre","codigo_clase":"06","nota":null}
+{"id":"EL0000003362","descripcion":"Unión de PVC sanitaria","codigo_clase":"72","nota":null}
+{"id":"EL0000003363","descripcion":"Confitillo","codigo_clase":"05","nota":null}
+{"id":"EL0000003364","descripcion":"Confitillo o cascajo de ladrillo","codigo_clase":"17","nota":null}
+{"id":"EL0000003365","descripcion":"Luminaria spotlight","codigo_clase":"12","nota":null}
+{"id":"EL0000003367","descripcion":"Madera catahua amarilla","codigo_clase":"43","nota":null}
+{"id":"EL0000003368","descripcion":"Contrazócalo de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000003369","descripcion":"Loseta de mármol","codigo_clase":"40","nota":null}
+{"id":"EL0000003370","descripcion":"Caña Guayaquil","codigo_clase":"43","nota":null}
+{"id":"EL0000003371","descripcion":"Zócalo de terrazo","codigo_clase":"40","nota":null}
+{"id":"EL0000003373","descripcion":"Loseta veneciana","codigo_clase":"40","nota":null}
+{"id":"EL0000003374","descripcion":"Piso vinílico","codigo_clase":"16","nota":null}
+{"id":"EL0000003376","descripcion":"Cordel","codigo_clase":"37","nota":"3/"}
+{"id":"EL0000003377","descripcion":"Fulminante común","codigo_clase":"27","nota":null}
+{"id":"EL0000003379","descripcion":"Cortadora de fierro de construcción","codigo_clase":"37","nota":null}
+{"id":"EL0000003380","descripcion":"Crawler Drill","codigo_clase":"49","nota":null}
+{"id":"EL0000003381","descripcion":"Cepilladora de madera","codigo_clase":"48","nota":null}
+{"id":"EL0000003383","descripcion":"Pastoral de concreto","codigo_clase":"62","nota":null}
+{"id":"EL0000003384","descripcion":"Madera rollizo","codigo_clase":"43","nota":null}
+{"id":"EL0000003385","descripcion":"Tapón de acero","codigo_clase":"65","nota":null}
+{"id":"EL0000003386","descripcion":"Cruz de fierro fundido","codigo_clase":"71","nota":null}
+{"id":"EL0000003387","descripcion":"Tubería CPVC para agua caliente","codigo_clase":"72","nota":null}
+{"id":"EL0000003390","descripcion":"Rollizo de eucalipto","codigo_clase":"43","nota":null}
+{"id":"EL0000003391","descripcion":"Curva de PVC eléctrica","codigo_clase":"72","nota":null}
+{"id":"EL0000003392","descripcion":"Decorpanel","codigo_clase":"84","nota":"1/"}
+{"id":"EL0000003395","descripcion":"Detonador eléctrico","codigo_clase":"27","nota":null}
+{"id":"EL0000003396","descripcion":"Pulidora eléctrica","codigo_clase":"48","nota":null}
+{"id":"EL0000003397","descripcion":"Dobladora de fierro","codigo_clase":"48","nota":null}
+{"id":"EL0000003398","descripcion":"Lijadora eléctrica","codigo_clase":"48","nota":null}
+{"id":"EL0000003399","descripcion":"Dosificadora de concreto","codigo_clase":"49","nota":null}
+{"id":"EL0000003400","descripcion":"Plancha zincada ondulada (calamina)","codigo_clase":"61","nota":null}
+{"id":"EL0000003402","descripcion":"Listón de madera","codigo_clase":"43","nota":null}
+{"id":"EL0000003404","descripcion":"Rotomartillo","codigo_clase":"48","nota":null}
+{"id":"EL0000003406","descripcion":"Elemento de arcilla para celosía","codigo_clase":"17","nota":null}
+{"id":"EL0000003407","descripcion":"Elementos fibro-cemento para celosías","codigo_clase":"59","nota":null}
+{"id":"EL0000003408","descripcion":"Elemento de concreto para celosía","codigo_clase":"17","nota":null}
+{"id":"EL0000003409","descripcion":"Rodillo tándem vibratorio autopropulsado","codigo_clase":"49","nota":null}
+{"id":"EL0000003412","descripcion":"Encofrado metálico","codigo_clase":"94","nota":"1/,3/"}
+{"id":"EL0000003413","descripcion":"Encuentro fibro-cemento","codigo_clase":"59","nota":null}
+{"id":"EL0000003414","descripcion":"Brick cerámico","codigo_clase":"24","nota":null}
+{"id":"EL0000003417","descripcion":"Mochila micropulverizadora","codigo_clase":"37","nota":null}
+{"id":"EL0000003418","descripcion":"Barrera de contención metálico","codigo_clase":"09","nota":null}
+{"id":"EL0000003421","descripcion":"Barra retráctil","codigo_clase":"37","nota":null}
+{"id":"EL0000003422","descripcion":"Rodillo vibratorio liso autopropulsado","codigo_clase":"49","nota":null}
+{"id":"EL0000003423","descripcion":"Rodillo vibratorio liso de tiro","codigo_clase":"49","nota":null}
+{"id":"EL0000003424","descripcion":"Pavimentadora sobre neumáticos","codigo_clase":"49","nota":null}
+{"id":"EL0000003425","descripcion":"Espejo","codigo_clase":"79","nota":null}
+{"id":"EL0000003427","descripcion":"Madera quillosisa o cedrillo","codigo_clase":"43","nota":null}
+{"id":"EL0000003431","descripcion":"Madera sapote","codigo_clase":"43","nota":null}
+{"id":"EL0000003434","descripcion":"Luminaria hermética","codigo_clase":"12","nota":null}
+{"id":"EL0000003435","descripcion":"Farola","codigo_clase":"11","nota":null}
+{"id":"EL0000003436","descripcion":"Tornillo para madera","codigo_clase":"02","nota":null}
+{"id":"EL0000003437","descripcion":"Cemento hidráulico tipo MS (MH)","codigo_clase":"21","nota":null}
+{"id":"EL0000003440","descripcion":"Acero corrugado ASTM A615","codigo_clase":"03","nota":null}
+{"id":"EL0000003441","descripcion":"Tornillo wafer","codigo_clase":"02","nota":null}
+{"id":"EL0000003445","descripcion":"Manguera","codigo_clase":"37","nota":null}
+{"id":"EL0000003446","descripcion":"Fulminante","codigo_clase":"27","nota":null}
+{"id":"EL0000003447","descripcion":"Seccionador cut out","codigo_clase":"11","nota":null}
+{"id":"EL0000003448","descripcion":"Brida de hierro dúctil","codigo_clase":"56","nota":null}
+{"id":"EL0000003449","descripcion":"Anillo de cera para inodoro","codigo_clase":"10","nota":null}
+{"id":"EL0000003451","descripcion":"Escalera telescópica","codigo_clase":"37","nota":null}
+{"id":"EL0000003452","descripcion":"Cerrojo sapito","codigo_clase":"26","nota":null}
+{"id":"EL0000003455","descripcion":"Generador","codigo_clase":"49","nota":null}
+{"id":"EL0000003456","descripcion":"Grafito","codigo_clase":"53","nota":null}
+{"id":"EL0000003457","descripcion":"Carbón mineral","codigo_clase":"05","nota":null}
+{"id":"EL0000003461","descripcion":"Cerámico","codigo_clase":"24","nota":null}
+{"id":"EL0000003463","descripcion":"Grifería nacional aparatos sanitarios","codigo_clase":"10","nota":null}
+{"id":"EL0000003464","descripcion":"Válvula esférica de hierro dúctil","codigo_clase":"78","nota":null}
+{"id":"EL0000003465","descripcion":"Grúa","codigo_clase":"49","nota":null}
+{"id":"EL0000003472","descripcion":"Esponja","codigo_clase":"37","nota":null}
+{"id":"EL0000003474","descripcion":"Madera cachimbo colorado","codigo_clase":"43","nota":null}
+{"id":"EL0000003478","descripcion":"Llave para urinario","codigo_clase":"10","nota":null}
+{"id":"EL0000003479","descripcion":"Sumidero","codigo_clase":"10","nota":null}
+{"id":"EL0000003480","descripcion":"Instrumento topográfico","codigo_clase":"48","nota":"3/"}
+{"id":"EL0000003481","descripcion":"Tubo fluorescente","codigo_clase":"12","nota":null}
+{"id":"EL0000003482","descripcion":"Zumbador","codigo_clase":"12","nota":null}
+{"id":"EL0000003483","descripcion":"Caja metálica para tablero eléctrico","codigo_clase":"12","nota":null}
+{"id":"EL0000003484","descripcion":"Placa de salida para teléfono","codigo_clase":"12","nota":null}
+{"id":"EL0000003485","descripcion":"Interruptor automático","codigo_clase":"12","nota":null}
+{"id":"EL0000003487","descripcion":"Inodoro one piece","codigo_clase":"10","nota":null}
+{"id":"EL0000003488","descripcion":"Comba","codigo_clase":"37","nota":null}
+{"id":"EL0000003489","descripcion":"Madera moena amarilla","codigo_clase":"43","nota":null}
+{"id":"EL0000003490","descripcion":"Madera misa","codigo_clase":"43","nota":null}
+{"id":"EL0000003495","descripcion":"Ladrillo de arcilla tipo tabique","codigo_clase":"17","nota":null}
+{"id":"EL0000003496","descripcion":"Bloque de concreto para muros","codigo_clase":"17","nota":null}
+{"id":"EL0000003497","descripcion":"Ladrillo refractario","codigo_clase":"17","nota":"3/"}
+{"id":"EL0000003498","descripcion":"Rejilla de concreto","codigo_clase":"17","nota":null}
+{"id":"EL0000003500","descripcion":"Remachadora","codigo_clase":"37","nota":null}
+{"id":"EL0000003501","descripcion":"Interruptor de 3 vías","codigo_clase":"12","nota":null}
+{"id":"EL0000003502","descripcion":"Lámpara de vapor de mercurio","codigo_clase":"11","nota":null}
+{"id":"EL0000003503","descripcion":"Luz de emergencia","codigo_clase":"11","nota":null}
+{"id":"EL0000003505","descripcion":"Soplador de aire","codigo_clase":"48","nota":null}
+{"id":"EL0000003507","descripcion":"Latón","codigo_clase":"61","nota":"3/"}
+{"id":"EL0000003508","descripcion":"Lavadero de fibra de vidrio","codigo_clase":"10","nota":null}
+{"id":"EL0000003510","descripcion":"Lavadero de loza","codigo_clase":"10","nota":null}
+{"id":"EL0000003511","descripcion":"Lavadero de fierro enlozado","codigo_clase":"10","nota":null}
+{"id":"EL0000003512","descripcion":"Lavadero de granito","codigo_clase":"10","nota":null}
+{"id":"EL0000003513","descripcion":"Lavadero de acero inoxidable","codigo_clase":"10","nota":"3/"}
+{"id":"EL0000003514","descripcion":"Llave sensor para lavatorio","codigo_clase":"10","nota":null}
+{"id":"EL0000003515","descripcion":"Lavatorio fierro aporcelanado","codigo_clase":"10","nota":null}
+{"id":"EL0000003516","descripcion":"Madera shihuahuaco marrón","codigo_clase":"43","nota":null}
+{"id":"EL0000003518","descripcion":"Disco de desbaste","codigo_clase":"37","nota":null}
+{"id":"EL0000003519","descripcion":"Arco de sierra","codigo_clase":"37","nota":null}
+{"id":"EL0000003521","descripcion":"Cizalla manual","codigo_clase":"37","nota":null}
+{"id":"EL0000003524","descripcion":"Loseta de concreto","codigo_clase":"40","nota":null}
+{"id":"EL0000003525","descripcion":"Loseta vinílica","codigo_clase":"16","nota":null}
+{"id":"EL0000003526","descripcion":"Aceite dieléctrico","codigo_clase":"01","nota":null}
+{"id":"EL0000003527","descripcion":"Aislador tipo pin","codigo_clase":"11","nota":null}
+{"id":"EL0000003528","descripcion":"Adoquín de concreto","codigo_clase":"17","nota":null}
+{"id":"EL0000003529","descripcion":"Madera casho moena (canela moena)","codigo_clase":"43","nota":null}
+{"id":"EL0000003530","descripcion":"Triplay lupuna","codigo_clase":"44","nota":null}
+{"id":"EL0000003533","descripcion":"Winche eléctrico","codigo_clase":"48","nota":null}
+{"id":"EL0000003534","descripcion":"Triplay de madera nacional","codigo_clase":"44","nota":null}
+{"id":"EL0000003535","descripcion":"Caja prefabricada","codigo_clase":"31","nota":null}
+{"id":"EL0000003537","descripcion":"Loseta podotáctil","codigo_clase":"40","nota":null}
+{"id":"EL0000003538","descripcion":"Martillo","codigo_clase":"37","nota":null}
+{"id":"EL0000003540","descripcion":"Martillo hincapilotes","codigo_clase":"49","nota":null}
+{"id":"EL0000003547","descripcion":"Inserto decorado cerámico","codigo_clase":"24","nota":null}
+{"id":"EL0000003548","descripcion":"Multiplicador sensible al detonador","codigo_clase":"27","nota":null}
+{"id":"EL0000003551","descripcion":"Alisadora de concreto","codigo_clase":"48","nota":null}
+{"id":"EL0000003553","descripcion":"Flexómetro","codigo_clase":"37","nota":null}
+{"id":"EL0000003555","descripcion":"Montacargas","codigo_clase":"49","nota":null}
+{"id":"EL0000003556","descripcion":"Mosaico","codigo_clase":"40","nota":null}
+{"id":"EL0000003557","descripcion":"Prisma reflectivo","codigo_clase":"48","nota":null}
+{"id":"EL0000003559","descripcion":"Vibrador de concreto","codigo_clase":"48","nota":null}
+{"id":"EL0000003560","descripcion":"Sierra eléctrica","codigo_clase":"48","nota":"3/"}
+{"id":"EL0000003562","descripcion":"Calentador de aceite","codigo_clase":"49","nota":null}
+{"id":"EL0000003563","descripcion":"Fachaleta","codigo_clase":"24","nota":null}
+{"id":"EL0000003564","descripcion":"Porcelánico","codigo_clase":"24","nota":null}
+{"id":"EL0000003566","descripcion":"Accesorio para tubería de cobre","codigo_clase":"68","nota":null}
+{"id":"EL0000003567","descripcion":"Asiendo de ducha de acero","codigo_clase":"10","nota":null}
+{"id":"EL0000003568","descripcion":"Niple de fierro galvanizado","codigo_clase":"65","nota":null}
+{"id":"EL0000003569","descripcion":"Niple de fierro negro","codigo_clase":"65","nota":null}
+{"id":"EL0000003570","descripcion":"Niple de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000003572","descripcion":"Emulsión explosiva","codigo_clase":"28","nota":null}
+{"id":"EL0000003573","descripcion":"Nivel óptico","codigo_clase":"48","nota":null}
+{"id":"EL0000003574","descripcion":"Nivel topográfico","codigo_clase":"48","nota":"3/"}
+{"id":"EL0000003575","descripcion":"Madera cumala","codigo_clase":"43","nota":null}
+{"id":"EL0000003579","descripcion":"Urinario de loza","codigo_clase":"10","nota":null}
+{"id":"EL0000003584","descripcion":"Lámpara de vapor de sodio","codigo_clase":"11","nota":null}
+{"id":"EL0000003587","descripcion":"Dispensador de papel","codigo_clase":"10","nota":null}
+{"id":"EL0000003588","descripcion":"Dispensador de jabón","codigo_clase":"10","nota":null}
+{"id":"EL0000003589","descripcion":"Cable de cobre desnudo","codigo_clase":"06","nota":null}
+{"id":"EL0000003590","descripcion":"Madera yacushapana","codigo_clase":"43","nota":null}
+{"id":"EL0000003591","descripcion":"Madera nacional en tiras para piso","codigo_clase":"41","nota":null}
+{"id":"EL0000003592","descripcion":"Parquet de madera","codigo_clase":"41","nota":null}
+{"id":"EL0000003593","descripcion":"Contrazócalo de madera","codigo_clase":"41","nota":"3/"}
+{"id":"EL0000003594","descripcion":"Rodón de madera","codigo_clase":"41","nota":null}
+{"id":"EL0000003595","descripcion":"Madera machihembrada","codigo_clase":"41","nota":null}
+{"id":"EL0000003596","descripcion":"Machihembrado de madera","codigo_clase":"41","nota":null}
+{"id":"EL0000003597","descripcion":"Contrapaso de madera","codigo_clase":"41","nota":"3/"}
+{"id":"EL0000003600","descripcion":"Platina de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000003601","descripcion":"Madera bolaina blanca","codigo_clase":"43","nota":null}
+{"id":"EL0000003602","descripcion":"Tarugo de madera","codigo_clase":"43","nota":null}
+{"id":"EL0000003603","descripcion":"Palomilla simple","codigo_clase":"62","nota":null}
+{"id":"EL0000003604","descripcion":"Pastoral para poste de fierro","codigo_clase":"63","nota":null}
+{"id":"EL0000003605","descripcion":"Pavimentación de asfalto sobre neumático","codigo_clase":"49","nota":null}
+{"id":"EL0000003606","descripcion":"Pavimentación de asfalto sobre oruga","codigo_clase":"49","nota":null}
+{"id":"EL0000003608","descripcion":"Pegamento asfaltico","codigo_clase":"13","nota":null}
+{"id":"EL0000003612","descripcion":"Mayólica","codigo_clase":"24","nota":null}
+{"id":"EL0000003613","descripcion":"Perfil de acero pesado","codigo_clase":"51","nota":"3/"}
+{"id":"EL0000003615","descripcion":"Tuerca hexagonal","codigo_clase":"02","nota":null}
+{"id":"EL0000003616","descripcion":"Bisagra roller","codigo_clase":"26","nota":null}
+{"id":"EL0000003617","descripcion":"Pico","codigo_clase":"37","nota":null}
+{"id":"EL0000003618","descripcion":"Waype","codigo_clase":"37","nota":null}
+{"id":"EL0000003621","descripcion":"Piedra grande de rio","codigo_clase":"05","nota":null}
+{"id":"EL0000003622","descripcion":"Piedra mediana de cantera o de rio","codigo_clase":"05","nota":null}
+{"id":"EL0000003623","descripcion":"Madera pino tadea","codigo_clase":"42","nota":null}
+{"id":"EL0000003629","descripcion":"Taco cerámico","codigo_clase":"24","nota":null}
+{"id":"EL0000003630","descripcion":"Espátula","codigo_clase":"37","nota":null}
+{"id":"EL0000003631","descripcion":"Cautín eléctrico","codigo_clase":"48","nota":null}
+{"id":"EL0000003633","descripcion":"Selector manual","codigo_clase":"12","nota":null}
+{"id":"EL0000003634","descripcion":"Placa de bakelita SAL eléctrica","codigo_clase":"12","nota":null}
+{"id":"EL0000003635","descripcion":"Terminal socket","codigo_clase":"12","nota":null}
+{"id":"EL0000003636","descripcion":"Timbre puerta","codigo_clase":"12","nota":null}
+{"id":"EL0000003637","descripcion":"Perfil de acero inoxidable","codigo_clase":"30","nota":null}
+{"id":"EL0000003641","descripcion":"Cordón de respaldo","codigo_clase":"60","nota":null}
+{"id":"EL0000003644","descripcion":"Apisonadora","codigo_clase":"48","nota":null}
+{"id":"EL0000003645","descripcion":"Soldadora monofásica","codigo_clase":"48","nota":null}
+{"id":"EL0000003646","descripcion":"Water stop de cobre","codigo_clase":"06","nota":null}
+{"id":"EL0000003647","descripcion":"Estera","codigo_clase":"37","nota":"3/"}
+{"id":"EL0000003652","descripcion":"Lana de roca","codigo_clase":"60","nota":null}
+{"id":"EL0000003653","descripcion":"Dinamita gelatina","codigo_clase":"28","nota":null}
+{"id":"EL0000003655","descripcion":"Seccionador portafusible","codigo_clase":"11","nota":null}
+{"id":"EL0000003656","descripcion":"Aislador eléctrico de pin","codigo_clase":"11","nota":null}
+{"id":"EL0000003657","descripcion":"Poste de acero","codigo_clase":"65","nota":"3/"}
+{"id":"EL0000003658","descripcion":"Poste de madera importada","codigo_clase":"42","nota":null}
+{"id":"EL0000003659","descripcion":"Madera huayruro","codigo_clase":"43","nota":null}
+{"id":"EL0000003661","descripcion":"Cable N2XOH","codigo_clase":"19","nota":null}
+{"id":"EL0000003662","descripcion":"Disco de corte","codigo_clase":"37","nota":null}
+{"id":"EL0000003663","descripcion":"Buje CPVC","codigo_clase":"72","nota":null}
+{"id":"EL0000003664","descripcion":"Rastillo","codigo_clase":"37","nota":null}
+{"id":"EL0000003665","descripcion":"Aislador polimérico","codigo_clase":"11","nota":null}
+{"id":"EL0000003666","descripcion":"Aislador eléctrico","codigo_clase":"11","nota":null}
+{"id":"EL0000003667","descripcion":"Abrazadera de hierro","codigo_clase":"71","nota":null}
+{"id":"EL0000003668","descripcion":"Reducción galvanizada","codigo_clase":"65","nota":null}
+{"id":"EL0000003669","descripcion":"Unión universal de CPVC","codigo_clase":"72","nota":null}
+{"id":"EL0000003670","descripcion":"Reflector","codigo_clase":"11","nota":null}
+{"id":"EL0000003671","descripcion":"Soldadora trifásica","codigo_clase":"48","nota":null}
+{"id":"EL0000003683","descripcion":"Madera huimba","codigo_clase":"43","nota":null}
+{"id":"EL0000003686","descripcion":"Madera estoraque","codigo_clase":"43","nota":null}
+{"id":"EL0000003688","descripcion":"Tirador para puertas","codigo_clase":"26","nota":null}
+{"id":"EL0000003689","descripcion":"Cerrajería","codigo_clase":"26","nota":null}
+{"id":"EL0000003692","descripcion":"Emulsión bitumen","codigo_clase":"13","nota":null}
+{"id":"EL0000003703","descripcion":"Fresadora eléctrica","codigo_clase":"48","nota":null}
+{"id":"EL0000003705","descripcion":"Curva PVC SEL eléctrica","codigo_clase":"72","nota":null}
+{"id":"EL0000003706","descripcion":"Sombrero de ventilación de bronce","codigo_clase":"68","nota":null}
+{"id":"EL0000003709","descripcion":"Soporte de acero","codigo_clase":"02","nota":null}
+{"id":"EL0000003710","descripcion":"Reducción de cobre","codigo_clase":"68","nota":null}
+{"id":"EL0000003711","descripcion":"Viga de madera importada","codigo_clase":"42","nota":null}
+{"id":"EL0000003712","descripcion":"Madera eucalipto","codigo_clase":"43","nota":null}
+{"id":"EL0000003713","descripcion":"Toma telefónica","codigo_clase":"12","nota":null}
+{"id":"EL0000003715","descripcion":"Madera pino insigne","codigo_clase":"42","nota":null}
+{"id":"EL0000003716","descripcion":"Madera huacapu","codigo_clase":"43","nota":null}
+{"id":"EL0000003717","descripcion":"Tuerca flange","codigo_clase":"02","nota":null}
+{"id":"EL0000003719","descripcion":"Cilindro de concreto","codigo_clase":"31","nota":null}
+{"id":"EL0000003720","descripcion":"Sardinel prefabricado de concreto","codigo_clase":"31","nota":null}
+{"id":"EL0000003721","descripcion":"Tapa de fierro fundido","codigo_clase":"50","nota":null}
+{"id":"EL0000003722","descripcion":"Codo de acero","codigo_clase":"65","nota":null}
+{"id":"EL0000003723","descripcion":"Tablero eléctrico de resina","codigo_clase":"12","nota":null}
+{"id":"EL0000003724","descripcion":"Rejilla de aluminio para alumbrado","codigo_clase":"12","nota":null}
+{"id":"EL0000003726","descripcion":"Canal U de acero al carbono","codigo_clase":"51","nota":null}
+{"id":"EL0000003727","descripcion":"Marco de mampara de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000003729","descripcion":"Tapón de fierro galvanizado","codigo_clase":"65","nota":null}
+{"id":"EL0000003730","descripcion":"Junta de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000003731","descripcion":"Tapón de fierro fundido","codigo_clase":"71","nota":null}
+{"id":"EL0000003733","descripcion":"Madera utucuro","codigo_clase":"43","nota":null}
+{"id":"EL0000003734","descripcion":"Tee de fierro fundido","codigo_clase":"71","nota":null}
+{"id":"EL0000003735","descripcion":"Tee de fierro galvanizado","codigo_clase":"65","nota":null}
+{"id":"EL0000003736","descripcion":"Unión universal de PVC-U CR para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000003737","descripcion":"Confitillo de arcilla","codigo_clase":"17","nota":null}
+{"id":"EL0000003746","descripcion":"Tierra vegetal","codigo_clase":"04","nota":null}
+{"id":"EL0000003747","descripcion":"Desagüe tapón y cadena","codigo_clase":"10","nota":null}
+{"id":"EL0000003749","descripcion":"Desagüe push up","codigo_clase":"10","nota":null}
+{"id":"EL0000003750","descripcion":"Reactor para fluorescente","codigo_clase":"12","nota":null}
+{"id":"EL0000003751","descripcion":"Bisagra de acero","codigo_clase":"26","nota":null}
+{"id":"EL0000003756","descripcion":"Yee de hierro dúctil","codigo_clase":"71","nota":null}
+{"id":"EL0000003757","descripcion":"Canopla","codigo_clase":"10","nota":null}
+{"id":"EL0000003758","descripcion":"Caja de pase PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000003759","descripcion":"Prensa hidráulica","codigo_clase":"48","nota":null}
+{"id":"EL0000003763","descripcion":"Madera panguana","codigo_clase":"43","nota":null}
+{"id":"EL0000003765","descripcion":"Madera higuerilla","codigo_clase":"43","nota":null}
+{"id":"EL0000003767","descripcion":"Tuerca cuadrada","codigo_clase":"02","nota":null}
+{"id":"EL0000003768","descripcion":"Triplay para carpintería","codigo_clase":"44","nota":null}
+{"id":"EL0000003771","descripcion":"Placa metálica corrugada","codigo_clase":"09","nota":null}
+{"id":"EL0000003772","descripcion":"Accesorio de tubería de acero","codigo_clase":"65","nota":null}
+{"id":"EL0000003773","descripcion":"Unión universal de PVC-U SP para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000003777","descripcion":"Cerradura eléctrica","codigo_clase":"26","nota":null}
+{"id":"EL0000003779","descripcion":"Accesorio PVC SAP eléctrica","codigo_clase":"72","nota":null}
+{"id":"EL0000003780","descripcion":"Accesorio PVC sanitaria","codigo_clase":"72","nota":null}
+{"id":"EL0000003781","descripcion":"Tubería PVC-U SP para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000003782","descripcion":"Unión simple de fierro galvanizado","codigo_clase":"65","nota":null}
+{"id":"EL0000003783","descripcion":"Unión universal galvanizado","codigo_clase":"65","nota":null}
+{"id":"EL0000003784","descripcion":"Unión universal de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000003785","descripcion":"Porta papel","codigo_clase":"10","nota":null}
+{"id":"EL0000003790","descripcion":"Taza turca sanitaria","codigo_clase":"10","nota":null}
+{"id":"EL0000003791","descripcion":"Canguilón","codigo_clase":"48","nota":"3/"}
+{"id":"EL0000003796","descripcion":"Tirfor","codigo_clase":"48","nota":null}
+{"id":"EL0000003797","descripcion":"Voltímetro","codigo_clase":"48","nota":"3/"}
+{"id":"EL0000003801","descripcion":"Tornillo autoperforante","codigo_clase":"02","nota":null}
+{"id":"EL0000003802","descripcion":"Salida de ducha","codigo_clase":"10","nota":null}
+{"id":"EL0000003803","descripcion":"Taza sanitaria","codigo_clase":"10","nota":null}
+{"id":"EL0000003806","descripcion":"Yee fierro fundido desagüe","codigo_clase":"71","nota":null}
+{"id":"EL0000003807","descripcion":"Tubería PVC-U CR para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000003811","descripcion":"Sierra de banco eléctrico","codigo_clase":"48","nota":null}
+{"id":"EL0000003812","descripcion":"Zócalo de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000003813","descripcion":"Zócalo de madera","codigo_clase":"43","nota":null}
+{"id":"EL0000003814","descripcion":"Loseta asfáltica","codigo_clase":"16","nota":"3/"}
+{"id":"EL0000003815","descripcion":"Loseta de cemento","codigo_clase":"40","nota":null}
+{"id":"EL0000003818","descripcion":"Válvula para ingreso y descarga para tanques","codigo_clase":"10","nota":null}
+{"id":"EL0000003819","descripcion":"Poza de acero inoxidable","codigo_clase":"10","nota":null}
+{"id":"EL0000003820","descripcion":"Portacepillos","codigo_clase":"10","nota":null}
+{"id":"EL0000003821","descripcion":"Mezcladora para lavatorio","codigo_clase":"10","nota":null}
+{"id":"EL0000003822","descripcion":"Llave para lavatorio","codigo_clase":"10","nota":null}
+{"id":"EL0000003823","descripcion":"Llave para ducha","codigo_clase":"10","nota":null}
+{"id":"EL0000003824","descripcion":"Mezcladora para ducha","codigo_clase":"10","nota":null}
+{"id":"EL0000003825","descripcion":"Ducha para bidet","codigo_clase":"10","nota":null}
+{"id":"EL0000003826","descripcion":"Tina bañera","codigo_clase":"10","nota":null}
+{"id":"EL0000003827","descripcion":"Registro de bronce","codigo_clase":"10","nota":null}
+{"id":"EL0000003828","descripcion":"Ovalín","codigo_clase":"10","nota":null}
+{"id":"EL0000003829","descripcion":"Tapa sanitaria","codigo_clase":"10","nota":null}
+{"id":"EL0000003830","descripcion":"Lavatorio de loza","codigo_clase":"10","nota":null}
+{"id":"EL0000003831","descripcion":"Papelera","codigo_clase":"10","nota":null}
+{"id":"EL0000003832","descripcion":"Ducha","codigo_clase":"10","nota":null}
+{"id":"EL0000003833","descripcion":"Cascote de arcilla","codigo_clase":"17","nota":null}
+{"id":"EL0000003834","descripcion":"Ladrillo caravista","codigo_clase":"17","nota":null}
+{"id":"EL0000003835","descripcion":"Viga prefabricada de concreto","codigo_clase":"31","nota":null}
+{"id":"EL0000003838","descripcion":"Cemento hidráulico tipo V","codigo_clase":"21","nota":"2/"}
+{"id":"EL0000003839","descripcion":"Cemento hidráulico tipo MS","codigo_clase":"21","nota":null}
+{"id":"EL0000003840","descripcion":"Cemento hidráulico tipo IP(M)","codigo_clase":"21","nota":null}
+{"id":"EL0000003841","descripcion":"Cemento hidráulico tipo HE","codigo_clase":"21","nota":null}
+{"id":"EL0000003842","descripcion":"Cemento hidráulico tipo Ico","codigo_clase":"21","nota":null}
+{"id":"EL0000003843","descripcion":"Cemento hidráulico tipo HS (MH)","codigo_clase":"21","nota":null}
+{"id":"EL0000003844","descripcion":"Cemento hidráulico tipo HS","codigo_clase":"21","nota":null}
+{"id":"EL0000003845","descripcion":"Cemento hidráulico tipo GU","codigo_clase":"21","nota":null}
+{"id":"EL0000003846","descripcion":"Porcelanato","codigo_clase":"24","nota":null}
+{"id":"EL0000003848","descripcion":"Dinamita pulverulenta","codigo_clase":"28","nota":null}
+{"id":"EL0000003866","descripcion":"Tanque de polietileno","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000003871","descripcion":"Esquinero","codigo_clase":"10","nota":null}
+{"id":"EL0000003906","descripcion":"Canal de concreto","codigo_clase":"31","nota":null}
+{"id":"EL0000003907","descripcion":"Tapa de concreto para caja de agua","codigo_clase":"31","nota":null}
+{"id":"EL0000003908","descripcion":"Caja de registro de desagüe","codigo_clase":"31","nota":null}
+{"id":"EL0000003909","descripcion":"Tapa de fierro galvanizado","codigo_clase":"61","nota":"3/"}
+{"id":"EL0000003910","descripcion":"Marco y tapa de concreto","codigo_clase":"31","nota":null}
+{"id":"EL0000003911","descripcion":"Tapa de concreto para caja de desagüe","codigo_clase":"31","nota":null}
+{"id":"EL0000003912","descripcion":"Buzón eléctrico","codigo_clase":"31","nota":null}
+{"id":"EL0000003913","descripcion":"Buzón de concreto prefabricado","codigo_clase":"31","nota":null}
+{"id":"EL0000003916","descripcion":"Vigueta prefabricada de concreto","codigo_clase":"31","nota":null}
+{"id":"EL0000003917","descripcion":"Triplay copaiba","codigo_clase":"44","nota":null}
+{"id":"EL0000003918","descripcion":"Madera prensada nacional","codigo_clase":"44","nota":"2/"}
+{"id":"EL0000003919","descripcion":"Tripode topográfico","codigo_clase":"48","nota":null}
+{"id":"EL0000003920","descripcion":"Barra cuadrada de acero al carbono","codigo_clase":"51","nota":null}
+{"id":"EL0000003921","descripcion":"Cantonera de acero","codigo_clase":"51","nota":null}
+{"id":"EL0000003922","descripcion":"Viga de acero al carbono","codigo_clase":"51","nota":null}
+{"id":"EL0000003923","descripcion":"Angulo de acero al carbono","codigo_clase":"51","nota":null}
+{"id":"EL0000003924","descripcion":"Rejilla de acero negro","codigo_clase":"51","nota":null}
+{"id":"EL0000003925","descripcion":"Tee de acero al carbono","codigo_clase":"51","nota":null}
+{"id":"EL0000003926","descripcion":"Canal C de acero al carbono","codigo_clase":"51","nota":null}
+{"id":"EL0000003927","descripcion":"Platina de acero al carbono","codigo_clase":"51","nota":null}
+{"id":"EL0000003928","descripcion":"Correa de acero al carbono","codigo_clase":"51","nota":null}
+{"id":"EL0000003929","descripcion":"Tapajuntas de acero","codigo_clase":"51","nota":null}
+{"id":"EL0000003933","descripcion":"Tapajuntas de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000003934","descripcion":"Lístelo de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000003936","descripcion":"Ángulo de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000003940","descripcion":"Parasol de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000003941","descripcion":"Canal de aluminio","codigo_clase":"52","nota":null}
+{"id":"EL0000003952","descripcion":"Thinner","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000003959","descripcion":"Placa de fibrocemento","codigo_clase":"59","nota":null}
+{"id":"EL0000003967","descripcion":"Poliuretano expandido","codigo_clase":"60","nota":null}
+{"id":"EL0000003968","descripcion":"Sellador intumescente","codigo_clase":"60","nota":null}
+{"id":"EL0000003969","descripcion":"Sello elastomérico","codigo_clase":"60","nota":null}
+{"id":"EL0000003970","descripcion":"Lana de fibra de vidrio","codigo_clase":"60","nota":null}
+{"id":"EL0000003971","descripcion":"Caja galvanizada","codigo_clase":"61","nota":null}
+{"id":"EL0000003972","descripcion":"Ménsula de concreto","codigo_clase":"62","nota":null}
+{"id":"EL0000003973","descripcion":"Cruceta asimétrica de concreto","codigo_clase":"62","nota":null}
+{"id":"EL0000003974","descripcion":"Tubo redondo de acero galvanizado","codigo_clase":"65","nota":null}
+{"id":"EL0000003975","descripcion":"Tubo rectangular de acero negro","codigo_clase":"65","nota":null}
+{"id":"EL0000003976","descripcion":"Tubo redondo de acero negro","codigo_clase":"65","nota":null}
+{"id":"EL0000003977","descripcion":"Tubo redondo de acero electrosoldado","codigo_clase":"65","nota":null}
+{"id":"EL0000003978","descripcion":"Tubo rectangular de acero electrosoldado","codigo_clase":"65","nota":null}
+{"id":"EL0000003979","descripcion":"Pastoral de acero","codigo_clase":"65","nota":"3/"}
+{"id":"EL0000003980","descripcion":"Tubo rectangular de acero galvanizado","codigo_clase":"65","nota":null}
+{"id":"EL0000003981","descripcion":"Tubo cuadrado de acero negro","codigo_clase":"65","nota":null}
+{"id":"EL0000003982","descripcion":"Niple de acero","codigo_clase":"65","nota":null}
+{"id":"EL0000003983","descripcion":"Tubo cuadrado de acero electrosoldado","codigo_clase":"65","nota":null}
+{"id":"EL0000003985","descripcion":"Tubería de hierro dúctil","codigo_clase":"71","nota":null}
+{"id":"EL0000003986","descripcion":"Codo de hierro dúctil","codigo_clase":"71","nota":null}
+{"id":"EL0000003987","descripcion":"Reducción de hierro dúctil","codigo_clase":"71","nota":null}
+{"id":"EL0000003988","descripcion":"Tee de hierro dúctil","codigo_clase":"71","nota":null}
+{"id":"EL0000003989","descripcion":"Trampa de fierro fundido desagüe","codigo_clase":"71","nota":null}
+{"id":"EL0000003995","descripcion":"Microaspersor de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000003996","descripcion":"Water stop de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000003997","descripcion":"Desvió de PVC para desagüe","codigo_clase":"72","nota":null}
+{"id":"EL0000003998","descripcion":"Válvula esférica PVC CR para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000003999","descripcion":"Tee PVC-U SP para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000004000","descripcion":"Válvula esférica PVC SP para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000004001","descripcion":"Yee PVC sanitaria","codigo_clase":"72","nota":null}
+{"id":"EL0000004002","descripcion":"Alambre y cable LSOHX","codigo_clase":"07","nota":null}
+{"id":"EL0000004003","descripcion":"Tee PVC-U CR para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000004004","descripcion":"Tee PVC sanitaria","codigo_clase":"72","nota":null}
+{"id":"EL0000004005","descripcion":"Accesorio PVC-U SP para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000004006","descripcion":"Tubería de PVC para eléctrica","codigo_clase":"72","nota":null}
+{"id":"EL0000004007","descripcion":"Accesorio PVC telefónico","codigo_clase":"72","nota":null}
+{"id":"EL0000004008","descripcion":"Codo ventilación PVC desagüe","codigo_clase":"72","nota":null}
+{"id":"EL0000004009","descripcion":"Unión de PVC eléctrica","codigo_clase":"72","nota":null}
+{"id":"EL0000004010","descripcion":"Codo CPVC","codigo_clase":"72","nota":null}
+{"id":"EL0000004011","descripcion":"Aspersor de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000004012","descripcion":"Tee CPVC","codigo_clase":"72","nota":null}
+{"id":"EL0000004013","descripcion":"Reducción CPVC","codigo_clase":"72","nota":null}
+{"id":"EL0000004014","descripcion":"Desnatador","codigo_clase":"72","nota":null}
+{"id":"EL0000004015","descripcion":"Unión de PVC desagüe","codigo_clase":"72","nota":null}
+{"id":"EL0000004016","descripcion":"Conector PVC SEL eléctrica","codigo_clase":"72","nota":null}
+{"id":"EL0000004017","descripcion":"Abrazadera de polipropileno","codigo_clase":"72","nota":null}
+{"id":"EL0000004018","descripcion":"Conector PVC SAP eléctrica","codigo_clase":"72","nota":null}
+{"id":"EL0000004019","descripcion":"Cinta teflón","codigo_clase":"72","nota":null}
+{"id":"EL0000004020","descripcion":"Canaleta de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000004021","descripcion":"Canastilla de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000004022","descripcion":"Cantonera de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000004023","descripcion":"Sombrero de ventilación de PVC sanitaria","codigo_clase":"72","nota":null}
+{"id":"EL0000004024","descripcion":"Accesorio CPVC","codigo_clase":"72","nota":null}
+{"id":"EL0000004025","descripcion":"Válvula compuerta de latón","codigo_clase":"77","nota":null}
+{"id":"EL0000004026","descripcion":"Válvula siamesa de latón","codigo_clase":"77","nota":null}
+{"id":"EL0000004027","descripcion":"Canastilla de bronce","codigo_clase":"77","nota":null}
+{"id":"EL0000004028","descripcion":"Válvula siamesa de bronce","codigo_clase":"77","nota":null}
+{"id":"EL0000004029","descripcion":"Válvula reductora de presión en PVC","codigo_clase":"77","nota":null}
+{"id":"EL0000004030","descripcion":"Toma de fondo de latón","codigo_clase":"77","nota":null}
+{"id":"EL0000004031","descripcion":"Válvula compuerta de bronce","codigo_clase":"77","nota":null}
+{"id":"EL0000004032","descripcion":"Canastilla de latón","codigo_clase":"77","nota":null}
+{"id":"EL0000004033","descripcion":"Válvula flotadora","codigo_clase":"77","nota":null}
+{"id":"EL0000004034","descripcion":"Toma de fondo de bronce","codigo_clase":"77","nota":null}
+{"id":"EL0000004035","descripcion":"Válvula reductora de presión en hierro dúctil","codigo_clase":"77","nota":null}
+{"id":"EL0000004036","descripcion":"Válvula reductora de presión de latón","codigo_clase":"77","nota":null}
+{"id":"EL0000004037","descripcion":"Válvula reductora de presión de bronce","codigo_clase":"77","nota":null}
+{"id":"EL0000004038","descripcion":"Válvula de purga bronce","codigo_clase":"77","nota":null}
+{"id":"EL0000004039","descripcion":"Válvula check canastilla de latón","codigo_clase":"77","nota":null}
+{"id":"EL0000004041","descripcion":"Motoperforador","codigo_clase":"49","nota":null}
+{"id":"EL0000004043","descripcion":"Mototraílla","codigo_clase":"49","nota":null}
+{"id":"EL0000004045","descripcion":"Minicargador","codigo_clase":"49","nota":null}
+{"id":"EL0000004046","descripcion":"Zaranda vibratoria","codigo_clase":"49","nota":null}
+{"id":"EL0000004047","descripcion":"Recicladora en frio","codigo_clase":"49","nota":null}
+{"id":"EL0000004048","descripcion":"Fresadora","codigo_clase":"49","nota":null}
+{"id":"EL0000004049","descripcion":"Semi-trailer","codigo_clase":"49","nota":null}
+{"id":"EL0000004055","descripcion":"Perno de convergencia corrugado","codigo_clase":"03","nota":null}
+{"id":"EL0000004056","descripcion":"Elevador eléctrico","codigo_clase":"49","nota":null}
+{"id":"EL0000004057","descripcion":"Tubo conduit de acero galvanizado","codigo_clase":"65","nota":null}
+{"id":"EL0000004063","descripcion":"Gravilla","codigo_clase":"05","nota":null}
+{"id":"EL0000004065","descripcion":"Madera azúcar huayo","codigo_clase":"43","nota":null}
+{"id":"EL0000004069","descripcion":"Caja terminal de 10 ó 20 pares","codigo_clase":"12","nota":"3/"}
+{"id":"EL0000004070","descripcion":"Cemento portland","codigo_clase":"21","nota":null}
+{"id":"EL0000004072","descripcion":"Caja rectangular liviana eléctrica","codigo_clase":"12","nota":null}
+{"id":"EL0000004075","descripcion":"Madera capirona","codigo_clase":"43","nota":null}
+{"id":"EL0000004089","descripcion":"Válvula check canastilla de bronce","codigo_clase":"77","nota":null}
+{"id":"EL0000004090","descripcion":"Válvula esférica de latón","codigo_clase":"77","nota":null}
+{"id":"EL0000004091","descripcion":"Válvula check de latón","codigo_clase":"77","nota":null}
+{"id":"EL0000004092","descripcion":"Válvula esférica de bronce","codigo_clase":"77","nota":null}
+{"id":"EL0000004093","descripcion":"Válvula angular de bronce","codigo_clase":"77","nota":null}
+{"id":"EL0000004095","descripcion":"Abrazadera de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000004096","descripcion":"Tubo cuadrado de acero galvanizado","codigo_clase":"65","nota":null}
+{"id":"EL0000004099","descripcion":"Madera nacional tratada","codigo_clase":"43","nota":null}
+{"id":"EL0000004101","descripcion":"Madera terciada nacional","codigo_clase":"44","nota":null}
+{"id":"EL0000004105","descripcion":"Aceite lubricante","codigo_clase":"01","nota":null}
+{"id":"EL0000004106","descripcion":"Grasa base litio","codigo_clase":"01","nota":null}
+{"id":"EL0000004107","descripcion":"Grasa base calcio","codigo_clase":"01","nota":null}
+{"id":"EL0000004108","descripcion":"Aceite","codigo_clase":"01","nota":null}
+{"id":"EL0000004109","descripcion":"Aceite aislante","codigo_clase":"01","nota":null}
+{"id":"EL0000004110","descripcion":"Grasa lubricante","codigo_clase":"01","nota":null}
+{"id":"EL0000004111","descripcion":"Tirafón de acero","codigo_clase":"02","nota":null}
+{"id":"EL0000004112","descripcion":"Tuerca ciega","codigo_clase":"02","nota":null}
+{"id":"EL0000004113","descripcion":"Trefilado (acero de refuerzo)","codigo_clase":"02","nota":null}
+{"id":"EL0000004114","descripcion":"Grapa","codigo_clase":"02","nota":null}
+{"id":"EL0000004115","descripcion":"Tirafondo de acero","codigo_clase":"02","nota":null}
+{"id":"EL0000004116","descripcion":"Adaptador integral para barra helicoidal","codigo_clase":"02","nota":null}
+{"id":"EL0000004117","descripcion":"Templador","codigo_clase":"02","nota":null}
+{"id":"EL0000004118","descripcion":"Estrobo","codigo_clase":"02","nota":null}
+{"id":"EL0000004119","descripcion":"Pin de expansión","codigo_clase":"02","nota":null}
+{"id":"EL0000004120","descripcion":"Alambre de acero","codigo_clase":"02","nota":null}
+{"id":"EL0000004121","descripcion":"Perno maquinado","codigo_clase":"02","nota":null}
+{"id":"EL0000004122","descripcion":"Alambre galvanizado","codigo_clase":"02","nota":null}
+{"id":"EL0000004123","descripcion":"Perno hexagonal estructural","codigo_clase":"02","nota":null}
+{"id":"EL0000004124","descripcion":"Perno flange","codigo_clase":"02","nota":null}
+{"id":"EL0000004125","descripcion":"Perno de expansión","codigo_clase":"02","nota":null}
+{"id":"EL0000004126","descripcion":"Perno cabeza choque","codigo_clase":"02","nota":null}
+{"id":"EL0000004127","descripcion":"Alambre","codigo_clase":"02","nota":null}
+{"id":"EL0000004128","descripcion":"Polea de acero","codigo_clase":"02","nota":null}
+{"id":"EL0000004129","descripcion":"Remache","codigo_clase":"02","nota":null}
+{"id":"EL0000004130","descripcion":"Fibra de acero","codigo_clase":"02","nota":null}
+{"id":"EL0000004131","descripcion":"Anclaje de acero tipo J","codigo_clase":"02","nota":null}
+{"id":"EL0000004132","descripcion":"Alambre de púas zincado","codigo_clase":"02","nota":null}
+{"id":"EL0000004133","descripcion":"Anclaje de acero","codigo_clase":"02","nota":null}
+{"id":"EL0000004134","descripcion":"Alambrón para trefilado","codigo_clase":"02","nota":null}
+{"id":"EL0000004135","descripcion":"Espiga de acero","codigo_clase":"02","nota":null}
+{"id":"EL0000004136","descripcion":"Barra de acero liso","codigo_clase":"02","nota":null}
+{"id":"EL0000004137","descripcion":"Clavo de acero sin cabeza","codigo_clase":"02","nota":null}
+{"id":"EL0000004138","descripcion":"Clavo de acero para calamina","codigo_clase":"02","nota":null}
+{"id":"EL0000004139","descripcion":"Clavo de acero galvanizado","codigo_clase":"02","nota":null}
+{"id":"EL0000004140","descripcion":"Clavo de acero con cabeza","codigo_clase":"02","nota":null}
+{"id":"EL0000004141","descripcion":"Pasador tipo horquilla","codigo_clase":"02","nota":null}
+{"id":"EL0000004142","descripcion":"Abrazadera de acero","codigo_clase":"02","nota":null}
+{"id":"EL0000004143","descripcion":"Perno hexagonal inoxidable","codigo_clase":"02","nota":null}
+{"id":"EL0000004144","descripcion":"Perno hexagonal zincado","codigo_clase":"02","nota":null}
+{"id":"EL0000004145","descripcion":"Alambre negro recocido","codigo_clase":"02","nota":null}
+{"id":"EL0000004146","descripcion":"Cadena de acero","codigo_clase":"02","nota":null}
+{"id":"EL0000004147","descripcion":"Acero corrugado ASTM A496","codigo_clase":"03","nota":null}
+{"id":"EL0000004148","descripcion":"Barra helicoidal","codigo_clase":"03","nota":null}
+{"id":"EL0000004149","descripcion":"Dowel de acero corrugado","codigo_clase":"03","nota":null}
+{"id":"EL0000004150","descripcion":"Acero corrugado dimensionado","codigo_clase":"03","nota":null}
+{"id":"EL0000004151","descripcion":"Borne de cobre","codigo_clase":"06","nota":null}
+{"id":"EL0000004152","descripcion":"Cable de acero con recubrimiento de cobre","codigo_clase":"06","nota":null}
+{"id":"EL0000004153","descripcion":"Electrodo de cobre","codigo_clase":"06","nota":null}
+{"id":"EL0000004154","descripcion":"Conductor de cobre desnudo","codigo_clase":"06","nota":null}
+{"id":"EL0000004155","descripcion":"Conector de cobre","codigo_clase":"06","nota":null}
+{"id":"EL0000004156","descripcion":"Electrodo de acero recubierto de cobre","codigo_clase":"06","nota":null}
+{"id":"EL0000004157","descripcion":"Varilla de cobre","codigo_clase":"06","nota":null}
+{"id":"EL0000004158","descripcion":"Alambre y cable tipo TW","codigo_clase":"07","nota":null}
+{"id":"EL0000004159","descripcion":"Alambre y cable LSOH","codigo_clase":"07","nota":null}
+{"id":"EL0000004160","descripcion":"Alambre y cable THW","codigo_clase":"07","nota":null}
+{"id":"EL0000004161","descripcion":"Alambre y cable NHX","codigo_clase":"07","nota":null}
+{"id":"EL0000004162","descripcion":"Alambre y cable NH","codigo_clase":"07","nota":null}
+{"id":"EL0000004163","descripcion":"Alambre y cable CPI","codigo_clase":"08","nota":null}
+{"id":"EL0000004164","descripcion":"Alcantarilla TMC media caña","codigo_clase":"09","nota":null}
+{"id":"EL0000004165","descripcion":"Guardavía metálico","codigo_clase":"09","nota":null}
+{"id":"EL0000004166","descripcion":"Guardarraíl","codigo_clase":"09","nota":null}
+{"id":"EL0000004167","descripcion":"Alcantarilla TMC","codigo_clase":"09","nota":null}
+{"id":"EL0000004168","descripcion":"Alcantarilla TMC circular","codigo_clase":"09","nota":null}
+{"id":"EL0000004169","descripcion":"Esclusa metálica","codigo_clase":"09","nota":null}
+{"id":"EL0000004170","descripcion":"Papelera de loza","codigo_clase":"10","nota":null}
+{"id":"EL0000004171","descripcion":"Percha","codigo_clase":"10","nota":null}
+{"id":"EL0000004172","descripcion":"Lavatorio de fierro enlozado","codigo_clase":"10","nota":null}
+{"id":"EL0000004173","descripcion":"Fluxómetro mecánico para inodoro","codigo_clase":"10","nota":null}
+{"id":"EL0000004174","descripcion":"Mezcladora monocomando para lavatorio","codigo_clase":"10","nota":null}
+{"id":"EL0000004175","descripcion":"Rejilla de ventilación","codigo_clase":"10","nota":null}
+{"id":"EL0000004176","descripcion":"Registro cromado","codigo_clase":"10","nota":null}
+{"id":"EL0000004177","descripcion":"Toallero","codigo_clase":"10","nota":null}
+{"id":"EL0000004178","descripcion":"Luminaria para Lámpara de vapor de sodio","codigo_clase":"11","nota":null}
+{"id":"EL0000004179","descripcion":"Aislador de porcelana vidriada","codigo_clase":"11","nota":null}
+{"id":"EL0000004180","descripcion":"Arrancador para Lámpara de vapor de mercurio","codigo_clase":"11","nota":null}
+{"id":"EL0000004181","descripcion":"Caja portamedidor polimérico","codigo_clase":"12","nota":null}
+{"id":"EL0000004182","descripcion":"Luminaria de panel","codigo_clase":"12","nota":null}
+{"id":"EL0000004183","descripcion":"Interruptor conmutador","codigo_clase":"12","nota":null}
+{"id":"EL0000004184","descripcion":"Sirena LED","codigo_clase":"12","nota":null}
+{"id":"EL0000004185","descripcion":"Socket","codigo_clase":"12","nota":null}
+{"id":"EL0000004186","descripcion":"Socket de baquelita","codigo_clase":"12","nota":null}
+{"id":"EL0000004187","descripcion":"Interruptor diferencial","codigo_clase":"12","nota":null}
+{"id":"EL0000004188","descripcion":"Placa de aluminio","codigo_clase":"12","nota":null}
+{"id":"EL0000004189","descripcion":"Tapa ciega","codigo_clase":"12","nota":null}
+{"id":"EL0000004190","descripcion":"Interruptor unipolar","codigo_clase":"12","nota":null}
+{"id":"EL0000004191","descripcion":"Enchufe","codigo_clase":"12","nota":null}
+{"id":"EL0000004192","descripcion":"Interruptor termomagnético","codigo_clase":"12","nota":null}
+{"id":"EL0000004193","descripcion":"Placa ciega","codigo_clase":"12","nota":null}
+{"id":"EL0000004194","descripcion":"Artefacto LED","codigo_clase":"12","nota":null}
+{"id":"EL0000004195","descripcion":"Contactor","codigo_clase":"12","nota":null}
+{"id":"EL0000004196","descripcion":"Toma TV","codigo_clase":"12","nota":null}
+{"id":"EL0000004197","descripcion":"Socket porta arrancador","codigo_clase":"12","nota":null}
+{"id":"EL0000004198","descripcion":"Tablero eléctrico metálico","codigo_clase":"12","nota":null}
+{"id":"EL0000004199","descripcion":"Dimmer","codigo_clase":"12","nota":null}
+{"id":"EL0000004200","descripcion":"Imprimante asfaltico","codigo_clase":"13","nota":"3/"}
+{"id":"EL0000004201","descripcion":"Brea liquida","codigo_clase":"13","nota":null}
+{"id":"EL0000004202","descripcion":"Sello asfaltico","codigo_clase":"13","nota":null}
+{"id":"EL0000004203","descripcion":"Asfalto liquido","codigo_clase":"13","nota":null}
+{"id":"EL0000004204","descripcion":"Baldosa de yeso multiplaca","codigo_clase":"14","nota":null}
+{"id":"EL0000004205","descripcion":"Baldosa acústica de fibra mineral","codigo_clase":"14","nota":null}
+{"id":"EL0000004206","descripcion":"Zócalo de PVC","codigo_clase":"16","nota":null}
+{"id":"EL0000004207","descripcion":"Contrazócalo de vinílico","codigo_clase":"16","nota":null}
+{"id":"EL0000004208","descripcion":"Deck de PVC","codigo_clase":"16","nota":null}
+{"id":"EL0000004209","descripcion":"Contrazócalo de PVC","codigo_clase":"16","nota":null}
+{"id":"EL0000004210","descripcion":"Cable PECSAT","codigo_clase":"18","nota":null}
+{"id":"EL0000004211","descripcion":"Cable telefónico para formas con PVC","codigo_clase":"18","nota":"3/"}
+{"id":"EL0000004212","descripcion":"Cable mensajero de 6,000, 10,000 y 16,000 lb","codigo_clase":"18","nota":null}
+{"id":"EL0000004213","descripcion":"Cable XPT","codigo_clase":"18","nota":null}
+{"id":"EL0000004214","descripcion":"Fibra óptica","codigo_clase":"18","nota":null}
+{"id":"EL0000004215","descripcion":"Cable multiconductor para control y señalización","codigo_clase":"18","nota":null}
+{"id":"EL0000004216","descripcion":"Bandeja de fibra óptica","codigo_clase":"18","nota":null}
+{"id":"EL0000004217","descripcion":"Cable PEAT","codigo_clase":"18","nota":null}
+{"id":"EL0000004218","descripcion":"Cable de red","codigo_clase":"18","nota":null}
+{"id":"EL0000004219","descripcion":"Cable ethernet","codigo_clase":"18","nota":null}
+{"id":"EL0000004220","descripcion":"Cable PROFIBUS","codigo_clase":"18","nota":null}
+{"id":"EL0000004221","descripcion":"Cable SFTP","codigo_clase":"18","nota":null}
+{"id":"EL0000004222","descripcion":"Cable patch cord","codigo_clase":"18","nota":null}
+{"id":"EL0000004223","descripcion":"Cable para teléfono","codigo_clase":"18","nota":null}
+{"id":"EL0000004224","descripcion":"Cable para seguridad y alarma","codigo_clase":"18","nota":null}
+{"id":"EL0000004225","descripcion":"Cable para control y señalización","codigo_clase":"18","nota":null}
+{"id":"EL0000004226","descripcion":"Cable HDMI","codigo_clase":"18","nota":null}
+{"id":"EL0000004227","descripcion":"Patch panel","codigo_clase":"18","nota":null}
+{"id":"EL0000004228","descripcion":"Cable de fibra óptica","codigo_clase":"18","nota":null}
+{"id":"EL0000004229","descripcion":"Cable FPLR","codigo_clase":"18","nota":null}
+{"id":"EL0000004230","descripcion":"Cemento hidráulico","codigo_clase":"21","nota":null}
+{"id":"EL0000004231","descripcion":"Cemento blanco tipo I","codigo_clase":"21","nota":null}
+{"id":"EL0000004232","descripcion":"Cemento hidráulico tipo LH","codigo_clase":"21","nota":null}
+{"id":"EL0000004233","descripcion":"Filler mineral","codigo_clase":"21","nota":null}
+{"id":"EL0000004234","descripcion":"Cemento hidráulico tipo IP","codigo_clase":"21","nota":null}
+{"id":"EL0000004235","descripcion":"Cerradura tipo tranca","codigo_clase":"26","nota":null}
+{"id":"EL0000004236","descripcion":"Aldaba","codigo_clase":"26","nota":null}
+{"id":"EL0000004237","descripcion":"Bisagra vaivén","codigo_clase":"26","nota":"3/"}
+{"id":"EL0000004238","descripcion":"Bisagra de acero tipo capuchina","codigo_clase":"26","nota":null}
+{"id":"EL0000004239","descripcion":"Riel para sistema corredizo","codigo_clase":"26","nota":null}
+{"id":"EL0000004240","descripcion":"Barra antipánico","codigo_clase":"26","nota":null}
+{"id":"EL0000004241","descripcion":"Cerradura de embutir","codigo_clase":"26","nota":null}
+{"id":"EL0000004242","descripcion":"Cerradura de manija","codigo_clase":"26","nota":null}
+{"id":"EL0000004243","descripcion":"Cerradura de perilla","codigo_clase":"26","nota":null}
+{"id":"EL0000004244","descripcion":"Cerradura de sobreponer","codigo_clase":"26","nota":null}
+{"id":"EL0000004245","descripcion":"Cerradura digital","codigo_clase":"26","nota":null}
+{"id":"EL0000004246","descripcion":"Detonador no eléctrico","codigo_clase":"27","nota":null}
+{"id":"EL0000004247","descripcion":"Cordón de ignición","codigo_clase":"27","nota":null}
+{"id":"EL0000004248","descripcion":"Conector para cordón de ignición","codigo_clase":"27","nota":null}
+{"id":"EL0000004249","descripcion":"Dinamita semigelatina","codigo_clase":"28","nota":null}
+{"id":"EL0000004250","descripcion":"Hidrogel","codigo_clase":"28","nota":null}
+{"id":"EL0000004251","descripcion":"Barrera de concreto","codigo_clase":"31","nota":null}
+{"id":"EL0000004252","descripcion":"Tapa de concreto para buzón","codigo_clase":"31","nota":null}
+{"id":"EL0000004253","descripcion":"Gasohol","codigo_clase":"34","nota":null}
+{"id":"EL0000004254","descripcion":"Material para subbase","codigo_clase":"38","nota":null}
+{"id":"EL0000004255","descripcion":"Over","codigo_clase":"38","nota":null}
+{"id":"EL0000004256","descripcion":"Material para base","codigo_clase":"38","nota":null}
+{"id":"EL0000004257","descripcion":"Madera importada para encofrado y carpintería","codigo_clase":"42","nota":null}
+{"id":"EL0000004258","descripcion":"Madera pino importada","codigo_clase":"42","nota":null}
+{"id":"EL0000004259","descripcion":"Madera pino oregón","codigo_clase":"42","nota":null}
+{"id":"EL0000004260","descripcion":"Madera mashonaste","codigo_clase":"43","nota":null}
+{"id":"EL0000004261","descripcion":"Madera caoba","codigo_clase":"43","nota":null}
+{"id":"EL0000004262","descripcion":"Madera oje renaco","codigo_clase":"43","nota":null}
+{"id":"EL0000004263","descripcion":"Madera nogal","codigo_clase":"43","nota":null}
+{"id":"EL0000004264","descripcion":"Madera nacional de uso no estructural","codigo_clase":"43","nota":null}
+{"id":"EL0000004265","descripcion":"Madera pino nacional","codigo_clase":"43","nota":null}
+{"id":"EL0000004266","descripcion":"Madera diablo fuerte","codigo_clase":"43","nota":null}
+{"id":"EL0000004267","descripcion":"Madera aguanillo","codigo_clase":"43","nota":null}
+{"id":"EL0000004268","descripcion":"Madera aguano masha","codigo_clase":"43","nota":null}
+{"id":"EL0000004269","descripcion":"Madera moena rosada","codigo_clase":"43","nota":null}
+{"id":"EL0000004270","descripcion":"Madera paujilruro blanco","codigo_clase":"43","nota":null}
+{"id":"EL0000004271","descripcion":"Jamba de madera","codigo_clase":"43","nota":null}
+{"id":"EL0000004272","descripcion":"Madera pashaco","codigo_clase":"43","nota":null}
+{"id":"EL0000004273","descripcion":"Madera achihua","codigo_clase":"43","nota":null}
+{"id":"EL0000004274","descripcion":"Madera nacional de uso estructural","codigo_clase":"43","nota":null}
+{"id":"EL0000004275","descripcion":"Madera ana caspi","codigo_clase":"43","nota":null}
+{"id":"EL0000004276","descripcion":"Malla triple torsión de acero","codigo_clase":"46","nota":null}
+{"id":"EL0000004277","descripcion":"Malla tejida olímpica galvanizada","codigo_clase":"46","nota":null}
+{"id":"EL0000004278","descripcion":"Malla de acero tejida olímpica","codigo_clase":"46","nota":null}
+{"id":"EL0000004279","descripcion":"Malla talud de acero","codigo_clase":"46","nota":null}
+{"id":"EL0000004280","descripcion":"Malla expanded metal","codigo_clase":"46","nota":null}
+{"id":"EL0000004281","descripcion":"Malla gavión de acero","codigo_clase":"46","nota":null}
+{"id":"EL0000004282","descripcion":"Malla soldada galvanizada","codigo_clase":"46","nota":null}
+{"id":"EL0000004283","descripcion":"Malla electrosoldada","codigo_clase":"46","nota":null}
+{"id":"EL0000004284","descripcion":"Operario de alta especialización","codigo_clase":"47-1","nota":"1/"}
+{"id":"EL0000004285","descripcion":"Operario soldador homologado","codigo_clase":"47-1","nota":"1/"}
+{"id":"EL0000004286","descripcion":"Operador electromecánico","codigo_clase":"47-1","nota":"1/"}
+{"id":"EL0000004287","descripcion":"Operador de equipo mediano","codigo_clase":"47-1","nota":"1/"}
+{"id":"EL0000004288","descripcion":"Operario topógrafo","codigo_clase":"47-1","nota":"1/"}
+{"id":"EL0000004289","descripcion":"Operador de equipo pesado","codigo_clase":"47-1","nota":"1/"}
+{"id":"EL0000004290","descripcion":"Tronzadora","codigo_clase":"48","nota":null}
+{"id":"EL0000004291","descripcion":"Temple","codigo_clase":"55","nota":null}
+{"id":"EL0000004292","descripcion":"Temple fino","codigo_clase":"55","nota":null}
+{"id":"EL0000004293","descripcion":"Bobina de acero LAF","codigo_clase":"57","nota":null}
+{"id":"EL0000004294","descripcion":"Plancha de poliestireno","codigo_clase":"60","nota":null}
+{"id":"EL0000004295","descripcion":"Sellador elastomérico a base de poliuretano","codigo_clase":"60","nota":null}
+{"id":"EL0000004296","descripcion":"Lana mineral de roca","codigo_clase":"60","nota":null}
+{"id":"EL0000004297","descripcion":"Banda elástica elastomérica","codigo_clase":"60","nota":null}
+{"id":"EL0000004298","descripcion":"Espuma expansiva","codigo_clase":"60","nota":null}
+{"id":"EL0000004299","descripcion":"Aislamiento elastómero","codigo_clase":"60","nota":null}
+{"id":"EL0000004300","descripcion":"Panel cortafuego","codigo_clase":"60","nota":null}
+{"id":"EL0000004301","descripcion":"Panel de lana mineral de roca","codigo_clase":"60","nota":null}
+{"id":"EL0000004302","descripcion":"Panel de poliestireno","codigo_clase":"60","nota":null}
+{"id":"EL0000004303","descripcion":"Panel de lana de fibra de vidrio","codigo_clase":"60","nota":null}
+{"id":"EL0000004304","descripcion":"Panel termoaislante","codigo_clase":"60","nota":null}
+{"id":"EL0000004305","descripcion":"Ladrillo de poliestireno expandido","codigo_clase":"60","nota":null}
+{"id":"EL0000004306","descripcion":"Bloque de poliestireno expandido","codigo_clase":"60","nota":null}
+{"id":"EL0000004307","descripcion":"Plancha de tecnopor","codigo_clase":"60","nota":null}
+{"id":"EL0000004308","descripcion":"Poliestireno expandido","codigo_clase":"60","nota":null}
+{"id":"EL0000004309","descripcion":"Panel de poliuretano","codigo_clase":"60","nota":null}
+{"id":"EL0000004310","descripcion":"Caja de pase galvanizada","codigo_clase":"61","nota":null}
+{"id":"EL0000004311","descripcion":"Platina de acero galvanizado","codigo_clase":"61","nota":null}
+{"id":"EL0000004312","descripcion":"Junta water stop fierro galvanizado","codigo_clase":"61","nota":null}
+{"id":"EL0000004313","descripcion":"Ducto de plancha de fierro galvanizado","codigo_clase":"61","nota":null}
+{"id":"EL0000004314","descripcion":"Placa colaborante de acero galvanizado","codigo_clase":"61","nota":null}
+{"id":"EL0000004315","descripcion":"Canaleta galvanizada","codigo_clase":"61","nota":null}
+{"id":"EL0000004316","descripcion":"Ducto de plancha de acero galvanizado","codigo_clase":"61","nota":null}
+{"id":"EL0000004317","descripcion":"Accesorio PVC-U para drenaje y alcantarillado","codigo_clase":"66","nota":null}
+{"id":"EL0000004318","descripcion":"Válvula bridada de PVC","codigo_clase":"66","nota":null}
+{"id":"EL0000004319","descripcion":"Empaquetadura de jebe","codigo_clase":"66","nota":null}
+{"id":"EL0000004320","descripcion":"Anillo de jebe presión para agua potable","codigo_clase":"66","nota":null}
+{"id":"EL0000004321","descripcion":"Accesorio PVC-O para redes de agua","codigo_clase":"66","nota":null}
+{"id":"EL0000004322","descripcion":"Unión de PVC-U para redes de agua","codigo_clase":"66","nota":null}
+{"id":"EL0000004323","descripcion":"Codo PVC-U para drenaje y alcantarillado","codigo_clase":"66","nota":null}
+{"id":"EL0000004324","descripcion":"Accesorio PVC-U para redes de agua","codigo_clase":"66","nota":null}
+{"id":"EL0000004325","descripcion":"Tapón PVC-U para redes de agua","codigo_clase":"66","nota":null}
+{"id":"EL0000004326","descripcion":"Lubricante para tubería","codigo_clase":"66","nota":null}
+{"id":"EL0000004327","descripcion":"Silla PVC-U para drenaje y alcantarillado","codigo_clase":"66","nota":null}
+{"id":"EL0000004328","descripcion":"Tubería de PVC para red de alcantarillado","codigo_clase":"66","nota":null}
+{"id":"EL0000004329","descripcion":"Tee PVC-U para redes de agua","codigo_clase":"66","nota":null}
+{"id":"EL0000004330","descripcion":"Curva PVC-U para redes de agua","codigo_clase":"66","nota":null}
+{"id":"EL0000004331","descripcion":"Tubería de PVC para red de agua potable","codigo_clase":"66","nota":null}
+{"id":"EL0000004332","descripcion":"Tubería PVC-U para drenaje y alcantarillado","codigo_clase":"66","nota":null}
+{"id":"EL0000004333","descripcion":"Tubería PVC-U a presión para redes de agua","codigo_clase":"66","nota":null}
+{"id":"EL0000004334","descripcion":"Tubería PVC-O a presión para redes de agua","codigo_clase":"66","nota":null}
+{"id":"EL0000004335","descripcion":"Anillo de jebe presión para alcantarillado","codigo_clase":"66","nota":null}
+{"id":"EL0000004336","descripcion":"Niple de cobre","codigo_clase":"68","nota":null}
+{"id":"EL0000004337","descripcion":"Tubería de cobre desnudo","codigo_clase":"68","nota":null}
+{"id":"EL0000004338","descripcion":"Tubería de cobre felxible","codigo_clase":"68","nota":null}
+{"id":"EL0000004339","descripcion":"Tubería de cobre rígido","codigo_clase":"68","nota":null}
+{"id":"EL0000004340","descripcion":"Tee de cobre","codigo_clase":"68","nota":null}
+{"id":"EL0000004341","descripcion":"Unión de cobre","codigo_clase":"68","nota":null}
+{"id":"EL0000004342","descripcion":"Sombrero de ventilación de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000004343","descripcion":"Tubería PVC SAP eléctrica","codigo_clase":"72","nota":null}
+{"id":"EL0000004344","descripcion":"Tubería PVC sanitaria pesada","codigo_clase":"72","nota":null}
+{"id":"EL0000004345","descripcion":"Tubería PVC sanitaria liviana","codigo_clase":"72","nota":null}
+{"id":"EL0000004346","descripcion":"Accesorio PVC-U CR para agua fría","codigo_clase":"72","nota":null}
+{"id":"EL0000004347","descripcion":"Válvula de aire de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000004348","descripcion":"Toma barredera de PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000004349","descripcion":"Válvula de purga PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000004350","descripcion":"Conexión PVC","codigo_clase":"72","nota":null}
+{"id":"EL0000004351","descripcion":"Sifón PVC sanitaria","codigo_clase":"72","nota":null}
+{"id":"EL0000004352","descripcion":"Grifo jardín de bronce","codigo_clase":"77","nota":null}
+{"id":"EL0000004353","descripcion":"Válvula check de bronce","codigo_clase":"77","nota":null}
+{"id":"EL0000004354","descripcion":"Válvula globo de bronce","codigo_clase":"77","nota":null}
+{"id":"EL0000004355","descripcion":"Válvula angular de latón","codigo_clase":"77","nota":null}
+{"id":"EL0000004356","descripcion":"Válvula globo de latón","codigo_clase":"77","nota":null}
+{"id":"EL0000004357","descripcion":"Grifo jardín de latón","codigo_clase":"77","nota":null}
+{"id":"EL0000004358","descripcion":"Válvula de hierro fundido importado","codigo_clase":"78","nota":"3/"}
+{"id":"EL0000004359","descripcion":"Válvula esférica de hierro fundido","codigo_clase":"78","nota":null}
+{"id":"EL0000004360","descripcion":"Válvula de globo de hierro fundido","codigo_clase":"78","nota":null}
+{"id":"EL0000004361","descripcion":"Válvula check de hierro fundido","codigo_clase":"78","nota":null}
+{"id":"EL0000004362","descripcion":"Válvula compuerta de acero","codigo_clase":"78","nota":null}
+{"id":"EL0000004363","descripcion":"Válvula check de hierro dúctil","codigo_clase":"78","nota":null}
+{"id":"EL0000004364","descripcion":"Válvula check de acero","codigo_clase":"78","nota":null}
+{"id":"EL0000004365","descripcion":"Válvula de globo de acero","codigo_clase":"78","nota":null}
+{"id":"EL0000004366","descripcion":"Válvula esférica de acero","codigo_clase":"78","nota":null}
+{"id":"EL0000004367","descripcion":"Válvula de globo de hierro dúctil","codigo_clase":"78","nota":null}
+{"id":"EL0000004368","descripcion":"Válvula cuchilla de hierro dúctil","codigo_clase":"78","nota":null}
+{"id":"EL0000004369","descripcion":"Válvula compuerta de hierro fundido","codigo_clase":"78","nota":null}
+{"id":"EL0000004370","descripcion":"Válvula compuerta de hierro dúctil","codigo_clase":"78","nota":null}
+{"id":"EL0000004371","descripcion":"Válvula cuchilla de acero","codigo_clase":"78","nota":null}
+{"id":"EL0000004372","descripcion":"Hidrante contraincendios","codigo_clase":"78","nota":null}
+{"id":"EL0000004373","descripcion":"Válvula mariposa de hierro fundido","codigo_clase":"78","nota":null}
+{"id":"EL0000004374","descripcion":"Manifold de acero","codigo_clase":"78","nota":null}
+{"id":"EL0000004375","descripcion":"Medidor de caudal de hierro fundido","codigo_clase":"78","nota":null}
+{"id":"EL0000004376","descripcion":"Válvula mariposa de acero","codigo_clase":"78","nota":null}
+{"id":"EL0000004377","descripcion":"Medidor de caudal de hierro dúctil","codigo_clase":"78","nota":null}
+{"id":"EL0000004378","descripcion":"Medidor de caudal de acero","codigo_clase":"78","nota":null}
+{"id":"EL0000004379","descripcion":"Válvula mariposa de hierro dúctil","codigo_clase":"78","nota":null}
+{"id":"EL0000004380","descripcion":"Válvula cuchilla de hierro fundido","codigo_clase":"78","nota":null}
+{"id":"EL0000004381","descripcion":"Válvula de aire de hierro dúctil","codigo_clase":"78","nota":null}
+{"id":"EL0000004382","descripcion":"Vidrio templado gris","codigo_clase":"79","nota":null}
+{"id":"EL0000004383","descripcion":"Vidrio nacional","codigo_clase":"79","nota":null}
+{"id":"EL0000004384","descripcion":"Vidrio templado incoloro","codigo_clase":"79","nota":null}
+{"id":"EL0000004385","descripcion":"Vidrio templado ultra claro","codigo_clase":"79","nota":null}
+{"id":"EL0000004386","descripcion":"Vidrio templado reflectante","codigo_clase":"79","nota":null}
+{"id":"EL0000004387","descripcion":"Vidrio laminado importado","codigo_clase":"79","nota":"3/"}
+{"id":"EL0000004388","descripcion":"Vidrio crudo gris","codigo_clase":"79","nota":null}
+{"id":"EL0000004389","descripcion":"Vidrio catedral","codigo_clase":"79","nota":null}
+{"id":"EL0000004390","descripcion":"Vidrio crudo incoloro","codigo_clase":"79","nota":null}
+{"id":"EL0000004391","descripcion":"Vidrio templado bronce","codigo_clase":"79","nota":null}
+{"id":"EL0000004392","descripcion":"Vidrio crudo bronce","codigo_clase":"79","nota":null}
+{"id":"EL0000004393","descripcion":"Vidrio blindado","codigo_clase":"79","nota":null}
+{"id":"EL0000004394","descripcion":"Baldosa de vidrio","codigo_clase":"79","nota":null}
+{"id":"EL0000004395","descripcion":"Vidrio simple","codigo_clase":"79","nota":null}
+{"id":"EL0000004396","descripcion":"Vidrio laminado nacional","codigo_clase":"79","nota":null}
+{"id":"EL0000004397","descripcion":"Vidrio insulado","codigo_clase":"79","nota":null}
+{"id":"EL0000004398","descripcion":"Mortero en bolsa","codigo_clase":"80","nota":null}
+{"id":"EL0000004399","descripcion":"Concreto premezclado en planta","codigo_clase":"80","nota":null}
+{"id":"EL0000004400","descripcion":"Tarrajeo en bolsa","codigo_clase":"80","nota":null}
+{"id":"EL0000004401","descripcion":"Microcemento","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004402","descripcion":"Desmoldador para encofrado","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004403","descripcion":"Microfibra sintética","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004404","descripcion":"Thor gel","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004405","descripcion":"Endurecedor de pisos","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004406","descripcion":"Removedor de óxido","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004407","descripcion":"Pegamento blanco flexible para cerámicos","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004408","descripcion":"Aditivo superplastificante","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004409","descripcion":"Dosis química ecogel","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004410","descripcion":"Microesferas de vidrio","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004411","descripcion":"Pegamento epóxico","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004412","descripcion":"Fragua para rellenar juntas","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004413","descripcion":"Pegamento gris para cerámicos","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004414","descripcion":"Gel Conductivo","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004415","descripcion":"Recubrimiento cementicio impermeabilizante","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004416","descripcion":"Mortero epóxico","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004417","descripcion":"Aditivo plastificante","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004418","descripcion":"Mortero reforzado con fibras","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004419","descripcion":"Aditivo curador","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004420","descripcion":"Aditivo impermeabilizante","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004421","descripcion":"Aditivo incorporador de aire","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004422","descripcion":"Grouting","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004423","descripcion":"Reductor de agua","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004424","descripcion":"Adhesivo epóxico multipropósito","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004425","descripcion":"Aditivo retardante","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004426","descripcion":"Aditivo inhibidor de corrosión","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004427","descripcion":"Puente de adherencia epóxico","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004428","descripcion":"Aditivo acelerante de fragua","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004429","descripcion":"Pegamento para adherir block","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004430","descripcion":"Aditivo para concreto","codigo_clase":"81","nota":"1/,3/"}
+{"id":"EL0000004431","descripcion":"Cemento conductivo","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004432","descripcion":"Cemento con aditivo","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004433","descripcion":"Aditivo endurecedor de superficies","codigo_clase":"81","nota":"1/"}
+{"id":"EL0000004434","descripcion":"Alambre y cable CAI de aluminio","codigo_clase":"82","nota":"1/"}
+{"id":"EL0000004435","descripcion":"Conductor de aleación de aluminio","codigo_clase":"82","nota":"1/"}
+{"id":"EL0000004436","descripcion":"Alambre y cable CAAI de aluminio","codigo_clase":"82","nota":"1/"}
+{"id":"EL0000004437","descripcion":"Conductor autoportante de aluminio","codigo_clase":"82","nota":"1/"}
+{"id":"EL0000004438","descripcion":"Cable de guarda","codigo_clase":"82","nota":"1/"}
+{"id":"EL0000004439","descripcion":"Conductor desnudo de aluminio","codigo_clase":"82","nota":"1/"}
+{"id":"EL0000004440","descripcion":"Alambre de aluminio","codigo_clase":"82","nota":"1/"}
+{"id":"EL0000004441","descripcion":"Conductor de aluminio","codigo_clase":"82","nota":"1/"}
+{"id":"EL0000004442","descripcion":"Overol","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004443","descripcion":"Respirador","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004444","descripcion":"Arnés de seguridad","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004445","descripcion":"Mascarilla","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004446","descripcion":"Guantes","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004447","descripcion":"Lámina reflectante","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004448","descripcion":"Collarín cervical","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004449","descripcion":"Barrera de tráfico","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004450","descripcion":"Señal de seguridad","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004451","descripcion":"Malla de seguridad","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004452","descripcion":"Baliza","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004453","descripcion":"Faja lumbar","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004454","descripcion":"Señal de transito","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004455","descripcion":"Casco de seguridad","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004456","descripcion":"Cono de seguridad","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004457","descripcion":"Cinta plástica de seguridad","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004458","descripcion":"Malla plástica","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004459","descripcion":"Cinta antideslizante","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004460","descripcion":"Protector auditivo","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004461","descripcion":"Cachaco de concreto","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004462","descripcion":"Captafaro","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004463","descripcion":"Triangulo de seguridad","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004464","descripcion":"Botiquín","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004465","descripcion":"Botín de seguridad","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004466","descripcion":"Chaleco de seguridad","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004467","descripcion":"Cachaco de PVC","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004468","descripcion":"Zapatos de seguridad","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004469","descripcion":"Tacha reflectiva","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004470","descripcion":"Tapón auditivo","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004471","descripcion":"Equipo de protección personal","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004472","descripcion":"Equipo de protección colectiva","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004473","descripcion":"Línea de vida","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004474","descripcion":"Lentes de seguridad","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004475","descripcion":"Máscara protectora","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004476","descripcion":"Malla raschel","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004477","descripcion":"Camilla de seguridad","codigo_clase":"83","nota":"1/"}
+{"id":"EL0000004478","descripcion":"Tablero MDP","codigo_clase":"84","nota":"1/"}
+{"id":"EL0000004479","descripcion":"Tablero OSB","codigo_clase":"84","nota":"1/"}
+{"id":"EL0000004480","descripcion":"Deck HDF","codigo_clase":"84","nota":"1/"}
+{"id":"EL0000004481","descripcion":"Piso laminado HDF","codigo_clase":"84","nota":"1/"}
+{"id":"EL0000004482","descripcion":"Tablero MDF","codigo_clase":"84","nota":"1/"}
+{"id":"EL0000004483","descripcion":"Tablero aglomerado","codigo_clase":"84","nota":"1/"}
+{"id":"EL0000004484","descripcion":"Triplay fenólico importado","codigo_clase":"84","nota":"1/"}
+{"id":"EL0000004485","descripcion":"Tablero de melamina","codigo_clase":"84","nota":"1/"}
+{"id":"EL0000004486","descripcion":"Relleno Sauerland","codigo_clase":"84","nota":"1/"}
+{"id":"EL0000004487","descripcion":"Relleno Honeycomb","codigo_clase":"84","nota":"1/"}
+{"id":"EL0000004488","descripcion":"Contrazócalo HDF","codigo_clase":"84","nota":"1/"}
+{"id":"EL0000004489","descripcion":"Angulo perimetral","codigo_clase":"85","nota":"1/"}
+{"id":"EL0000004490","descripcion":"Riel de acero galvanizado","codigo_clase":"85","nota":"1/"}
+{"id":"EL0000004491","descripcion":"Perfil de acero galvanizado","codigo_clase":"85","nota":"1/"}
+{"id":"EL0000004492","descripcion":"Perfil T principal","codigo_clase":"85","nota":"1/"}
+{"id":"EL0000004493","descripcion":"Perfil omega de acero galvanizado","codigo_clase":"85","nota":"1/"}
+{"id":"EL0000004494","descripcion":"Esquinero de acero galvanizado","codigo_clase":"85","nota":"1/"}
+{"id":"EL0000004495","descripcion":"Perfil T secundario","codigo_clase":"85","nota":"1/"}
+{"id":"EL0000004496","descripcion":"Perfil T terciario","codigo_clase":"85","nota":"1/"}
+{"id":"EL0000004497","descripcion":"Omega de acero galvanizado","codigo_clase":"85","nota":"1/"}
+{"id":"EL0000004498","descripcion":"Parante de acero galvanizado","codigo_clase":"85","nota":"1/"}
+{"id":"EL0000004499","descripcion":"Bandeja portacable de acero galvanizado","codigo_clase":"85","nota":"1/"}
+{"id":"EL0000004500","descripcion":"Perfil ranurado de acero galvanizado","codigo_clase":"85","nota":"1/"}
+{"id":"EL0000004501","descripcion":"Catalizador epóxico","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004502","descripcion":"Barniz marino","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004503","descripcion":"Barniz poliuretano","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004504","descripcion":"Formador de empaquetadura","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004505","descripcion":"Pegamento para plástico PVC","codigo_clase":"86","nota":"1/,3/"}
+{"id":"EL0000004506","descripcion":"Disolvente de pintura","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004507","descripcion":"Laca selladora","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004508","descripcion":"Pegamento para tubería de PVC eléctrica","codigo_clase":"86","nota":"1/,3/"}
+{"id":"EL0000004509","descripcion":"Pegamento para PVC","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004510","descripcion":"Disolvente epóxico","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004511","descripcion":"Solvente xilol","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004512","descripcion":"Laca desmoldeante","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004513","descripcion":"Pintura de resina epóxica","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004514","descripcion":"Pintura base epóxica","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004515","descripcion":"Thinner acrílico","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004516","descripcion":"Pintura zincromato","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004517","descripcion":"Pintura super gloss","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004518","descripcion":"Pintura bituminosa","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004519","descripcion":"Pintura poliuretano","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004520","descripcion":"Pintura epóxica","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004521","descripcion":"Pintura para trafico","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004522","descripcion":"Pintura oleo mate sintético","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004523","descripcion":"Pintura oleo","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004524","descripcion":"Preservante de madera","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004525","descripcion":"Pintura esmalte super gloss","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004526","descripcion":"Tinta serigráfica","codigo_clase":"86","nota":"1/"}
+{"id":"EL0000004527","descripcion":"Plancha de aluzinc","codigo_clase":"87","nota":"1/"}
+{"id":"EL0000004528","descripcion":"Plancha de aluzinc para techos","codigo_clase":"87","nota":"1/"}
+{"id":"EL0000004529","descripcion":"Plancha curva de aluzinC","codigo_clase":"87","nota":"1/"}
+{"id":"EL0000004530","descripcion":"Tapa termoplástica","codigo_clase":"88","nota":"1/"}
+{"id":"EL0000004531","descripcion":"Plancha termoacústica de PVC","codigo_clase":"88","nota":"1/"}
+{"id":"EL0000004532","descripcion":"Plancha de fibra de vidrio","codigo_clase":"88","nota":"1/"}
+{"id":"EL0000004533","descripcion":"Plancha de policarbonato","codigo_clase":"88","nota":"1/"}
+{"id":"EL0000004534","descripcion":"Policarbonato","codigo_clase":"88","nota":"1/"}
+{"id":"EL0000004535","descripcion":"Caja termoplástica","codigo_clase":"88","nota":"1/"}
+{"id":"EL0000004536","descripcion":"Plancha de acrílico","codigo_clase":"88","nota":"1/"}
+{"id":"EL0000004537","descripcion":"Marco y tapa termoplástica","codigo_clase":"88","nota":"1/"}
+{"id":"EL0000004538","descripcion":"Plancha de PVC","codigo_clase":"88","nota":"1/"}
+{"id":"EL0000004539","descripcion":"Plancha de polipropileno","codigo_clase":"88","nota":"1/"}
+{"id":"EL0000004540","descripcion":"Placa de vinilona de poliéster","codigo_clase":"88","nota":"1/"}
+{"id":"EL0000004541","descripcion":"Accesorios de tubería de PRFV","codigo_clase":"89","nota":"1/"}
+{"id":"EL0000004542","descripcion":"Tubería de fibra de vidrio","codigo_clase":"89","nota":"1/"}
+{"id":"EL0000004543","descripcion":"Poste PFV","codigo_clase":"89","nota":"1/"}
+{"id":"EL0000004544","descripcion":"Tobogán de fibra de vidrio","codigo_clase":"89","nota":"1/"}
+{"id":"EL0000004545","descripcion":"Poste PRFV","codigo_clase":"89","nota":"1/"}
+{"id":"EL0000004546","descripcion":"Bandeja de fibra de vidrio","codigo_clase":"89","nota":"1/"}
+{"id":"EL0000004547","descripcion":"Contenedor de fibra de vidrio","codigo_clase":"89","nota":"1/"}
+{"id":"EL0000004548","descripcion":"Tanque PRFV","codigo_clase":"89","nota":"1/"}
+{"id":"EL0000004549","descripcion":"Poste de fibra de vidrio","codigo_clase":"89","nota":"1/"}
+{"id":"EL0000004550","descripcion":"Tubería PRFV","codigo_clase":"89","nota":"1/"}
+{"id":"EL0000004551","descripcion":"Juegos de fibra de vidrio","codigo_clase":"89","nota":"1/"}
+{"id":"EL0000004552","descripcion":"Tanque de fibra de vidrio","codigo_clase":"89","nota":"1/"}
+{"id":"EL0000004553","descripcion":"Canal de medición Parshall de fibra de vidrio","codigo_clase":"89","nota":"1/"}
+{"id":"EL0000004554","descripcion":"Fibra de vidrio","codigo_clase":"89","nota":"1/,3/"}
+{"id":"EL0000004555","descripcion":"Compuerta de fibra de vidrio","codigo_clase":"89","nota":"1/"}
+{"id":"EL0000004556","descripcion":"Accesorios tubería PP-R","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004557","descripcion":"Biodepurador de polietileno","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004558","descripcion":"Tee HDPE","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004559","descripcion":"Biodigestor de polietileno","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004560","descripcion":"Registro de lodos de polietileno","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004561","descripcion":"Codo HDPE","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004562","descripcion":"Cisterna de polietileno","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004563","descripcion":"Manga de polietileno","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004564","descripcion":"Accesorios tubería HDPE","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004565","descripcion":"Tubo de polietileno","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004566","descripcion":"Tubería multiplaca para gas","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004567","descripcion":"Gotero HDPE","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004568","descripcion":"Tubería HDPE","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004569","descripcion":"Tubería HDPE a presión","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004570","descripcion":"Curva HDPE","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004571","descripcion":"Tubería PE-AL-PE","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004572","descripcion":"Tubería PP-R","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004573","descripcion":"Tubería HDPE drenaje y alcantarillado","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004574","descripcion":"Válvula de polietileno","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004575","descripcion":"Tubería de polietileno","codigo_clase":"90","nota":"1/"}
+{"id":"EL0000004576","descripcion":"Geomembrana","codigo_clase":"91","nota":"1/"}
+{"id":"EL0000004577","descripcion":"Lona","codigo_clase":"91","nota":"1/"}
+{"id":"EL0000004578","descripcion":"Manto plástico","codigo_clase":"91","nota":"1/"}
+{"id":"EL0000004579","descripcion":"Geomalla","codigo_clase":"91","nota":"1/"}
+{"id":"EL0000004580","descripcion":"Geobolsa","codigo_clase":"91","nota":"1/"}
+{"id":"EL0000004581","descripcion":"Geotextil","codigo_clase":"91","nota":"1/"}
+{"id":"EL0000004582","descripcion":"Geocompuesto","codigo_clase":"91","nota":"1/"}
+{"id":"EL0000004583","descripcion":"Membrana impermeable de asfalto","codigo_clase":"91","nota":"1/"}
+{"id":"EL0000004584","descripcion":"Transporte fluvial","codigo_clase":"92","nota":"1/"}
+{"id":"EL0000004585","descripcion":"Flete fluvial","codigo_clase":"92","nota":"1/"}
+{"id":"EL0000004586","descripcion":"Prueba eléctricas","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004587","descripcion":"Prueba de comunicación para Scada","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004588","descripcion":"Prueba de carga","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004589","descripcion":"Prueba de calidad","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004590","descripcion":"Internet","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004591","descripcion":"Gas natural vehicular","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004592","descripcion":"Impresiones y copias","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004593","descripcion":"Prueba hidráulica","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004594","descripcion":"Derecho de autorizaciones","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004595","descripcion":"Alcohol","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004596","descripcion":"Telefonía","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004597","descripcion":"Humus","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004598","descripcion":"Derecho de cantera","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004599","descripcion":"Cortina de tela","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004600","descripcion":"Bloqueador solar","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004601","descripcion":"Trámite TUPA","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004602","descripcion":"Hipoclorito de calcio","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004603","descripcion":"Cortina tipo persiana","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004604","descripcion":"Acetileno","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004605","descripcion":"Compost","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004606","descripcion":"Ácido muriático","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000004607","descripcion":"Yute","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004608","descripcion":"Semilla","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004609","descripcion":"Ensayo de laboratorio","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004610","descripcion":"Sal","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004611","descripcion":"Alquiler de oficina","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004612","descripcion":"Cloro","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004613","descripcion":"Lejía","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004614","descripcion":"Árbol","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000004615","descripcion":"Alquiler de baños portátiles","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004616","descripcion":"Gas natural","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004617","descripcion":"Tubo de papel","codigo_clase":"93","nota":"1/,3/"}
+{"id":"EL0000004618","descripcion":"Capacitación profesional","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004619","descripcion":"Monitoreo arqueológico","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004620","descripcion":"Examen medico","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004621","descripcion":"Monitoreo de calidad de suelo","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004622","descripcion":"Monitoreo de calidad de ruido","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004623","descripcion":"Monitoreo de calidad de aire","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004624","descripcion":"Monitoreo de calidad de agua","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004625","descripcion":"Monitoreo de calidad","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004626","descripcion":"Monitoreo biológico","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004627","descripcion":"Fertilizante","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004628","descripcion":"Oxigeno","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004629","descripcion":"Pago por disposición final de residuos sólidos","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004630","descripcion":"Servicio profesional","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004631","descripcion":"Monitoreo ambiental","codigo_clase":"93","nota":"1/"}
+{"id":"EL0000004632","descripcion":"Piso técnico","codigo_clase":"94","nota":"1/"}
+{"id":"EL0000004633","descripcion":"Encofrado prefabricado","codigo_clase":"94","nota":"1/"}
+{"id":"EL0000004634","descripcion":"Puntal metálico telescópico","codigo_clase":"94","nota":"1/"}
+{"id":"EL0000004635","descripcion":"Tarima flotante","codigo_clase":"94","nota":"1/"}
+{"id":"EL0000004636","descripcion":"Cimbra metálica","codigo_clase":"94","nota":"1/,3/"}
+{"id":"EL0000004637","descripcion":"Tablestacado prefabricado","codigo_clase":"94","nota":"1/"}
+{"id":"EL0000004638","descripcion":"Cruz de arriostre de andamio","codigo_clase":"94","nota":"1/"}
+{"id":"EL0000004639","descripcion":"Andamio metálico","codigo_clase":"94","nota":"1/"}
+{"id":"EL0000004640","descripcion":"Baranda modular","codigo_clase":"94","nota":"1/"}
+{"id":"EL0000004641","descripcion":"Andamio prefabricado","codigo_clase":"94","nota":"1/"}
+{"id":"EL0000004642","descripcion":"Panel de entibado metálico","codigo_clase":"94","nota":"1/"}
+{"id":"EL0000004643","descripcion":"Escalera modular","codigo_clase":"94","nota":"1/"}
+{"id":"EL0000004644","descripcion":"Tablaestacado prefabricado","codigo_clase":"94","nota":"1/"}
+{"id":"EL0000004645","descripcion":"Cámara de seguridad","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004646","descripcion":"Access point","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004647","descripcion":"Pasarela móvil","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004648","descripcion":"Equipo de cloración","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004649","descripcion":"Turbocomprensor","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004650","descripcion":"Equipo UV para desinfección","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004651","descripcion":"Escalera mecánica eléctrica","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004652","descripcion":"Cámara domo IP","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004653","descripcion":"Unidad mejoradora de aire","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004654","descripcion":"Anemómetro","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004655","descripcion":"Eco enfriador","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004656","descripcion":"Equipo de presurización","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004657","descripcion":"Agitador hiperbólico","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004658","descripcion":"Regulador de tensión","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004659","descripcion":"Soplador en tanque desarenador","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004660","descripcion":"Celda de protección con seccionador","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004661","descripcion":"Servidor de comando y control","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004662","descripcion":"Switch","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004663","descripcion":"Centro de distribución Clusters","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004664","descripcion":"Sensor de flujo electromagnético","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004665","descripcion":"Macromedidor electromecánico","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004666","descripcion":"Sensor","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004667","descripcion":"Cerradura inteligente","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004668","descripcion":"Seccionalizador electrónico","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004669","descripcion":"Panel solar","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004670","descripcion":"Semáforo","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004671","descripcion":"Espira sensor","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004672","descripcion":"Estufa","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004673","descripcion":"Estación de toma de datos (ETD)","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004674","descripcion":"Digestor","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004675","descripcion":"Difusor de aire","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004676","descripcion":"Detector térmico","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004677","descripcion":"Detector de humo","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004678","descripcion":"Alarma audible","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004679","descripcion":"Bureta","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004680","descripcion":"Pinza hidráulica","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004681","descripcion":"Deshumidificador eléctrico","codigo_clase":"95","nota":null}
+{"id":"EL0000004682","descripcion":"Triturador de lodos","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004683","descripcion":"Buzone termoplástico","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004684","descripcion":"Datalogger con sensor de presión","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004685","descripcion":"Cuchara bivalva","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004686","descripcion":"Cronómetro","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004687","descripcion":"Transformador eléctrico","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004688","descripcion":"Transformador de corriente y tensión mixto","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004689","descripcion":"Transformador de aislamiento","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004690","descripcion":"Estación meteorológica","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004691","descripcion":"Nivel electrónico de precisión (tipo Alphameter)","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004692","descripcion":"Estufa a gas","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004693","descripcion":"Network Video Recorder (NVR)","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004694","descripcion":"Extensómetro","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004695","descripcion":"UPS","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004696","descripcion":"Panel de velocidad","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004697","descripcion":"Altavoz","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004698","descripcion":"Disco duro","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004699","descripcion":"Calentador eléctrico","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004700","descripcion":"Tornillo transportador","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004701","descripcion":"Calentador de agua","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004702","descripcion":"Sistema de control distribuido","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004703","descripcion":"Intercomunicador","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004704","descripcion":"Sistema de sensores inteligentes","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004705","descripcion":"Monitor de CO2","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004706","descripcion":"Inversor","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004707","descripcion":"Módulo fotovoltaico","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004708","descripcion":"Módulo de acumulación de LiFePO4","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004709","descripcion":"Medidor para conexión domiciliaria","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004710","descripcion":"Mezclador de tanque digestor","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004711","descripcion":"Horno de secado","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004712","descripcion":"Humidificador eléctrico","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004713","descripcion":"Grabador de red - NVR","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004714","descripcion":"Medidor de agua","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004715","descripcion":"Manómetro","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004716","descripcion":"Videoportero","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004717","descripcion":"Bomba contraincendios","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004718","descripcion":"Cámara bullet IP","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004719","descripcion":"Banco de baterías","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004720","descripcion":"Luminancímetro","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004721","descripcion":"Ventilador helicoidal","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004722","descripcion":"Antena de telemetría","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004723","descripcion":"Bomba para sistema contraincendios","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004724","descripcion":"Lavador de arenas","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004725","descripcion":"Bomba sumergible","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004726","descripcion":"Monta vehículos","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004727","descripcion":"Bomba de agua solar","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004728","descripcion":"Filtro de grava","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004729","descripcion":"Ventilador mecánico","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004730","descripcion":"Bomba de concentrado","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004731","descripcion":"Bomba de lodos","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004732","descripcion":"Medidor de Oxígeno","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004733","descripcion":"Aire acondicionado","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004734","descripcion":"Portero automático","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004735","descripcion":"Acelerógrafo","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004736","descripcion":"Rampa mecánica eléctrica","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004737","descripcion":"Controlador de carga","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004738","descripcion":"Planta eléctrica","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004739","descripcion":"Cámara PTZ IP","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004740","descripcion":"Termotanque","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004741","descripcion":"Compactador de solidos","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004742","descripcion":"Colorímetro","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004743","descripcion":"Agitador sumergible","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004744","descripcion":"Controlador inteligente","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004745","descripcion":"Sistema de parqueo","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004746","descripcion":"Concentrador de grasas","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004747","descripcion":"Terma eléctrica","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004748","descripcion":"Bomba dosificadora","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004749","descripcion":"Bomba de cavidad progresiva","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004750","descripcion":"Medidor de energía","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004751","descripcion":"Medidor de caudal electromagnético","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004752","descripcion":"Medidor electrónico de tensión","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004753","descripcion":"Ventiloconvector (fan coil)","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004754","descripcion":"Terma solar","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004755","descripcion":"Sistema de video vigilancia","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004756","descripcion":"Quemador de biogas","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004757","descripcion":"Purificador y alcalinizador","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004758","descripcion":"Purificador de aire","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004759","descripcion":"Purificador de agua","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004760","descripcion":"Pulsador de alarma contraincendios","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004761","descripcion":"Terma a gas","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004762","descripcion":"Extractor de aire","codigo_clase":"95","nota":"1/"}
+{"id":"EL0000004763","descripcion":"Macromedidor de agua","codigo_clase":"95","nota":"1/"}

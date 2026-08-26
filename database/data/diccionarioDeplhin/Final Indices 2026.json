@@ -1,0 +1,85 @@
+﻿{"id":"CL0000000003","descripcion":"Acero de construcción liso","codigo_clase":"02","nota":null}
+{"id":"CL0000000002","descripcion":"Acero de construcción corrugado","codigo_clase":"03","nota":null}
+{"id":"CL0000000005","descripcion":"Mano de obra (incluye leyes sociales)","codigo_clase":"47","nota":null}
+{"id":"CL0000000001","descripcion":"Aceite y lubricante","codigo_clase":"01","nota":"(b)"}
+{"id":"CL0000000004","descripcion":"Agregado fino","codigo_clase":"04","nota":null}
+{"id":"CL0000000006","descripcion":"Agregado grueso","codigo_clase":"05","nota":null}
+{"id":"CL0000000007","descripcion":"Maquinaria y equipo de construcción liviano","codigo_clase":"48","nota":"(b)"}
+{"id":"CL0000000008","descripcion":"Maquinaria y equipo de construcción pesado","codigo_clase":"49","nota":"(b)"}
+{"id":"CL0000000010","descripcion":"Alambre y cable de cobre desnudo","codigo_clase":"06","nota":null}
+{"id":"CL0000000011","descripcion":"Alambre y cable tipo TW, THW, LSOH","codigo_clase":"07","nota":"(b)"}
+{"id":"CL0000000012","descripcion":"Asfalto","codigo_clase":"13","nota":null}
+{"id":"CL0000000014","descripcion":"Alambre y cable tipo WP, CPI","codigo_clase":"08","nota":"(b)"}
+{"id":"CL0000000013","descripcion":"Aparato sanitario con grifería","codigo_clase":"10","nota":null}
+{"id":"CL0000000015","descripcion":"Flete terrestre","codigo_clase":"32","nota":null}
+{"id":"CL0000000016","descripcion":"Flete aéreo","codigo_clase":"33","nota":null}
+{"id":"CL0000000017","descripcion":"Terrazo","codigo_clase":"64","nota":"(a)"}
+{"id":"CL0000000018","descripcion":"Malla de acero","codigo_clase":"46","nota":null}
+{"id":"CL0000000019","descripcion":"Poste de concreto","codigo_clase":"62","nota":null}
+{"id":"CL0000000021","descripcion":"Índice de Precios al Consumidor (INEI)","codigo_clase":"39","nota":"(b)"}
+{"id":"CL0000000022","descripcion":"Herramienta manual","codigo_clase":"37","nota":null}
+{"id":"CL0000000023","descripcion":"Hormigón y afirmado","codigo_clase":"38","nota":"(b)"}
+{"id":"CL0000000024","descripcion":"Loseta y terrazo","codigo_clase":"40","nota":"(b)"}
+{"id":"CL0000000025","descripcion":"Madera nacional en tiras para piso","codigo_clase":"41","nota":"(b)"}
+{"id":"CL0000000020","descripcion":"Alcantarilla metálica y guardavías","codigo_clase":"09","nota":"(b)"}
+{"id":"CL0000000026","descripcion":"Artefacto de alumbrado exterior","codigo_clase":"11","nota":null}
+{"id":"CL0000000028","descripcion":"Baldosa acústica","codigo_clase":"14","nota":null}
+{"id":"CL0000000030","descripcion":"Baldosa vinílica y PVC","codigo_clase":"16","nota":"(b)"}
+{"id":"CL0000000031","descripcion":"Bloque y ladrillo","codigo_clase":"17","nota":null}
+{"id":"CL0000000032","descripcion":"Cable telefónico y de red","codigo_clase":"18","nota":"(b)"}
+{"id":"CL0000000033","descripcion":"Cable NYY, N2XY, NPT, N2XOH, N2XSY","codigo_clase":"19","nota":"(b)"}
+{"id":"CL0000000034","descripcion":"Cemento asfáltico","codigo_clase":"20","nota":null}
+{"id":"CL0000000035","descripcion":"Cemento Portland e hidráulico","codigo_clase":"21","nota":"(b)"}
+{"id":"CL0000000036","descripcion":"Cemento Portland tipo II","codigo_clase":"22","nota":"(a)"}
+{"id":"CL0000000038","descripcion":"Cerámica y porcelanato","codigo_clase":"24","nota":"(b)"}
+{"id":"CL0000000037","descripcion":"Cemento Portland tipo V","codigo_clase":"23","nota":"(a)"}
+{"id":"CL0000000039","descripcion":"Cerrajería","codigo_clase":"26","nota":"(b)"}
+{"id":"CL0000000027","descripcion":"Artefacto de alumbrado interior","codigo_clase":"12","nota":null}
+{"id":"CL0000000040","descripcion":"Detonante","codigo_clase":"27","nota":null}
+{"id":"CL0000000041","descripcion":"Dinamita","codigo_clase":"28","nota":null}
+{"id":"CL0000000042","descripcion":"Dólar más inflación mercado USA","codigo_clase":"30","nota":null}
+{"id":"CL0000000043","descripcion":"Prefabricado de concreto","codigo_clase":"31","nota":"(b)"}
+{"id":"CL0000000044","descripcion":"Gasohol y gasolina","codigo_clase":"34","nota":"(b)"}
+{"id":"CL0000000045","descripcion":"Madera importada para encofrado y carpintería","codigo_clase":"42","nota":null}
+{"id":"CL0000000046","descripcion":"Madera nacional para encofrado y carpintería","codigo_clase":"43","nota":null}
+{"id":"CL0000000047","descripcion":"Madera terciada nacional","codigo_clase":"44","nota":"(b)"}
+{"id":"CL0000000048","descripcion":"Madera terciada para encofrado","codigo_clase":"45","nota":"(a)"}
+{"id":"CL0000000049","descripcion":"Marco y tapa de fierro","codigo_clase":"50","nota":"(b)"}
+{"id":"CL0000000050","descripcion":"Perfil de acero al carbono","codigo_clase":"51","nota":"(b)"}
+{"id":"CL0000000051","descripcion":"Perfil de aluminio","codigo_clase":"52","nota":null}
+{"id":"CL0000000052","descripcion":"Petróleo diésel","codigo_clase":"53","nota":null}
+{"id":"CL0000000053","descripcion":"Pintura látex","codigo_clase":"54","nota":null}
+{"id":"CL0000000054","descripcion":"Pintura temple","codigo_clase":"55","nota":null}
+{"id":"CL0000000055","descripcion":"Plancha de acero LAC","codigo_clase":"56","nota":null}
+{"id":"CL0000000056","descripcion":"Plancha de acero LAF","codigo_clase":"57","nota":null}
+{"id":"CL0000000057","descripcion":"Plancha de fibrocemento y yeso","codigo_clase":"59","nota":"(b)"}
+{"id":"CL0000000058","descripcion":"Plancha de poliuretano, poliestireno y termoaislante","codigo_clase":"60","nota":"(b)"}
+{"id":"CL0000000059","descripcion":"Tubería de acero negro y/o galvanizado","codigo_clase":"65","nota":null}
+{"id":"CL0000000060","descripcion":"Tubería de PVC para la red de agua potable y alcantarillado","codigo_clase":"66","nota":null}
+{"id":"CL0000000061","descripcion":"Tubería de cobre","codigo_clase":"68","nota":null}
+{"id":"CL0000000062","descripcion":"Tubería de concreto simple","codigo_clase":"69","nota":"(a)"}
+{"id":"CL0000000063","descripcion":"Tubería de concreto reforzado","codigo_clase":"70","nota":"(a)"}
+{"id":"CL0000000064","descripcion":"Tubería de hierro fundido y dúctil","codigo_clase":"71","nota":"(b)"}
+{"id":"CL0000000065","descripcion":"Tubería de PVC para redes interiores","codigo_clase":"72","nota":"(b)"}
+{"id":"CL0000000066","descripcion":"Ducto telefónico de PVC","codigo_clase":"73","nota":"(a)"}
+{"id":"CL0000000068","descripcion":"Válvula de bronce y latón","codigo_clase":"77","nota":"(b)"}
+{"id":"CL0000000069","descripcion":"Válvula de hierro y acero","codigo_clase":"78","nota":"(b)"}
+{"id":"CL0000000070","descripcion":"Vidrio","codigo_clase":"79","nota":"(b)"}
+{"id":"CL0000000071","descripcion":"Plancha galvanizada","codigo_clase":"61","nota":null}
+{"id":"CL0000000074","descripcion":"Concreto premezclado","codigo_clase":"80","nota":null}
+{"id":"CL0000000075","descripcion":"Aditivo de concreto y similar","codigo_clase":"81","nota":"(c)"}
+{"id":"CL0000000076","descripcion":"Alambre y cable de aluminio","codigo_clase":"82","nota":"(c)"}
+{"id":"CL0000000077","descripcion":"Implemento y accesorio de seguridad","codigo_clase":"83","nota":"(c)"}
+{"id":"CL0000000078","descripcion":"Madera terciada importada","codigo_clase":"84","nota":"(c)"}
+{"id":"CL0000000079","descripcion":"Perfil de acero galvanizado","codigo_clase":"85","nota":"(c)"}
+{"id":"CL0000000080","descripcion":"Pintura esmalte y epóxica","codigo_clase":"86","nota":"(c)"}
+{"id":"CL0000000081","descripcion":"Plancha con cubierta aluzinc","codigo_clase":"87","nota":"(c)"}
+{"id":"CL0000000082","descripcion":"Plancha y cobertura plástica","codigo_clase":"88","nota":"(c)"}
+{"id":"CL0000000083","descripcion":"Poste y tubería de fibra de vidrio","codigo_clase":"89","nota":"(c)"}
+{"id":"CL0000000084","descripcion":"Tubería de polietileno","codigo_clase":"90","nota":"(c)"}
+{"id":"CL0000000085","descripcion":"Geomembrana y geotextil","codigo_clase":"91","nota":"(c)"}
+{"id":"CL0000000086","descripcion":"Flete fluvial","codigo_clase":"92","nota":"(c)"}
+{"id":"CL0000000087","descripcion":"Bienes y servicios auxiliares","codigo_clase":"93","nota":"(c)"}
+{"id":"CL0000000088","descripcion":"Encofrado y andamio prefabricado","codigo_clase":"94","nota":"(c)"}
+{"id":"CL0000000089","descripcion":"Equipamiento permanente de obra","codigo_clase":"95","nota":"(c)"}
+{"id":"CL0000000090","descripcion":"Mano de obra de alta especialización (incluye leyes sociales)","codigo_clase":"47-1","nota":"(c)"}
