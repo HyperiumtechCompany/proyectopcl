@@ -985,4 +985,82 @@ class PresupuestoControllerTest extends TestCase
 
         $response->assertStatus(403);
     }
+
+    public function test_formula_polinomica_can_be_saved_and_restored(): void
+    {
+        $estructura = [[
+            'id' => 'm-47',
+            'nomenclatura' => 'MA',
+            'root' => [
+                'id' => 'i-47',
+                'code' => '47',
+                'descripcion' => 'Mano de Obra',
+                'coefCalculado' => 0.6,
+                'coefDefinido' => 0.6,
+                'children' => [],
+            ],
+        ]];
+
+        $this->actingAs($this->user)
+            ->putJson("/costos/proyectos/{$this->project->id}/presupuesto/formula-polinomica", [
+                'parent_id' => 10,
+                'estructura' => $estructura,
+            ])
+            ->assertSuccessful()
+            ->assertJsonPath('data.0.nomenclatura', 'MA');
+
+        $this->actingAs($this->user)
+            ->getJson("/costos/proyectos/{$this->project->id}/presupuesto/formula-polinomica?parent_id=10")
+            ->assertSuccessful()
+            ->assertJsonPath('data.0.root.code', '47');
+
+        $this->assertDatabaseCount('formula_polinomica_configuraciones', 1, 'costos_tenant');
+    }
+
+    public function test_formula_polinomica_rejects_more_than_two_direct_children(): void
+    {
+        $child = fn (string $id): array => [
+            'id' => $id,
+            'code' => $id,
+            'descripcion' => $id,
+            'coefCalculado' => 0.1,
+            'coefDefinido' => 0.1,
+            'children' => [],
+        ];
+
+        $this->actingAs($this->user)
+            ->putJson("/costos/proyectos/{$this->project->id}/presupuesto/formula-polinomica", [
+                'parent_id' => 10,
+                'estructura' => [[
+                    'id' => 'm-root',
+                    'nomenclatura' => 'MA',
+                    'root' => [...$child('root'), 'children' => [$child('a'), $child('b'), $child('c')]],
+                ]],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('estructura.0.root.children');
+    }
+
+    public function test_formula_polinomica_allows_saving_a_draft_with_more_than_eight_roots(): void
+    {
+        $estructura = collect(range(1, 9))->map(fn (int $index): array => [
+            'id' => "m-$index",
+            'nomenclatura' => "M$index",
+            'root' => [
+                'id' => "i-$index",
+                'code' => (string) $index,
+                'descripcion' => "Índice $index",
+                'coefCalculado' => 0.1,
+                'coefDefinido' => 0.1,
+                'children' => [],
+            ],
+        ])->all();
+
+        $this->actingAs($this->user)
+            ->putJson("/costos/proyectos/{$this->project->id}/presupuesto/formula-polinomica", [
+                'parent_id' => 10,
+                'estructura' => $estructura,
+            ])
+            ->assertSuccessful();
+    }
 }

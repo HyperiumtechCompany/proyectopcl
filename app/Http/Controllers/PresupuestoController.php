@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\SaveFormulaPolinomicaRequest;
 use App\Models\AcuEquipo;
 use App\Models\AcuManoDeObra;
 use App\Models\AcuMaterial;
@@ -32,6 +33,49 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class PresupuestoController extends Controller
 {
+    public function getFormulaPolinomica(CostoProject $project, Request $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        $parentId = $request->integer('parent_id');
+        abort_if($parentId < 1, 422, 'El parent_id es obligatorio.');
+
+        $row = DB::connection('costos_tenant')
+            ->table('formula_polinomica_configuraciones')
+            ->where('parent_id', $parentId)
+            ->first();
+
+        return response()->json([
+            'success' => true,
+            'data' => $row ? json_decode($row->estructura, true) : null,
+        ]);
+    }
+
+    public function saveFormulaPolinomica(CostoProject $project, SaveFormulaPolinomicaRequest $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+        $validated = $request->validated();
+
+        DB::connection('costos_tenant')
+            ->table('formula_polinomica_configuraciones')
+            ->updateOrInsert(
+                ['parent_id' => $validated['parent_id']],
+                [
+                    'estructura' => json_encode($validated['estructura'], JSON_UNESCAPED_UNICODE),
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ],
+            );
+
+        return response()->json([
+            'success' => true,
+            'data' => $validated['estructura'],
+            'message' => 'Fórmula polinómica guardada correctamente.',
+        ]);
+    }
+
     /**
      * Cache por-request de existencia de columnas en DB tenant.
      *

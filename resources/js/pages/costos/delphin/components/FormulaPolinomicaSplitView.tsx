@@ -1,7 +1,9 @@
 import type { ACUComponenteRow, ACURowSummary } from '@/types/presupuestos';
-import { ArrowLeft, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
+import axios from 'axios';
+import { ArrowLeft, Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, LoaderCircle, Save } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
+import Swal from 'sweetalert2';
 import type { DicEntry } from '../hooks/useDiccionario';
 import type { DelphinRow, ResumenPresupuesto } from '../types';
 import {
@@ -267,6 +269,7 @@ function buildMatrix(
 
 // ── Component ─────────────────────────────────────────────────────────────────
 interface Props {
+    projectId: number;
     parentId: number;
     rows: DelphinRow[];
     acuRows: ACURowSummary[];
@@ -278,7 +281,7 @@ interface Props {
     onMonomiosChange?: (monomios: any[]) => void;
 }
 
-export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionario, projectName,
+export function FormulaPolinomicaSplitView({ projectId, parentId, rows, acuRows, diccionario, projectName,
     resumenPresupuesto, onBack, onMonomiosChange }: Props) {
 
     // Subtree en pre-order
@@ -352,10 +355,85 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
     });
 
     const [builderMonomios, setBuilderMonomios] = useState<FormulaMonomio[]>([]);
+    const [persistedMonomios, setPersistedMonomios] = useState<FormulaMonomio[] | null>(null);
+    const [isLoadingFormula, setIsLoadingFormula] = useState(true);
+    const [isSavingFormula, setIsSavingFormula] = useState(false);
+    const [formulaDirty, setFormulaDirty] = useState(false);
+    const [formulaSaved, setFormulaSaved] = useState(false);
+    const [formulaError, setFormulaError] = useState<string | null>(null);
     const handleBuilderMonomiosChange = useCallback(
-        (monomios: FormulaMonomio[]) => setBuilderMonomios(monomios),
-        [],
+        (monomios: FormulaMonomio[]) => {
+            if (isLoadingFormula) return;
+            setBuilderMonomios(monomios);
+            setFormulaDirty(JSON.stringify(monomios) !== JSON.stringify(persistedMonomios));
+            setFormulaSaved(false);
+        },
+        [isLoadingFormula, persistedMonomios],
     );
+    useEffect(() => {
+        let active = true;
+        setIsLoadingFormula(true);
+        setFormulaError(null);
+        axios.get(`/costos/proyectos/${projectId}/presupuesto/formula-polinomica`, { params: { parent_id: parentId } })
+            .then(({ data }) => {
+                if (!active) return;
+                const restored = Array.isArray(data?.data) ? data.data as FormulaMonomio[] : null;
+                setPersistedMonomios(restored);
+                setBuilderMonomios(restored ?? []);
+                setFormulaDirty(false);
+            })
+            .catch(() => active && setFormulaError('No se pudo cargar la fórmula guardada.'))
+            .finally(() => active && setIsLoadingFormula(false));
+        return () => { active = false; };
+    }, [parentId, projectId]);
+    const saveFormula = useCallback(async () => {
+        if (!formulaDirty) {
+            await Swal.fire({
+                icon: 'info',
+                title: 'Sin cambios pendientes',
+                text: 'La fórmula polinómica actual ya se encuentra guardada.',
+                confirmButtonText: 'Entendido',
+            });
+            return;
+        }
+        setIsSavingFormula(true);
+        setFormulaError(null);
+        try {
+            await axios.put(`/costos/proyectos/${projectId}/presupuesto/formula-polinomica`, {
+                parent_id: parentId,
+                estructura: builderMonomios,
+            });
+            setPersistedMonomios(builderMonomios);
+            setFormulaDirty(false);
+            setFormulaSaved(true);
+            await Swal.fire({
+                icon: 'success',
+                title: 'Fórmula guardada',
+                text: 'La estructura de la fórmula polinómica se guardó correctamente.',
+                timer: 1800,
+                showConfirmButton: false,
+            });
+        } catch (error) {
+            const validationErrors = axios.isAxiosError(error) ? error.response?.data?.errors : null;
+            const messages = validationErrors && typeof validationErrors === 'object'
+                ? Object.values(validationErrors).flat().filter((message): message is string => typeof message === 'string')
+                : [];
+            const responseMessage = axios.isAxiosError(error) && typeof error.response?.data?.message === 'string'
+                ? error.response.data.message
+                : null;
+            const reason = messages[0] ?? responseMessage ?? 'No se pudo guardar la fórmula polinómica.';
+            setFormulaError(reason);
+            await Swal.fire({
+                icon: 'error',
+                title: 'No se pudo guardar',
+                text: reason,
+                footer: messages.length > 1 ? `${messages.length} observaciones de validación.` : undefined,
+                confirmButtonText: 'Revisar',
+            });
+        } finally {
+            setIsSavingFormula(false);
+        }
+    }, [builderMonomios, formulaDirty, parentId, projectId]);
     useEffect(() => {
         
         if (onMonomiosChange) {
@@ -445,6 +523,11 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
                     </p>
                     <p className="text-[10px] text-slate-500">{projectName}</p>
                 </div>
+                {formulaError && <span className="max-w-52 text-right text-[10px] text-red-400">{formulaError}</span>}
+                <button type="button" onClick={saveFormula} disabled={isLoadingFormula || isSavingFormula} className="flex items-center gap-1.5 rounded bg-emerald-700 px-2.5 py-1.5 text-[10px] font-semibold text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500">
+                    {isSavingFormula ? <LoaderCircle size={12} className="animate-spin" /> : formulaSaved && !formulaDirty ? <Check size={12} /> : <Save size={12} />}
+                    {isSavingFormula ? 'Guardando…' : formulaSaved && !formulaDirty ? 'Guardado' : formulaDirty ? 'Guardar fórmula' : 'Sin cambios'}
+                </button>
                 {/* Cobertura ACU */}
                 <div className="shrink-0 text-right">
                     <p className="text-[9px] uppercase tracking-wider text-slate-500">ACU cubierto</p>
@@ -779,6 +862,8 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
                         budgetTotal={budgetTotal}
                         codeToDesc={codeToDesc}
                         sortedCodes={sortedCodes}
+                        persistedMonomios={persistedMonomios}
+                        isLoading={isLoadingFormula}
                         onMonomiosChange={handleBuilderMonomiosChange}
                     />
                 </Panel>

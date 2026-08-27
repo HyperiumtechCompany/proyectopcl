@@ -1005,6 +1005,7 @@ export default function DelphinView({
                 {mode === 'budget' && budgetView === 'formula_polinomica' && formulaParentId !== null ? (
                     <FormulaPolinomicaSplitView
                         key={String(formulaParentId)}
+                        projectId={project_id_int}
                         parentId={formulaParentId}
                         rows={delphinRows}
                         acuRows={acuRows}

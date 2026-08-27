@@ -399,6 +399,8 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/presupuesto/export/excel', [PresupuestoController::class, 'exportExcel'])->name('proyectos.presupuesto.export.excel');
             Route::get('/presupuesto/export/pdf', [PresupuestoController::class, 'exportPdf'])->name('proyectos.presupuesto.export.pdf');
             Route::get('/presupuesto/acus/export-data', [PresupuestoController::class, 'exportAcusData'])->name('proyectos.presupuesto.acus.export-data');
+            Route::get('/presupuesto/formula-polinomica', [PresupuestoController::class, 'getFormulaPolinomica'])->name('proyectos.presupuesto.formula-polinomica.show');
+            Route::put('/presupuesto/formula-polinomica', [PresupuestoController::class, 'saveFormulaPolinomica'])->name('proyectos.presupuesto.formula-polinomica.update');
 
             // ─── Consolidado Snapshot (cache de totales) ───
             Route::get('/presupuesto/consolidado/snapshot', [PresupuestoController::class, 'getConsolidadoSnapshot'])->name('proyectos.presupuesto.consolidado.snapshot.show');
