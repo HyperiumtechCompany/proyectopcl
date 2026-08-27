@@ -53,6 +53,22 @@ export type ViewMode = 'monto' | 'porcentaje';
  */
 export type ModoCalculo = 'calendario' | '30dias';
 
+/**
+ * Porcentajes/montos reales del presupuesto del proyecto (tabla
+ * gg_consolidado, la misma fuente que usa Delphin/Consolidado) — se usan
+ * como valores iniciales de la sección "Resumen Financiero" del valorizado
+ * en vez de placeholders fijos. Siguen siendo editables ahí (clic en la
+ * celda), esto solo evita arrancar con un % que no es el real del proyecto.
+ */
+export interface FinDefaults {
+    pctGastosGenerales?: number;
+    pctUtilidad?:        number;
+    pctIGV?:             number;
+    montoMobiliario?:    number;
+    pctIGVMobiliario?:   number;
+    pctSupervision?:     number;
+}
+
 export interface ValorizadoProps {
     project:          string;
     projectName:      string;
@@ -67,5 +83,6 @@ export interface ValorizadoProps {
     jerarquiaPresupuesto?: Record<string, string>;
     projectData?: any;
      materiales?: any[];           // Datos de materiales
-    materialesResumen?: any;  
+    materialesResumen?: any;
+    finDefaults?: FinDefaults;
 }

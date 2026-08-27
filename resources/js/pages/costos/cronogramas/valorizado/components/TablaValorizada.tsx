@@ -14,6 +14,7 @@ import type {
     Periodo,
     ViewMode,
     TotalesColumna,
+    FinDefaults,
 } from '../types';
 
 // FORMATOS
@@ -268,15 +269,9 @@ interface Props {
     isPeriodoBloqueado: (item: ItemValorizado, key: string) => boolean;
     totalesPorItem?: Record<string | number, number>;
     totalGeneralPeriodos?: number;
-    // Valores iniciales de la sección financiera
-    finDefaults?: {
-        pctGastosGenerales?: number;
-        pctUtilidad?: number;
-        pctIGV?: number;
-        montoMobiliario?: number;
-        pctIGVMobiliario?: number;
-        pctSupervision?: number;
-    };
+    // Valores iniciales de la sección financiera (% reales del presupuesto,
+    // ver CronoValorizadoController::resolveFinDefaults())
+    finDefaults?: FinDefaults;
 }
 
 // COMPONENTE PRINCIPAL

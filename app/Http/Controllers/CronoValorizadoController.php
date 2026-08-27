@@ -42,6 +42,7 @@ class CronoValorizadoController extends Controller
         $costoProject = CostoProject::findOrFail($projectId);
         $this->dbService->setTenantConnection($costoProject->database_name);
         $presupuestoId = $this->resolvePresupuestoId();
+        $finDefaults = $this->resolveFinDefaults($presupuestoId);
 
         $projectData = [
             'nombre' => $costoProject->nombre ?? 'PROYECTO',
@@ -94,6 +95,7 @@ class CronoValorizadoController extends Controller
                 'materiales' => [],
                 'materialesResumen' => $this->materialesResumenVacio(),
                 'projectData' => $projectData,
+                'finDefaults' => $finDefaults,
             ]);
         }
 
@@ -225,6 +227,7 @@ class CronoValorizadoController extends Controller
             'materiales' => $materialesFormateados->toArray(),
             'materialesResumen' => $materialesResumen,
             'projectData' => $projectData,
+            'finDefaults' => $finDefaults,
         ]);
     }
 
@@ -830,6 +833,64 @@ class CronoValorizadoController extends Controller
             'mes_pico_key' => null,
             'monto_mes_pico' => 0,
             'pct_mes_pico' => 0,
+        ];
+    }
+
+    /**
+     * Porcentajes/montos reales del presupuesto (tabla gg_consolidado), para
+     * usarlos como valor inicial del Resumen Financiero del valorizado —
+     * antes esa sección arrancaba siempre con placeholders fijos (11.56% GG,
+     * 5% Utilidad) sin relación con lo que el proyecto tiene realmente
+     * configurado en Presupuesto/Delphin (ej. 10%/10%), así que el
+     * "Presupuesto Total" del valorizado no coincidía con el real hasta que
+     * alguien lo corregía a mano en cada carga de página.
+     *
+     * Misma fuente y mismo criterio que DelphinController::resumenPresupuesto():
+     * gg_consolidado tiene prioridad (snapshot guardado por el usuario), con
+     * fallback al desagregado de gg_fijos/gg_variables si no hay override de
+     * gastos generales. Los % siguen siendo editables en la tabla (PctCell/
+     * MontoCell) — esto solo evita arrancar con un valor que no es el real.
+     */
+    private function resolveFinDefaults(int $presupuestoId): array
+    {
+        $connection = DB::connection('costos_tenant');
+
+        $snapshot = $connection->table('gg_consolidado')
+            ->where('presupuesto_id', $presupuestoId)
+            ->first();
+
+        $costoDirecto = (float) $connection->table('presupuesto_general')
+            ->where('presupuesto_id', $presupuestoId)
+            ->where('metrado', '>', 0)
+            ->sum('parcial');
+
+        $gastosGeneralesDetalle = (float) $connection->table('gg_fijos')
+            ->where('presupuesto_id', $presupuestoId)
+            ->where('tipo_fila', 'detalle')
+            ->sum('parcial')
+            + (float) $connection->table('gg_variables')
+                ->where('presupuesto_id', $presupuestoId)
+                ->where('tipo_fila', 'detalle')
+                ->sum('parcial');
+
+        $gastosGeneralesOverride = $snapshot?->gastos_generales_porcentaje ?? null;
+        $gastosGenerales = $gastosGeneralesOverride !== null
+            ? $costoDirecto * ((float) $gastosGeneralesOverride / 100)
+            : $gastosGeneralesDetalle;
+
+        $supervisionTotal = (float) ($snapshot?->total_supervision ?? 0);
+
+        return [
+            'pctGastosGenerales' => $costoDirecto > 0
+                ? round(($gastosGenerales / $costoDirecto) * 100, 4)
+                : 0.0,
+            'pctUtilidad' => (float) ($snapshot?->utilidad_porcentaje ?? 5),
+            'pctIGV' => (float) ($snapshot?->igv_porcentaje ?? 18),
+            'montoMobiliario' => (float) ($snapshot?->componente_ii_monto ?? 0),
+            'pctIGVMobiliario' => (float) ($snapshot?->igv_porcentaje ?? 18),
+            'pctSupervision' => $costoDirecto > 0
+                ? round(($supervisionTotal / $costoDirecto) * 100, 4)
+                : 0.0,
         ];
     }
 

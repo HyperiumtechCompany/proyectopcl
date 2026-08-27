@@ -286,6 +286,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                                         isPeriodoBloqueado={isPeriodoBloqueado}
                                         totalesPorItem={totalesPorItem}
                                         totalGeneralPeriodos={totalGeneralPeriodos}
+                                        finDefaults={props.finDefaults}
                                     />
                                 </>
                             ) : (
