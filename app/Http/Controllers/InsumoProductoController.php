@@ -294,6 +294,7 @@ class InsumoProductoController extends Controller
     {
         $diccionarios = DB::connection('costos_tenant')
             ->table('diccionario')
+            ->orderBy('codigo')
             ->orderBy('descripcion')
             ->get();
 
