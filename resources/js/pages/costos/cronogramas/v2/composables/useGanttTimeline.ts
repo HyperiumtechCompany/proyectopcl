@@ -307,18 +307,21 @@ export function useGanttTimeline(
 
         const minDate = dates.reduce((a, b) => (a < b ? a : b));
         const maxDate = dates.reduce((a, b) => (a > b ? a : b));
-        const start = configuredStart
-            ? minDate
-            : dayjs(minDate)
-                  .subtract(BUFFER_MONTHS, 'month')
-                  .startOf('month')
-                  .format('YYYY-MM-DD');
-        const end = configuredEnd
-            ? maxDate
-            : dayjs(maxDate)
-                  .add(BUFFER_MONTHS, 'month')
-                  .endOf('month')
-                  .format('YYYY-MM-DD');
+        // Siempre se agrega el margen de BUFFER_MONTHS, tenga o no el proyecto
+        // fecha de inicio/fin configurada explícitamente. Antes, con una fecha
+        // configurada, el margen se omitía y la primera barra quedaba pegada al
+        // borde izquierdo del Gantt — no se distinguía bien el día exacto de
+        // inicio. El margen es solo visual (espacio antes/después en el
+        // diagrama); no cambia projectStart/projectEnd ni ningún cálculo real
+        // de fechas o duraciones.
+        const start = dayjs(minDate)
+            .subtract(BUFFER_MONTHS, 'month')
+            .startOf('month')
+            .format('YYYY-MM-DD');
+        const end = dayjs(maxDate)
+            .add(BUFFER_MONTHS, 'month')
+            .endOf('month')
+            .format('YYYY-MM-DD');
 
         return buildTimeline(start, end, dayWidth, effectiveZoom, calendarSettings);
     }, [tasks, zoom, calendarSettings, dayWidthOverride]);
