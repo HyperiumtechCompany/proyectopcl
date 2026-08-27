@@ -466,6 +466,7 @@ export default function ElectricalNetworkPage({
                                 onUpdateEdge={editor.updateEdge}
                                 onUpdateNode={editor.updateNode}
                                 onChangeNodeParent={editor.changeNodeParent}
+                                onUpdateSettings={editor.updateSettings}
                                 onRemove={editor.removeById}
                             />
                             <VoltageDropAlertPanel

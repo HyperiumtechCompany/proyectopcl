@@ -652,9 +652,10 @@ async function buildFormulaPolinomicaSheet(
 
     monomios.forEach((row: any) => {
         const esPadre = row.esPadre;
-        const bg = esPadre ? C.titulo0Bg : C.leafBg;
-        const fg = esPadre ? C.titulo0Fg : C.leafFg;
-        const bold = esPadre;
+        const esMonomio = row.esMonomio ?? esPadre;
+        const bg = esMonomio ? C.titulo0Bg : C.leafBg;
+        const fg = esMonomio ? C.titulo0Fg : C.leafFg;
+        const bold = esMonomio;
 
         // Col 1: N°
         const c1 = ws.getCell(filaActual, 1);
@@ -664,15 +665,15 @@ async function buildFormulaPolinomicaSheet(
 
         // Col 2: Descripción (indentada para hijos)
         const c2 = ws.getCell(filaActual, 2);
-        const indent = esPadre ? 0 : 2;
-        c2.value = (esPadre ? '' : '    ') + (row.descripcion || '');
+        const indent = Number(row.nivel ?? (esPadre ? 0 : 1));
+        c2.value = `${row.codigo ? `${row.codigo} ` : ''}${row.descripcion || ''}`;
         fill(c2, bg); font(c2, fg, bold, 10); border(c2);
         c2.alignment = { vertical: 'middle', horizontal: 'left', wrapText: false, indent };
         maxDescLen = Math.max(maxDescLen, (row.descripcion ?? '').length + indent * 2);
 
         // Col 3: Nomenclatura (solo padres)
         const c3 = ws.getCell(filaActual, 3);
-        c3.value = esPadre ? row.monomio : '—';
+        c3.value = esPadre ? row.monomio : '';
         fill(c3, bg); font(c3, esPadre ? 'FF059669' : fg, bold, esPadre ? 12 : 10); border(c3);
         c3.alignment = { vertical: 'middle', horizontal: 'center' };
 
@@ -1111,4 +1112,3 @@ export async function exportInsumosConsolidadosExcel(
         `${safeName}.xlsx`,
     );
 }
-

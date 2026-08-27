@@ -369,8 +369,8 @@ async function buildFormulaPolinomicaBlock(
 
     const body = monomios.map((row: any) => [
         row.esPadre ? String(row.nro) : '',
-        (row.esPadre ? '' : '    ') + (row.descripcion ?? ''),
-        row.esPadre ? (row.monomio ?? '') : '—',
+        `${'    '.repeat(Number(row.nivel ?? (row.esPadre ? 0 : 1)))}${row.codigo ? `${row.codigo} ` : ''}${row.descripcion ?? ''}`,
+        row.esPadre ? (row.monomio ?? '') : '',
         (row.coeficiente ?? 0).toFixed(3),
         (row.incidencia ?? 0).toFixed(1) + '%',
     ]);
@@ -413,7 +413,7 @@ async function buildFormulaPolinomicaBlock(
                 return;
             }
             if (!row) return;
-            if (row.esPadre) {
+            if (row.esMonomio ?? row.esPadre) {
                 data.cell.styles.fillColor = [217, 234, 247];
                 data.cell.styles.textColor = [31, 78, 121];
                 data.cell.styles.fontStyle = 'bold';

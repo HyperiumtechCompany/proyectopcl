@@ -5,6 +5,7 @@ import {
     Layers, Milestone, X, ChevronLeft,
 } from 'lucide-react';
 import type { DelphinRow } from '../types';
+import type { FormulaMonomio } from '../helpers/formulaPolinomicaTree';
 import {
     exportDelphin,
     type DelphinExportContent,
@@ -61,15 +62,7 @@ const FORMAT_OPTIONS: {
         { key: 'msp', label: 'MS Project', ext: '.xml', icon: <Milestone size={14} />, onlyGantt: true, disabledWhenFormula: true, },
     ];
 
-interface MonomioExport {
-    nomenclatura: string;
-    indices: {
-        code: string;
-        descripcion: string;
-        coefCalculado: number;
-        coefDefinido: number;
-    }[];
-}
+type MonomioExport = FormulaMonomio;
 
 interface Props {
     open: boolean;

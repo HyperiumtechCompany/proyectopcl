@@ -2,6 +2,11 @@ import type { DelphinRow } from '../types';
 import { exportDelphinExcel } from './exportDelphinExcel';
 import { exportDelphinPdf } from './exportDelphinPdf';
 import { exportDelphinMSP } from './exportDelphinMSP';
+import {
+    flattenMonomiosForExport,
+    sumNode,
+    type FormulaMonomio,
+} from './formulaPolinomicaTree';
 
 // ── Tipos públicos ────────────────────────────────────────────────────────────
 export type DelphinExportContent = 'budget_only' | 'budget_gantt' | 'gantt_only' | 'formula_polinomica';
@@ -10,15 +15,7 @@ export type DelphinExportFormat = 'excel' | 'pdf' | 'msp';
 // backward-compat alias (modal anterior usaba DelphinExportType)
 export type DelphinExportType = DelphinExportContent;
 
-interface MonomioExport {
-    nomenclatura: string;
-    indices: {
-        code: string;
-        descripcion: string;
-        coefCalculado: number;
-        coefDefinido: number;
-    }[];
-}
+type MonomioExport = FormulaMonomio;
 
 // ── Fórmula Polinómica ──────────────────────────────────────────────────────
 async function exportFormulaPolinomicaExcel(
@@ -52,39 +49,24 @@ function buildFormulaData(monomios: any[]): any {
         };
     }
 
-    // Calcular coeficiente total de cada monomio
-    const monomiosConCoef = monomios.map((m: any) => {
-        const coef = m.indices.reduce((s: number, i: any) => s + (i.coefDefinido || 0), 0);
-        return {
-            ...m,
-            coeficienteTotal: coef,
-        };
-    });
+    const typedMonomios = monomios as FormulaMonomio[];
+    const monomiosConCoef = typedMonomios.map((monomio) => ({
+        ...monomio,
+        coeficienteTotal: sumNode(monomio.root),
+    }));
 
     // Construir la fórmula K
     const parts = monomiosConCoef
         .filter((m: any) => m.coeficienteTotal > 0)
         .map((m: any) => {
             const coef = m.coeficienteTotal;
-            return `${coef.toFixed(3)} ${m.nomenclatura}r`;
+            return `${coef.toFixed(3)} (${m.nomenclatura}r/${m.nomenclatura}o)`;
         });
 
     const formulaStr = parts.length > 0 ? `K = ${parts.join(' + ')}` : 'K = (sin datos)';
 
-    // Datos para la tabla
-    const tableData = monomiosConCoef.map((m: any, index: number) => ({
-        nro: index + 1,
-        esPadre: true,
-        descripcion: m.indices[0]?.descripcion || 'Monomio',
-        monomio: m.nomenclatura || '',
-        coeficiente: m.coeficienteTotal,
-        incidencia: m.coeficienteTotal * 100,
-        indices: m.indices.map((i: any) => ({
-            code: i.code || '',
-            descripcion: i.descripcion || '',
-            coefDefinido: i.coefDefinido || 0,
-        })),
-    }));
+    // Recorrido preorden completo: refleja el árbol visible sin comprimirlo.
+    const tableData = flattenMonomiosForExport(typedMonomios);
 
     const totalK = monomiosConCoef.reduce((s: number, m: any) => s + m.coeficienteTotal, 0);
 

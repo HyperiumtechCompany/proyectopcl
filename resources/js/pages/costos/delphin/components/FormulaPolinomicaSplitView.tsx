@@ -12,6 +12,7 @@ import {
     resolveIneiNombre,
 } from '../data/ineiIndices';
 import { FormulaPolinomicaBuilder } from './FormulaPolinomicaBuilder';
+import type { FormulaMonomio } from '../helpers/formulaPolinomicaTree';
 
 // INE 39: Gastos Generales + Utilidad no pertenecen a ningún insumo de ACU —
 // se inyectan como una fila/columna sintética aparte, con el código y nombre
@@ -278,7 +279,7 @@ interface Props {
 }
 
 export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionario, projectName,
-    resumenPresupuesto, onBack, onExportFormula, onMonomiosChange }: Props) {
+    resumenPresupuesto, onBack, onMonomiosChange }: Props) {
 
     // Subtree en pre-order
     const subtree = useMemo(() => subtreePreorder(rows, parentId), [rows, parentId]);
@@ -350,19 +351,11 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
         return new Set(sub.filter((r) => ps.has(r.id)).map((r) => r.id));
     });
 
-    const [builderMonomios, setBuilderMonomios] = useState<any[]>([]);
-    const [isDataReady, setIsDataReady] = useState(false);
-
-    useEffect(() => {
-        
-        if (builderMonomios.length > 0) {
-            
-            setIsDataReady(true);
-        } else {
-            
-            setIsDataReady(false);
-        }
-    }, [builderMonomios]);
+    const [builderMonomios, setBuilderMonomios] = useState<FormulaMonomio[]>([]);
+    const handleBuilderMonomiosChange = useCallback(
+        (monomios: FormulaMonomio[]) => setBuilderMonomios(monomios),
+        [],
+    );
     useEffect(() => {
         
         if (onMonomiosChange) {
@@ -370,80 +363,6 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
             onMonomiosChange(builderMonomios);
         }
     }, [builderMonomios, onMonomiosChange]);
-
-
-    // ── Obtener datos de la fórmula para exportar ──────────────────────────────
-    const getFormulaData = useCallback(() => {
-        
-        const monomios = builderMonomios;
-
-        if (!monomios || monomios.length === 0) {
-            return {
-                formula: 'K = No hay monomios configurados',
-                monomios: [],  // ← Array vacío
-                totalK: 0,
-                hasData: false,
-            };
-        }
-
-    
-        const formula = monomios
-            .filter(m => m.indices.some((i: any) => i.coefDefinido > 0))
-            .map((m: any) => {
-                const coef = m.indices.reduce((s: number, i: any) => s + i.coefDefinido, 0);
-                return `${coef.toFixed(3)} ${m.nomenclatura}r`;
-            })
-            .join(' + ');
-
-
-        const result = {
-            formula: `K = ${formula}`,
-            monomios: monomios.map((m: any) => ({
-                nro: monomios.indexOf(m) + 1,
-                esPadre: true,
-                descripcion: m.indices[0]?.descripcion || 'Monomio',
-                monomio: m.nomenclatura || '',
-                coeficiente: m.indices.reduce((s: number, i: any) => s + i.coefDefinido, 0),
-                incidencia: m.indices.reduce((s: number, i: any) => s + i.coefDefinido, 0) * 100,
-                indices_agrupados: m.indices.slice(1).map((i: any) => ({
-                    codigo: i.code,
-                    descripcion: i.descripcion,
-                    coeficiente: i.coefDefinido
-                }))
-            })),
-            totalK: monomios.reduce((s: number, m: any) => s + m.indices.reduce((sum: number, i: any) => sum + i.coefDefinido, 0), 0),
-            hasData: true,
-            parentId: parentId,
-            projectName: projectName,
-        };
-
-
-        return result;
-    }, [builderMonomios, parentId, projectName]);
-
-    const handleExportFormula = useCallback(() => {
-        
-        const data = getFormulaData();
-
-        // Validar que hay datos para exportar
-        if (!data.hasData || data.monomios.length === 0) {
-            alert('⚠️ NO HAY MONOMIOS CONFIGURADOS\n\n');
-            return;
-        }
-
-        // Verificar que la suma de coeficientes sea aproximadamente 1.0
-        if (Math.abs(data.totalK - 1.0) > 0.005) {
-            if (!confirm(
-                `⚠️ La suma de coeficientes es ${data.totalK.toFixed(3)}, no es exactamente 1.000.\n\n` +
-                '¿Deseas exportar de todas formas?'
-            )) {
-                return;
-            }
-        }
-
-       
-        onExportFormula?.(data.monomios);
-    }, [getFormulaData, onExportFormula, builderMonomios]);
 
     // Cuando cambia el parentId, reiniciar estado
     useEffect(() => {
@@ -860,14 +779,7 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
                         budgetTotal={budgetTotal}
                         codeToDesc={codeToDesc}
                         sortedCodes={sortedCodes}
-                        onMonomiosChange={(monomios) => {
-                           
-
-                            // ✅ Forzar actualización con setTimeout
-                            setTimeout(() => {
-                                setBuilderMonomios(monomios);
-                            }, 0);
-                        }}
+                        onMonomiosChange={handleBuilderMonomiosChange}
                     />
                 </Panel>
             </Group>

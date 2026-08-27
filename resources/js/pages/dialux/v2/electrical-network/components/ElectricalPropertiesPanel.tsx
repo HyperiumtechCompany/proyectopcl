@@ -15,6 +15,7 @@ export function ElectricalPropertiesPanel({
     onUpdateEdge,
     onUpdateNode,
     onChangeNodeParent,
+    onUpdateSettings,
     onRemove,
 }: {
     data: ElectricalNetworkData;
@@ -23,6 +24,9 @@ export function ElectricalPropertiesPanel({
     onUpdateEdge: (id: string, patch: Partial<ElectricalEdge>) => void;
     onUpdateNode: (id: string, patch: Partial<ElectricalNode>) => void;
     onChangeNodeParent: (nodeId: string, parentId: string) => void;
+    onUpdateSettings: (
+        patch: Partial<ElectricalNetworkData['settings']>,
+    ) => void;
     onRemove: (id: string) => void;
 }) {
     const edge = data.edges.find((item) => item.id === selectedId);
@@ -127,6 +131,138 @@ export function ElectricalPropertiesPanel({
                                     este tablero.
                                 </span>
                             </label>
+                        )}
+                        {node.type === 'main_panel' && (
+                            <>
+                                <div className="mt-1 border-t border-slate-200 pt-3 text-xs font-bold text-slate-700 dark:border-white/10 dark:text-slate-300">
+                                    Configuración general de la red
+                                </div>
+                                <p className="-mt-2 text-[10px] leading-relaxed text-slate-400">
+                                    Este es el único TG del proyecto — desde
+                                    aquí se define el suministro para todos
+                                    los módulos conectados.
+                                </p>
+                                <NumberField
+                                    label="Voltaje de operación (V)"
+                                    value={data.settings.nominalVoltageV}
+                                    min={1}
+                                    onChange={(value) =>
+                                        onUpdateSettings({
+                                            nominalVoltageV: value,
+                                        })
+                                    }
+                                />
+                                <SelectField
+                                    label="Sistema"
+                                    value={String(data.settings.phases)}
+                                    options={[
+                                        ['1', '1Φ (monofásico)'],
+                                        ['3', '3Φ (trifásico)'],
+                                    ]}
+                                    onChange={(value) =>
+                                        onUpdateSettings({
+                                            phases: Number(value) as 1 | 3,
+                                        })
+                                    }
+                                />
+                                <SelectField
+                                    label="Conexión"
+                                    value={data.settings.connectionType}
+                                    options={[
+                                        ['star', 'Estrella'],
+                                        ['delta', 'Delta'],
+                                    ]}
+                                    onChange={(value) =>
+                                        onUpdateSettings({
+                                            connectionType: value as
+                                                | 'star'
+                                                | 'delta',
+                                        })
+                                    }
+                                />
+                                <SelectField
+                                    label="Frecuencia"
+                                    value={String(data.settings.frequencyHz)}
+                                    options={[
+                                        ['50', '50 Hz'],
+                                        ['60', '60 Hz'],
+                                    ]}
+                                    onChange={(value) =>
+                                        onUpdateSettings({
+                                            frequencyHz: Number(value) as
+                                                | 50
+                                                | 60,
+                                        })
+                                    }
+                                />
+                                <SelectField
+                                    label="Material del conductor"
+                                    value={data.settings.conductorMaterial}
+                                    options={[
+                                        ['copper', 'Cobre'],
+                                        ['aluminium', 'Aluminio'],
+                                    ]}
+                                    onChange={(value) =>
+                                        onUpdateSettings({
+                                            conductorMaterial: value as
+                                                | 'copper'
+                                                | 'aluminium',
+                                        })
+                                    }
+                                />
+                                <NumberField
+                                    label="Factor de potencia por defecto"
+                                    value={data.settings.defaultPowerFactor}
+                                    min={0.1}
+                                    onChange={(value) =>
+                                        onUpdateSettings({
+                                            defaultPowerFactor: Math.min(
+                                                1,
+                                                value,
+                                            ),
+                                        })
+                                    }
+                                />
+                                <NumberField
+                                    label="Factor de diseño (fdis)"
+                                    value={data.settings.designFactor ?? 1.25}
+                                    min={1}
+                                    onChange={(value) =>
+                                        onUpdateSettings({
+                                            designFactor: value,
+                                        })
+                                    }
+                                />
+                                <NumberField
+                                    label="Temperatura de trabajo (°C)"
+                                    value={data.settings.workingTemperatureC}
+                                    onChange={(value) =>
+                                        onUpdateSettings({
+                                            workingTemperatureC: value,
+                                        })
+                                    }
+                                />
+                                <NumberField
+                                    label="Límite ΔU alimentador (%)"
+                                    value={data.settings.feederDropLimitPercent}
+                                    min={0.1}
+                                    onChange={(value) =>
+                                        onUpdateSettings({
+                                            feederDropLimitPercent: value,
+                                        })
+                                    }
+                                />
+                                <NumberField
+                                    label="Límite ΔU acumulada total (%)"
+                                    value={data.settings.totalDropLimitPercent}
+                                    min={0.1}
+                                    onChange={(value) =>
+                                        onUpdateSettings({
+                                            totalDropLimitPercent: value,
+                                        })
+                                    }
+                                />
+                            </>
                         )}
                         {incomingEdge && (
                             <>
@@ -314,6 +450,34 @@ function NumberField({
                 value={value}
                 onChange={(event) => onChange(Number(event.target.value))}
             />
+        </label>
+    );
+}
+function SelectField({
+    label,
+    value,
+    options,
+    onChange,
+}: {
+    label: string;
+    value: string;
+    options: Array<[string, string]>;
+    onChange: (value: string) => void;
+}) {
+    return (
+        <label className="text-[11px] text-slate-500">
+            {label}
+            <select
+                className={inputClass}
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+            >
+                {options.map(([optionValue, optionLabel]) => (
+                    <option key={optionValue} value={optionValue}>
+                        {optionLabel}
+                    </option>
+                ))}
+            </select>
         </label>
     );
 }
