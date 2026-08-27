@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, CheckCircle2, Wrench } from 'lucide-react';
+import { AlertTriangle, Check, Wrench } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import { circuitCurrent } from '@/pages/dialux/electrical/engine/formulas';
 import { CONDUCTOR_SECTION_OPTIONS } from '@/pages/dialux/hooks/types';
@@ -33,6 +33,10 @@ interface Props {
     onSelect: (id: string) => void;
 }
 const COLS = 36;
+// Techo del alimentador de UN TD/Sub-TD específico al corregir el árbol
+// automáticamente — pasado esto, la corrección escala al alimentador padre
+// (el TG que corresponde) en vez de seguir engordando ese tablero.
+const TD_FEEDER_SECTION_CAP_MM2 = 150;
 const ITM_OPTIONS = [
     '1x10',
     '1x16',
@@ -124,7 +128,6 @@ export function ElectricalCtTable({
     onUpdateCircuit,
     onSelect,
 }: Props) {
-    const [verified, setVerified] = useState(false);
     const [treeFixApplied, setTreeFixApplied] = useState(false);
     const nodes = new Map(data.nodes.map((node) => [node.id, node]));
     const calcByEdge = new Map(calculations.map((item) => [item.edgeId, item]));
@@ -200,30 +203,68 @@ export function ElectricalCtTable({
     // normativo fijo, no una variable de ajuste: si algo no cumple, se
     // corrige subiendo el alimentador que lo alimenta (mismo criterio de
     // "por tablero, no por salida" que ya usa la verificación del árbol).
-    // Subir la sección del TG primero reduce la caída heredada aguas abajo,
-    // por lo que un segundo clic puede seguir destrabando tableros que
-    // dependían de esa corrección.
+    //
+    // El alimentador que llega a un TD/Sub-TD específico (un solo módulo)
+    // nunca crece más allá de TD_FEEDER_SECTION_CAP_MM2 — pasado ese punto
+    // el problema no es "ese cable", es que el TRONCAL (Suministro→Medidor→
+    // TG) no está dejando suficiente margen de ΔU para sus hijos. En ese
+    // caso se sube un paso el alimentador PADRE (el que llega al origen de
+    // este tramo) en vez de seguir engordando el TD — mismo algoritmo
+    // hijo→padre que `resolveProjectTreeConformingSections` ya usa dentro
+    // de un módulo, aplicado ahora también al límite TG↔TD de la red v2.
+    // Subir un alimentador cambia la caída heredada de sus hijos, por lo que
+    // un segundo clic puede seguir destrabando tableros que dependían de esa
+    // corrección — converge en unos pocos clics, no en uno solo.
     const runTreeFix = () => {
+        const nextCatalogSection = (current: number): number | undefined =>
+            CONDUCTOR_SECTION_OPTIONS.map((option) => option.value as number)
+                .sort((a, b) => a - b)
+                .find((section) => section > current);
         for (const edge of data.edges) {
             const calc = calcByEdge.get(edge.id);
-            if (
-                calc?.suggestedSectionMm2 &&
-                calc.suggestedSectionMm2 > edge.sectionMm2
-            ) {
+            if (!calc?.suggestedSectionMm2) continue;
+            if (calc.suggestedSectionMm2 <= edge.sectionMm2) continue;
+            const targetsModulePanel =
+                nodes.get(edge.targetNodeId)?.type === 'module_panel_port';
+            if (!targetsModulePanel) {
+                // Tramo troncal (Suministro→Medidor→TG): sin techo.
                 onUpdateEdge(edge.id, {
                     sectionMm2: calc.suggestedSectionMm2,
                 });
+                continue;
+            }
+            const cappedSection = Math.min(
+                calc.suggestedSectionMm2,
+                TD_FEEDER_SECTION_CAP_MM2,
+            );
+            if (cappedSection > edge.sectionMm2) {
+                onUpdateEdge(edge.id, { sectionMm2: cappedSection });
+            }
+            if (calc.suggestedSectionMm2 > TD_FEEDER_SECTION_CAP_MM2) {
+                const parentEdge = data.edges.find(
+                    (candidate) => candidate.targetNodeId === edge.sourceNodeId,
+                );
+                const bumped =
+                    parentEdge &&
+                    nextCatalogSection(parentEdge.sectionMm2);
+                if (parentEdge && bumped) {
+                    onUpdateEdge(parentEdge.id, { sectionMm2: bumped });
+                }
             }
         }
         moduleCtCircuits.forEach((circuit) => {
             if (!circuit.isPanelSummary) return;
             if (circuit.voltageDropOk && circuit.capacityConforms) return;
             const nextSection = resolveConformingSectionMm2(circuit);
-            if (nextSection !== null && nextSection > circuit.sectionMm2) {
-                onUpdateCircuit(circuit, { sectionMm2: nextSection });
+            if (nextSection === null) return;
+            const cappedSection = Math.min(
+                nextSection,
+                TD_FEEDER_SECTION_CAP_MM2,
+            );
+            if (cappedSection > circuit.sectionMm2) {
+                onUpdateCircuit(circuit, { sectionMm2: cappedSection });
             }
         });
-        setVerified(true);
         setTreeFixApplied(true);
     };
 
@@ -240,14 +281,6 @@ export function ElectricalCtTable({
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button
                         type="button"
-                        onClick={() => setVerified(true)}
-                        className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-3 py-2 text-[10px] font-semibold text-white"
-                    >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Verificar árbol multimódulo
-                    </button>
-                    <button
-                        type="button"
                         onClick={runTreeFix}
                         className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-[10px] font-semibold text-white hover:bg-emerald-500"
                     >
@@ -257,11 +290,9 @@ export function ElectricalCtTable({
                     <span
                         className={`rounded-full px-3 py-1.5 text-[10px] font-semibold ${problems === 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}
                     >
-                        {!verified
-                            ? 'Verificación pendiente'
-                            : problems === 0
-                              ? 'Árbol completo y conforme'
-                              : `${problems} incidencia(s): ${topologyProblems} topología · ${feederProblems} alimentadores · ${circuitProblems} circuitos · ${disconnected.length} desconectados`}
+                        {problems === 0
+                            ? 'Árbol completo y conforme'
+                            : `${problems} incidencia(s): ${topologyProblems} topología · ${feederProblems} alimentadores · ${circuitProblems} circuitos · ${disconnected.length} desconectados`}
                     </span>
                     {treeFixApplied && (
                         <p

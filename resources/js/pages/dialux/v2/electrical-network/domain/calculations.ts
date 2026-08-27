@@ -88,19 +88,29 @@ export function calculateElectricalNetwork(
     if (network.rootNodeId) loadAt(network.rootNodeId);
 
     const results: EdgeCalculation[] = [];
-    const walk = (
-        nodeId: string,
-        upstreamPercent: number,
-        upstreamV: number,
-    ): void => {
+    const walk = (nodeId: string, upstreamV: number): void => {
         for (const edge of children.get(nodeId) ?? []) {
             const load = loadAt(edge.targetNodeId);
             const powerFactor =
                 edge.powerFactor ?? network.settings.defaultPowerFactor;
+            // El % de caída de tensión se define contra el voltaje NOMINAL
+            // del circuito que recibe la carga — no contra el voltaje del
+            // sistema general. Un tablero de módulo (module_panel_port) casi
+            // siempre publica su propio voltaje/fases reales (ej. 220V
+            // monofásico colgado de un sistema 380V trifásico); usar el
+            // voltaje global del TG ahí subestima o distorsiona el % real
+            // (confirmado: la misma caída en voltios daba "conforme" contra
+            // 380V y "no conforme" contra los 220V reales del tablero). Los
+            // nodos sin puerto propio (Medidor, TG) sí usan el voltaje
+            // general, porque ahí no hay un circuito receptor más específico.
+            const targetPort = portByNode.get(edge.targetNodeId);
+            const edgeVoltageV =
+                targetPort?.nominalVoltageV || network.settings.nominalVoltageV;
+            const edgePhases = targetPort?.phases ?? network.settings.phases;
             const currentA = circuitCurrent(
                 load.demand,
-                network.settings.nominalVoltageV,
-                network.settings.phases,
+                edgeVoltageV,
+                edgePhases,
                 powerFactor,
             );
             const designCurrentA =
@@ -125,19 +135,23 @@ export function calculateElectricalNetwork(
                 currentA,
                 lengthM,
                 edge.sectionMm2,
-                network.settings.nominalVoltageV,
-                network.settings.phases,
+                edgeVoltageV,
+                edgePhases,
                 material,
             );
-            const accumulatedPercent = upstreamPercent + ownPercent;
-            const ownVoltageDropV =
-                (ownPercent * network.settings.nominalVoltageV) / 100;
+            const ownVoltageDropV = (ownPercent * edgeVoltageV) / 100;
+            // Los VOLTIOS acumulados sí se suman sin ambigüedad (son una
+            // cantidad física, no dependen de la base elegida); el % de
+            // caída acumulada se recalcula aquí contra el voltaje de ESTE
+            // tramo — nunca sumando porcentajes ya calculados con voltajes
+            // distintos aguas arriba, que es matemáticamente inválido.
             const accumulatedV = upstreamV + ownVoltageDropV;
+            const accumulatedPercent = (accumulatedV / edgeVoltageV) * 100;
             const suggestion = selectConductor({
                 designCurrentA,
                 lengthM,
-                voltageV: network.settings.nominalVoltageV,
-                phases: network.settings.phases,
+                voltageV: edgeVoltageV,
+                phases: edgePhases,
                 minSectionMm2: 2.5,
                 maxVoltageDropPct: network.settings.feederDropLimitPercent,
                 conductors: catalog,
@@ -217,10 +231,10 @@ export function calculateElectricalNetwork(
                             : 'complete',
                 warnings,
             });
-            walk(edge.targetNodeId, accumulatedPercent, accumulatedV);
+            walk(edge.targetNodeId, accumulatedV);
         }
     };
-    if (network.rootNodeId) walk(network.rootNodeId, 0, 0);
+    if (network.rootNodeId) walk(network.rootNodeId, 0);
 
     return results;
 }

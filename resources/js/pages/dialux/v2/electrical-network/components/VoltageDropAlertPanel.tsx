@@ -20,6 +20,17 @@ function incompleteReason(calculation: EdgeCalculation): string {
     return 'datos incompletos';
 }
 
+/**
+ * No siempre es la caída de tensión: `warnings` puede venir de sección
+ * inexistente en el catálogo, ampacidad insuficiente, etc. Mostrar siempre
+ * "ΔU X% > límite%" aquí era engañoso cuando la causa real era otra (ej.
+ * "la sección 300 mm² no existe para N2XOH").
+ */
+function criticalReason(item: EdgeCalculation): string {
+    if (item.warnings.length > 0) return item.warnings.join(' · ');
+    return `ΔU ${item.accumulatedVoltageDropPercent.toFixed(2)}% supera el límite`;
+}
+
 export function VoltageDropAlertPanel({
     data,
     calculations,
@@ -67,7 +78,7 @@ export function VoltageDropAlertPanel({
                                 onClick={() => onSelect(item.edgeId)}
                                 className={`block w-full rounded px-2 py-1 text-left text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/30 ${selectedId === item.edgeId ? 'bg-red-50 dark:bg-red-950/30' : ''}`}
                             >
-                                {`${edgeLabel(data, item.edgeId)}: ΔU ${item.accumulatedVoltageDropPercent.toFixed(2)}% > ${data.settings.totalDropLimitPercent}%`}
+                                {`${edgeLabel(data, item.edgeId)}: ${criticalReason(item)}`}
                             </button>
                         ))}
                     </div>

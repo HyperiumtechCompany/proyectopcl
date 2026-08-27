@@ -24,7 +24,7 @@ const tasks: GanttTask[] = [
         item_order: 54,
         partida: '2',
         descripcion: 'Actividad sucesora',
-        duracion_dias: 3,
+        duracion_dias: 10,
         fecha_inicio: '2027-02-18',
         fecha_fin: '2027-02-20',
         avance: 0,
@@ -40,7 +40,8 @@ describe('buildDelphinMSPXml', () => {
         expect(xml).toContain('<Name>Actividad sucesora</Name>');
         expect(xml).toContain('<Start>2027-02-18T08:00:00</Start>');
         expect(xml).toContain('<Finish>2027-02-20T17:00:00</Finish>');
-        expect(xml).toContain('<Duration>PT24H0M0S</Duration>');
+        expect(xml).toContain('<Duration>PT80H0M0S</Duration>');
+        expect(xml).toContain('<RemainingDuration>PT80H0M0S</RemainingDuration>');
         expect(xml).toContain('<FixedCost>200.00</FixedCost>');
         expect(xml).toContain('<PredecessorUID>1</PredecessorUID>');
         expect(xml).toContain('<Type>1</Type>');

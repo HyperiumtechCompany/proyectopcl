@@ -22,7 +22,7 @@ function workingMinutesPerDay(settings?: GanttCalendarSettings): number {
 }
 
 function toDuration(days: number, minutesPerDay: number): string {
-    const totalMinutes = Math.max(0, Math.round(days)) * minutesPerDay;
+    const totalMinutes = Math.max(0, Math.round(days * minutesPerDay));
     const hours = Math.floor(totalMinutes / 60);
     return `PT${hours}H${totalMinutes % 60}M0S`;
 }
@@ -145,6 +145,13 @@ export function buildDelphinMSPXml(
         const isGroup = groupIds.has(row.id);
         const start  = toMSDate(row.fecha_inicio, startTime);
         const finish = toMSDate(row.fecha_fin, finishTime);
+        const durationDays = Math.max(0, Number(row.duracion_dias) || 0);
+        const duration = toDuration(durationDays, minutesPerDay);
+        const progress = Math.min(100, Math.max(0, Number(row.avance) || 0));
+        const remainingDuration = toDuration(
+            durationDays * (1 - progress / 100),
+            minutesPerDay,
+        );
         const predecessors = Array.isArray(row.predecesoras)
             ? row.predecesoras.map((predecessor) => ({
                 predecessor,
@@ -165,16 +172,22 @@ export function buildDelphinMSPXml(
         tasksXml += tag('Priority', 500);
         if (start)  tasksXml += tag('Start', start);
         if (finish) tasksXml += tag('Finish', finish);
-        tasksXml += tag('Duration', toDuration(row.duracion_dias, minutesPerDay));
+        tasksXml += tag('Duration', duration);
         tasksXml += tag('DurationFormat', 7); // days
-        tasksXml += tag('Milestone', row.duracion_dias === 0 && !isGroup ? 1 : 0);
+        tasksXml += tag('Work', duration);
+        tasksXml += tag('EffortDriven', 0);
+        tasksXml += tag('Estimated', 0);
+        tasksXml += tag('Milestone', durationDays === 0 && !isGroup ? 1 : 0);
         tasksXml += tag('Summary', isGroup ? 1 : 0);
         if (!isGroup && row.presupuesto) {
             tasksXml += tag('FixedCost', row.presupuesto.toFixed(2));
             tasksXml += tag('FixedCostAccrual', 3);
         }
-        if (row.avance)      tasksXml += tag('PercentComplete', Math.round(row.avance));
+        tasksXml += tag('PercentComplete', Math.round(progress));
+        tasksXml += tag('PercentWorkComplete', Math.round(progress));
         if (!isGroup && row.presupuesto) tasksXml += tag('Cost', row.presupuesto.toFixed(2));
+        tasksXml += tag('RegularWork', duration);
+        tasksXml += tag('RemainingDuration', remainingDuration);
         if (!isGroup && start && predecessors.length === 0) {
             tasksXml += tag('ConstraintType', 2);
             tasksXml += tag('CalendarUID', 1);
