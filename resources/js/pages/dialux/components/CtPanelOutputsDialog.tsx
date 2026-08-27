@@ -142,7 +142,7 @@ export function CtPanelOutputsDialog({
         panelCircuits.forEach((circuit) => {
             if (circuit.voltageDropOk && circuit.capacityConforms) return;
             const nextSection = resolveConformingSectionMm2(circuit);
-            if (nextSection > circuit.sectionMm2) {
+            if (nextSection !== null && nextSection > circuit.sectionMm2) {
                 fixedCount += 1;
                 onFixSection?.(levelId, circuit.rootConductorId, nextSection);
             }

@@ -1540,7 +1540,19 @@ export function calculateProjectPanelCircuitSummaries(scenes: Scene[]): PanelCir
  * Si ningún calibre disponible alcanza a cumplir, devuelve el mayor
  * disponible (mejor esfuerzo).
  */
-export function resolveConformingSectionMm2(circuit: PanelCircuitSummary): number {
+/**
+ * Busca el menor calibre del catálogo que haga cumplir el circuito.
+ * Devuelve `null` (no `candidates.at(-1)`) cuando NINGÚN calibre disponible
+ * cumple ampacidad + caída de tensión — aplicar el más grande "porque sí" es
+ * peor que no aplicar nada: puede saltar a un calibre físicamente absurdo
+ * (ej. 300 mm² para una salida de alumbrado) cuando la causa real es una
+ * caída heredada aguas arriba que ningún calibre local puede compensar. El
+ * llamador debe tratar `null` como "no se puede corregir aquí, revisar
+ * manualmente o corregir el alimentador padre", nunca aplicarlo a ciegas.
+ */
+export function resolveConformingSectionMm2(
+    circuit: PanelCircuitSummary,
+): number | null {
     const maxPhaseCurrent = Math.max(
         circuit.phaseCurrentR,
         circuit.phaseCurrentS,
@@ -1575,7 +1587,7 @@ export function resolveConformingSectionMm2(circuit: PanelCircuitSummary): numbe
         }
     }
 
-    return candidates.at(-1) ?? circuit.sectionMm2;
+    return null;
 }
 
 /**
@@ -1653,7 +1665,7 @@ export function resolveTreeConformingSections(
         if (!violator) break;
 
         const nextSection = resolveConformingSectionMm2(violator);
-        if (nextSection <= violator.sectionMm2) {
+        if (nextSection === null || nextSection <= violator.sectionMm2) {
             exhausted.add(violator.rootConductorId);
             continue;
         }
@@ -1692,7 +1704,7 @@ export function resolveProjectTreeConformingSections(
         );
         if (!violator) break;
         const nextSection = resolveConformingSectionMm2(violator);
-        if (nextSection <= violator.sectionMm2) {
+        if (nextSection === null || nextSection <= violator.sectionMm2) {
             exhausted.add(violator.rootConductorId);
             continue;
         }

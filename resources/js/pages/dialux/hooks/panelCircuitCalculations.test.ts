@@ -710,10 +710,13 @@ describe('calculatePanelCircuitSummaries', () => {
         expect(circuit.voltageDropOk).toBe(false);
 
         const fixedSection = resolveConformingSectionMm2(circuit);
+        expect(fixedSection).not.toBeNull();
         expect(fixedSection).toBeGreaterThan(circuit.sectionMm2);
         expect(fixedSection).toBe(10);
 
-        const [fixedCircuit] = calculatePanelCircuitSummaries(buildScene(fixedSection));
+        const [fixedCircuit] = calculatePanelCircuitSummaries(
+            buildScene(fixedSection as number),
+        );
         expect(fixedCircuit.voltageDropOk).toBe(true);
         expect(fixedCircuit.capacityConforms).toBe(true);
     });

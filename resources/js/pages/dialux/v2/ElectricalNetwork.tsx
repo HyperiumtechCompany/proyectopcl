@@ -430,6 +430,7 @@ export default function ElectricalNetworkPage({
                         onUpdateCircuit={updateModuleCircuit}
                         issues={editor.issues}
                         onUpdateSettings={editor.updateSettings}
+                        onUpdateEdge={editor.updateEdge}
                         onSelect={editor.setSelectedId}
                     />
                 ) : (

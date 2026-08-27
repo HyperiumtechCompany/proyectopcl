@@ -175,6 +175,19 @@ export function calculateElectricalNetwork(
                     `La caída acumulada supera ${network.settings.totalDropLimitPercent}%.`,
                 );
             }
+            // `selectConductor` cae al calibre más grande del catálogo
+            // cuando NINGUNA sección cumple ampacidad + caída de tensión —
+            // eso es un caso de "no hay solución local", no una sugerencia
+            // válida. Ofrecerla igual (botón "Aplicar sección sugerida" o el
+            // auto-corrector del árbol) puede saltar a un calibre absurdo
+            // (ej. 300 mm²) sin que ese salto resuelva nada realmente. Solo
+            // se expone `suggestedSectionMm2` cuando el propio motor no
+            // reportó advertencias sobre esa elección; si las reportó, se
+            // muestran como advertencia normal para que un humano revise el
+            // alimentador (o el que está aguas arriba) manualmente.
+            if (suggestion.warnings.length > 0) {
+                warnings.push(...suggestion.warnings);
+            }
 
             results.push({
                 edgeId: edge.id,
@@ -185,7 +198,10 @@ export function calculateElectricalNetwork(
                 designCurrentA,
                 ampacityA: selected?.ampacity_a,
                 breakerA: breaker.amps,
-                suggestedSectionMm2: suggestion.sectionMm2 || undefined,
+                suggestedSectionMm2:
+                    suggestion.warnings.length === 0
+                        ? suggestion.sectionMm2 || undefined
+                        : undefined,
                 ownVoltageDropV,
                 ownVoltageDropPercent: ownPercent,
                 accumulatedVoltageDropPercent: accumulatedPercent,

@@ -1,8 +1,11 @@
-import { AlertTriangle, Check, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, Wrench } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import { circuitCurrent } from '@/pages/dialux/electrical/engine/formulas';
 import { CONDUCTOR_SECTION_OPTIONS } from '@/pages/dialux/hooks/types';
-import { calculatePanelTotalCurrentA } from '@/pages/dialux/hooks/wireLengthCalculations';
+import {
+    calculatePanelTotalCurrentA,
+    resolveConformingSectionMm2,
+} from '@/pages/dialux/hooks/wireLengthCalculations';
 import type { EdgeCalculation } from '../domain/calculations';
 import {
     rowsForDistributionPanel,
@@ -22,6 +25,7 @@ interface Props {
     onUpdateSettings: (
         patch: Partial<ElectricalNetworkData['settings']>,
     ) => void;
+    onUpdateEdge: (id: string, patch: Partial<ElectricalEdge>) => void;
     onUpdateCircuit: (
         circuit: ModuleCtCircuit,
         patch: Partial<ModuleCtCircuit>,
@@ -116,10 +120,12 @@ export function ElectricalCtTable({
     moduleCtCircuits,
     issues,
     onUpdateSettings,
+    onUpdateEdge,
     onUpdateCircuit,
     onSelect,
 }: Props) {
     const [verified, setVerified] = useState(false);
+    const [treeFixApplied, setTreeFixApplied] = useState(false);
     const nodes = new Map(data.nodes.map((node) => [node.id, node]));
     const calcByEdge = new Map(calculations.map((item) => [item.edgeId, item]));
     const portIds = new Set(
@@ -187,6 +193,39 @@ export function ElectricalCtTable({
             circuit.panelType === 'sub_panel' &&
             rootPanelIds.has(circuit.panelId),
     );
+    // Corrige el árbol multimódulo en un solo paso, pero SOLO a nivel de
+    // tablero (alimentadores TG→TD→Sub-TD de la red v2 y las filas resumen
+    // "CGx" de cada módulo) — nunca las salidas individuales. La sección de
+    // una salida (alumbrado 2.5 mm², tomacorriente 4 mm²) es un mínimo
+    // normativo fijo, no una variable de ajuste: si algo no cumple, se
+    // corrige subiendo el alimentador que lo alimenta (mismo criterio de
+    // "por tablero, no por salida" que ya usa la verificación del árbol).
+    // Subir la sección del TG primero reduce la caída heredada aguas abajo,
+    // por lo que un segundo clic puede seguir destrabando tableros que
+    // dependían de esa corrección.
+    const runTreeFix = () => {
+        for (const edge of data.edges) {
+            const calc = calcByEdge.get(edge.id);
+            if (
+                calc?.suggestedSectionMm2 &&
+                calc.suggestedSectionMm2 > edge.sectionMm2
+            ) {
+                onUpdateEdge(edge.id, {
+                    sectionMm2: calc.suggestedSectionMm2,
+                });
+            }
+        }
+        moduleCtCircuits.forEach((circuit) => {
+            if (!circuit.isPanelSummary) return;
+            if (circuit.voltageDropOk && circuit.capacityConforms) return;
+            const nextSection = resolveConformingSectionMm2(circuit);
+            if (nextSection !== null && nextSection > circuit.sectionMm2) {
+                onUpdateCircuit(circuit, { sectionMm2: nextSection });
+            }
+        });
+        setVerified(true);
+        setTreeFixApplied(true);
+    };
 
     return (
         <section className="flex min-h-0 flex-1 flex-col bg-slate-50 dark:bg-[#090c14]">
@@ -207,6 +246,14 @@ export function ElectricalCtTable({
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         Verificar árbol multimódulo
                     </button>
+                    <button
+                        type="button"
+                        onClick={runTreeFix}
+                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-[10px] font-semibold text-white hover:bg-emerald-500"
+                    >
+                        <Wrench className="h-3.5 w-3.5" />
+                        Corregir automáticamente
+                    </button>
                     <span
                         className={`rounded-full px-3 py-1.5 text-[10px] font-semibold ${problems === 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}
                     >
@@ -216,6 +263,19 @@ export function ElectricalCtTable({
                               ? 'Árbol completo y conforme'
                               : `${problems} incidencia(s): ${topologyProblems} topología · ${feederProblems} alimentadores · ${circuitProblems} circuitos · ${disconnected.length} desconectados`}
                     </span>
+                    {treeFixApplied && (
+                        <p
+                            className={
+                                problems === 0
+                                    ? 'text-[10px] font-semibold text-emerald-600 dark:text-emerald-400'
+                                    : 'text-[10px] font-semibold text-amber-600 dark:text-amber-400'
+                            }
+                        >
+                            {problems === 0
+                                ? 'Todo el árbol multimódulo cumple.'
+                                : `${problems} incidencia(s) siguen sin cumplir — vuelve a pulsar "Corregir automáticamente" (subir un alimentador cambia la caída heredada de sus hijos) o revisa el calibre máximo disponible.`}
+                        </p>
+                    )}
                 </div>
             </div>
             <div className="min-h-0 flex-1 overflow-auto">
@@ -429,6 +489,7 @@ export function ElectricalCtTable({
                             calculations={calculations}
                             distributionSummaries={rootDistributionSummaries}
                             onUpdate={onUpdateSettings}
+                            onUpdateEdge={onUpdateEdge}
                         />
                     </tbody>
                 </table>
@@ -499,11 +560,13 @@ function GeneralRow({
     calculations,
     distributionSummaries,
     onUpdate,
+    onUpdateEdge,
 }: {
     data: ElectricalNetworkData;
     calculations: EdgeCalculation[];
     distributionSummaries: ModuleCtCircuit[];
     onUpdate: Props['onUpdateSettings'];
+    onUpdateEdge: Props['onUpdateEdge'];
 }) {
     // Alimentador real Medidor → TG (el único TG del proyecto) — sin esto la
     // fila resumen del TG mostraba longitud/sección/ΔU fijos en 0, aunque el
@@ -607,7 +670,22 @@ function GeneralRow({
             <Mono value={tgEdge ? tgEdge.horizontalLengthM.toFixed(2) : '0.00'} />
             <Mono value={tgEdge ? tgEdge.verticalLengthM.toFixed(2) : '0.00'} />
             <Mono value={tgResult ? tgResult.lengthM.toFixed(2) : '0.00'} />
-            <Mono value={tgEdge ? `${tgEdge.sectionMm2} mm²` : '—'} />
+            {tgEdge ? (
+                <SelectCell
+                    value={tgEdge.sectionMm2.toString()}
+                    options={CONDUCTOR_SECTION_OPTIONS.map((option) => [
+                        option.value.toString(),
+                        option.label,
+                    ])}
+                    onChange={(value) =>
+                        onUpdateEdge(tgEdge.id, {
+                            sectionMm2: Number(value),
+                        })
+                    }
+                />
+            ) : (
+                <Mono value="—" />
+            )}
             <Mono value={tgResult ? tgResult.ownVoltageDropV.toFixed(2) : '0.00'} />
             <Mono
                 value={`${tgResult ? tgResult.accumulatedVoltageDropPercent.toFixed(2) : '0.00'}%`}
@@ -622,8 +700,34 @@ function GeneralRow({
                 }
             />
             <Mono value="—" />
-            <Mono value={tgEdge?.conductorType ?? '—'} />
-            <Mono value={tgEdge?.earthSectionMm2?.toFixed(1) ?? '—'} />
+            {tgEdge ? (
+                <td className="px-2 py-2">
+                    <input
+                        value={tgEdge.conductorType}
+                        onChange={(event) =>
+                            onUpdateEdge(tgEdge.id, {
+                                conductorType: event.target.value,
+                            })
+                        }
+                        className="h-8 w-24 rounded border border-slate-300 bg-white px-2 dark:border-white/15 dark:bg-[#182237]"
+                    />
+                </td>
+            ) : (
+                <Mono value="—" />
+            )}
+            {tgEdge ? (
+                <SelectCell
+                    value={(tgEdge.earthSectionMm2 ?? 2.5).toString()}
+                    options={EARTH_SECTION_OPTIONS}
+                    onChange={(value) =>
+                        onUpdateEdge(tgEdge.id, {
+                            earthSectionMm2: Number(value),
+                        })
+                    }
+                />
+            ) : (
+                <Mono value="—" />
+            )}
         </tr>
     );
 }
