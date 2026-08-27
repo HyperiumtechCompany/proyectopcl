@@ -27,6 +27,13 @@ class ProjectController extends Controller
     public function index(): Response
     {
         $proyectos = DialuxProject::where('user_id', Auth::id())
+            // Solo las columnas que el listado realmente usa: sin esto,
+            // Eloquent trae también `data`/`consolidated_summary` (JSON
+            // potencialmente de varios MB por proyecto CAD importado) solo
+            // para descartarlos en el map() de abajo — y un ORDER BY sobre
+            // filas así de grandes puede agotar el sort_buffer de MySQL
+            // (1038 "Out of sort memory"), tumbando el listado completo.
+            ->select(['id', 'name', 'is_demo', 'demo_expires_at', 'created_at', 'updated_at'])
             ->orderByDesc('updated_at')
             ->get()
             ->map(fn (DialuxProject $p) => [
