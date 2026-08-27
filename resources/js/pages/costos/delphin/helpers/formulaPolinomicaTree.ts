@@ -135,9 +135,9 @@ export function buildInitialMonomios(
 /**
  * Actualiza los textos derivados del catálogo al cargar una fórmula guardada.
  * La estructura, los identificadores y los coeficientes definidos por el usuario
- * se conservan intactos. Se reemplazan los textos que pudieron quedar
- * persistidos desde un catálogo anterior y se ordenan los monomios hermanos
- * por código ascendente en cada nivel.
+ * se conservan intactos, incluido el orden personalizado por el usuario. Solo
+ * se reemplazan los textos que pudieron quedar persistidos desde un catálogo
+ * anterior.
  */
 export function reconcileMonomiosWithCatalog(
     monomios: FormulaMonomio[],
@@ -146,11 +146,11 @@ export function reconcileMonomiosWithCatalog(
     const reconcileNode = (node: FormulaNode): FormulaNode => ({
         ...node,
         descripcion: codeToDesc.get(node.code) ?? node.descripcion,
-        children: node.children.map(reconcileNode).sort((left, right) => compareCodes(left.code, right.code)),
+        children: node.children.map(reconcileNode),
     });
     const usedSymbols = new Set<string>();
 
-    return sortMonomiosByCode(monomios).map((monomio) => {
+    return monomios.map((monomio) => {
         const root = reconcileNode(monomio.root);
         const officialDescription = codeToDesc.get(root.code);
         const nomenclatura = officialDescription
@@ -224,10 +224,77 @@ export function moveNode(
     if (!canMoveNode(monomios, sourceId, targetId)) return monomios;
     const { forest, node } = detachNode(monomios, sourceId);
     if (!node) return monomios;
-    return sortMonomiosByCode(forest.map((monomio) => ({
+    return forest.map((monomio) => ({
         ...monomio,
         root: appendChild(monomio.root, targetId, node),
-    })));
+    }));
+}
+
+export function moveNodeWithinSiblings(
+    monomios: FormulaMonomio[],
+    nodeId: string,
+    direction: -1 | 1,
+): FormulaMonomio[] {
+    const rootIndex = monomios.findIndex((monomio) => monomio.root.id === nodeId);
+    if (rootIndex >= 0) {
+        const targetIndex = rootIndex + direction;
+        if (targetIndex < 0 || targetIndex >= monomios.length) return monomios;
+        const reordered = [...monomios];
+        [reordered[rootIndex], reordered[targetIndex]] = [reordered[targetIndex], reordered[rootIndex]];
+        return reordered;
+    }
+
+    let moved = false;
+    const reorderChildren = (node: FormulaNode): FormulaNode => {
+        const childIndex = node.children.findIndex((child) => child.id === nodeId);
+        if (childIndex >= 0) {
+            const targetIndex = childIndex + direction;
+            if (targetIndex < 0 || targetIndex >= node.children.length) return node;
+            const children = [...node.children];
+            [children[childIndex], children[targetIndex]] = [children[targetIndex], children[childIndex]];
+            moved = true;
+            return { ...node, children };
+        }
+        return { ...node, children: node.children.map(reorderChildren) };
+    };
+
+    const reordered = monomios.map((monomio) => ({ ...monomio, root: reorderChildren(monomio.root) }));
+    return moved ? reordered : monomios;
+}
+
+export function reorderNodeAmongSiblings(
+    monomios: FormulaMonomio[],
+    sourceId: string,
+    targetId: string,
+    placement: 'before' | 'after',
+): FormulaMonomio[] {
+    if (sourceId === targetId) return monomios;
+
+    const reorder = <T extends { id: string }>(items: T[]): T[] | null => {
+        const source = items.find((item) => item.id === sourceId);
+        const target = items.find((item) => item.id === targetId);
+        if (!source || !target) return null;
+        const remaining = items.filter((item) => item.id !== sourceId);
+        const targetIndex = remaining.findIndex((item) => item.id === targetId);
+        remaining.splice(placement === 'before' ? targetIndex : targetIndex + 1, 0, source);
+        return remaining;
+    };
+
+    const roots = monomios.map((monomio) => ({ id: monomio.root.id, monomio }));
+    const reorderedRoots = reorder(roots);
+    if (reorderedRoots) return reorderedRoots.map(({ monomio }) => monomio);
+
+    let changed = false;
+    const reorderChildren = (node: FormulaNode): FormulaNode => {
+        const reordered = reorder(node.children);
+        if (reordered) {
+            changed = true;
+            return { ...node, children: reordered };
+        }
+        return { ...node, children: node.children.map(reorderChildren) };
+    };
+    const result = monomios.map((monomio) => ({ ...monomio, root: reorderChildren(monomio.root) }));
+    return changed ? result : monomios;
 }
 
 export function flattenMonomiosForExport(monomios: FormulaMonomio[]): FormulaExportRow[] {

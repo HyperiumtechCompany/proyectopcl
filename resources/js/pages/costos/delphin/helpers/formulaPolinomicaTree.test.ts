@@ -5,6 +5,8 @@ import {
     flattenMonomiosForExport,
     flattenNodes,
     moveNode,
+    moveNodeWithinSiblings,
+    reorderNodeAmongSiblings,
     reconcileMonomiosWithCatalog,
 } from './formulaPolinomicaTree';
 
@@ -77,15 +79,30 @@ describe('árbol de fórmula polinómica', () => {
         expect(reconciled[0].root.children[0].coefDefinido).toBe(monomios[0].root.children[0].coefDefinido);
     });
 
-    it('ordena monomios y hermanos por código ascendente al restaurarlos', () => {
+    it('permite ordenar manualmente monomios y filas sin cambiar su jerarquía', () => {
         let monomios = build();
         monomios = moveNode(monomios, 'i-30', 'i-10');
         monomios = moveNode(monomios, 'i-20', 'i-10');
-        monomios.reverse();
+        monomios = moveNodeWithinSiblings(monomios, 'i-39', -1);
+        monomios = moveNodeWithinSiblings(monomios, 'i-20', -1);
 
-        const reconciled = reconcileMonomiosWithCatalog(monomios, new Map());
+        expect(monomios.map((monomio) => monomio.root.code)).toEqual(['39', '10']);
+        expect(monomios[1].root.children.map((node) => node.code)).toEqual(['20', '30']);
+        expect(monomios[1].root.children.every((node) => node.children.length === 0)).toBe(true);
+    });
 
-        expect(reconciled.map((monomio) => monomio.root.code)).toEqual(['10', '39']);
-        expect(reconciled[0].root.children.map((node) => node.code)).toEqual(['20', '30']);
+    it('reordena por arrastre solo entre hermanos y no agrupa elementos', () => {
+        let monomios = build();
+        monomios = moveNode(monomios, 'i-20', 'i-10');
+        monomios = moveNode(monomios, 'i-30', 'i-10');
+
+        const reorderedRoots = reorderNodeAmongSiblings(monomios, 'i-39', 'i-10', 'before');
+        const reorderedChildren = reorderNodeAmongSiblings(reorderedRoots, 'i-30', 'i-20', 'before');
+        const invalidCrossLevel = reorderNodeAmongSiblings(reorderedChildren, 'i-20', 'i-39', 'before');
+
+        expect(reorderedChildren.map((monomio) => monomio.root.code)).toEqual(['39', '10']);
+        expect(reorderedChildren[1].root.children.map((node) => node.code)).toEqual(['30', '20']);
+        expect(invalidCrossLevel).toBe(reorderedChildren);
+        expect(flattenNodes(reorderedChildren[1].root)).toHaveLength(3);
     });
 });

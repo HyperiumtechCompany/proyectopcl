@@ -4,19 +4,7 @@ import { saveAs } from 'file-saver';
 import axios from 'axios';
 import type { DelphinRow } from '../types';
 import type { DelphinExportContent } from './exportDelphin';
-
-// presupuesto_general.partida se guarda sin padding ("4.1.1.1") pero
-// presupuesto_acus.partida sí lleva padding de 2 dígitos por segmento
-// ("04.01.01.01") — mismo criterio que normalizePartidaCode() en
-// CostoDatabaseService.php y normalizedPartida() en InsumosConsolidadosModal.tsx.
-// Comparar los strings tal cual nunca coincide y descarta todos los ACUs.
-function normalizedPartida(value: string): string {
-    return value
-        .split('.')
-        .filter(Boolean)
-        .map((part) => part.padStart(2, '0'))
-        .join('.');
-}
+import { orderAcusForExport } from './acuExportOrder';
 
 // ── Colores RGB para jsPDF ────────────────────────────────────────────────────
 type RGB = [number, number, number];
@@ -460,18 +448,9 @@ async function buildFormulaPolinomicaBlock(
 // ── ACUs ───────────────────────────────────────────────────────────────
 async function buildAcusPdf(doc: jsPDF, acusData: any[], filteredRows: DelphinRow[], projectName: string, proyecto: any) {
     let startY = await addPageHeader(doc, projectName, 'ANÁLISIS DE PRECIOS UNITARIOS', proyecto);
-    const filteredPartidas = new Set(filteredRows.map(r => normalizedPartida(String(r.partida ?? ''))));
-    // presupuesto_acus.partida guarda el código con padding ("04.01.01.01"); se
-    // muestra con el mismo formato que la hoja/tabla "Presupuesto General" (sin
-    // padding, "4.1.1.1") para que ambas coincidan visualmente.
-    const partidaDisplayByNormalized = new Map(
-        filteredRows.map(r => [normalizedPartida(String(r.partida ?? '')), String(r.partida ?? '')]),
-    );
+    const orderedAcus = orderAcusForExport(acusData, filteredRows);
 
-    for (const acu of acusData) {
-        const partidaNorm = normalizedPartida(String(acu.partida ?? ''));
-        if (filteredRows.length > 0 && !filteredPartidas.has(partidaNorm)) continue;
-        const partidaDisplay = partidaDisplayByNormalized.get(partidaNorm) ?? acu.partida;
+    for (const { acu, item, partidaDisplay } of orderedAcus) {
 
         // Add a new page for each ACU if it's too close to the bottom (optional, but good for neatness)
         if (startY > doc.internal.pageSize.getHeight() - 40) {
@@ -487,7 +466,7 @@ async function buildAcusPdf(doc: jsPDF, acusData: any[], filteredRows: DelphinRo
             head: [],
             body: [
                 [
-                    { content: `Partida: ${partidaDisplay}`, colSpan: 1, styles: { fontStyle: 'bold', fillColor: C.nivel1!, textColor: C.fgLight! } },
+                    { content: `Ítem: ${item}\nPartida: ${partidaDisplay}`, colSpan: 1, styles: { fontStyle: 'bold', fillColor: C.nivel1!, textColor: C.fgLight! } },
                     { content: acu.descripcion, colSpan: 2, styles: { fontStyle: 'bold', fillColor: C.nivel1!, textColor: C.fgLight! } },
                     { content: `Rendimiento: ${Number(acu.rendimiento ?? 0).toFixed(2)} ${acu.unidad ?? ''}/Día`, colSpan: 2, styles: { fontStyle: 'bold', fillColor: C.nivel1!, textColor: C.fgLight! } },
                     { content: `Costo unitario por ${acu.unidad ?? ''}: ${Number(acu.costo_unitario_total).toFixed(2)}`, colSpan: 1, styles: { fontStyle: 'bold', halign: 'right', fillColor: C.nivel1!, textColor: C.fgLight! } },

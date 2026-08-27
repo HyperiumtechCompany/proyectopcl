@@ -1,7 +1,7 @@
-import { AlertTriangle, ChevronDown, ChevronRight, CornerDownRight, GripVertical, LogOut, Plus, RefreshCw, Trash2, X } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, ArrowDown, ArrowUp, ChevronDown, ChevronRight, CornerDownRight, GripVertical, LogOut, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Swal from 'sweetalert2';
-import { buildInitialMonomios, canMoveNode, deriveMonomioSymbol, flattenNodes, moveNode, reconcileMonomiosWithCatalog, sortMonomiosByCode, sumNode, type FormulaMonomio, type FormulaNode } from '../helpers/formulaPolinomicaTree';
+import { buildInitialMonomios, canMoveNode, deriveMonomioSymbol, flattenNodes, moveNode, moveNodeWithinSiblings, reconcileMonomiosWithCatalog, reorderNodeAmongSiblings, sumNode, type FormulaMonomio, type FormulaNode } from '../helpers/formulaPolinomicaTree';
 
 const MAX_MONOMIOS = 8;
 interface Props { parentMap: Map<string, number>; budgetTotal: number; codeToDesc: Map<string, string>; sortedCodes: string[]; persistedMonomios?: FormulaMonomio[] | null; isLoading?: boolean; onMonomiosChange?: (monomios: FormulaMonomio[]) => void }
@@ -42,7 +42,11 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes, p
     const [editingCoef, setEditingCoef] = useState<string | null>(null);
     const [dragNodeId, setDragNodeId] = useState<string | null>(null);
     const [dragOverId, setDragOverId] = useState<string | null>(null);
+    const [reorderOverId, setReorderOverId] = useState<string | null>(null);
+    const [reorderPlacement, setReorderPlacement] = useState<'before' | 'after'>('before');
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+    const groupDragIdRef = useRef<string | null>(null);
+    const reorderDragIdRef = useRef<string | null>(null);
     useEffect(() => {
         if (isLoading) return;
         const restored = persistedMonomios
@@ -73,7 +77,7 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes, p
         let detached: FormulaNode | null = null;
         const updated = current.map((item) => { const result = detachChild(item.root, nodeId); if (result.detached) detached = result.detached; return { ...item, root: result.node }; });
         const extracted = detached as FormulaNode | null;
-        return extracted ? sortMonomiosByCode([...updated, { id: `m-${nodeId}`, nomenclatura: nextSymbol(updated, extracted.descripcion), root: extracted }]) : current;
+        return extracted ? [...updated, { id: `m-${nodeId}`, nomenclatura: nextSymbol(updated, extracted.descripcion), root: extracted }] : current;
     });
     const groupNode = (sourceId: string, targetId: string) => {
         const target = allNodes.find((node) => node.id === targetId);
@@ -93,9 +97,19 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes, p
     };
     const drop = (event: React.DragEvent, targetId: string) => {
         event.preventDefault(); event.stopPropagation();
-        const sourceId = event.dataTransfer.getData('text/plain') || dragNodeId;
+        const sourceId = groupDragIdRef.current;
         if (sourceId) groupNode(sourceId, targetId);
+        groupDragIdRef.current = null;
         setDragNodeId(null); setDragOverId(null);
+    };
+    const dropReorder = (event: React.DragEvent, targetId: string) => {
+        event.preventDefault(); event.stopPropagation();
+        const sourceId = reorderDragIdRef.current;
+        if (sourceId) {
+            setMonomios((current) => reorderNodeAmongSiblings(current, sourceId, targetId, reorderPlacement));
+        }
+        reorderDragIdRef.current = null;
+        setReorderOverId(null);
     };
 
     const renderNode = (node: FormulaNode, monomio: FormulaMonomio, depth: number, root: boolean): React.ReactNode => {
@@ -104,14 +118,20 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes, p
         const canReceive = Boolean(activeSourceId && canMoveNode(monomios, activeSourceId, node.id));
         const isFullTarget = Boolean(selectedNodeId && selectedNodeId !== node.id && node.children.length >= 2);
         const isExpanded = expanded.has(node.id);
+        const siblingIds = root
+            ? monomios.map((item) => item.root.id)
+            : allNodes.find((candidate) => candidate.children.some((child) => child.id === node.id))?.children.map((child) => child.id) ?? [];
+        const siblingIndex = siblingIds.indexOf(node.id);
+        const canMoveUp = siblingIndex > 0;
+        const canMoveDown = siblingIndex >= 0 && siblingIndex < siblingIds.length - 1;
         return <React.Fragment key={node.id}>
-            <tr draggable onDragStart={(event) => { event.stopPropagation(); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', node.id); setDragNodeId(node.id); }} onDragEnd={() => { setDragNodeId(null); setDragOverId(null); }} onDragOver={(event) => { if (!activeSourceId || activeSourceId === node.id) return; event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = canReceive ? 'move' : 'none'; setDragOverId(node.id); }} onDrop={(event) => drop(event, node.id)} className={`border-b border-slate-700/60 ${root ? 'border-t-2 border-t-slate-600 bg-slate-800' : 'bg-slate-900'} ${dragOverId === node.id ? 'ring-2 ring-inset ring-sky-500' : ''} ${selectedNodeId === node.id ? 'bg-violet-950/60 ring-1 ring-inset ring-violet-500' : ''}`}>
-                <td className="p-1 text-center"><div className="flex items-center justify-center gap-0.5" style={{ paddingLeft: depth * 10 }}><GripVertical size={10} className="text-slate-600" />{node.children.length > 0 ? <button type="button" onClick={() => toggle(node.id)} className="text-amber-400">{isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</button> : <span className="w-3" />}</div></td>
+            <tr onDragOver={(event) => { const reorderSourceId = reorderDragIdRef.current; if (reorderSourceId && reorderSourceId !== node.id) { if (!siblingIds.includes(reorderSourceId)) { event.dataTransfer.dropEffect = 'none'; return; } event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'move'; const rect = event.currentTarget.getBoundingClientRect(); setReorderPlacement(event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'); setReorderOverId(node.id); return; } if (!activeSourceId || activeSourceId === node.id) return; event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = canReceive ? 'move' : 'none'; setDragOverId(node.id); }} onDrop={(event) => reorderDragIdRef.current ? dropReorder(event, node.id) : drop(event, node.id)} className={`border-b border-slate-700/60 ${root ? 'border-t-2 border-t-slate-600 bg-slate-800' : 'bg-slate-900'} ${dragOverId === node.id ? 'ring-2 ring-inset ring-sky-500' : ''} ${reorderOverId === node.id ? `ring-2 ring-inset ${reorderPlacement === 'before' ? 'ring-emerald-400' : 'ring-teal-500'}` : ''} ${selectedNodeId === node.id ? 'bg-violet-950/60 ring-1 ring-inset ring-violet-500' : ''}`}>
+                <td className="p-1 text-center"><div className="flex items-center justify-center gap-0.5" style={{ paddingLeft: depth * 10 }}><span draggable title="Arrastrar para ordenar dentro de este nivel" onDragStart={(event) => { event.stopPropagation(); event.dataTransfer.effectAllowed = 'move'; reorderDragIdRef.current = node.id; groupDragIdRef.current = null; setSelectedNodeId(null); setDragNodeId(null); }} onDragEnd={() => { reorderDragIdRef.current = null; setReorderOverId(null); }} className="cursor-grab rounded p-0.5 text-slate-500 hover:bg-slate-700 hover:text-emerald-300 active:cursor-grabbing"><GripVertical size={11} /></span>{node.children.length > 0 ? <button type="button" onClick={() => toggle(node.id)} className="text-amber-400">{isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</button> : <span className="w-3" />}</div></td>
                 <td className="py-1.5 pr-1" style={{ paddingLeft: 6 + depth * 22 }}><div className="flex items-center gap-1.5"><span className="rounded bg-slate-700 px-1 py-0.5 font-mono text-[9px] font-bold text-sky-400">{node.code}</span><span className="font-bold text-amber-300">{node.descripcion}</span><span className="rounded bg-violet-900/50 px-1 text-[8px] font-semibold text-violet-300">MONOMIO{node.children.length > 0 ? ` +${node.children.length}` : ''}</span>{canReceive && <span className="text-[8px] text-sky-300">soltar aquí</span>}</div></td>
                 <td className="p-1 text-center">{root ? <span className="font-mono font-bold text-emerald-300" title="Nomenclatura técnica asignada según el concepto representativo">{monomio.nomenclatura}</span> : '—'}</td>
                 <td className="py-1.5 pr-2 text-right font-mono font-bold text-slate-200">{fmt(nodeTotal)}</td>
                 <td className="py-1.5 pr-2 text-right font-mono text-slate-400">{total > 0 ? ((nodeTotal / total) * 100).toFixed(1) : '—'}</td>
-                <td className="p-1 text-right"><div className="flex items-center justify-end gap-1">{isFullTarget ? <button type="button" onClick={() => groupNode(selectedNodeId!, node.id)} title="Este monomio ya tiene dos hijos" className="rounded bg-amber-700 p-1 text-white hover:bg-amber-600"><AlertTriangle size={11} /></button> : canReceive && selectedNodeId ? <button type="button" onClick={() => groupNode(selectedNodeId, node.id)} title="Agregar el monomio seleccionado dentro de este nodo" className="rounded bg-sky-600 p-1 text-white hover:bg-sky-500"><CornerDownRight size={11} /></button> : <button type="button" onClick={() => setSelectedNodeId((current) => current === node.id ? null : node.id)} title={selectedNodeId === node.id ? 'Cancelar agrupación' : 'Seleccionar para agrupar'} className={`rounded p-1 ${selectedNodeId === node.id ? 'bg-violet-600 text-white' : 'text-slate-500 hover:bg-slate-700 hover:text-violet-300'}`}>{selectedNodeId === node.id ? <X size={11} /> : <GripVertical size={11} />}</button>}{root ? <button type="button" onClick={() => setMonomios((current) => current.filter((item) => item.id !== monomio.id))} title="Eliminar monomio" className="text-slate-600 hover:text-red-400"><Trash2 size={12} /></button> : <button type="button" onClick={() => extract(node.id)} title="Extraer subárbol como monomio" className="text-slate-600 hover:text-violet-400"><LogOut size={11} /></button>}</div></td>
+                <td className="p-1 text-right"><div className="flex items-center justify-end gap-1"><button type="button" disabled={!canMoveUp} onClick={() => setMonomios((current) => moveNodeWithinSiblings(current, node.id, -1))} title="Subir dentro de este nivel" className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-sky-300 disabled:cursor-not-allowed disabled:opacity-20"><ArrowUp size={11} /></button><button type="button" disabled={!canMoveDown} onClick={() => setMonomios((current) => moveNodeWithinSiblings(current, node.id, 1))} title="Bajar dentro de este nivel" className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-sky-300 disabled:cursor-not-allowed disabled:opacity-20"><ArrowDown size={11} /></button>{isFullTarget ? <button type="button" onClick={() => groupNode(selectedNodeId!, node.id)} title="Este monomio ya tiene dos hijos" className="rounded bg-amber-700 p-1 text-white hover:bg-amber-600"><AlertTriangle size={11} /></button> : canReceive && selectedNodeId ? <button type="button" onClick={() => groupNode(selectedNodeId, node.id)} title="Agregar el monomio seleccionado dentro de este nodo" className="rounded bg-sky-600 p-1 text-white hover:bg-sky-500"><CornerDownRight size={11} /></button> : <button type="button" draggable onDragStart={(event) => { event.stopPropagation(); event.dataTransfer.effectAllowed = 'move'; groupDragIdRef.current = node.id; reorderDragIdRef.current = null; setDragNodeId(node.id); }} onDragEnd={() => { groupDragIdRef.current = null; setDragNodeId(null); setDragOverId(null); }} onClick={() => setSelectedNodeId((current) => current === node.id ? null : node.id)} title={selectedNodeId === node.id ? 'Cancelar agrupación' : 'Arrastrar o seleccionar para agrupar'} className={`rounded p-1 ${selectedNodeId === node.id ? 'bg-violet-600 text-white' : 'cursor-grab text-slate-500 hover:bg-slate-700 hover:text-violet-300 active:cursor-grabbing'}`}>{selectedNodeId === node.id ? <X size={11} /> : <GripVertical size={11} />}</button>}{root ? <button type="button" onClick={() => setMonomios((current) => current.filter((item) => item.id !== monomio.id))} title="Eliminar monomio" className="text-slate-600 hover:text-red-400"><Trash2 size={12} /></button> : <button type="button" onClick={() => extract(node.id)} title="Extraer subárbol como monomio" className="text-slate-600 hover:text-violet-400"><LogOut size={11} /></button>}</div></td>
             </tr>
             <tr className="border-b border-slate-800 bg-slate-950">
                 <td className="py-1 text-center text-slate-600"><CornerDownRight size={10} className="ml-auto" /></td>
@@ -131,7 +151,7 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes, p
         <FormulaBar monomios={monomios} />
         {selectedNodeId && <div className="flex shrink-0 items-center gap-2 border-b border-violet-700 bg-violet-950/50 px-3 py-1.5 text-[10px] text-violet-200"><CornerDownRight size={12} /><span>Monomio seleccionado. Pulsa el botón azul del monomio donde deseas agruparlo.</span><button type="button" onClick={() => setSelectedNodeId(null)} className="ml-auto rounded p-0.5 hover:bg-violet-800" title="Cancelar"><X size={12} /></button></div>}
         <div className="min-h-0 flex-1 overflow-auto"><table className="w-full border-collapse"><thead className="sticky top-0 z-10"><tr className="bg-slate-800 text-[10px] font-semibold text-slate-400"><th className="w-8 py-1.5" /><th className="py-1.5 text-left">Monomio / descripción</th><th className="w-20 py-1.5">Nomen.</th><th className="w-28 py-1.5 text-right">Coeficiente</th><th className="w-20 py-1.5 text-right">% Total</th><th className="w-16" /></tr></thead><tbody>{monomios.map((item) => renderNode(item.root, item, 0, true))}</tbody><tfoot className="sticky bottom-0"><tr className={totalOk ? 'bg-emerald-950/50' : 'bg-amber-950/40'}><td colSpan={3} className="border-t-2 border-slate-600 py-1.5 pr-2 text-right font-bold">TOTAL</td><td className="border-t-2 border-slate-600 pr-2 text-right font-mono font-bold">{fmt(total)}</td><td colSpan={2} className="border-t-2 border-slate-600" /></tr></tfoot></table></div>
-        {available.length > 0 && <div className="shrink-0 border-t border-slate-700 bg-slate-900 px-3 py-2"><p className="mb-1 text-[9px] uppercase text-slate-500">Sin asignar ({available.length})</p><div className="flex flex-wrap gap-1">{available.map((node) => <button key={node.id} type="button" onClick={() => setMonomios((current) => sortMonomiosByCode([...current, { id: `m-${node.code}-${Date.now()}`, nomenclatura: nextSymbol(current, node.descripcion), root: node }]))} className="flex items-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-slate-300 hover:border-sky-600"><Plus size={9} /> {node.code} {node.descripcion}</button>)}</div></div>}
-        <div className="shrink-0 border-t border-slate-800 bg-slate-950 px-3 py-1 text-center text-[8px] text-slate-500">Arrastra un monomio sobre otro o selecciónalo con el asa · máximo 2 hijos directos por nodo · profundidad ilimitada</div>
+        {available.length > 0 && <div className="shrink-0 border-t border-slate-700 bg-slate-900 px-3 py-2"><p className="mb-1 text-[9px] uppercase text-slate-500">Sin asignar ({available.length})</p><div className="flex flex-wrap gap-1">{available.map((node) => <button key={node.id} type="button" onClick={() => setMonomios((current) => [...current, { id: `m-${node.code}-${Date.now()}`, nomenclatura: nextSymbol(current, node.descripcion), root: node }])} className="flex items-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-slate-300 hover:border-sky-600"><Plus size={9} /> {node.code} {node.descripcion}</button>)}</div></div>}
+        <div className="shrink-0 border-t border-slate-800 bg-slate-950 px-3 py-1 text-center text-[8px] text-slate-500">Asa izquierda o ↑ ↓: ordenar entre hermanos · asa derecha: agrupar · máximo 2 hijos directos por nodo · profundidad ilimitada</div>
     </div>;
 }

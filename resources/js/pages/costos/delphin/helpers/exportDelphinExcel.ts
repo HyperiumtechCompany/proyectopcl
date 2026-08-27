@@ -5,19 +5,7 @@ import { saveAs } from 'file-saver';
 import axios from 'axios';
 import type { DelphinRow } from '../types';
 import type { DelphinExportContent } from './exportDelphin';
-
-// presupuesto_general.partida se guarda sin padding ("4.1.1.1") pero
-// presupuesto_acus.partida sí lleva padding de 2 dígitos por segmento
-// ("04.01.01.01") — mismo criterio que normalizePartidaCode() en
-// CostoDatabaseService.php y normalizedPartida() en InsumosConsolidadosModal.tsx.
-// Comparar los strings tal cual nunca coincide y descarta todos los ACUs.
-function normalizedPartida(value: string): string {
-    return value
-        .split('.')
-        .filter(Boolean)
-        .map((part) => part.padStart(2, '0'))
-        .join('.');
-}
+import { orderAcusForExport } from './acuExportOrder';
 
 // ─── ESPECIALIDADES ─────────────────────────────────────────────────────────────
 
@@ -733,8 +721,8 @@ async function buildAcusSheet(
     workbook: ExcelJS.Workbook
 ) {
     const totalColumnas = 9;
-    ws.getColumn(1).width = 5;
-    ws.getColumn(2).width = 8;   // Ind.
+    ws.getColumn(1).width = 10;  // Ítem
+    ws.getColumn(2).width = 14;  // Partida / Ind.
     ws.getColumn(3).width = 11;  // Cod. Elect.
     ws.getColumn(4).width = 45;  // Descripción
     ws.getColumn(5).width = 10;  // Unidad
@@ -745,27 +733,19 @@ async function buildAcusSheet(
 
     let filaActual = await buildHeader(workbook, ws, projectName, proyecto, totalColumnas, 'ANÁLISIS DE PRECIOS UNITARIOS');
 
-    const filteredPartidas = new Set(filteredRows.map(r => normalizedPartida(String(r.partida ?? ''))));
-    // presupuesto_acus.partida guarda el código con padding ("04.01.01.01"); se
-    // muestra con el mismo formato que la hoja "Presupuesto General" (sin
-    // padding, "4.1.1.1") para que ambas hojas coincidan visualmente.
-    const partidaDisplayByNormalized = new Map(
-        filteredRows.map(r => [normalizedPartida(String(r.partida ?? '')), String(r.partida ?? '')]),
-    );
+    const orderedAcus = orderAcusForExport(acusData, filteredRows);
 
-    for (const acu of acusData) {
-        const partidaNorm = normalizedPartida(String(acu.partida ?? ''));
-        if (filteredRows.length > 0 && !filteredPartidas.has(partidaNorm)) continue;
-        const partidaDisplay = partidaDisplayByNormalized.get(partidaNorm) ?? acu.partida;
+    for (const { acu, item, partidaDisplay } of orderedAcus) {
 
         ws.mergeCells(filaActual, 3, filaActual, 6);
         ws.mergeCells(filaActual, 7, filaActual, 8);
+        ws.getCell(filaActual, 1).value = `Ítem: ${item}`;
         ws.getCell(filaActual, 2).value = `Partida: ${partidaDisplay}`;
         ws.getCell(filaActual, 3).value = acu.descripcion;
         ws.getCell(filaActual, 7).value = `Rendimiento: ${Number(acu.rendimiento ?? 0).toFixed(2)} ${acu.unidad ?? ''}/Día`;
         ws.getCell(filaActual, 9).value = `Costo unitario por ${acu.unidad ?? ''}: ${Number(acu.costo_unitario_total).toFixed(2)}`;
 
-        for (let c = 2; c <= 9; c++) {
+        for (let c = 1; c <= 9; c++) {
             const cell = ws.getCell(filaActual, c);
             font(cell, C.titulo0Fg, true, 10);
             fill(cell, C.titulo0Bg);

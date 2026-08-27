@@ -7,6 +7,7 @@
  *   3. CompilaciÃƒÂ³n mÃƒÂ¡s rÃƒÂ¡pida (menos interdependencias).
  */
 
+import type { SiteData } from '../v2/site/domain/types';
 import type { NormativeStandard } from './roomLighting';
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Herramientas y UI Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -1457,6 +1458,16 @@ export interface Project {
     /** Última norma aplicada; se persiste con el documento para rehidratar el panel. */
     defaultRoomNormativeStandard?: NonNullable<Room['normativeStandard']>;
     siteSettings?: ProjectSiteSettings;
+    /**
+     * Emplazamiento exterior del Módulo General (DIALux v2, Fase 3 del plan
+     * de exteriores) — terreno, bloques de edificación, alimentadores
+     * trazados en planta, etc. Vive en `Project` (no en un documento aparte)
+     * a propósito: así hereda gratis el autosave de `useDialuxModuleSync` y
+     * el undo/redo de `historySlice`, en vez de un guardado paralelo que
+     * competiría con ellos. Solo se usa cuando `moduleId` pertenece a un
+     * módulo `kind === 'general'`.
+     */
+    site?: SiteData;
     scenes: Scene[];
 }
 

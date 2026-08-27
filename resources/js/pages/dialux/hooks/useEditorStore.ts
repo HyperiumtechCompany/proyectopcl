@@ -68,6 +68,31 @@ export type {
 import { calculateCenteredOffsetOnWall } from './fixtureGrid';
 import type { NormativeStandard } from './roomLighting';
 import { buildDefaultStairConfig } from './stairNorms';
+import { createDeletionSlice, type DeletionSlice } from './store/deletionSlice';
+import { createFloorSlice, type FloorSlice } from './store/floorSlice';
+import {
+    createHistorySlice,
+    installHistoryCapture,
+    type HistorySlice,
+} from './store/historySlice';
+import { createProjectSlice, type ProjectSlice } from './store/projectSlice';
+import { createScaleDxfSlice, type ScaleDxfSlice } from './store/scaleDxfSlice';
+import {
+    createSceneObjectsSlice,
+    type SceneObjectsSlice,
+} from './store/sceneObjectsSlice';
+import { createSiteSlice, type SiteSlice } from './store/siteSlice';
+import { createUiSlice, type UiSlice } from './store/uiSlice';
+import {
+    createScaleConfig,
+    mutateScene,
+    normalizeScaleConfig,
+    normalizeWallPatch,
+    normalizeWallState,
+    rescaleDxfEntities,
+    rescaleDxfExtents,
+    rescaleSceneEntities,
+} from './storeHelpers';
 import type {
     DrawTool,
     SidebarTab,
@@ -100,30 +125,6 @@ import type {
     CorridorConfig,
     Vertex,
 } from './types';
-import {
-    createScaleConfig,
-    mutateScene,
-    normalizeScaleConfig,
-    normalizeWallPatch,
-    normalizeWallState,
-    rescaleDxfEntities,
-    rescaleDxfExtents,
-    rescaleSceneEntities,
-} from './storeHelpers';
-import { createFloorSlice, type FloorSlice } from './store/floorSlice';
-import { createScaleDxfSlice, type ScaleDxfSlice } from './store/scaleDxfSlice';
-import { createProjectSlice, type ProjectSlice } from './store/projectSlice';
-import {
-    createSceneObjectsSlice,
-    type SceneObjectsSlice,
-} from './store/sceneObjectsSlice';
-import { createUiSlice, type UiSlice } from './store/uiSlice';
-import { createDeletionSlice, type DeletionSlice } from './store/deletionSlice';
-import {
-    createHistorySlice,
-    installHistoryCapture,
-    type HistorySlice,
-} from './store/historySlice';
 
 export { createScaleConfig, normalizeScaleConfig } from './storeHelpers';
 
@@ -236,6 +237,7 @@ export interface EditorState
         FloorSlice,
         ScaleDxfSlice,
         ProjectSlice,
+        SiteSlice,
         UiSlice {
     project: Project | null;
     activeSceneId: string | null;
@@ -461,6 +463,7 @@ export const useEditorStore = create<EditorState>()(
         ...createScaleDxfSlice(set, get, api),
         ...createUiSlice(set, get, api),
         ...createProjectSlice(set, get, api),
+        ...createSiteSlice(set, get, api),
         ...createSceneObjectsSlice(set, get, api),
         ...createDeletionSlice(set, get, api),
         ...createHistorySlice(set, get, api),
