@@ -55,4 +55,17 @@ describe('buildDelphinMSPXml', () => {
 
         expect(successor).not.toContain('<ConstraintType>2</ConstraintType>');
     });
+
+    it('marks tasks as manually scheduled so MS Project uses Start/Finish as-is', () => {
+        // Real: calendarios con horas distintas por día (ej. 9h L-V, 5h sáb/dom)
+        // hacían que MS Project, al auto-programar, reconvirtiera la Duración
+        // exportada en minutos usando horas-por-día uniformes — corriendo el
+        // Fin semanas hacia adelante frente a lo que Delphin calculó (que
+        // cuenta días completos, no horas). <Manual>1</Manual> le dice a MS
+        // Project que use el Start/Finish exportado tal cual, sin recalcular.
+        const xml = buildDelphinMSPXml(tasks, 'Proyecto vial');
+        const successor = xml.split('<Name>Actividad sucesora</Name>')[1].split('</Task>')[0];
+
+        expect(successor).toContain('<Manual>1</Manual>');
+    });
 });

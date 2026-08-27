@@ -170,6 +170,15 @@ export function buildDelphinMSPXml(
         tasksXml += tag('OutlineNumber', outlines[i]);
         tasksXml += tag('OutlineLevel', nivel);
         tasksXml += tag('Priority', 500);
+        // Manual (no auto-programada): con tareas auto-programadas, MS Project
+        // IGNORA el Start/Finish exportado y recalcula el Fin desde
+        // Duración+Calendario — y si el calendario tiene horas distintas por
+        // día (ej. 9h L-V pero 5h sáb/dom, caso real de producción), esa
+        // reconversión de minutos a días corre las fechas semanas hacia
+        // adelante respecto a lo que Delphin ya calculó correctamente (Delphin
+        // cuenta días completos, sin fraccionar por horas). Con Manual=1, MS
+        // Project usa el Start/Finish tal cual se exportan, sin recalcular.
+        tasksXml += tag('Manual', 1);
         if (start)  tasksXml += tag('Start', start);
         if (finish) tasksXml += tag('Finish', finish);
         tasksXml += tag('Duration', duration);
