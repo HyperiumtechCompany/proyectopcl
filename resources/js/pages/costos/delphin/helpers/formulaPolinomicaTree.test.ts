@@ -5,6 +5,7 @@ import {
     flattenMonomiosForExport,
     flattenNodes,
     moveNode,
+    reconcileMonomiosWithCatalog,
 } from './formulaPolinomicaTree';
 
 const build = () => buildInitialMonomios(
@@ -54,5 +55,37 @@ describe('árbol de fórmula polinómica', () => {
         expect(rows[1].incidencia).toBeCloseTo(44.44444, 5);
         expect(rows[2].incidencia).toBeCloseTo(55.55556, 5);
         expect(rows[3].incidencia).toBeCloseTo(60, 5);
+    });
+
+    it('reconcilia un árbol guardado con el catálogo vigente sin perder su estructura', () => {
+        let monomios = build();
+        monomios = moveNode(monomios, 'i-20', 'i-10');
+        monomios[1].root.code = '32';
+        monomios[1].root.descripcion = 'Dinamita';
+        monomios[1].nomenclatura = 'DI';
+
+        const reconciled = reconcileMonomiosWithCatalog(monomios, new Map([
+            ['10', 'Aparato sanitario con grifería'],
+            ['20', 'Cemento asfáltico'],
+            ['32', 'Flete terrestre'],
+            ['39', 'Índice de Precios al Consumidor (INEI)'],
+        ]));
+
+        expect(reconciled[0].root.children[0].descripcion).toBe('Cemento asfáltico');
+        expect(reconciled[1].root.descripcion).toBe('Flete terrestre');
+        expect(reconciled[1].nomenclatura).toBe('FT');
+        expect(reconciled[0].root.children[0].coefDefinido).toBe(monomios[0].root.children[0].coefDefinido);
+    });
+
+    it('ordena monomios y hermanos por código ascendente al restaurarlos', () => {
+        let monomios = build();
+        monomios = moveNode(monomios, 'i-30', 'i-10');
+        monomios = moveNode(monomios, 'i-20', 'i-10');
+        monomios.reverse();
+
+        const reconciled = reconcileMonomiosWithCatalog(monomios, new Map());
+
+        expect(reconciled.map((monomio) => monomio.root.code)).toEqual(['10', '39']);
+        expect(reconciled[0].root.children.map((node) => node.code)).toEqual(['20', '30']);
     });
 });

@@ -27,6 +27,20 @@ export interface FormulaExportRow {
 
 export const MAX_CHILDREN_PER_NODE = 2;
 
+const codeCollator = new Intl.Collator('es', { numeric: true, sensitivity: 'base' });
+
+const compareCodes = (left: string, right: string): number => codeCollator.compare(left, right);
+
+const sortNodeChildren = (node: FormulaNode): FormulaNode => ({
+    ...node,
+    children: node.children.map(sortNodeChildren).sort((left, right) => compareCodes(left.code, right.code)),
+});
+
+export const sortMonomiosByCode = (monomios: FormulaMonomio[]): FormulaMonomio[] =>
+    monomios
+        .map((monomio) => ({ ...monomio, root: sortNodeChildren(monomio.root) }))
+        .sort((left, right) => compareCodes(left.root.code, right.root.code));
+
 const normalizeConcept = (value: string): string => value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -118,6 +132,36 @@ export function buildInitialMonomios(
     return monomios;
 }
 
+/**
+ * Actualiza los textos derivados del catálogo al cargar una fórmula guardada.
+ * La estructura, los identificadores y los coeficientes definidos por el usuario
+ * se conservan intactos. Se reemplazan los textos que pudieron quedar
+ * persistidos desde un catálogo anterior y se ordenan los monomios hermanos
+ * por código ascendente en cada nivel.
+ */
+export function reconcileMonomiosWithCatalog(
+    monomios: FormulaMonomio[],
+    codeToDesc: Map<string, string>,
+): FormulaMonomio[] {
+    const reconcileNode = (node: FormulaNode): FormulaNode => ({
+        ...node,
+        descripcion: codeToDesc.get(node.code) ?? node.descripcion,
+        children: node.children.map(reconcileNode).sort((left, right) => compareCodes(left.code, right.code)),
+    });
+    const usedSymbols = new Set<string>();
+
+    return sortMonomiosByCode(monomios).map((monomio) => {
+        const root = reconcileNode(monomio.root);
+        const officialDescription = codeToDesc.get(root.code);
+        const nomenclatura = officialDescription
+            ? uniqueSymbol(deriveMonomioSymbol(officialDescription), usedSymbols)
+            : uniqueSymbol(monomio.nomenclatura, usedSymbols);
+        usedSymbols.add(nomenclatura);
+
+        return { ...monomio, nomenclatura, root };
+    });
+}
+
 function containsNode(node: FormulaNode, id: string): boolean {
     return node.id === id || node.children.some((child) => containsNode(child, id));
 }
@@ -180,10 +224,10 @@ export function moveNode(
     if (!canMoveNode(monomios, sourceId, targetId)) return monomios;
     const { forest, node } = detachNode(monomios, sourceId);
     if (!node) return monomios;
-    return forest.map((monomio) => ({
+    return sortMonomiosByCode(forest.map((monomio) => ({
         ...monomio,
         root: appendChild(monomio.root, targetId, node),
-    }));
+    })));
 }
 
 export function flattenMonomiosForExport(monomios: FormulaMonomio[]): FormulaExportRow[] {

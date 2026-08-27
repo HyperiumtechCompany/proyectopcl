@@ -1,7 +1,7 @@
 import { AlertTriangle, ChevronDown, ChevronRight, CornerDownRight, GripVertical, LogOut, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Swal from 'sweetalert2';
-import { buildInitialMonomios, canMoveNode, deriveMonomioSymbol, flattenNodes, moveNode, sumNode, type FormulaMonomio, type FormulaNode } from '../helpers/formulaPolinomicaTree';
+import { buildInitialMonomios, canMoveNode, deriveMonomioSymbol, flattenNodes, moveNode, reconcileMonomiosWithCatalog, sortMonomiosByCode, sumNode, type FormulaMonomio, type FormulaNode } from '../helpers/formulaPolinomicaTree';
 
 const MAX_MONOMIOS = 8;
 interface Props { parentMap: Map<string, number>; budgetTotal: number; codeToDesc: Map<string, string>; sortedCodes: string[]; persistedMonomios?: FormulaMonomio[] | null; isLoading?: boolean; onMonomiosChange?: (monomios: FormulaMonomio[]) => void }
@@ -45,10 +45,12 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes, p
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     useEffect(() => {
         if (isLoading) return;
-        const restored = persistedMonomios ?? initial();
+        const restored = persistedMonomios
+            ? reconcileMonomiosWithCatalog(persistedMonomios, codeToDesc)
+            : initial();
         setMonomios(restored);
         setExpanded(new Set(restored.flatMap((item) => flattenNodes(item.root)).filter((node) => node.children.length > 0).map((node) => node.id)));
-    }, [initial, isLoading, persistedMonomios]);
+    }, [codeToDesc, initial, isLoading, persistedMonomios]);
     useEffect(() => onMonomiosChange?.(monomios), [monomios, onMonomiosChange]);
 
     const allNodes = useMemo(() => monomios.flatMap((item) => flattenNodes(item.root)), [monomios]);
@@ -71,7 +73,7 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes, p
         let detached: FormulaNode | null = null;
         const updated = current.map((item) => { const result = detachChild(item.root, nodeId); if (result.detached) detached = result.detached; return { ...item, root: result.node }; });
         const extracted = detached as FormulaNode | null;
-        return extracted ? [...updated, { id: `m-${nodeId}`, nomenclatura: nextSymbol(updated, extracted.descripcion), root: extracted }] : current;
+        return extracted ? sortMonomiosByCode([...updated, { id: `m-${nodeId}`, nomenclatura: nextSymbol(updated, extracted.descripcion), root: extracted }]) : current;
     });
     const groupNode = (sourceId: string, targetId: string) => {
         const target = allNodes.find((node) => node.id === targetId);
@@ -129,7 +131,7 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes, p
         <FormulaBar monomios={monomios} />
         {selectedNodeId && <div className="flex shrink-0 items-center gap-2 border-b border-violet-700 bg-violet-950/50 px-3 py-1.5 text-[10px] text-violet-200"><CornerDownRight size={12} /><span>Monomio seleccionado. Pulsa el botón azul del monomio donde deseas agruparlo.</span><button type="button" onClick={() => setSelectedNodeId(null)} className="ml-auto rounded p-0.5 hover:bg-violet-800" title="Cancelar"><X size={12} /></button></div>}
         <div className="min-h-0 flex-1 overflow-auto"><table className="w-full border-collapse"><thead className="sticky top-0 z-10"><tr className="bg-slate-800 text-[10px] font-semibold text-slate-400"><th className="w-8 py-1.5" /><th className="py-1.5 text-left">Monomio / descripción</th><th className="w-20 py-1.5">Nomen.</th><th className="w-28 py-1.5 text-right">Coeficiente</th><th className="w-20 py-1.5 text-right">% Total</th><th className="w-16" /></tr></thead><tbody>{monomios.map((item) => renderNode(item.root, item, 0, true))}</tbody><tfoot className="sticky bottom-0"><tr className={totalOk ? 'bg-emerald-950/50' : 'bg-amber-950/40'}><td colSpan={3} className="border-t-2 border-slate-600 py-1.5 pr-2 text-right font-bold">TOTAL</td><td className="border-t-2 border-slate-600 pr-2 text-right font-mono font-bold">{fmt(total)}</td><td colSpan={2} className="border-t-2 border-slate-600" /></tr></tfoot></table></div>
-        {available.length > 0 && <div className="shrink-0 border-t border-slate-700 bg-slate-900 px-3 py-2"><p className="mb-1 text-[9px] uppercase text-slate-500">Sin asignar ({available.length})</p><div className="flex flex-wrap gap-1">{available.map((node) => <button key={node.id} type="button" onClick={() => setMonomios((current) => [...current, { id: `m-${node.code}-${Date.now()}`, nomenclatura: nextSymbol(current, node.descripcion), root: node }])} className="flex items-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-slate-300 hover:border-sky-600"><Plus size={9} /> {node.code} {node.descripcion}</button>)}</div></div>}
+        {available.length > 0 && <div className="shrink-0 border-t border-slate-700 bg-slate-900 px-3 py-2"><p className="mb-1 text-[9px] uppercase text-slate-500">Sin asignar ({available.length})</p><div className="flex flex-wrap gap-1">{available.map((node) => <button key={node.id} type="button" onClick={() => setMonomios((current) => sortMonomiosByCode([...current, { id: `m-${node.code}-${Date.now()}`, nomenclatura: nextSymbol(current, node.descripcion), root: node }]))} className="flex items-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-slate-300 hover:border-sky-600"><Plus size={9} /> {node.code} {node.descripcion}</button>)}</div></div>}
         <div className="shrink-0 border-t border-slate-800 bg-slate-950 px-3 py-1 text-center text-[8px] text-slate-500">Arrastra un monomio sobre otro o selecciónalo con el asa · máximo 2 hijos directos por nodo · profundidad ilimitada</div>
     </div>;
 }
