@@ -902,6 +902,7 @@ export function useGanttTasks(
                 }));
                 await axios.post(`/cronograma/v2/${project}/save`, {
                     tasks: payload,
+                    calendar_settings: calendarSettings,
                 });
                 setDirtyIds(new Set());
                 return true;
@@ -911,7 +912,7 @@ export function useGanttTasks(
                 setIsSaving(false);
             }
         },
-        [tasks],
+        [calendarSettings, tasks],
     );
 
     // ── Importar tareas desde fuente externa (solo frontend) ─────────────────

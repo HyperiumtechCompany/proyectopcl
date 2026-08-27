@@ -16,6 +16,7 @@ import { useGanttSelection } from '../cronogramas/v2/composables/useGanttSelecti
 import { useGanttSettings } from '../cronogramas/v2/composables/useGanttSettings';
 import { useGanttTimeline } from '../cronogramas/v2/composables/useGanttTimeline';
 import { diffWorkingDaysInclusive } from '../cronogramas/v2/types/calendar';
+import type { GanttCalendarSettings } from '../cronogramas/v2/types/calendar';
 import type { GanttBarLabel, RowAction } from '../cronogramas/v2/types/cell';
 import type { GanttTask, SchedulingMode } from '../cronogramas/v2/types/task';
 import { CHART_HEADER_H } from '../cronogramas/v2/types/timeline';
@@ -113,6 +114,7 @@ interface PageProps {
     project_name: string;
     initialRows: any[];
     initialTasks: GanttTask[];
+    initialCalendarSettings?: Partial<GanttCalendarSettings> | null;
     projectParams: Record<string, any> | null;
     resumenPresupuesto: ResumenPresupuesto;
     projectData?: {
@@ -133,7 +135,7 @@ interface PageProps {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function DelphinView({
     project, project_id_int, project_name,
-    initialRows, initialTasks, projectParams,
+    initialRows, initialTasks, initialCalendarSettings, projectParams,
     projectData, resumenPresupuesto: initialResumenPresupuesto,
 }: PageProps) {
 
@@ -274,7 +276,11 @@ export default function DelphinView({
         setColumnFilters({});
     }, []);
     const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
-    const { calendarSettings, setCalendarSettings } = useGanttSettings(project, initialTasks);
+    const { calendarSettings, setCalendarSettings } = useGanttSettings(
+        project,
+        initialTasks,
+        initialCalendarSettings,
+    );
     const initializeParams = useProjectParamsStore((s) => s.initialize);
     useEffect(() => { initializeParams(projectParams); }, [projectParams, initializeParams]);
 
@@ -1213,6 +1219,8 @@ export default function DelphinView({
                 <DelphinExportModal
                     open={exportOpen}
                     rows={delphinRows}
+                    tasks={tasks}
+                    calendarSettings={calendarSettings}
                     projectName={project_name}
                     project={project}
                     projectData={projectData}

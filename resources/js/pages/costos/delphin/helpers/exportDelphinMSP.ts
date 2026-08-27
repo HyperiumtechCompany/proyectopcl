@@ -1,5 +1,6 @@
 import { saveAs } from 'file-saver';
-import type { DelphinRow } from '../types';
+import type { GanttTask } from '../../cronogramas/v2/types/task';
+import type { GanttCalendarSettings, WeekdayKey } from '../../cronogramas/v2/types/calendar';
 
 // ── Tipo → código MSPDI ───────────────────────────────────────────────────────
 // FC = Finish-to-Start  → FS = 1
@@ -32,7 +33,46 @@ function tag(name: string, value: string | number): string {
 }
 
 // ── Generador XML ──────────────────────────────────────────────────────────────
-export function exportDelphinMSP(rows: DelphinRow[], projectName: string): void {
+function outlineNumbers(rows: GanttTask[]): string[] {
+    const counters: number[] = [];
+
+    return rows.map((row) => {
+        const level = Math.max(1, row.nivel ?? 1);
+        counters.length = level;
+        counters[level - 1] = (counters[level - 1] ?? 0) + 1;
+        for (let index = 0; index < level - 1; index++) {
+            counters[index] ??= 1;
+        }
+        return counters.join('.');
+    });
+}
+
+function calendarXml(settings?: GanttCalendarSettings): string {
+    if (!settings) return '';
+
+    const dayTypes: Array<[WeekdayKey, number]> = [
+        ['sun', 1], ['mon', 2], ['tue', 3], ['wed', 4],
+        ['thu', 5], ['fri', 6], ['sat', 7],
+    ];
+    const weekDays = dayTypes.map(([key, dayType]) => {
+        const day = settings.workDays[key];
+        const times = day.enabled
+            ? `<WorkingTimes><WorkingTime><FromTime>${day.start}:00</FromTime><ToTime>${day.end}:00</ToTime></WorkingTime></WorkingTimes>`
+            : '';
+        return `<WeekDay><DayType>${dayType}</DayType><DayWorking>${day.enabled ? 1 : 0}</DayWorking>${times}</WeekDay>`;
+    }).join('');
+    const exceptions = settings.holidays.map((holiday) =>
+        `<Exception><Name>${xmlEsc(holiday.name)}</Name><TimePeriod><FromDate>${holiday.date}T00:00:00</FromDate><ToDate>${holiday.date}T23:59:59</ToDate></TimePeriod><DayWorking>0</DayWorking></Exception>`,
+    ).join('');
+
+    return `<Calendars><Calendar><UID>1</UID><Name>Calendario del proyecto</Name><IsBaseCalendar>1</IsBaseCalendar><BaseCalendarUID>-1</BaseCalendarUID><WeekDays>${weekDays}</WeekDays>${exceptions ? `<Exceptions>${exceptions}</Exceptions>` : ''}</Calendar></Calendars>`;
+}
+
+export function exportDelphinMSP(
+    rows: GanttTask[],
+    projectName: string,
+    calendarSettings?: GanttCalendarSettings,
+): void {
     // Nodes that have children
     const groupIds = new Set(
         rows.map((r) => r.parent_id).filter((id): id is number => id != null),
@@ -43,6 +83,7 @@ export function exportDelphinMSP(rows: DelphinRow[], projectName: string): void 
     rows.forEach((r, i) => uidMap.set(r.id, i + 1));
 
     const today = new Date().toISOString().split('T')[0]!;
+    const outlines = outlineNumbers(rows);
 
     let tasksXml = '';
 
@@ -72,8 +113,9 @@ export function exportDelphinMSP(rows: DelphinRow[], projectName: string): void 
         tasksXml += tag('Type', 0);
         tasksXml += tag('IsNull', 0);
         tasksXml += tag('WBS', xmlEsc(row.partida ?? String(uid)));
-        tasksXml += tag('OutlineNumber', xmlEsc(row.partida ?? String(uid)));
+        tasksXml += tag('OutlineNumber', outlines[i]);
         tasksXml += tag('OutlineLevel', nivel);
+        tasksXml += tag('CalendarUID', 1);
         tasksXml += tag('Priority', 500);
         tasksXml += tag('Summary', isGroup ? 1 : 0);
         if (row.duracion_dias) {
@@ -108,6 +150,7 @@ export function exportDelphinMSP(rows: DelphinRow[], projectName: string): void 
 <Project xmlns="http://schemas.microsoft.com/project">
   <Name>${xmlEsc(projectName)}</Name>
   <Title>${xmlEsc(projectName)}</Title>
+  <CalendarUID>1</CalendarUID>
   <SaveVersion>14</SaveVersion>
   <DefaultStartTime>08:00:00</DefaultStartTime>
   <DefaultFinishTime>17:00:00</DefaultFinishTime>
@@ -119,6 +162,7 @@ export function exportDelphinMSP(rows: DelphinRow[], projectName: string): void 
   <DefaultStandardRate>0</DefaultStandardRate>
   <DefaultOvertimeRate>0</DefaultOvertimeRate>
   <CreationDate>${today}T09:00:00</CreationDate>
+  ${calendarXml(calendarSettings)}
   <Tasks>
 ${tasksXml}  </Tasks>
   <Resources/>

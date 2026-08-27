@@ -5,6 +5,8 @@ import {
     Layers, Milestone, X, ChevronLeft,
 } from 'lucide-react';
 import type { DelphinRow } from '../types';
+import type { GanttTask } from '../../cronogramas/v2/types/task';
+import type { GanttCalendarSettings } from '../../cronogramas/v2/types/calendar';
 import type { FormulaMonomio } from '../helpers/formulaPolinomicaTree';
 import {
     exportDelphin,
@@ -67,6 +69,8 @@ type MonomioExport = FormulaMonomio;
 interface Props {
     open: boolean;
     rows: DelphinRow[];
+    tasks: GanttTask[];
+    calendarSettings: GanttCalendarSettings;
     projectName: string;
     project?: any;
 
@@ -87,7 +91,7 @@ interface Props {
 }
 
 export function DelphinExportModal({
-    open, rows, projectName, project, projectData,
+    open, rows, tasks, calendarSettings, projectName, project, projectData,
     formulaMonomios,
     availableSpecialties = [], onClose,
 }: Props) {
@@ -124,6 +128,8 @@ export function DelphinExportModal({
                 projectData,
                 selectedSpecialties,
                 formulaMonomios ?? [],  // ← pasar el array crudo directamente
+                tasks,
+                calendarSettings,
             );
         } catch (error) {
             console.error('doExport error:', error);

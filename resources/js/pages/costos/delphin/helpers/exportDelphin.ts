@@ -2,6 +2,8 @@ import type { DelphinRow } from '../types';
 import { exportDelphinExcel } from './exportDelphinExcel';
 import { exportDelphinPdf } from './exportDelphinPdf';
 import { exportDelphinMSP } from './exportDelphinMSP';
+import type { GanttTask } from '../../cronogramas/v2/types/task';
+import type { GanttCalendarSettings } from '../../cronogramas/v2/types/calendar';
 import {
     flattenMonomiosForExport,
     sumNode,
@@ -92,6 +94,8 @@ export async function exportDelphin(
     projectData?: any,
     selectedSpecialties: string[] = [],
     formulaMonomios: MonomioExport[] = [],
+    ganttTasks: GanttTask[] = [],
+    calendarSettings?: GanttCalendarSettings,
 ) {
     
     // ── FÓRMULA POLINÓMICA ──────────────────────────────────────────────────
@@ -129,7 +133,7 @@ export async function exportDelphin(
         case 'pdf':
             return exportDelphinPdf(content, rows, projectName, projectData, selectedSpecialties);
         case 'msp':
-            return exportDelphinMSP(rows, projectName);
+            return exportDelphinMSP(ganttTasks, projectName, calendarSettings);
         default:
             throw new Error(`Formato no soportado: ${format}`);
     }

@@ -477,6 +477,7 @@ Route::middleware(['auth', 'verified', SetCostosDatabase::class])->group(functio
     Route::get('/module/crono_general_v2', [CronogramaV2Controller::class, 'index'])->name('proyectos.cronograma.v2.index');
     Route::get('/cronograma/v2/{project}/tasks', [CronogramaV2Controller::class, 'getTasks'])->name('proyectos.cronograma.v2.tasks');
     Route::post('/cronograma/v2/{project}/save', [CronogramaV2Controller::class, 'store'])->name('proyectos.cronograma.v2.save');
+    Route::patch('/cronograma/v2/{project}/settings', [CronogramaV2Controller::class, 'storeSettings'])->name('proyectos.cronograma.v2.settings');
 
     // ─── Delphin (Presupuesto + Cronograma CPM fusionados) ────────────────
     Route::get('/module/delphin', [DelphinController::class, 'index'])->name('proyectos.delphin.index');

@@ -14,6 +14,7 @@ import { useGanttTimeline } from '../composables/useGanttTimeline';
 import { useGanttCriticalPath } from '../composables/useGanttCriticalPath';
 import { useGanttSettings } from '../composables/useGanttSettings';
 import { diffWorkingDaysInclusive } from '../types/calendar';
+import type { GanttCalendarSettings } from '../types/calendar';
 import { GanttShell } from '../components/layout/GanttShell';
 import { GanttToolbar } from '../components/toolbar/GanttToolbar';
 import { GanttSettingsModal } from '../components/settings/GanttSettingsModal';
@@ -49,6 +50,7 @@ interface PageProps {
     project: string;
     project_name: string;
     initialTasks: GanttTask[];
+    initialCalendarSettings?: Partial<GanttCalendarSettings> | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -56,6 +58,7 @@ export default function CronogramaGeneralV2({
     project,
     project_name,
     initialTasks,
+    initialCalendarSettings,
 }: PageProps) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Proyectos', href: '/costos' },
@@ -88,6 +91,7 @@ export default function CronogramaGeneralV2({
     const { calendarSettings, setCalendarSettings } = useGanttSettings(
         project,
         initialTasks,
+        initialCalendarSettings,
     );
 
     // ── Estado de tareas ─────────────────────────────────────────────────────

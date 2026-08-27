@@ -81,10 +81,21 @@ class DelphinController extends Controller
             'project_name' => $costoProject->nombre ?? '',
             'initialRows' => $rows,
             'initialTasks' => $tasks,
+            'initialCalendarSettings' => $this->fetchCalendarSettings((string) $projectId),
             'projectParams' => $projectParams ? (array) $projectParams : null,
             'projectData' => $projectData,
             'resumenPresupuesto' => $resumenPresupuesto,
         ]);
+    }
+
+    private function fetchCalendarSettings(string $project): ?array
+    {
+        $json = DB::table('cronogramas')->where('project_id', $project)->value('config_json');
+        $config = $json ? json_decode($json, true) : null;
+
+        return is_array($config['calendar_settings'] ?? null)
+            ? $config['calendar_settings']
+            : null;
     }
 
     /**

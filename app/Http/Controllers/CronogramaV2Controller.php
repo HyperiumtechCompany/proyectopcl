@@ -33,6 +33,7 @@ class CronogramaV2Controller extends Controller
             'project' => (string) $projectId,
             'project_name' => $costoProject->nombre ?? '',
             'initialTasks' => $tasks,
+            'initialCalendarSettings' => $this->fetchCalendarSettings((string) $projectId),
         ]);
     }
 
@@ -54,7 +55,14 @@ class CronogramaV2Controller extends Controller
     // ──────────────────────────────────────────────────────────────────────────
     public function store(Request $request, string $project): JsonResponse
     {
-        $request->validate(['tasks' => 'required|array']);
+        $request->validate([
+            'tasks' => 'required|array',
+            'calendar_settings' => 'nullable|array',
+            'calendar_settings.projectStart' => 'nullable|date_format:Y-m-d',
+            'calendar_settings.projectEnd' => 'nullable|date_format:Y-m-d',
+            'calendar_settings.workDays' => 'nullable|array',
+            'calendar_settings.holidays' => 'nullable|array',
+        ]);
 
         $costoProject = CostoProject::findOrFail($project);
         app(CostoDatabaseService::class)->setTenantConnection($costoProject->database_name);
@@ -141,6 +149,11 @@ class CronogramaV2Controller extends Controller
 
                 DB::connection('costos_tenant')->commit();
 
+                $this->saveCalendarSettings(
+                    (string) $project,
+                    $request->input('calendar_settings'),
+                );
+
                 return response()->json([
                     'status' => 'success',
                     'message' => 'Cronograma guardado correctamente.',
@@ -178,6 +191,25 @@ class CronogramaV2Controller extends Controller
             'status' => 'error',
             'message' => 'No se pudo guardar debido a alta concurrencia. Intenta nuevamente.',
         ], 500);
+    }
+
+    public function storeSettings(Request $request, string $project): JsonResponse
+    {
+        $validated = $request->validate([
+            'calendar_settings' => 'required|array',
+            'calendar_settings.projectStart' => 'required|date_format:Y-m-d',
+            'calendar_settings.projectEnd' => 'required|date_format:Y-m-d|after_or_equal:calendar_settings.projectStart',
+            'calendar_settings.workDays' => 'required|array',
+            'calendar_settings.holidays' => 'present|array',
+        ]);
+
+        CostoProject::findOrFail($project);
+        $this->saveCalendarSettings($project, $validated['calendar_settings']);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Calendario guardado correctamente.',
+        ]);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -246,5 +278,34 @@ class CronogramaV2Controller extends Controller
         }
 
         return (int) $id;
+    }
+
+    private function fetchCalendarSettings(string $project): ?array
+    {
+        $json = DB::table('cronogramas')->where('project_id', $project)->value('config_json');
+        $config = $json ? json_decode($json, true) : null;
+
+        return is_array($config['calendar_settings'] ?? null)
+            ? $config['calendar_settings']
+            : null;
+    }
+
+    private function saveCalendarSettings(string $project, mixed $settings): void
+    {
+        if (! is_array($settings)) {
+            return;
+        }
+
+        $existing = DB::table('cronogramas')->where('project_id', $project)->value('config_json');
+        $config = $existing ? json_decode($existing, true) : [];
+        $config = is_array($config) ? $config : [];
+        $config['calendar_settings'] = $settings;
+
+        $values = ['config_json' => json_encode($config), 'updated_at' => now()];
+        if ($existing === null) {
+            $values['created_at'] = now();
+        }
+
+        DB::table('cronogramas')->updateOrInsert(['project_id' => $project], $values);
     }
 }

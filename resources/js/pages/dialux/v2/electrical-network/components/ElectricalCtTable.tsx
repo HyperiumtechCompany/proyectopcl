@@ -136,7 +136,11 @@ export function ElectricalCtTable({
     const topologyProblems = issues.filter(
         (issue) => issue.code !== 'disconnected',
     ).length;
-    const feederProblems = edges.filter((edge) =>
+    // TODOS los alimentadores de la red, no solo los que llegan a tableros de
+    // módulo: el tramo Medidor→TG (el único TG del proyecto) también debe
+    // contarse, para que la verificación escale hasta el TG igual que el
+    // resto del árbol.
+    const feederProblems = data.edges.filter((edge) =>
         ['incomplete', 'non_compliant'].includes(
             calcByEdge.get(edge.id)?.status ?? 'incomplete',
         ),
@@ -422,6 +426,7 @@ export function ElectricalCtTable({
                         </tr>
                         <GeneralRow
                             data={data}
+                            calculations={calculations}
                             distributionSummaries={rootDistributionSummaries}
                             onUpdate={onUpdateSettings}
                         />
@@ -491,13 +496,23 @@ function FullHeader() {
 
 function GeneralRow({
     data,
+    calculations,
     distributionSummaries,
     onUpdate,
 }: {
     data: ElectricalNetworkData;
+    calculations: EdgeCalculation[];
     distributionSummaries: ModuleCtCircuit[];
     onUpdate: Props['onUpdateSettings'];
 }) {
+    // Alimentador real Medidor → TG (el único TG del proyecto) — sin esto la
+    // fila resumen del TG mostraba longitud/sección/ΔU fijos en 0, aunque el
+    // usuario ya lo hubiera configurado en el diagrama de red.
+    const tgNode = data.nodes.find((node) => node.type === 'main_panel');
+    const tgEdge = data.edges.find(
+        (edge) => edge.targetNodeId === tgNode?.id,
+    );
+    const tgResult = calculations.find((item) => item.edgeId === tgEdge?.id);
     const installedPowerW = distributionSummaries.reduce(
         (sum, circuit) => sum + circuit.installedPowerW,
         0,
@@ -532,9 +547,10 @@ function GeneralRow({
             data.settings.phases,
             data.settings.defaultPowerFactor,
         ) * designFactor;
-    const ok = distributionSummaries.every(
-        (circuit) => circuit.capacityConforms && circuit.voltageDropOk,
-    );
+    const ok =
+        distributionSummaries.every(
+            (circuit) => circuit.capacityConforms && circuit.voltageDropOk,
+        ) && (tgResult ? tgResult.status !== 'non_compliant' : true);
 
     return (
         <tr className="border-b-4 border-violet-300 bg-violet-50/80 font-semibold dark:border-violet-900 dark:bg-violet-950/20">
@@ -576,7 +592,7 @@ function GeneralRow({
             <Mono value={phaseCurrentR.toFixed(2)} />
             <Mono value={phaseCurrentS.toFixed(2)} />
             <Mono value={phaseCurrentT.toFixed(2)} />
-            <Mono value="—" />
+            <Mono value={tgResult?.ampacityA?.toFixed(2) ?? '—'} />
             <Edit
                 value={data.settings.workingTemperatureC}
                 onChange={(value) => onUpdate({ workingTemperatureC: value })}
@@ -584,20 +600,30 @@ function GeneralRow({
             <Mono value="1" />
             <Mono value="1.00" />
             <Mono value="1.00" />
-            <Mono value="—" />
+            <Mono value={tgResult?.ampacityA?.toFixed(2) ?? '—'} />
             <Conform ok={ok} />
+            <Mono value={tgResult ? `${tgResult.breakerA} A` : '—'} />
             <Mono value="—" />
+            <Mono value={tgEdge ? tgEdge.horizontalLengthM.toFixed(2) : '0.00'} />
+            <Mono value={tgEdge ? tgEdge.verticalLengthM.toFixed(2) : '0.00'} />
+            <Mono value={tgResult ? tgResult.lengthM.toFixed(2) : '0.00'} />
+            <Mono value={tgEdge ? `${tgEdge.sectionMm2} mm²` : '—'} />
+            <Mono value={tgResult ? tgResult.ownVoltageDropV.toFixed(2) : '0.00'} />
+            <Mono
+                value={`${tgResult ? tgResult.accumulatedVoltageDropPercent.toFixed(2) : '0.00'}%`}
+                strong
+            />
+            <Conform
+                ok={
+                    tgResult
+                        ? tgResult.status === 'complete' ||
+                          tgResult.status === 'warning'
+                        : ok
+                }
+            />
             <Mono value="—" />
-            <Mono value="0.00" />
-            <Mono value="0.00" />
-            <Mono value="0.00" />
-            <Mono value="—" />
-            <Mono value="0.00" />
-            <Mono value="0.00%" strong />
-            <Conform ok={ok} />
-            <Mono value="—" />
-            <Mono value="—" />
-            <Mono value="—" />
+            <Mono value={tgEdge?.conductorType ?? '—'} />
+            <Mono value={tgEdge?.earthSectionMm2?.toFixed(1) ?? '—'} />
         </tr>
     );
 }
