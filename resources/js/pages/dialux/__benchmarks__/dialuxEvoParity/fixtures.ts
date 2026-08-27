@@ -207,6 +207,221 @@ export function buildCasetaVsGuarderiasFixture(): DialuxEvoParityFixture {
     };
 }
 
+/**
+ * "GUARDIANIA" (`MODULO XIV_InformeU.pdf`, DIALux evo real, p.11-23) —
+ * proyecto real distinto de MODULO I, MISMA luminaria que
+ * `caseta-vs-guarderias` (GF19140, 26.0 W, 2580 lm) pero otro ambiente,
+ * altura de montaje (2.900 m, no 3.500 m) y área (3.47 m², rectángulo de
+ * UGR 2.212 m x 1.889 m, no 4.63 m²). Reutiliza la MISMA fotometría real de
+ * fábrica ya obtenida (`GF19140_SUBSTITUTE_PHOTOMETRIC_WEB`) — es el mismo
+ * artículo/fabricante, no una elección nueva para este fixture.
+ */
+export function buildGuardianiaModuloXivFixture(): DialuxEvoParityFixture {
+    const width = 2.212;
+    const depth = 1.889;
+    const room: Room = {
+        id: 'benchmark-guardiania-modulo-xiv',
+        name: 'GUARDIANIA (benchmark vs. DIALux evo — MODULO XIV)',
+        roomType: 'ambient',
+        vertices: [
+            { x: 0, y: 0 },
+            { x: width, y: 0 },
+            { x: width, y: depth },
+            { x: 0, y: depth },
+        ],
+        height: 2.9,
+        color: '#000000',
+        illuminanceLux: 200,
+        usefulPlaneHeight: 0.8,
+        // Zona marginal DECLARADA por DIALux evo para ESTE ambiente
+        // (`MODULO XIV_InformeU.pdf` p.16).
+        marginalZone: 0.1,
+    };
+
+    const fixtures: Fixture[] = [
+        {
+            id: 'benchmark-guardiania-modulo-xiv-gf19140',
+            name: 'G4 LED Plain - 22W - SMART - Corridor Lens - 4000K',
+            x: 0.944,
+            y: 1.241,
+            z: 2.9,
+            lumens: 2580,
+            power: 26,
+            efficiency: 1,
+            fixtureType: 'recessed',
+            brand: 'Thorlux Lighting',
+            articleNumber: 'GF19140',
+            lightColor: '#ffffff',
+            roomId: 'benchmark-guardiania-modulo-xiv::ambient-1',
+            photometricWeb: GF19140_SUBSTITUTE_PHOTOMETRIC_WEB,
+        },
+    ];
+
+    return {
+        id: 'guardiania-modulo-xiv',
+        label: 'GUARDIANIA (MODULO XIV / DIALux evo real)',
+        referenceSource: 'MODULO XIV_InformeU.pdf p.11-23 — Thorlux GF19140',
+        room,
+        fixtures,
+        reference: { avgLux: 280, minLux: 173, maxLux: 357, uniformity: 0.62 },
+        reflectance: { ceiling: 0.7, wall: 0.5, floor: 0.2 },
+        caveats: [
+            'Fotometría real de un SUSTITUTO (LTS, 26W/2580lm), no de la Thorlux GF19140 exacta — misma nota de procedencia que `caseta-vs-guarderias` (mismo artículo real usado en proyectos del usuario, ver `realPhotometry.ts`).',
+            'Geometría real del ambiente es un pentágono irregular (ver plano p.11); se usa el rectángulo equivalente que el propio PDF declara para la nota de UGR (2.212 m x 1.889 m), no el polígono exacto — misma aproximación que los otros fixtures de este archivo.',
+        ],
+        hasRealPhotometry: true,
+    };
+}
+
+/**
+ * "PASILLO" (`MODULO XIV_InformeU.pdf`, DIALux evo real, p.24-31) — misma
+ * luminaria exacta que `sshh-vs-bano` (TEG18046, 14.0 W, 1508 lm) pero
+ * ambiente y altura de montaje distintos (2.900 m, no 3.500 m). Reutiliza la
+ * MISMA fotometría .ldt real ya obtenida (`TEG18046_PHOTOMETRIC_WEB`).
+ */
+export function buildPasilloModuloXivFixture(): DialuxEvoParityFixture {
+    // OJO: para ESTE ambiente puntual, la orientación X/Y del PDF es al
+    // revés de lo esperado por analogía con los otros fixtures — el eje X
+    // es el CORTO (0.57 m) y el Y es el LARGO (3.09 m), confirmado por la
+    // posición real de la luminaria (X=0.307, Y=1.612 — 1.612 solo cabe en
+    // el eje largo). Con `width`/`depth` invertidos (como en los otros
+    // fixtures) la luminaria caía FUERA del rectángulo del ambiente:
+    // `buildCalculationSnapshot` la descartaba en silencio
+    // (`object-without-luminaires`), dando 0 lux en todos los puntos — no
+    // era un bug del motor, era esta geometría mal orientada.
+    const width = 0.57;
+    const depth = 3.09;
+    const room: Room = {
+        id: 'benchmark-pasillo-modulo-xiv',
+        name: 'PASILLO (benchmark vs. DIALux evo — MODULO XIV)',
+        roomType: 'ambient',
+        vertices: [
+            { x: 0, y: 0 },
+            { x: width, y: 0 },
+            { x: width, y: depth },
+            { x: 0, y: depth },
+        ],
+        height: 2.9,
+        color: '#000000',
+        illuminanceLux: 100,
+        usefulPlaneHeight: 0,
+        // Zona marginal DECLARADA por DIALux evo para ESTE ambiente
+        // (`MODULO XIV_InformeU.pdf` p.24).
+        marginalZone: 0.086,
+    };
+
+    const fixtures: Fixture[] = [
+        {
+            id: 'benchmark-pasillo-modulo-xiv-teg18046',
+            name: 'TEGO IP65 FROSTED GLASS',
+            x: 0.307,
+            y: 1.612,
+            z: 2.9,
+            lumens: 1508,
+            power: 14,
+            efficiency: 1,
+            fixtureType: 'surface',
+            brand: 'Thorlux Lighting',
+            articleNumber: 'TEG18046',
+            lightColor: '#ffffff',
+            roomId: 'benchmark-pasillo-modulo-xiv::ambient-1',
+            photometricWeb: TEG18046_PHOTOMETRIC_WEB,
+        },
+    ];
+
+    return {
+        id: 'pasillo-modulo-xiv',
+        label: 'PASILLO (MODULO XIV / DIALux evo real)',
+        referenceSource: 'MODULO XIV_InformeU.pdf p.24-31 — Thorlux TEG18046',
+        room,
+        fixtures,
+        reference: { avgLux: 160, minLux: 66.4, maxLux: 244, uniformity: 0.42 },
+        reflectance: { ceiling: 0.7, wall: 0.5, floor: 0.2 },
+        caveats: [
+            'Usa fotometría REAL de fábrica (`realPhotometry.ts::TEG18046_PHOTOMETRIC_WEB`), mismo artículo que `sshh-vs-bano`.',
+            'Ambiente muy alargado (relación 5.4:1) — fuera del rango típico de los otros fixtures de este archivo; un error mayor aquí puede reflejar sensibilidad de forma, no solo fotometría (ver `dialux-calc-reviewer` antes de sacar conclusiones de precisión de este caso puntual).',
+            'Geometría real del ambiente es una franja angosta con un tramo curvo (ver plano p.26); se usa el rectángulo equivalente que el propio PDF declara para la nota de UGR (0.570 m x 3.090 m, eje X=corto/eje Y=largo — ver comentario de orientación arriba), no el polígono exacto.',
+        ],
+        hasRealPhotometry: true,
+    };
+}
+
+/**
+ * "SS.HH SERVICIO" (`MODULO XIV_InformeU.pdf`, DIALux evo real, p.32-39) —
+ * luminaria Regiolux relo-RDES-O/190 LED (37672106640, 21.0 W, 2014 lm) SIN
+ * fotometría .ldt real todavía conseguida en este repo (a diferencia de las
+ * otras dos luminarias de este mismo PDF) — usa la aproximación Lambertiana
+ * genérica, igual que el resto del suite cuando falta el archivo real (ver
+ * doc-comment de `dialuxEvoParity.test.ts`).
+ */
+export function buildSsHhServicioModuloXivFixture(): DialuxEvoParityFixture {
+    const width = 2.604;
+    const depth = 1.427;
+    const room: Room = {
+        id: 'benchmark-sshh-servicio-modulo-xiv',
+        name: 'SS.HH SERVICIO (benchmark vs. DIALux evo — MODULO XIV)',
+        roomType: 'ambient',
+        vertices: [
+            { x: 0, y: 0 },
+            { x: width, y: 0 },
+            { x: width, y: depth },
+            { x: 0, y: depth },
+        ],
+        height: 2.9,
+        color: '#000000',
+        illuminanceLux: 100,
+        usefulPlaneHeight: 0,
+        // Zona marginal DECLARADA por DIALux evo para ESTE ambiente
+        // (`MODULO XIV_InformeU.pdf` p.32).
+        marginalZone: 0.173,
+    };
+
+    const fixtures: Fixture[] = [
+        {
+            id: 'benchmark-sshh-servicio-modulo-xiv-regiolux',
+            name: 'relo-RDES-O/190 LED - Diffusor opal | Opal diffuser',
+            x: 0.697,
+            y: 1.302,
+            z: 2.9,
+            lumens: 2014,
+            power: 21,
+            // Ficha de producto (`MODULO XIV_InformeU.pdf` p.6): "η: –"
+            // (no declarado); se usa 1 como el resto de fixtures de este
+            // archivo cuando la ficha no reporta un valor propio.
+            efficiency: 1,
+            fixtureType: 'recessed',
+            brand: 'Regiolux',
+            articleNumber: '37672106640',
+            lightColor: '#ffffff',
+            roomId: 'benchmark-sshh-servicio-modulo-xiv::ambient-1',
+            // Sin `photometricWeb`: no se ha conseguido el .ldt real de este
+            // artículo todavía — cae en la aproximación Lambertiana, igual
+            // que el resto del suite en la misma situación.
+        },
+    ];
+
+    return {
+        id: 'sshh-servicio-modulo-xiv',
+        label: 'SS.HH SERVICIO (MODULO XIV / DIALux evo real)',
+        referenceSource: 'MODULO XIV_InformeU.pdf p.32-39 — Regiolux 37672106640',
+        room,
+        fixtures,
+        reference: { avgLux: 166, minLux: 102, maxLux: 229, uniformity: 0.61 },
+        reflectance: { ceiling: 0.7, wall: 0.5, floor: 0.2 },
+        caveats: [
+            'SIN fotometría real (aproximación Lambertiana) — el .ldt de Regiolux 37672106640 no se ha conseguido todavía; el % de error de este fixture NO es comparable a los que sí tienen fotometría real (mismo criterio que el resto del suite, ver doc-comment de `dialuxEvoParity.test.ts`).',
+            'Geometría real del ambiente es un hexágono irregular con un recorte (ver plano p.34); se usa el rectángulo equivalente que el propio PDF declara para la nota de UGR (2.604 m x 1.427 m), no el polígono exacto.',
+        ],
+        hasRealPhotometry: false,
+    };
+}
+
 export function buildAllDialuxEvoParityFixtures(): DialuxEvoParityFixture[] {
-    return [buildSsHhVsBanoFixture(), buildCasetaVsGuarderiasFixture()];
+    return [
+        buildSsHhVsBanoFixture(),
+        buildCasetaVsGuarderiasFixture(),
+        buildGuardianiaModuloXivFixture(),
+        buildPasilloModuloXivFixture(),
+        buildSsHhServicioModuloXivFixture(),
+    ];
 }

@@ -74,6 +74,10 @@ function buildFormulaData(monomios: any[]): any {
 
     const result = {
         formula: formulaStr,
+        terms: monomiosConCoef.map((monomio) => ({
+            nomenclatura: monomio.nomenclatura,
+            coeficiente: monomio.coeficienteTotal,
+        })),
         monomios: tableData,
         totalK: totalK,
         hasData: true,

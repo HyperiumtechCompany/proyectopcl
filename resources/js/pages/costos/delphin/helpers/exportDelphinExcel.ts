@@ -586,44 +586,64 @@ async function buildFormulaPolinomicaSheet(
     projectName: string,
     workbook: ExcelJS.Workbook
 ) {
-    const totalColumnas = 5;
-
-
-    ws.getColumn(1).width = 6;
-    ws.getColumn(2).width = 55;
-    ws.getColumn(3).width = 16;
-    ws.getColumn(4).width = 16;
-    ws.getColumn(5).width = 14;
+    const totalColumnas = 17;
+    ws.getColumn(1).width = 5;
+    for (let column = 2; column <= totalColumnas; column++) {
+        ws.getColumn(column).width = column % 2 === 0 ? 8 : 7;
+    }
 
     const nombreProyecto = String(projectName || 'PROYECTO');
     let filaActual = await buildHeader(
         workbook, ws, nombreProyecto, proyecto, totalColumnas, 'FÓRMULA POLINÓMICA'
     );
 
-    // ── BLOQUE FÓRMULA K ──────────────────────────────────────────────────
-    const formulaStr = formulaData?.formula || 'K = (sin datos)';
-    ws.mergeCells(filaActual, 1, filaActual + 2, totalColumnas);
-    const formulaCell = ws.getCell(filaActual, 1);
-    formulaCell.value = formulaStr;
-    formulaCell.font = { bold: true, size: 10, name: 'Calibri', color: { argb: 'FF1A3C5E' } };
-    formulaCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
-    formulaCell.border = {
-        top: { style: 'medium', color: { argb: 'FF1F4E79' } },
-        bottom: { style: 'medium', color: { argb: 'FF1F4E79' } },
-        left: { style: 'medium', color: { argb: 'FF1F4E79' } },
-        right: { style: 'medium', color: { argb: 'FF1F4E79' } },
-    };
-    // Altura dinámica: ~18pt por cada línea estimada (1 línea cada 60 chars)
-    const lineasEstimadas = Math.max(3, Math.ceil(formulaStr.length / 90));
-    ws.getRow(filaActual).height = lineasEstimadas * 16;
+    // Fórmula normativa: coeficiente × índice relativo (r) / índice base (o).
+    const terms: Array<{ nomenclatura: string; coeficiente: number }> = formulaData?.terms ?? [];
+    ws.mergeCells(filaActual, 1, filaActual + 2, 1);
+    const kCell = ws.getCell(filaActual, 1);
+    kCell.value = 'K =';
+    font(kCell, 'FF1A3C5E', true, 11);
+    kCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    terms.slice(0, 8).forEach((term, index) => {
+        const coefficientColumn = 2 + index * 2;
+        const fractionColumn = coefficientColumn + 1;
+        const coefficientCell = ws.getCell(filaActual + 1, coefficientColumn);
+        coefficientCell.value = `${index > 0 ? '+ ' : ''}${Number(term.coeficiente).toFixed(3)} ×`;
+        font(coefficientCell, 'FF1A3C5E', true, 9);
+        coefficientCell.alignment = { horizontal: 'right', vertical: 'middle' };
+
+        const numerator = ws.getCell(filaActual, fractionColumn);
+        numerator.value = `${term.nomenclatura}r`;
+        font(numerator, 'FF1A3C5E', true, 9);
+        numerator.alignment = { horizontal: 'center', vertical: 'bottom' };
+        numerator.border = { bottom: { style: 'thin', color: { argb: 'FF1A3C5E' } } };
+
+        const denominator = ws.getCell(filaActual + 2, fractionColumn);
+        denominator.value = `${term.nomenclatura}o`;
+        font(denominator, 'FF1A3C5E', true, 9);
+        denominator.alignment = { horizontal: 'center', vertical: 'top' };
+    });
+    for (let row = filaActual; row <= filaActual + 2; row++) ws.getRow(row).height = 15;
     filaActual += 3;
 
-    // ── CABECERA TABLA ────────────────────────────────────────────────────
+    ws.mergeCells(filaActual, 1, filaActual, totalColumnas);
+    const processCell = ws.getCell(filaActual, 1);
+    processCell.value = 'Proceso: K = Σ(ai × Ir / Io) · ai: coeficiente de incidencia · Ir: índice del mes de reajuste · Io: índice base.';
+    font(processCell, 'FF475569', false, 8);
+    processCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+    ws.getRow(filaActual).height = 18;
     filaActual++;
-    const headers = ['N°', 'Descripción', 'Nomen.', 'Coeficiente', '% Total'];
-    headers.forEach((h, i) => {
-        const cell = ws.getCell(filaActual, i + 1);
-        cell.value = h;
+    const headerGroups = [
+        { label: 'Descripción', from: 1, to: 11 },
+        { label: 'Nomenclatura', from: 12, to: 13 },
+        { label: 'Coeficiente', from: 14, to: 15 },
+        { label: 'Porcentaje (%)', from: 16, to: 17 },
+    ];
+    headerGroups.forEach(({ label, from, to }) => {
+        ws.mergeCells(filaActual, from, filaActual, to);
+        const cell = ws.getCell(filaActual, from);
+        cell.value = label;
         fill(cell, C.headerBg);
         font(cell, C.headerFg, true, 10);
         cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
@@ -632,7 +652,6 @@ async function buildFormulaPolinomicaSheet(
     ws.getRow(filaActual).height = 22;
     filaActual++;
 
-    // ── FILAS DE DATOS ────────────────────────────────────────────────────
     const monomios: any[] = formulaData?.monomios ?? [];
 
     if (monomios.length === 0) {
@@ -647,9 +666,6 @@ async function buildFormulaPolinomicaSheet(
         return;
     }
 
-    // Calcular el ancho máximo de la columna descripción dinámicamente
-    let maxDescLen = 30;
-
     monomios.forEach((row: any) => {
         const esPadre = row.esPadre;
         const esMonomio = row.esMonomio ?? esPadre;
@@ -657,71 +673,53 @@ async function buildFormulaPolinomicaSheet(
         const fg = esMonomio ? C.titulo0Fg : C.leafFg;
         const bold = esMonomio;
 
-        // Col 1: N°
-        const c1 = ws.getCell(filaActual, 1);
-        c1.value = esPadre ? row.nro : '';
-        fill(c1, bg); font(c1, fg, bold, 10); border(c1);
-        c1.alignment = { vertical: 'middle', horizontal: 'center' };
-
-        // Col 2: Descripción (indentada para hijos)
-        const c2 = ws.getCell(filaActual, 2);
+        ws.mergeCells(filaActual, 1, filaActual, 11);
+        const c2 = ws.getCell(filaActual, 1);
         const indent = Number(row.nivel ?? (esPadre ? 0 : 1));
         c2.value = `${row.codigo ? `${row.codigo} ` : ''}${row.descripcion || ''}`;
         fill(c2, bg); font(c2, fg, bold, 10); border(c2);
         c2.alignment = { vertical: 'middle', horizontal: 'left', wrapText: false, indent };
-        maxDescLen = Math.max(maxDescLen, (row.descripcion ?? '').length + indent * 2);
 
-        // Col 3: Nomenclatura (solo padres)
-        const c3 = ws.getCell(filaActual, 3);
+        ws.mergeCells(filaActual, 12, filaActual, 13);
+        const c3 = ws.getCell(filaActual, 12);
         c3.value = esPadre ? row.monomio : '';
         fill(c3, bg); font(c3, esPadre ? 'FF059669' : fg, bold, esPadre ? 12 : 10); border(c3);
         c3.alignment = { vertical: 'middle', horizontal: 'center' };
 
-        // Col 4: Coeficiente
-        const c4 = ws.getCell(filaActual, 4);
+        ws.mergeCells(filaActual, 14, filaActual, 15);
+        const c4 = ws.getCell(filaActual, 14);
         c4.value = row.coeficiente ?? 0;
         fill(c4, bg); font(c4, fg, bold, 10); border(c4);
         c4.alignment = { vertical: 'middle', horizontal: 'right' };
         c4.numFmt = '#,##0.000';
 
-        // Col 5: % Total
-        const c5 = ws.getCell(filaActual, 5);
+        ws.mergeCells(filaActual, 16, filaActual, 17);
+        const c5 = ws.getCell(filaActual, 16);
         c5.value = row.incidencia ?? 0;
         fill(c5, bg); font(c5, fg, bold, 10); border(c5);
         c5.alignment = { vertical: 'middle', horizontal: 'right' };
-        c5.numFmt = '0.0';
+        c5.numFmt = '0.00';
 
         ws.getRow(filaActual).height = esPadre ? 20 : 16;
         filaActual++;
     });
 
-    // ── FILA TOTAL ────────────────────────────────────────────────────────
     const totalK = formulaData?.totalK ?? 0;
     [
-        { v: '', col: 1 },
-        { v: 'TOTAL K =', col: 2 },
-        { v: '', col: 3 },
-        { v: totalK, col: 4, fmt: '#,##0.000' },
-        { v: 100, col: 5, fmt: '0.0' },
-    ].forEach(({ v, col, fmt }) => {
-        const cell = ws.getCell(filaActual, col);
+        { v: 'TOTAL K =', from: 1, to: 13, fmt: undefined },
+        { v: totalK, from: 14, to: 15, fmt: '#,##0.000' },
+        { v: 100, from: 16, to: 17, fmt: '0.00' },
+    ].forEach(({ v, from, to, fmt }) => {
+        ws.mergeCells(filaActual, from, filaActual, to);
+        const cell = ws.getCell(filaActual, from);
         cell.value = v;
         fill(cell, C.totalBg);
         font(cell, C.totalFg, true, 11);
         border(cell);
-        cell.alignment = { vertical: 'middle', horizontal: col === 2 ? 'right' : col >= 4 ? 'right' : 'center' };
+        cell.alignment = { vertical: 'middle', horizontal: 'right' };
         if (fmt) cell.numFmt = fmt;
     });
     ws.getRow(filaActual).height = 22;
-
-    // ── ANCHOS ADAPTATIVOS ────────────────────────────────────────────────
-
-    ws.getColumn(2).width = Math.min(80, Math.max(50, maxDescLen * 0.9));
-
-    ws.getColumn(1).width = 6;
-    ws.getColumn(3).width = 14;
-    ws.getColumn(4).width = 16;
-    ws.getColumn(5).width = 12;
 
     ws.views = [{}];
 }

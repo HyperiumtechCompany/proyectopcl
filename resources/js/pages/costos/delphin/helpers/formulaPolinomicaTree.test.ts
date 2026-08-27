@@ -14,7 +14,7 @@ const build = () => buildInitialMonomios(
         ['10', 'Artefacto de alumbrado exterior'],
         ['20', 'Cemento'],
         ['30', 'Equipo'],
-        ['39', 'Gasto General y Utilidad'],
+        ['39', 'Índice de Precios al Consumidor (INEI)'],
     ]),
 );
 
@@ -22,7 +22,7 @@ describe('árbol de fórmula polinómica', () => {
     it('inicia cada índice como monomio independiente sin duplicarlo', () => {
         const monomios = build();
         expect(monomios).toHaveLength(4);
-        expect(monomios.map((monomio) => monomio.nomenclatura)).toEqual(['AZ', 'CE', 'EQ', 'GU']);
+        expect(monomios.map((monomio) => monomio.nomenclatura)).toEqual(['AZ', 'CE', 'EQ', 'IP']);
         expect(monomios.reduce((sum, monomio) => sum + monomio.root.coefDefinido, 0)).toBeCloseTo(1, 3);
         expect(monomios.every((monomio) => monomio.root.children.length === 0)).toBe(true);
         expect(monomios.flatMap((monomio) => flattenNodes(monomio.root)).map((node) => node.code))
@@ -50,5 +50,9 @@ describe('árbol de fórmula polinómica', () => {
         expect(rows.map((row) => row.codigo)).toEqual(['10', '10', '20', '20', '30', '30', '39', '39']);
         expect(rows.map((row) => row.nivel)).toEqual([0, 1, 1, 2, 2, 3, 0, 1]);
         expect(rows.map((row) => row.esMonomio)).toEqual([true, false, true, false, true, false, true, false]);
+        expect(rows[0].incidencia).toBe(100);
+        expect(rows[1].incidencia).toBeCloseTo(44.44444, 5);
+        expect(rows[2].incidencia).toBeCloseTo(55.55556, 5);
+        expect(rows[3].incidencia).toBeCloseTo(60, 5);
     });
 });

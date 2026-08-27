@@ -3,21 +3,14 @@ import { useEffect, useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import { EditorLayout } from '@/pages/dialux/components/EditorLayout';
 import { ensureStandardDataLoaded } from '@/pages/dialux/hooks/normativeRemoteData';
-import {
-    useEditorStore,
-    type Project as EditorProject,
-} from '@/pages/dialux/hooks/useEditorStore';
+import {useEditorStore, type Project as EditorProject} from '@/pages/dialux/hooks/useEditorStore';
 import type { BreadcrumbItem } from '@/types';
 import { ModuleSidebar } from './components/ModuleSidebar';
 import { GeneralWorkspaceTabs } from './components/GeneralWorkspaceTabs';
 import { useDialuxModuleSync } from './hooks/useDialuxModuleSync';
 import { useModuleActions } from './hooks/useModuleActions';
 import { createBlankModuleProject } from './lib/createBlankModuleProject';
-import type {
-    DialuxV2EditorModule,
-    DialuxV2Module,
-    DialuxV2Project,
-} from './types';
+import type {DialuxV2EditorModule,DialuxV2Module,DialuxV2Project} from './types';
 
 interface Props {
     project: Pick<DialuxV2Project, 'id' | 'name'>;

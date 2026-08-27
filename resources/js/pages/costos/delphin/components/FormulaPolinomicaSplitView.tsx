@@ -16,10 +16,9 @@ import {
 import { FormulaPolinomicaBuilder } from './FormulaPolinomicaBuilder';
 import type { FormulaMonomio } from '../helpers/formulaPolinomicaTree';
 
-// INE 39: Gastos Generales + Utilidad no pertenecen a ningún insumo de ACU —
-// se inyectan como una fila/columna sintética aparte, con el código y nombre
-// oficial DS 011-79-VC, para que también puedan entrar a un monomio de la
-// fórmula (tal como cualquier otro índice INEI).
+// El importe de Gastos Generales + Utilidad no pertenece a ningún insumo de
+// ACU. Se inyecta como una fila/columna sintética bajo el índice oficial 39,
+// conservando exactamente su nombre del catálogo INEI 2026.
 const INDICE_INE_CODE = GU_CODE;
 const INDICE_INE_LABEL = INEI_NOMBRES[GU_CODE];
 
@@ -337,8 +336,8 @@ export function FormulaPolinomicaSplitView({ projectId, parentId, rows, acuRows,
                   return a.localeCompare(b, 'es');
               });
 
-        // Nombre oficial del índice 39, aun si diccionario ya usa ese código
-        // para otros insumos (semilla de datos ambigua) — este siempre gana.
+        // El nombre oficial del índice 39 siempre prevalece sobre descripciones
+        // heredadas o ambiguas del diccionario de insumos.
         const codeToDesc = new Map(base.codeToDesc);
         codeToDesc.set(INDICE_INE_CODE, INDICE_INE_LABEL);
 
@@ -754,7 +753,7 @@ export function FormulaPolinomicaSplitView({ projectId, parentId, rows, acuRows,
                                     );
                                 })}
 
-                                {/* Fila sintética: Gastos Generales + Utilidad → índice 39 (INE) */}
+                                {/* Importe sintético de GG + Utilidad bajo el índice oficial 39 */}
                                 {ggUtilidad > 0 && (
                                     <tr>
                                         <td

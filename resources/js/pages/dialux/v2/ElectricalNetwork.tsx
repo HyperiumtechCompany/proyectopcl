@@ -283,6 +283,48 @@ export default function ElectricalNetworkPage({
         editor.snapshot.data.edges,
         editor.calculations,
     ]);
+    // Longitud real del alimentador TG→tablero (o padre→hijo entre módulos)
+    // que ya existe en el diagrama de red — así el tablero raíz de cada
+    // módulo NO pide una longitud por separado: la de su fila resumen en la
+    // Tabla CT es la MISMA que ya trazaste en el diagrama, no una duplicada.
+    // Deliberadamente NO se inyecta como `properties.horizontalLengthM`
+    // (que sí alimentaría el cálculo): eso haría que el tablero calculara
+    // SU PROPIA caída de tensión para ese tramo ADEMÁS de heredar
+    // `upstreamVoltageDropV` (que la red YA calculó para el mismo tramo) —
+    // contaría la misma caída dos veces. Por eso el valor se aplica después,
+    // solo sobre el circuito ya calculado, únicamente para mostrarlo.
+    const upstreamFeederLengthByDevice = useMemo(() => {
+        const result = new Map<
+            string,
+            { horizontalLengthM: number; verticalLengthM: number }
+        >();
+        for (const node of editor.snapshot.data.nodes) {
+            if (
+                node.type !== 'module_panel_port' ||
+                !node.deviceId ||
+                !node.sceneId ||
+                node.moduleId === undefined
+            ) {
+                continue;
+            }
+            const port = ports.find(
+                (candidate) =>
+                    candidate.moduleId === node.moduleId &&
+                    candidate.sceneId === node.sceneId &&
+                    candidate.panelId === node.deviceId,
+            );
+            if (!port || port.parentPanelId) continue;
+            const incomingEdge = editor.snapshot.data.edges.find(
+                (edge) => edge.targetNodeId === node.id,
+            );
+            if (!incomingEdge) continue;
+            result.set(`${node.moduleId}:${node.sceneId}:${node.deviceId}`, {
+                horizontalLengthM: incomingEdge.horizontalLengthM,
+                verticalLengthM: incomingEdge.verticalLengthM,
+            });
+        }
+        return result;
+    }, [ports, editor.snapshot.data.nodes, editor.snapshot.data.edges]);
     const moduleCtCircuits = useMemo<ModuleCtCircuit[]>(
         () =>
             modulesData.flatMap((module) => {
@@ -313,14 +355,32 @@ export default function ElectricalNetworkPage({
                                   : scene;
                           });
                 return calculateProjectPanelCircuitSummaries(scenes).map(
-                    (circuit) => ({
-                        ...circuit,
-                        moduleId: module.moduleId,
-                        moduleName: module.moduleName,
-                    }),
+                    (circuit) => {
+                        const feederLength = circuit.isPanelSummary
+                            ? upstreamFeederLengthByDevice.get(
+                                  `${module.moduleId}:${circuit.levelId}:${circuit.panelId}`,
+                              )
+                            : undefined;
+                        return {
+                            ...circuit,
+                            ...(feederLength
+                                ? {
+                                      horizontalLengthM:
+                                          feederLength.horizontalLengthM,
+                                      verticalLengthM:
+                                          feederLength.verticalLengthM,
+                                      lengthM:
+                                          feederLength.horizontalLengthM +
+                                          feederLength.verticalLengthM,
+                                  }
+                                : {}),
+                            moduleId: module.moduleId,
+                            moduleName: module.moduleName,
+                        };
+                    },
                 );
             }),
-        [modulesData, upstreamVoltageDropVByDevice],
+        [modulesData, upstreamVoltageDropVByDevice, upstreamFeederLengthByDevice],
     );
     const voltageDropAlertCount = editor.calculations.filter((item) =>
         ['non_compliant', 'warning', 'incomplete'].includes(item.status),

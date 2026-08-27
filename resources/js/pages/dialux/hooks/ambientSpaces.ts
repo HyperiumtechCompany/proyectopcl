@@ -304,6 +304,16 @@ function buildRegionPolygon(
     cellSize: number,
 ): Vertex[] {
     const occupied = new Set(cells.map((cell) => `${cell.col},${cell.row}`));
+    // Claves de arista en coordenadas de ESQUINA DE GRILLA (enteros: col/row
+    // de cada celda, nunca col*cellSize) — el traspaso a metros ocurre solo
+    // al final, una vez cerrado el polÃ­gono. Antes se usaban las coordenadas
+    // mÃ©tricas directamente como clave (`${x},${y}` con x=originX+col*cellSize)
+    // y dos aristas del MISMO punto fÃ­sico podÃ­an generar claves distintas por
+    // deriva de punto flotante (p.ej. col*0.1 vs (col-1)*0.1+0.1 no siempre
+    // son bit-a-bit iguales en JS) â€” eso rompÃ­a la cadena de bordes a mitad
+    // de camino ("open chain") en grillas de ciertos tamaÃ±os, incluso para un
+    // rectÃ¡ngulo simple sin ningÃºn estrechamiento real. Con enteros no hay
+    // deriva posible.
     const nextByStart = new Map<string, Vertex>();
 
     // Registrar cada arista exterior exactamente una vez.
@@ -315,10 +325,10 @@ function buildRegionPolygon(
     const hasCell = (col: number, row: number) => occupied.has(`${col},${row}`);
 
     cells.forEach(({ col, row }) => {
-        const x0 = originX + col * cellSize;
-        const y0 = originY + row * cellSize;
-        const x1 = x0 + cellSize;
-        const y1 = y0 + cellSize;
+        const x0 = col;
+        const y0 = row;
+        const x1 = x0 + 1;
+        const y1 = y0 + 1;
 
         const addEdge = (sx: number, sy: number, ex: number, ey: number) => {
             const key = `${sx},${sy}`;
@@ -343,27 +353,33 @@ function buildRegionPolygon(
     const firstKey = nextByStart.keys().next().value as string | undefined;
     if (!firstKey) return [];
 
-    const vertices: Vertex[] = [];
+    const gridVertices: Vertex[] = [];
     let cursorKey = firstKey;
     const visited = new Set<string>();
     const maxSteps = nextByStart.size + 1; // salvaguarda anti-loop infinito
 
-    while (!visited.has(cursorKey) && vertices.length <= maxSteps) {
+    while (!visited.has(cursorKey) && gridVertices.length <= maxSteps) {
         visited.add(cursorKey);
         const [x, y] = cursorKey.split(',').map(Number);
-        vertices.push({ x, y });
+        gridVertices.push({ x, y });
 
         const next = nextByStart.get(cursorKey);
         if (!next) {
             // Cadena no cerrada â†’ la geometrÃ­a de la regiÃ³n es degenerada.
             // Retornar [] para que buildRasterRegions use el fallback de bounds.
             ambientLog(
-                `buildRegionPolygon: open chain detected after ${vertices.length} verts (cells=${cells.length})`,
+                `buildRegionPolygon: open chain detected after ${gridVertices.length} verts (cells=${cells.length})`,
             );
             return [];
         }
         cursorKey = `${next.x},${next.y}`;
     }
+
+    // Traspaso a metros AHORA que el polÃ­gono ya cerrÃ³ en espacio de grilla.
+    const vertices: Vertex[] = gridVertices.map((vertex) => ({
+        x: originX + vertex.x * cellSize,
+        y: originY + vertex.y * cellSize,
+    }));
 
     // Verificar que el polÃ­gono tiene al menos 3 vÃ©rtices no colineales
     const simplified = simplifyVertices(vertices);

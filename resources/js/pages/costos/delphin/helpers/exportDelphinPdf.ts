@@ -348,38 +348,65 @@ async function buildFormulaPolinomicaBlock(
     const contentW = pageW - marginX * 2;
     let y = startY;
 
-    // ── Fórmula K ────────────────────────────────────────────────────────
-    doc.setFillColor(217, 234, 247);
-    const formulaStr = formulaData?.formula || 'K = (sin datos)';
-    const formulaLines = doc.splitTextToSize(`K = ${formulaStr.replace(/^K = /, '')}`, contentW - 6);
-    const formulaBlockH = formulaLines.length * 4.5 + 4;
-    doc.rect(marginX, y, contentW, formulaBlockH, 'F');
-    doc.setDrawColor(31, 78, 121);
-    doc.setLineWidth(0.4);
-    doc.rect(marginX, y, contentW, formulaBlockH);
+    // Fórmula normativa: coeficiente × índice relativo (r) / índice base (o).
+    const terms: Array<{ nomenclatura: string; coeficiente: number }> = formulaData?.terms ?? [];
+    const formulaBlockH = 15;
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(148, 163, 184);
+    doc.setLineWidth(0.25);
+    doc.rect(marginX, y, contentW, formulaBlockH, 'FD');
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(26, 60, 94);
-    doc.text(formulaLines, marginX + 3, y + 4.5);
-    y += formulaBlockH + 3;
+    doc.setFontSize(9);
+    doc.setTextColor(15, 23, 42);
+    doc.text('K =', marginX + 3, y + 8.5);
+
+    if (terms.length === 0) {
+        doc.setFont('helvetica', 'normal');
+        doc.text('(sin monomios configurados)', marginX + 13, y + 8.5);
+    } else {
+        const availableW = contentW - 15;
+        const termW = availableW / Math.min(8, terms.length);
+        terms.slice(0, 8).forEach((term, index) => {
+            const x = marginX + 14 + index * termW;
+            const nomenclature = String(term.nomenclatura ?? '');
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.text(`${index > 0 ? '+ ' : ''}${Number(term.coeficiente).toFixed(3)} ×`, x, y + 8.5);
+            const fractionX = x + Math.min(16, termW * 0.58);
+            const fractionW = Math.min(12, termW * 0.36);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`${nomenclature}r`, fractionX + fractionW / 2, y + 5.5, { align: 'center' });
+            doc.line(fractionX, y + 7, fractionX + fractionW, y + 7);
+            doc.text(`${nomenclature}o`, fractionX + fractionW / 2, y + 10.5, { align: 'center' });
+        });
+    }
+    y += formulaBlockH + 2;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.8);
+    doc.setTextColor(71, 85, 105);
+    doc.text(
+        'Proceso: K = Σ(ai × Ir / Io) · ai: coeficiente de incidencia · Ir: índice del mes de reajuste · Io: índice base.',
+        marginX,
+        y + 2,
+    );
+    y += 5;
 
     // ── Tabla ─────────────────────────────────────────────────────────────
     const monomios: any[] = formulaData?.monomios ?? [];
     const totalK = formulaData?.totalK ?? 0;
 
     const body = monomios.map((row: any) => [
-        row.esPadre ? String(row.nro) : '',
         `${'    '.repeat(Number(row.nivel ?? (row.esPadre ? 0 : 1)))}${row.codigo ? `${row.codigo} ` : ''}${row.descripcion ?? ''}`,
         row.esPadre ? (row.monomio ?? '') : '',
         (row.coeficiente ?? 0).toFixed(3),
-        (row.incidencia ?? 0).toFixed(1) + '%',
+        (row.incidencia ?? 0).toFixed(2) + '%',
     ]);
-    body.push(['', 'TOTAL K =', '', totalK.toFixed(3), '100.0%']);
+    body.push(['TOTAL K =', '', totalK.toFixed(3), '100.00%']);
 
     autoTable(doc, {
         startY: y,
         margin: { left: marginX, right: marginX },
-        head: [['N°', 'Descripción', 'Nomen.', 'Coeficiente', '% Total']],
+        head: [['Descripción', 'Nomenclatura', 'Coeficiente', 'Porcentaje (%)']],
         body,
         theme: 'grid',
         styles: {
@@ -396,11 +423,10 @@ async function buildFormulaPolinomicaBlock(
             fontSize: 8,
         },
         columnStyles: {
-            0: { cellWidth: 10, halign: 'center' },
-            1: { cellWidth: 'auto' },
-            2: { cellWidth: 20, halign: 'center' },
-            3: { cellWidth: 28, halign: 'right' },
-            4: { cellWidth: 24, halign: 'right' },
+            0: { cellWidth: 'auto' },
+            1: { cellWidth: 28, halign: 'center' },
+            2: { cellWidth: 32, halign: 'right' },
+            3: { cellWidth: 30, halign: 'right' },
         },
         didParseCell: (data) => {
             if (data.section !== 'body') return;
@@ -422,7 +448,7 @@ async function buildFormulaPolinomicaBlock(
                 data.cell.styles.textColor = [30, 41, 59];
             }
             // Nomenclatura de padre en verde
-            if (row.esPadre && data.column.index === 2) {
+            if (row.esPadre && data.column.index === 1) {
                 data.cell.styles.textColor = [5, 150, 105];
             }
         },
