@@ -53,6 +53,7 @@ class CronoValorizadoController extends Controller
             'unidad_ejecutora' => $costoProject->unidad_ejecutora ?? '-',
             'propietario' => $costoProject->unidad_ejecutora ?? '-',
             'modulo' => 'GENERAL',
+            'duracion_dias' => (int) ($costoProject->duracion_dias ?? 0),
             'plantilla_logo_izq' => $costoProject->plantilla_logo_izq
                 ? Storage::url($costoProject->plantilla_logo_izq)
                 : null,
@@ -885,6 +886,15 @@ class CronoValorizadoController extends Controller
         $componentesExtra = is_string($componentesExtraRaw)
             ? (json_decode($componentesExtraRaw, true) ?? [])
             : (is_array($componentesExtraRaw) ? $componentesExtraRaw : []);
+        $conceptosRaw = $snapshot?->conceptos_adicionales_json ?? null;
+        $conceptos = $conceptosRaw === null
+            ? (((float) ($snapshot?->total_supervision ?? 0)) > 0 ? [[
+                'id' => 'supervision',
+                'name' => 'GASTOS DE SUPERVISIÓN Y LIQUIDACIÓN',
+                'tipo' => 'porcentaje',
+                'valor' => $costoDirecto > 0 ? round(((float) $snapshot->total_supervision / $costoDirecto) * 100, 4) : 0,
+            ]] : [])
+            : (is_string($conceptosRaw) ? (json_decode($conceptosRaw, true) ?? []) : $conceptosRaw);
 
         return [
             'pctGastosGenerales' => $costoDirecto > 0
@@ -909,6 +919,7 @@ class CronoValorizadoController extends Controller
                 ],
                 $componentesExtra
             )),
+            'conceptosAdicionales' => array_values($conceptos),
         ];
     }
 

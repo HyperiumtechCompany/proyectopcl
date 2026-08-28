@@ -9,7 +9,7 @@ import TablaValorizada from './components/TablaValorizada';
 import CronogramaDesembolsos from './components/CronogramaDesembolsos';
 import { exportarExcel, exportarPDF } from './helpers/exportHelpers';
 import { useValorizadoLogic } from './helpers/useValorizadoLogic';
-import type { ValorizadoProps, ModoCalculo } from './types';
+import type { ValorizadoProps, ModoCalculo, FinDefaults } from './types';
 import CronogramaMateriales from '../materiales/CronogramaMateriales';
 import { ArrowLeft } from 'lucide-react';
 
@@ -43,6 +43,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
     const [modoCalculo, setModoCalculo] = useState<ModoCalculo>(props.modoCalculo ?? 'calendario');
     const [mostrarDesembolso, setMostrarDesembolso] = useState(false);
     const [vistaActual, setVistaActual] = useState<'valorizado' | 'materiales'>('valorizado');
+    const [exportFinDefaults, setExportFinDefaults] = useState<FinDefaults>(props.finDefaults ?? {});
 
     const { toasts, show: showToast } = useToast();
 
@@ -132,7 +133,9 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
 
     // EXPORTACIONES  
     const handleExportExcel = useCallback(() => {
-        const totalDias = props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0);
+        const totalDias = Number(projectDataExport?.duracion_dias) > 0
+            ? Number(projectDataExport.duracion_dias)
+            : props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0);
 
         exportarExcel(itemsFiltrados, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem, {
             projectData: projectDataExport,
@@ -140,11 +143,14 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
             totalPresupuesto: props.totalPresupuesto,
             diasPorMes: props.diasPorMes || {},
             totalDias,
+            finDefaults: exportFinDefaults,
         });
-    }, [itemsFiltrados, props.periodos, props.diasPorMes, props.totalPresupuesto, props.project, totalesFinales, props.projectName, viewMode, totalesPorItem, projectDataExport]);
+    }, [itemsFiltrados, props.periodos, props.diasPorMes, props.totalPresupuesto, props.project, totalesFinales, props.projectName, viewMode, totalesPorItem, projectDataExport, exportFinDefaults]);
 
     const handleExportPDF = useCallback(() => {
-        const totalDias = props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0);
+        const totalDias = Number(projectDataExport?.duracion_dias) > 0
+            ? Number(projectDataExport.duracion_dias)
+            : props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0);
 
         exportarPDF(itemsFiltrados, props.periodos, totalesFinales, props.projectName, totalesPorItem, {
             projectData: projectDataExport,
@@ -152,8 +158,9 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
             totalPresupuesto: props.totalPresupuesto,
             diasPorMes: props.diasPorMes || {},
             totalDias,
+            finDefaults: exportFinDefaults,
         });
-    }, [itemsFiltrados, props.periodos, props.diasPorMes, props.totalPresupuesto, props.project, totalesFinales, props.projectName, totalesPorItem, projectDataExport]);
+    }, [itemsFiltrados, props.periodos, props.diasPorMes, props.totalPresupuesto, props.project, totalesFinales, props.projectName, totalesPorItem, projectDataExport, exportFinDefaults]);
 
     // MES PICO 
     const mesPicoKey = React.useMemo(() => {
@@ -288,6 +295,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                                         totalGeneralPeriodos={totalGeneralPeriodos}
                                         finDefaults={props.finDefaults}
                                         projectId={props.project}
+                                        onFinDefaultsChange={setExportFinDefaults}
                                     />
                                 </>
                             ) : (
@@ -325,7 +333,9 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                         periodos={props.periodos}
                         totalPresupuesto={props.totalPresupuesto}
                         valorizacionesMensuales={totalesFinales}
-                        totalDias={props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0)}
+                        totalDias={Number(projectDataExport?.duracion_dias) > 0
+                            ? Number(projectDataExport.duracion_dias)
+                            : props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0)}
                         diasPorMes={props.diasPorMes || {}}
                         projectName={projectDataExport?.nombre ?? props.projectName}
                         codigoProyecto={projectDataExport?.codigo_cui ?? projectDataExport?.codigo_local ?? ''}

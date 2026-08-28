@@ -19,6 +19,7 @@ interface ExportarExcelOptions {
         montoMobiliario?: number;
         pctIGVMobiliario?: number;
         pctSupervision?: number;
+        conceptosAdicionales?: Array<{ id: string; name: string; tipo: 'porcentaje' | 'monto'; valor: number }>;
     };
 }
 
@@ -1043,8 +1044,12 @@ function addFilasFinancierasValorizado(
     const montoIGVMob = fin.montoMobiliario * (fin.pctIGVMobiliario / 100);
     const subTotalII = fin.montoMobiliario + montoIGVMob;
     const totalI_II = presupI + subTotalII;
-    const montoSup = presupI * (fin.pctSupervision / 100);
-    const presupTotal = totalI_II + montoSup;
+    const additionalRows = (options.finDefaults?.conceptosAdicionales ?? []).map((concepto) => {
+        const monto = concepto.tipo === 'porcentaje' ? totalI_II * (concepto.valor / 100) : concepto.valor;
+        return [`${concepto.name}${concepto.tipo === 'porcentaje' ? ` ${concepto.valor.toFixed(2)}%` : ''}`, monto, propDist(monto)] as [string, number, Record<string, number>];
+    });
+    const additionalTotal = additionalRows.reduce((sum, row) => sum + row[1], 0);
+    const presupTotal = totalI_II + additionalTotal;
 
     const rows: Array<[string, number, Record<string, number>]> = [
         [`GASTOS GENERALES ${fin.pctGastosGenerales.toFixed(2)}%`, montoGG, propDist(montoGG)],
@@ -1055,7 +1060,7 @@ function addFilasFinancierasValorizado(
         ['MOBILIARIO Y EQUIPAMIENTO', fin.montoMobiliario, propDist(fin.montoMobiliario)],
         [`IGV MOBILIARIO ${fin.pctIGVMobiliario.toFixed(2)}%`, montoIGVMob, propDist(montoIGVMob)],
         ['PRESUPUESTO I + II', totalI_II, propDist(totalI_II)],
-        [`SUPERVISIÓN ${fin.pctSupervision.toFixed(2)}%`, montoSup, propDist(montoSup)],
+        ...additionalRows,
     ];
 
     let r = startRow + 1;
@@ -1088,7 +1093,7 @@ function addFilasFinancierasValorizado(
     style(labelCell, { bg: 'FF0F172A', fg: 'FFFFFFFF', bold: true, size: 10, hAlign: 'right', vAlign: 'middle' });
     borderAll(labelCell, 'FF0F172A');
 
-    const distPresTotal = propDist(presupI + montoSup);
+    const distPresTotal = propDist(presupI + additionalTotal);
     periodos.forEach((p, i) => {
         const cell = ws.getCell(r, fixedCols + 1 + i);
         cell.value = distPresTotal[p.key] || null;
@@ -1336,8 +1341,12 @@ export async function exportarExcel(
     const montoIGVMob = fin.montoMobiliario * (fin.pctIGVMobiliario / 100);
     const subTotalII = fin.montoMobiliario + montoIGVMob;
     const totalI_II = presupI + subTotalII;
-    const montoSup = presupI * (fin.pctSupervision / 100);
-    const presupTotal = totalI_II + montoSup;
+    const additionalRows = (options.finDefaults?.conceptosAdicionales ?? []).map((concepto) => {
+        const total = concepto.tipo === 'porcentaje' ? totalI_II * (concepto.valor / 100) : concepto.valor;
+        return { pct: concepto.tipo === 'porcentaje' ? `${concepto.valor.toFixed(2)}%` : 'monto', label: concepto.name, total };
+    });
+    const additionalTotal = additionalRows.reduce((sum, row) => sum + row.total, 0);
+    const presupTotal = totalI_II + additionalTotal;
 
     const finRows: Array<{ pct?: string; label: string; total: number; dark?: boolean; gray?: boolean }> = [
         { label: 'COSTO DIRECTO', total: totalPresupuesto, gray: true },
@@ -1352,7 +1361,7 @@ export async function exportarExcel(
             { label: 'SUB TOTAL COMPONENTE II', total: subTotalII, gray: true },
         ] : []),
         { label: `TOTAL PRESUPUESTO DE OBRA COMPONENTE ${fin.montoMobiliario > 0 ? 'I+II' : 'I'}`, total: totalI_II, dark: true },
-        { pct: `${fin.pctSupervision.toFixed(2)}%`, label: 'GASTOS DE SUPERVISIÓN Y LIQUIDACIÓN', total: montoSup },
+        ...additionalRows,
         { label: 'PRESUPUESTO TOTAL', total: presupTotal, dark: true },
     ];
 
@@ -1496,8 +1505,12 @@ export async function exportarPDF(
     const montoIGVMob = fin.montoMobiliario * (fin.pctIGVMobiliario / 100);
     const subTotalII = fin.montoMobiliario + montoIGVMob;
     const totalI_II = presupI + subTotalII;
-    const montoSup = presupI * (fin.pctSupervision / 100);
-    const presupTotal = totalI_II + montoSup;
+    const additionalRows = (options.finDefaults?.conceptosAdicionales ?? []).map((concepto) => {
+        const total = concepto.tipo === 'porcentaje' ? totalI_II * (concepto.valor / 100) : concepto.valor;
+        return [concepto.name, concepto.tipo === 'porcentaje' ? `${concepto.valor.toFixed(2)}%` : 'monto', total, propDist(total), 'normal'];
+    });
+    const additionalTotal = additionalRows.reduce((sum, row) => sum + Number(row[2]), 0);
+    const presupTotal = totalI_II + additionalTotal;
 
     const header = (titulo: string) => `
         <div class="report-header">
@@ -1542,8 +1555,8 @@ export async function exportarPDF(
             ['SUB TOTAL COMPONENTE II', '', subTotalII, propDist(subTotalII), 'sub'],
         ] : []),
         [`TOTAL PRESUPUESTO DE OBRA COMPONENTE ${fin.montoMobiliario > 0 ? 'I+II' : 'I'}`, '', totalI_II, propDist(totalI_II), 'blue'],
-        ['GASTOS DE SUPERVISIÓN Y LIQUIDACIÓN', `${fin.pctSupervision.toFixed(2)}%`, montoSup, propDist(montoSup), 'normal'],
-        ['PRESUPUESTO TOTAL', '', presupTotal, propDist(presupI + montoSup), 'final'],
+        ...additionalRows,
+        ['PRESUPUESTO TOTAL', '', presupTotal, propDist(presupI + additionalTotal), 'final'],
     ].map(([label, pct, total, dist, kind]: any) => {
         const cells = periodos.map(p => `<td class="num ${p.key === mesPicoKey ? 'pico-cell' : ''}">${dist[p.key] ? fmt(dist[p.key]) : ''}</td>`).join('');
         return `<tr class="fin-${kind}"><td></td><td>${esc(pct)}</td><td colspan="4" class="desc bold">${esc(label)}</td><td class="num bold">${total ? fmtS(total) : ''}</td><td></td>${cells}<td class="num total">${total ? fmtS(total) : ''}</td></tr>`;

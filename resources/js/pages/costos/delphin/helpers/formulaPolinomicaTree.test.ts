@@ -55,10 +55,11 @@ describe('árbol de fórmula polinómica', () => {
         expect(rows.map((row) => row.esMonomio)).toEqual([true, false, true, false, true, false, true, false]);
         expect(rows[0].incidencia).toBe(100);
         expect(rows[1].incidencia).toBeCloseTo(44.44444, 5);
-        expect(rows[2].incidencia).toBe(100);
-        expect(rows[3].incidencia).toBeCloseTo(60, 5);
-        expect(rows[4].incidencia).toBe(100);
-        expect(rows[5].incidencia).toBe(100);
+        expect(rows[2].incidencia).toBeCloseTo(55.55556, 5);
+        expect(rows[3].incidencia).toBeCloseTo(33.33333, 5);
+        expect(rows[4].incidencia).toBeCloseTo(22.22222, 5);
+        expect(rows[5].incidencia).toBeCloseTo(22.22222, 5);
+        expect(rows.filter((row) => !row.esMonomio && row.nro === null).slice(0, 3).reduce((sum, row) => sum + row.incidencia, 0)).toBeCloseTo(100, 5);
     });
 
     it('reconcilia un árbol guardado con el catálogo vigente sin perder su estructura', () => {

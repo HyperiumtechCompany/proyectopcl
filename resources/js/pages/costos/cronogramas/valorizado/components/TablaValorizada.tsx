@@ -19,6 +19,7 @@ import type {
     TotalesColumna,
     FinDefaults,
     ComponenteExtra,
+    ConceptoAdicional,
 } from '../types';
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
@@ -281,6 +282,7 @@ interface Props {
     // Proyecto actual — para persistir altas/bajas de componentes extra en
     // gg_consolidado (mismo endpoint que usa el panel Consolidado).
     projectId?: string;
+    onFinDefaultsChange?: (values: FinDefaults) => void;
 }
 
 // COMPONENTE PRINCIPAL
@@ -304,6 +306,7 @@ const TablaValorizada: React.FC<Props> = ({
     totalGeneralPeriodos = 0,
     finDefaults = {},
     projectId,
+    onFinDefaultsChange,
 }) => {
     const tableRef = useRef<HTMLDivElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -343,6 +346,16 @@ const TablaValorizada: React.FC<Props> = ({
     const [extraComponents, setExtraComponents] = useState<ComponenteExtra[]>(
         () => finDefaults.componentesExtra ?? [],
     );
+    const [additionalConcepts, setAdditionalConcepts] = useState<ConceptoAdicional[]>(
+        () => finDefaults.conceptosAdicionales ?? [],
+    );
+    useEffect(() => {
+        onFinDefaultsChange?.({
+            ...fin,
+            componentesExtra: extraComponents,
+            conceptosAdicionales: additionalConcepts,
+        });
+    }, [fin, extraComponents, additionalConcepts, onFinDefaultsChange]);
     const extraSeeded = useRef(false);
 
     const addExtraComponent = useCallback(() => {
@@ -387,6 +400,10 @@ const TablaValorizada: React.FC<Props> = ({
                             name: c.name,
                             monto: Number(c.monto) || 0,
                         })),
+                        conceptos_adicionales: additionalConcepts.map((concepto) => ({
+                            ...concepto,
+                            valor: Number(concepto.valor) || 0,
+                        })),
                     },
                 )
                 .catch(() => {
@@ -394,7 +411,7 @@ const TablaValorizada: React.FC<Props> = ({
                 });
         }, 800);
         return () => clearTimeout(timer);
-    }, [extraComponents, projectId]);
+    }, [extraComponents, additionalConcepts, projectId]);
 
     const toggleCollapse = useCallback((code: string) => {
         setCollapsed((prev) => {
@@ -575,8 +592,14 @@ const TablaValorizada: React.FC<Props> = ({
 
     const totalI_II = presupI + subTotalII + extraComponentsTotal;
 
-    const montoSup = presupI * (fin.pctSupervision / 100);
-    const presupTotal = totalI_II + montoSup;
+    const additionalCalcs = additionalConcepts.map((concepto) => ({
+        ...concepto,
+        monto: concepto.tipo === 'porcentaje'
+            ? totalI_II * ((Number(concepto.valor) || 0) / 100)
+            : Number(concepto.valor) || 0,
+    }));
+    const additionalTotal = additionalCalcs.reduce((sum, concepto) => sum + concepto.monto, 0);
+    const presupTotal = totalI_II + additionalTotal;
 
     const propDist = (total: number): Record<string, number> => {
         const r: Record<string, number> = {};
@@ -594,7 +617,7 @@ const TablaValorizada: React.FC<Props> = ({
     const distSub = propDist(subTotal);
     const distIGV = propDist(montoIGV);
     const distPresI = propDist(presupI);
-    const distSup = propDist(montoSup);
+    const distAdditional = propDist(additionalTotal);
 
     // Avance acumulado
     let acumCD = 0;
@@ -1404,29 +1427,20 @@ const TablaValorizada: React.FC<Props> = ({
                             />
                         </tr>
 
-                        {/* ── GASTOS DE SUPERVISIÓN ── */}
-                        <tr className="bg-white text-slate-800">
-                            <PctCell
-                                value={fin.pctSupervision}
-                                onChange={(v) => setPct('pctSupervision', v)}
-                            />
-                            <td className="sticky left-0 z-10 border border-slate-300 bg-white p-2.5 text-left text-[11px] font-semibold tracking-wide uppercase">
-                                GASTOS DE SUPERVISIÓN Y LIQUIDACIÓN
-                            </td>
-                            <td className="border border-slate-300 p-2" />
-                            <td className="border border-slate-300 p-2" />
-                            <td className="border border-slate-300 p-2" />
-                            <td className="border border-slate-300 p-2.5 text-right font-semibold tabular-nums">
-                                {fmtS(montoSup)}
-                            </td>
-                            <td className="border border-slate-300 p-2" />
-                            {periodos.map((p) =>
-                                finTd(distSup[p.key] ?? 0, p.key, 'bg-white'),
-                            )}
-                            <td className="sticky right-0 z-10 border border-slate-300 bg-white p-2.5 text-right font-semibold tabular-nums">
-                                {fmtS(montoSup)}
-                            </td>
-                        </tr>
+                        {additionalCalcs.map((concepto) => {
+                            const distribucion = propDist(concepto.monto);
+                            return <tr key={concepto.id} className="bg-white text-slate-800">
+                                <td className="border border-slate-300 p-1 text-center"><button type="button" onClick={() => setAdditionalConcepts((current) => current.filter((item) => item.id !== concepto.id))} title="Eliminar concepto" className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button></td>
+                                <td className="sticky left-0 z-10 border border-slate-300 bg-white p-1"><input value={concepto.name} onChange={(event) => setAdditionalConcepts((current) => current.map((item) => item.id === concepto.id ? { ...item, name: event.target.value } : item))} className="w-full bg-transparent p-1 text-[11px] font-semibold uppercase outline-none" /></td>
+                                <td className="border border-slate-300 p-1"><select value={concepto.tipo} onChange={(event) => setAdditionalConcepts((current) => current.map((item) => item.id === concepto.id ? { ...item, tipo: event.target.value as ConceptoAdicional['tipo'] } : item))} className="w-full bg-transparent text-[9px] outline-none"><option value="porcentaje">%</option><option value="monto">S/.</option></select></td>
+                                <td className="border border-slate-300 p-2" /><td className="border border-slate-300 p-2" />
+                                <MontoCell value={concepto.valor} onChange={(valor) => setAdditionalConcepts((current) => current.map((item) => item.id === concepto.id ? { ...item, valor } : item))} />
+                                <td className="border border-slate-300 p-2" />
+                                {periodos.map((p) => finTd(distribucion[p.key] ?? 0, p.key, 'bg-white'))}
+                                <td className="sticky right-0 z-10 border border-slate-300 bg-white p-2.5 text-right font-semibold tabular-nums">{fmtS(concepto.monto)}</td>
+                            </tr>;
+                        })}
+                        <tr><td colSpan={nCols} className="border border-dashed border-slate-300 bg-white p-2"><button type="button" onClick={() => setAdditionalConcepts((current) => [...current, { id: crypto.randomUUID(), name: 'NUEVO CONCEPTO', tipo: 'porcentaje', valor: 0 }])} className="flex items-center gap-1.5 text-[10px] font-bold text-sky-600 hover:text-sky-700"><Plus className="h-3.5 w-3.5" />Agregar concepto adicional</button></td></tr>
 
                         {/* ── PRESUPUESTO TOTAL ── */}
                         <tr className="bg-slate-900 text-[12px] font-bold text-white">
@@ -1440,7 +1454,7 @@ const TablaValorizada: React.FC<Props> = ({
                             {periodos.map((p) => {
                                 const v =
                                     (distPresI[p.key] ?? 0) +
-                                    (distSup[p.key] ?? 0);
+                                    (distAdditional[p.key] ?? 0);
                                 return (
                                     <td
                                         key={p.key}

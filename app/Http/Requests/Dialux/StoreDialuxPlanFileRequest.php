@@ -14,15 +14,19 @@ class StoreDialuxPlanFileRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'plan' => ['required', 'file', 'max:102400', 'extensions:dxf,dwg'],
+            // png/jpg/jpeg: el editor de emplazamiento (Dialux v2) sube aquí
+            // la imagen YA renderizada de un DXF/DWG importado (captura del
+            // motor CAD) — no un plano CAD editable. El editor de interiores
+            // sigue subiendo dxf/dwg crudos como siempre.
+            'plan' => ['required', 'file', 'max:102400', 'extensions:dxf,dwg,png,jpg,jpeg'],
         ];
     }
 
     public function messages(): array
     {
         return [
-            'plan.required' => 'Selecciona un archivo DXF o DWG.',
-            'plan.extensions' => 'El plano debe ser un archivo DXF o DWG.',
+            'plan.required' => 'Selecciona un archivo.',
+            'plan.extensions' => 'El plano debe ser un archivo DXF, DWG, PNG o JPG.',
             'plan.max' => 'El plano no puede superar los 100 MB.',
         ];
     }

@@ -1,7 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { deriveFeederStatus, feederStatusColor } from '../domain/feederSync';
 import { computeSatelliteTiles } from '../domain/geoTiles';
-import type { Point2D, SiteData, SiteElement } from '../domain/types';
+import type {
+    ImportedSitePlan,
+    Point2D,
+    SiteData,
+    SiteElement,
+} from '../domain/types';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 
 interface Props {
@@ -67,6 +72,10 @@ export function SiteCanvas2D({ editor }: Props) {
     >(undefined);
     const vertexDragRef = useRef<
         | { elementId: string; vertexIndex: number; pointerId: number }
+        | undefined
+    >(undefined);
+    const planDragRef = useRef<
+        | { pointerId: number; start: Point2D; origin: Point2D }
         | undefined
     >(undefined);
 
@@ -148,6 +157,7 @@ export function SiteCanvas2D({ editor }: Props) {
     // para vincular un módulo existente, que se hace desde el panel de
     // propiedades después de dibujar el bloque (no con un clic aislado).
     const isPointTool = editor.activeTool === 'place_tg';
+    const isCalibrateTool = editor.activeTool === 'calibrate_plan';
 
     const handleCanvasClick = (point: Point2D) => {
         if (isDrawTool) {
@@ -156,6 +166,10 @@ export function SiteCanvas2D({ editor }: Props) {
         }
         if (isPointTool) {
             editor.placePoint(point, editor.pendingType);
+            return;
+        }
+        if (isCalibrateTool) {
+            editor.addCalibrationPoint(point);
             return;
         }
         editor.selectElement(null);
@@ -169,7 +183,7 @@ export function SiteCanvas2D({ editor }: Props) {
             className="h-full min-h-[420px] w-full touch-none bg-[radial-gradient(circle,#94a3b833_1px,transparent_1px)] bg-size-[20px_20px] select-none dark:bg-[radial-gradient(circle,#47556955_1px,transparent_1px)]"
             onPointerDown={(event) => {
                 if (event.target !== event.currentTarget) return;
-                if (isDrawTool || isPointTool) {
+                if (isDrawTool || isPointTool || isCalibrateTool) {
                     handleCanvasClick(
                         toSvgPoint(event.clientX, event.clientY),
                     );
@@ -212,6 +226,15 @@ export function SiteCanvas2D({ editor }: Props) {
                     });
                     return;
                 }
+                const planDrag = planDragRef.current;
+                if (planDrag && planDrag.pointerId === event.pointerId) {
+                    const current = toSvgPoint(event.clientX, event.clientY);
+                    editor.updateImportedPlan({
+                        x: planDrag.origin.x + (current.x - planDrag.start.x),
+                        y: planDrag.origin.y + (current.y - planDrag.start.y),
+                    });
+                    return;
+                }
                 const pan = panRef.current;
                 if (!pan || pan.pointerId !== event.pointerId) return;
                 const dxClient = event.clientX - pan.lastClientX;
@@ -237,6 +260,10 @@ export function SiteCanvas2D({ editor }: Props) {
                     dragRef.current = undefined;
                     return;
                 }
+                if (planDragRef.current?.pointerId === event.pointerId) {
+                    planDragRef.current = undefined;
+                    return;
+                }
                 const pan = panRef.current;
                 if (!pan || pan.pointerId !== event.pointerId) return;
                 event.currentTarget.releasePointerCapture(event.pointerId);
@@ -246,6 +273,7 @@ export function SiteCanvas2D({ editor }: Props) {
             onPointerCancel={() => {
                 dragRef.current = undefined;
                 vertexDragRef.current = undefined;
+                planDragRef.current = undefined;
                 panRef.current = undefined;
             }}
         >
@@ -261,6 +289,15 @@ export function SiteCanvas2D({ editor }: Props) {
                     className="pointer-events-none"
                 />
             ))}
+            {siteData.importedPlan?.visible && (
+                <ImportedPlanImage
+                    plan={siteData.importedPlan}
+                    imageUrl={editor.importedPlanUrl}
+                    canSelect={editor.activeTool === 'select'}
+                    toSvgPoint={toSvgPoint}
+                    planDragRef={planDragRef}
+                />
+            )}
             {siteData.elements
                 .filter(
                     (element) =>
@@ -370,6 +407,30 @@ export function SiteCanvas2D({ editor }: Props) {
                     />
                 );
             })}
+            {editor.calibrationPoints.length > 0 && (
+                <>
+                    {editor.calibrationPoints.length === 2 && (
+                        <line
+                            x1={editor.calibrationPoints[0].x}
+                            y1={editor.calibrationPoints[0].y}
+                            x2={editor.calibrationPoints[1].x}
+                            y2={editor.calibrationPoints[1].y}
+                            className="stroke-fuchsia-500"
+                            strokeWidth={2}
+                            strokeDasharray="4 3"
+                        />
+                    )}
+                    {editor.calibrationPoints.map((vertex, index) => (
+                        <circle
+                            key={index}
+                            cx={vertex.x}
+                            cy={vertex.y}
+                            r={6}
+                            className="fill-fuchsia-500 stroke-white stroke-2 dark:stroke-slate-900"
+                        />
+                    ))}
+                </>
+            )}
             {editor.pendingVertices.length > 0 && (
                 <>
                     <polyline
@@ -405,5 +466,53 @@ export function SiteCanvas2D({ editor }: Props) {
             </div>
         )}
         </div>
+    );
+}
+
+/**
+ * Extraído como componente propio (no un IIFE inline) — el compilador de
+ * React no logra analizar correctamente los refs (`planDragRef`) leídos
+ * dentro de un `onPointerDown` cuando el JSX que lo contiene se arma con un
+ * IIFE en vez de un componente real (error de build
+ * `react-hooks/refs`, confirmado al intentarlo).
+ */
+function ImportedPlanImage({
+    plan,
+    imageUrl,
+    canSelect,
+    toSvgPoint,
+    planDragRef,
+}: {
+    plan: ImportedSitePlan;
+    imageUrl: string | undefined;
+    canSelect: boolean;
+    toSvgPoint: (clientX: number, clientY: number) => Point2D;
+    planDragRef: RefObject<
+        { pointerId: number; start: Point2D; origin: Point2D } | undefined
+    >;
+}) {
+    return (
+        <image
+            href={imageUrl}
+            x={plan.x}
+            y={plan.y}
+            width={plan.widthUnits}
+            height={plan.heightUnits}
+            opacity={plan.opacity}
+            preserveAspectRatio="none"
+            className={canSelect ? 'cursor-move' : ''}
+            onPointerDown={(event) => {
+                if (!canSelect) return;
+                event.stopPropagation();
+                event.currentTarget.ownerSVGElement?.setPointerCapture(
+                    event.pointerId,
+                );
+                planDragRef.current = {
+                    pointerId: event.pointerId,
+                    start: toSvgPoint(event.clientX, event.clientY),
+                    origin: { x: plan.x, y: plan.y },
+                };
+            }}
+        />
     );
 }

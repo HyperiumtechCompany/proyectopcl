@@ -7,7 +7,9 @@ import {
     MapPin,
     MousePointer2,
     ParkingSquare,
+    Ruler,
     Trees,
+    Upload,
     Waves,
     Zap,
 } from 'lucide-react';
@@ -128,6 +130,26 @@ export function SitePalette({ editor }: Props) {
                     icon={Trees}
                     label="Área verde"
                 />
+            </div>
+
+            <div>
+                <p className="mb-1 px-1 text-[10px] font-bold tracking-wide text-slate-400 uppercase">
+                    Plano importado
+                </p>
+                <PaletteButton
+                    icon={Upload}
+                    label="Importar DXF / DWG"
+                    active={editor.planImportOpen}
+                    onClick={editor.openPlanImport}
+                />
+                {editor.siteData?.importedPlan && (
+                    <PaletteButton
+                        icon={Ruler}
+                        label="Calibrar plano"
+                        active={editor.activeTool === 'calibrate_plan'}
+                        onClick={editor.startCalibratePlan}
+                    />
+                )}
             </div>
 
             <div>

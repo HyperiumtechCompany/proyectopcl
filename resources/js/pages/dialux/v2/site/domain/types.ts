@@ -74,6 +74,32 @@ export interface SiteLayer {
     locked: boolean;
 }
 
+// ── Plano importado (DXF/DWG) ────────────────────
+/**
+ * Referencia de fondo del emplazamiento generada a partir de un DXF/DWG
+ * subido por el usuario (Fase 5, fuera del plan original). NO es geometría
+ * CAD editable — es una captura estática (PNG) del plano ya renderizado por
+ * el motor CAD (`useMlightcadEngine`), igual que la capa satelital: se
+ * calibra una vez (2 clics + distancia real) y queda fija.
+ *
+ * La imagen en sí NO se guarda aquí — vive en el mismo backend de planos
+ * que ya usa el editor de interiores (`dialux_plans`, vía
+ * `PlanFileController`), reusando el `dialuxModule.id` del Módulo General
+ * con un `sceneId` reservado (`SITE_PLAN_SCENE_ID`). Aquí solo se persiste
+ * la transformación (posición/tamaño/opacidad) — la URL se deriva.
+ */
+export interface ImportedSitePlan {
+    originalName: string;
+    x: number; // esquina superior-izquierda, unidades de canvas
+    y: number;
+    widthUnits: number;
+    heightUnits: number;
+    opacity: number;
+    visible: boolean;
+    /** `Date.now()` de la última (re)importación — invalida la caché del navegador en la URL de la imagen, que vive en una ruta fija. */
+    updatedAt: number;
+}
+
 // ── Documento principal ──────────────────────────
 export interface SiteData {
     schemaVersion: 1;
@@ -85,6 +111,7 @@ export interface SiteData {
     elements: SiteElement[];
     feederPaths: FeederPath[];
     layers: SiteLayer[];
+    importedPlan?: ImportedSitePlan;
 }
 
 // ── Herramientas del editor ──────────────────────
@@ -97,4 +124,5 @@ export type SiteTool =
     | 'place_block'
     | 'place_tg'
     | 'draw_feeder'
+    | 'calibrate_plan'
     | 'measure';

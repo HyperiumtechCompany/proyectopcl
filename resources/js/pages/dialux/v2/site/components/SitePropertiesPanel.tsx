@@ -1,4 +1,5 @@
 import { Copy, Eye, EyeOff, Lock, Trash2, Unlock } from 'lucide-react';
+import { useState } from 'react';
 import { polygonArea, polygonPerimeter } from '../domain/geometry';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 
@@ -32,6 +33,9 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                         : 'Selecciona un elemento del plano'}
                 </p>
             </div>
+            {editor.calibrationPoints.length === 2 && (
+                <CalibrationPanel editor={editor} />
+            )}
             {element && (
                 <div className="grid gap-3 overflow-y-auto p-4">
                     <label className="text-[11px] text-slate-500">
@@ -241,6 +245,7 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                     </div>
                 </div>
             )}
+            {!element && <ImportedPlanPanel editor={editor} />}
             {!element && (editor.siteData?.feederPaths.length ?? 0) > 0 && (
                 <div className="p-4">
                     <p className="mb-2 text-[10px] font-bold tracking-wide text-slate-400 uppercase">
@@ -274,5 +279,119 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                 </div>
             )}
         </aside>
+    );
+}
+
+/** Panel de gestión del plano importado (DXF/DWG convertido a imagen) — opacidad, visibilidad, calibrar, eliminar. */
+function ImportedPlanPanel({ editor }: { editor: UseSiteEditorReturn }) {
+    const plan = editor.siteData?.importedPlan;
+    if (!plan) return null;
+
+    return (
+        <div className="border-b border-slate-200 p-4 dark:border-white/10">
+            <p className="mb-2 text-[10px] font-bold tracking-wide text-slate-400 uppercase">
+                Plano importado
+            </p>
+            <p className="mb-2 truncate text-[11px] text-slate-600 dark:text-slate-300">
+                {plan.originalName}
+            </p>
+            <label className="text-[11px] text-slate-500">
+                Opacidad ({Math.round(plan.opacity * 100)}%)
+                <input
+                    type="range"
+                    min={0.1}
+                    max={1}
+                    step={0.05}
+                    value={plan.opacity}
+                    onChange={(event) =>
+                        editor.updateImportedPlan({
+                            opacity: Number(event.target.value),
+                        })
+                    }
+                    className="mt-1 w-full"
+                />
+            </label>
+            <div className="mt-2 flex items-center gap-2">
+                <button
+                    type="button"
+                    onClick={() =>
+                        editor.updateImportedPlan({ visible: !plan.visible })
+                    }
+                    title={plan.visible ? 'Ocultar' : 'Mostrar'}
+                    className="flex-1 rounded-md border border-slate-200 py-1.5 text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+                >
+                    {plan.visible ? (
+                        <Eye className="mx-auto h-3.5 w-3.5" />
+                    ) : (
+                        <EyeOff className="mx-auto h-3.5 w-3.5" />
+                    )}
+                </button>
+                <button
+                    type="button"
+                    onClick={editor.startCalibratePlan}
+                    title="Calibrar con una distancia real conocida"
+                    className="flex-1 rounded-md border border-slate-200 py-1.5 text-[10px] font-bold text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+                >
+                    Calibrar
+                </button>
+                <button
+                    type="button"
+                    onClick={editor.removeImportedPlan}
+                    title="Eliminar plano importado"
+                    className="flex-1 rounded-md border border-rose-300 py-1.5 text-rose-600 hover:bg-rose-50 dark:border-rose-900/50 dark:text-rose-300 dark:hover:bg-rose-950/30"
+                >
+                    <Trash2 className="mx-auto h-3.5 w-3.5" />
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/** Panel de calibración — aparece con los 2 clics ya hechos, pide la distancia real y aplica el factor de escala. */
+function CalibrationPanel({ editor }: { editor: UseSiteEditorReturn }) {
+    const [distance, setDistance] = useState('');
+    const [p1, p2] = editor.calibrationPoints;
+    const measured = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+
+    return (
+        <div className="border-b border-fuchsia-200 bg-fuchsia-50 p-4 dark:border-fuchsia-900/50 dark:bg-fuchsia-950/20">
+            <p className="mb-2 text-[10px] font-bold tracking-wide text-fuchsia-600 uppercase dark:text-fuchsia-400">
+                Calibrar plano
+            </p>
+            <p className="mb-2 text-[11px] text-slate-600 dark:text-slate-300">
+                Distancia medida en el plano:{' '}
+                <strong>{measured.toFixed(2)} u</strong>. ¿Cuánto mide esa
+                misma distancia en la realidad?
+            </p>
+            <div className="flex items-center gap-2">
+                <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    autoFocus
+                    placeholder="Metros reales"
+                    value={distance}
+                    onChange={(event) => setDistance(event.target.value)}
+                    className={inputClass}
+                />
+                <button
+                    type="button"
+                    disabled={!(Number(distance) > 0)}
+                    onClick={() =>
+                        editor.applyPlanCalibration(Number(distance))
+                    }
+                    className="h-8 shrink-0 rounded-md bg-fuchsia-600 px-3 text-xs font-semibold text-white disabled:opacity-40"
+                >
+                    Aplicar
+                </button>
+                <button
+                    type="button"
+                    onClick={editor.cancelCalibration}
+                    className="h-8 shrink-0 rounded-md border border-slate-200 px-3 text-xs text-slate-600 dark:border-white/10 dark:text-slate-300"
+                >
+                    Cancelar
+                </button>
+            </div>
+        </div>
     );
 }

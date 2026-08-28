@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type {
     FeederPath,
     GeoLocation,
+    ImportedSitePlan,
     Point2D,
     SiteData,
     SiteElement,
@@ -31,6 +32,9 @@ export interface SiteSlice {
     setSiteLocation: (location: GeoLocation) => void;
     toggleSiteLayer: (layerId: string) => void;
     lockSiteLayer: (layerId: string, locked: boolean) => void;
+    setImportedPlan: (plan: ImportedSitePlan) => void;
+    updateImportedPlan: (patch: Partial<ImportedSitePlan>) => void;
+    removeImportedPlan: () => void;
 }
 
 function defaultSiteData(): SiteData {
@@ -266,6 +270,42 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
                         ),
                     },
                 },
+            };
+        }),
+    setImportedPlan: (plan) =>
+        set((state) => {
+            if (!state.project) return state;
+            const site = state.project.site ?? defaultSiteData();
+            return {
+                project: {
+                    ...state.project,
+                    site: { ...site, importedPlan: plan },
+                },
+            };
+        }),
+    updateImportedPlan: (patch) =>
+        set((state) => {
+            if (!state.project?.site?.importedPlan) return state;
+            return {
+                project: {
+                    ...state.project,
+                    site: {
+                        ...state.project.site,
+                        importedPlan: {
+                            ...state.project.site.importedPlan,
+                            ...patch,
+                        },
+                    },
+                },
+            };
+        }),
+    removeImportedPlan: () =>
+        set((state) => {
+            if (!state.project?.site?.importedPlan) return state;
+            const site = { ...state.project.site };
+            delete site.importedPlan;
+            return {
+                project: { ...state.project, site },
             };
         }),
 });

@@ -456,6 +456,7 @@ class PresupuestoController extends Controller
             'igv_porcentaje' => $request->input('igv_porcentaje'),
             'componente_ii_monto' => $request->input('componente_ii_monto'),
             'componentes_extra' => $request->input('componentes_extra'),
+            'conceptos_adicionales' => $request->input('conceptos_adicionales'),
         ];
 
         try {
@@ -509,6 +510,17 @@ class PresupuestoController extends Controller
         }
         if (! is_array($extraComponents)) {
             $extraComponents = [];
+        }
+
+        $hasAdditionalConceptsConfig = ($inputs['conceptos_adicionales'] ?? null) !== null
+            || ($existing->conceptos_adicionales_json ?? null) !== null;
+        $additionalConcepts = $inputs['conceptos_adicionales'] ?? null;
+        if ($additionalConcepts === null) {
+            $additionalConcepts = $existing->conceptos_adicionales_json ?? '[]';
+            $additionalConcepts = is_string($additionalConcepts) ? json_decode($additionalConcepts, true) : $additionalConcepts;
+        }
+        if (! is_array($additionalConcepts)) {
+            $additionalConcepts = [];
         }
 
         // Solo partidas hoja (con metrado): presupuesto_general también guarda el
@@ -568,7 +580,14 @@ class PresupuestoController extends Controller
         }
 
         $totalComponents = $subTotalComponenteI + $subTotalComponenteII + $extraTotal;
-        $totalConsolidado = $totalComponents + $supervisionTotal;
+        $additionalTotal = 0.0;
+        foreach ($additionalConcepts as $concept) {
+            $value = (float) ($concept['valor'] ?? 0);
+            $additionalTotal += ($concept['tipo'] ?? 'porcentaje') === 'monto'
+                ? $value
+                : $totalComponents * ($value / 100);
+        }
+        $totalConsolidado = $totalComponents + ($hasAdditionalConceptsConfig ? $additionalTotal : $supervisionTotal);
         $controlConcurrenteFinanciado = $totalConsolidado * 0.02;
         $totalInversionObra = $totalConsolidado + $controlConcurrenteFinanciado;
 
@@ -585,6 +604,7 @@ class PresupuestoController extends Controller
             'igv_porcentaje' => round((float) $igvPct, 4),
             'componente_ii_monto' => round($componenteIIMontoNum, 4),
             'componentes_extra_json' => json_encode($extraComponents),
+            'conceptos_adicionales_json' => $hasAdditionalConceptsConfig ? json_encode($additionalConcepts) : null,
 
             'comp_i_costo_directo' => round($costoDirecto, 4),
             'comp_i_porcentaje' => 100.0000,

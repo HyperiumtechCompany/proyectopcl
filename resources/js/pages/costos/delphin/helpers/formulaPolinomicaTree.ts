@@ -300,12 +300,7 @@ export function reorderNodeAmongSiblings(
 export function flattenMonomiosForExport(monomios: FormulaMonomio[]): FormulaExportRow[] {
     const rows: FormulaExportRow[] = [];
 
-    const visit = (
-        node: FormulaNode,
-        level: number,
-        monomio: FormulaMonomio,
-        nro: number,
-    ) => {
+    const visit = (node: FormulaNode, level: number, monomio: FormulaMonomio, nro: number, monomioTotal: number) => {
         const nodeTotal = sumNode(node);
         rows.push({
             nro: level === 0 ? nro : null,
@@ -316,7 +311,7 @@ export function flattenMonomiosForExport(monomios: FormulaMonomio[]): FormulaExp
             descripcion: node.descripcion,
             monomio: level === 0 ? monomio.nomenclatura : '',
             coeficiente: nodeTotal,
-            incidencia: nodeTotal > 0 ? 100 : 0,
+            incidencia: monomioTotal > 0 ? (nodeTotal / monomioTotal) * 100 : 0,
         });
         rows.push({
             nro: null,
@@ -327,11 +322,14 @@ export function flattenMonomiosForExport(monomios: FormulaMonomio[]): FormulaExp
             descripcion: node.descripcion,
             monomio: '',
             coeficiente: node.coefDefinido,
-            incidencia: nodeTotal > 0 ? (node.coefDefinido / nodeTotal) * 100 : 0,
+            incidencia: monomioTotal > 0 ? (node.coefDefinido / monomioTotal) * 100 : 0,
         });
-        node.children.forEach((child) => visit(child, level + 1, monomio, nro));
+        node.children.forEach((child) => visit(child, level + 1, monomio, nro, monomioTotal));
     };
 
-    monomios.forEach((monomio, index) => visit(monomio.root, 0, monomio, index + 1));
+    monomios.forEach((monomio, index) => {
+        const monomioTotal = sumNode(monomio.root);
+        visit(monomio.root, 0, monomio, index + 1, monomioTotal);
+    });
     return rows;
 }

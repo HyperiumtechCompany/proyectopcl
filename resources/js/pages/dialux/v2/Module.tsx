@@ -111,6 +111,7 @@ export default function DialuxV2Module({
                             initialView === '2d' ? (
                                 <SiteEditor2D
                                     projectId={project.id}
+                                    generalModuleId={module.id}
                                     modules={modules
                                         .filter((item) => item.kind !== 'general')
                                         .map((item) => ({

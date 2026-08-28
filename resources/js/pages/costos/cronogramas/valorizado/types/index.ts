@@ -66,6 +66,13 @@ export interface ComponenteExtra {
     monto: number;
 }
 
+export interface ConceptoAdicional {
+    id: string;
+    name: string;
+    tipo: 'porcentaje' | 'monto';
+    valor: number;
+}
+
 export interface FinDefaults {
     pctGastosGenerales?: number;
     pctUtilidad?:        number;
@@ -74,6 +81,7 @@ export interface FinDefaults {
     pctIGVMobiliario?:   number;
     pctSupervision?:     number;
     componentesExtra?:   ComponenteExtra[];
+    conceptosAdicionales?: ConceptoAdicional[];
 }
 
 export interface ValorizadoProps {

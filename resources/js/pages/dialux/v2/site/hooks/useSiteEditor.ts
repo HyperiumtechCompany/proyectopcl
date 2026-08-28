@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { computeLinearScaleFactor } from '@/pages/dialux/geometry/calibration';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import { snapToGrid } from '../domain/geometry';
 import {
@@ -7,8 +8,10 @@ import {
     MIN_SATELLITE_ZOOM,
 } from '../domain/geoTiles';
 import type { Point2D, SiteElementType, SiteTool } from '../domain/types';
+import { sitePlanImageUrl } from '../lib/planImport';
 import { SITE_ELEMENT_DEFAULTS } from '../lib/siteDefaults';
 import { useNetworkSnapshotForSite } from './useNetworkSnapshotForSite';
+import type { SitePlanImportResult } from './useSitePlanImport';
 
 /** Tipos que se dibujan como polígono (clic a clic, cerrar con doble clic/Enter). */
 const POLYGON_TYPES = new Set<SiteElementType>([
@@ -27,7 +30,7 @@ const POLYGON_TYPES = new Set<SiteElementType>([
 /** Tipos que se colocan con un solo clic (equipo puntual, tamaño fijo por defecto). */
 const POINT_SIZE_M = 4;
 
-export function useSiteEditor(projectId: number) {
+export function useSiteEditor(projectId: number, generalModuleId: number) {
     const project = useEditorStore((state) => state.project);
     const ensureSiteData = useEditorStore((state) => state.ensureSiteData);
     const addSiteElement = useEditorStore((state) => state.addSiteElement);
@@ -47,6 +50,13 @@ export function useSiteEditor(projectId: number) {
     const setSiteLocation = useEditorStore((state) => state.setSiteLocation);
     const toggleSiteLayer = useEditorStore((state) => state.toggleSiteLayer);
     const lockSiteLayer = useEditorStore((state) => state.lockSiteLayer);
+    const setImportedPlan = useEditorStore((state) => state.setImportedPlan);
+    const updateImportedPlan = useEditorStore(
+        (state) => state.updateImportedPlan,
+    );
+    const removeImportedPlan = useEditorStore(
+        (state) => state.removeImportedPlan,
+    );
 
     useEffect(() => {
         if (project && !project.site) ensureSiteData();
@@ -64,6 +74,8 @@ export function useSiteEditor(projectId: number) {
         null,
     );
     const [pendingVertices, setPendingVertices] = useState<Point2D[]>([]);
+    const [calibrationPoints, setCalibrationPoints] = useState<Point2D[]>([]);
+    const [planImportOpen, setPlanImportOpen] = useState(false);
     const [snapEnabled, setSnapEnabled] = useState(true);
     const [showSatellite, setShowSatellite] = useState(true);
     const [satelliteZoom, setSatelliteZoomState] = useState(
@@ -80,6 +92,7 @@ export function useSiteEditor(projectId: number) {
     const startTool = (tool: SiteTool, elementType?: SiteElementType) => {
         setPendingVertices([]);
         setPendingNetworkEdgeId(null);
+        setCalibrationPoints([]);
         setActiveToolState(tool);
         if (elementType) setPendingType(elementType);
     };
@@ -89,6 +102,12 @@ export function useSiteEditor(projectId: number) {
         setPendingVertices([]);
         setPendingNetworkEdgeId(networkEdgeId);
         setActiveToolState('draw_feeder');
+    };
+
+    /** Arranca la calibración del plano importado (2 clics + distancia real). */
+    const startCalibratePlan = () => {
+        setCalibrationPoints([]);
+        setActiveToolState('calibrate_plan');
     };
 
     const snap = (point: Point2D): Point2D =>
@@ -162,6 +181,61 @@ export function useSiteEditor(projectId: number) {
         setActiveToolState('select');
     };
 
+    // ── Plano importado (DXF/DWG) ────────────────────────────────────────
+    const importedPlanUrl = siteData?.importedPlan
+        ? sitePlanImageUrl(
+              projectId,
+              generalModuleId,
+              siteData.importedPlan.updatedAt,
+          )
+        : undefined;
+
+    const openPlanImport = () => setPlanImportOpen(true);
+    const closePlanImport = () => setPlanImportOpen(false);
+
+    /** Coloca el plano recién importado centrado en el origen del canvas (mismo punto que ancla la capa satelital) y arranca la calibración. */
+    const handlePlanImported = (result: SitePlanImportResult) => {
+        setImportedPlan({
+            originalName: result.originalName,
+            x: -result.widthUnits / 2,
+            y: -result.heightUnits / 2,
+            widthUnits: result.widthUnits,
+            heightUnits: result.heightUnits,
+            opacity: 0.85,
+            visible: true,
+            updatedAt: Date.now(),
+        });
+        setPlanImportOpen(false);
+        startCalibratePlan();
+    };
+
+    /** Registra un clic de calibración (máximo 2 puntos — el tercero reinicia la medición). */
+    const addCalibrationPoint = (point: Point2D) => {
+        setCalibrationPoints((current) =>
+            current.length >= 2 ? [point] : [...current, point],
+        );
+    };
+
+    const cancelCalibration = () => {
+        setCalibrationPoints([]);
+        setActiveToolState('select');
+    };
+
+    /** Reescala el plano importado para que la distancia medida (2 clics) equivalga a `realDistanceM`. */
+    const applyPlanCalibration = (realDistanceM: number) => {
+        if (calibrationPoints.length !== 2 || !siteData?.importedPlan) return;
+        const [p1, p2] = calibrationPoints;
+        const measured = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const factor = computeLinearScaleFactor(measured, realDistanceM);
+        if (factor === null) return;
+        updateImportedPlan({
+            widthUnits: siteData.importedPlan.widthUnits * factor,
+            heightUnits: siteData.importedPlan.heightUnits * factor,
+        });
+        setCalibrationPoints([]);
+        setActiveToolState('select');
+    };
+
     const isPolygonType = (type: SiteElementType) => POLYGON_TYPES.has(type);
 
     // Deep link desde "Ver trazado en emplazamiento" (diagrama de red): si
@@ -199,6 +273,7 @@ export function useSiteEditor(projectId: number) {
         activeTool,
         startTool,
         startFeederTool,
+        startCalibratePlan,
         pendingType,
         pendingNetworkEdgeId,
         selectedElementId,
@@ -231,6 +306,17 @@ export function useSiteEditor(projectId: number) {
         networkEdges: network.edges,
         networkEdgesLoading: network.loading,
         networkCalculations: network.calculations,
+        importedPlanUrl,
+        planImportOpen,
+        openPlanImport,
+        closePlanImport,
+        handlePlanImported,
+        updateImportedPlan,
+        removeImportedPlan,
+        calibrationPoints,
+        addCalibrationPoint,
+        applyPlanCalibration,
+        cancelCalibration,
     };
 }
 
