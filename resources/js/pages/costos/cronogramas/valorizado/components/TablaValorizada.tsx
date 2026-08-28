@@ -1243,13 +1243,17 @@ const TablaValorizada: React.FC<Props> = ({
 
                         {/* ── SUB TOTAL ── */}
                         <tr className="bg-slate-200 font-bold text-slate-900">
-                            <td
-                                colSpan={6}
-                                className="border border-slate-300 p-2.5 text-right text-[10px] tracking-wider uppercase"
-                            >
+                            <td className="border border-slate-300 p-2" />
+                            <td className="sticky left-0 z-10 border border-slate-300 bg-slate-200 p-2.5 text-left text-[11px] tracking-wider uppercase">
                                 SUB TOTAL
                             </td>
-                            <td className="border border-slate-300 bg-slate-300" />
+                            <td className="border border-slate-300 p-2" />
+                            <td className="border border-slate-300 p-2" />
+                            <td className="border border-slate-300 p-2" />
+                            <td className="border border-slate-300 p-2.5 text-right text-[11px] font-bold tabular-nums">
+                                {fmtS(subTotal)}
+                            </td>
+                            <td className="border border-slate-300 bg-slate-300 p-2" />
                             {periodos.map((p) =>
                                 finTd(
                                     distSub[p.key] ?? 0,
@@ -1695,13 +1699,17 @@ const TablaValorizada: React.FC<Props> = ({
 
                         {/* ── PRESUPUESTO TOTAL (final) ── */}
                         <tr className="bg-slate-900 text-[12px] font-bold text-white">
-                            <td
-                                colSpan={6}
-                                className="border border-slate-700 p-3 text-right text-[11px] tracking-widest uppercase"
-                            >
+                            <td className="border border-slate-700 p-2" />
+                            <td className="sticky left-0 z-10 border border-slate-700 bg-slate-900 p-3 text-left text-[11px] tracking-widest uppercase">
                                 PRESUPUESTO TOTAL
                             </td>
-                            <td className="border border-slate-700" />
+                            <td className="border border-slate-700 p-2" />
+                            <td className="border border-slate-700 p-2" />
+                            <td className="border border-slate-700 p-2" />
+                            <td className="border border-slate-700 p-3 text-right text-[12px] font-bold text-emerald-300 tabular-nums">
+                                {fmtS(presupTotal)}
+                            </td>
+                            <td className="border border-slate-700 p-2" />
                             {periodos.map((p) => {
                                 const v = distPresupuestoTotal[p.key] ?? 0;
                                 return (

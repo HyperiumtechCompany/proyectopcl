@@ -167,6 +167,13 @@ class CronoValorizadoController extends Controller
         // ── 5. Construir la lista de items desde presupuesto_general ───────
         $allItems = [];
         $totalPresupuesto = 0.0;
+        // El presupuesto general conserva parciales con 4 decimales. Su costo
+        // directo oficial se obtiene sumando esa precisión y redondeando una
+        // sola vez al final; sumar cada partida ya redondeada a céntimos puede
+        // introducir diferencias de S/ 0.01 frente a Presupuesto/Delphin.
+        $totalPresupuestoOficial = (float) $presupuesto->sum(
+            fn ($item) => (float) ($item->parcial ?? 0)
+        );
 
         foreach ($presupuesto as $pItem) {
             $partida = trim($pItem->partida ?? '');
@@ -223,6 +230,12 @@ class CronoValorizadoController extends Controller
 
             $totalPresupuesto += $parcial;
         }
+
+        // Las distribuciones individuales permanecen en céntimos, mientras
+        // los cálculos financieros conservan la precisión interna oficial y
+        // solo se formatean a dos decimales al mostrarse/exportarse. El reparto
+        // mensual ajusta cualquier residuo en el último período.
+        $totalPresupuesto = $totalPresupuestoOficial;
 
         $resumen = $this->calcularResumen($allItems, $periodos, $totalPresupuesto);
 
