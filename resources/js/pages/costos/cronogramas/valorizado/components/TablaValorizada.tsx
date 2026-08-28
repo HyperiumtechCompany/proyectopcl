@@ -22,8 +22,10 @@ import type {
     ComponenteExtra,
     ConceptoAdicional,
 } from '../types';
-
-const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+import {
+    calcularResumenFinanciero,
+    type ConceptoCalculado,
+} from '../helpers/calcularResumenFinanciero';
 
 // FORMATOS
 const fmtN = (v: number) =>
@@ -284,6 +286,16 @@ interface Props {
     // gg_consolidado (mismo endpoint que usa el panel Consolidado).
     projectId?: string;
     onFinDefaultsChange?: (values: FinDefaults) => void;
+    // Reporta el "Presupuesto Total" final ya calculado (con GG/Utilidad/IGV/
+    // Componentes/conceptos) Y su reparto mensual — lo usa el padre para el
+    // Cronograma de Desembolsos, que debe basarse en el monto real del
+    // contrato (no en el Costo Directo puro) tanto en el total como mes a
+    // mes, y reaccionar a cualquier cambio en Valorizado (%, componentes,
+    // conceptos), no solo al cargar la página.
+    onPresupuestoTotalChange?: (data: {
+        total: number;
+        distribucionMensual: Record<string, number>;
+    }) => void;
 }
 
 // COMPONENTE PRINCIPAL
@@ -308,6 +320,7 @@ const TablaValorizada: React.FC<Props> = ({
     finDefaults = {},
     projectId,
     onFinDefaultsChange,
+    onPresupuestoTotalChange,
 }) => {
     const tableRef = useRef<HTMLDivElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -358,6 +371,96 @@ const TablaValorizada: React.FC<Props> = ({
         });
     }, [fin, extraComponents, additionalConcepts, onFinDefaultsChange]);
     const extraSeeded = useRef(false);
+
+    // Costo Directo + cascada completa (GG/Utilidad/IGV/Componentes/conceptos),
+    // vía el mismo helper que usan exportHelpers.ts y (para Desembolso)
+    // CronogramaValorizado.tsx — una sola fuente de verdad para esta fórmula.
+    // Se calcula ANTES del "return early" de abajo (items.length === 0) para
+    // no romper las reglas de hooks: un useEffect no puede declararse
+    // condicionalmente según ese return.
+    const costoDirectoResumen =
+        totalPresupuesto > 0 ? totalPresupuesto : totalGeneralPeriodos;
+    const resumenFinanciero = useMemo(
+        () =>
+            calcularResumenFinanciero({
+                costoDirecto: costoDirectoResumen,
+                pctGastosGenerales: fin.pctGastosGenerales,
+                pctUtilidad: fin.pctUtilidad,
+                pctIGV: fin.pctIGV,
+                montoMobiliario: fin.montoMobiliario,
+                pctIGVMobiliario: fin.pctIGVMobiliario,
+                hasComponentII,
+                componentesExtra: extraComponents,
+                conceptosAdicionales: additionalConcepts,
+            }),
+        [costoDirectoResumen, fin, hasComponentII, extraComponents, additionalConcepts],
+    );
+    // cdPorPeriodo/cdTotalReal/propDist se calculan aquí (antes del "return
+    // early" de más abajo) para poder reportar distribucionMensual al padre.
+    // Sin esto, el Cronograma de Desembolsos usaba el Costo Directo puro por
+    // mes (`totalesFinales`) en vez de la valorización real (con GG/Utilidad/
+    // IGV/conceptos ya sumados) — cualquier cambio en los conceptos de
+    // Valorizado no se reflejaba ahí ("sigue con 79, no veo cambios").
+    const cdPorPeriodo: Record<string, number> = {};
+    periodos.forEach((p) => {
+        cdPorPeriodo[p.key] = totales[p.key]?.monto ?? 0;
+    });
+    const cdTotalReal = Object.values(cdPorPeriodo).reduce((a, b) => a + b, 0);
+
+    // Reparto proporcional con ajuste de residuo (Decimal.js): sin esto, cada
+    // celda se redondeaba a 2 decimales por separado y la suma de los meses
+    // casi nunca cuadraba exacto con el total de su propia fila. El último
+    // período con peso > 0 absorbe el residuo — mismo patrón que ya usa el
+    // backend en CronoValorizadoController::distribuirPorDiasCalendario().
+    const propDist = (total: number): Record<string, number> => {
+        const r: Record<string, number> = {};
+        if (cdTotalReal <= 0) {
+            periodos.forEach((p) => {
+                r[p.key] = 0;
+            });
+            return r;
+        }
+
+        const totalDec = new Decimal(total);
+        let sumaAsignada = new Decimal(0);
+        let ultimaKey: string | null = null;
+
+        periodos.forEach((p) => {
+            const peso = cdPorPeriodo[p.key] ?? 0;
+            const monto = totalDec
+                .times(peso)
+                .dividedBy(cdTotalReal)
+                .toDecimalPlaces(2)
+                .toNumber();
+            r[p.key] = monto;
+            sumaAsignada = sumaAsignada.plus(monto);
+            if (peso !== 0) {
+                ultimaKey = p.key;
+            }
+        });
+
+        if (ultimaKey !== null) {
+            const residuo = totalDec.minus(sumaAsignada);
+            if (!residuo.isZero()) {
+                r[ultimaKey] = new Decimal(r[ultimaKey]).plus(residuo).toDecimalPlaces(2).toNumber();
+            }
+        }
+
+        return r;
+    };
+
+    useEffect(() => {
+        // Desembolso usa el "PRESUPUESTADO DE OBRA INFRAESTRUCTURA" (Costo
+        // Directo + GG + Utilidad + IGV) — NO el Presupuesto Total con
+        // Componentes II/III ni conceptos (Supervisión, Coordinación, Gestión
+        // Administrativa, Control Concurrente, ...) sumados. Esos son costos
+        // administrativos/de otros componentes que no forman parte del
+        // contrato de obra sobre el que se calculan los adelantos.
+        onPresupuestoTotalChange?.({
+            total: resumenFinanciero.presupI,
+            distribucionMensual: propDist(resumenFinanciero.presupI),
+        });
+    }, [resumenFinanciero.presupI, totales, periodos, onPresupuestoTotalChange]);
 
     const addExtraComponent = useCallback(() => {
         setExtraComponents((prev) => [
@@ -555,125 +658,33 @@ const TablaValorizada: React.FC<Props> = ({
             </div>
         );
 
-    const costoDirecto =
-        totalPresupuesto > 0 ? totalPresupuesto : totalGeneralPeriodos;
+    const costoDirecto = costoDirectoResumen;
 
-    const cdPorPeriodo: Record<string, number> = {};
-    periodos.forEach((p) => {
-        cdPorPeriodo[p.key] = totales[p.key]?.monto ?? 0;
-    });
-    const cdTotalReal = Object.values(cdPorPeriodo).reduce((a, b) => a + b, 0);
-
-    const montoGG = costoDirecto * (fin.pctGastosGenerales / 100);
-    const montoUT = costoDirecto * (fin.pctUtilidad / 100);
-    const subTotal = costoDirecto + montoGG + montoUT;
-    const montoIGV = subTotal * (fin.pctIGV / 100);
-    const presupI = subTotal + montoIGV;
-
-    const montoIGVMob = fin.montoMobiliario * (fin.pctIGVMobiliario / 100);
-    const subTotalII = fin.montoMobiliario + montoIGVMob;
-
-    // Componentes extra (III, IV, ...): igual tratamiento que Componente II
-    // (monto fijo + IGV, sin distribuir por mes — no son avance de obra).
-    const extraCalcs = extraComponents.map((c) => {
-        const monto = Number(c.monto) || 0;
-        const igv = monto * (fin.pctIGVMobiliario / 100);
-        return { ...c, monto, igv, subtotal: monto + igv };
-    });
-    const extraComponentsTotal = extraCalcs.reduce(
-        (acc, c) => acc + c.subtotal,
-        0,
-    );
-    const componentCount = 1 + (hasComponentII ? 1 : 0) + extraComponents.length;
-    const romanList = ROMAN.slice(0, componentCount).join('+');
-
-    const totalI_II = presupI + subTotalII + extraComponentsTotal;
-
-    // Cascada de 3 etapas (igual que el Excel de referencia,
-    // planes/costos/plan_valorizado_compatibilidad.md secciones 7 y 13):
-    // amarillos → Presupuesto Sub Total → rojos → Presupuesto Total
-    // (intermedio) → rojos_final (ej. Control Concurrente) → Presupuesto
-    // Total final. Cada tipo ('porcentaje' | 'monto') es independiente de
-    // la categoría: un amarillo puede ser % igual que un rojo puede ser
-    // monto fijo — solo cambia SOBRE QUÉ BASE se calcula el %.
-    const calcConcepto = (concepto: ConceptoAdicional, base: number) => ({
-        ...concepto,
-        monto:
-            concepto.tipo === 'porcentaje'
-                ? base * ((Number(concepto.valor) || 0) / 100)
-                : Number(concepto.valor) || 0,
-    });
-
-    const amarillos = additionalConcepts.filter(
-        (c) => (c.categoria ?? 'rojo') === 'amarillo',
-    );
-    const rojosNormales = additionalConcepts.filter(
-        (c) => (c.categoria ?? 'rojo') === 'rojo',
-    );
-    const rojosFinales = additionalConcepts.filter(
-        (c) => (c.categoria ?? 'rojo') === 'rojo_final',
-    );
-
-    // Etapa 1 — amarillos sobre el Presupuestado de Obra (Componente I+II+extra)
-    const amarilloCalcs = amarillos.map((c) => calcConcepto(c, totalI_II));
-    const amarilloTotal = amarilloCalcs.reduce((sum, c) => sum + c.monto, 0);
-    const presupuestoSubTotal = totalI_II + amarilloTotal;
-
-    // Etapa 2 — rojos normales sobre el Presupuesto Sub Total (YA con amarillos)
-    const rojoCalcs = rojosNormales.map((c) => calcConcepto(c, presupuestoSubTotal));
-    const rojoTotal = rojoCalcs.reduce((sum, c) => sum + c.monto, 0);
-    const presupuestoTotalIntermedio = presupuestoSubTotal + rojoTotal;
-
-    // Etapa 3 — rojo_final (ej. Control Concurrente) sobre el intermedio
-    const rojoFinalCalcs = rojosFinales.map((c) => calcConcepto(c, presupuestoTotalIntermedio));
-    const rojoFinalTotal = rojoFinalCalcs.reduce((sum, c) => sum + c.monto, 0);
-
-    const additionalCalcs = [...amarilloCalcs, ...rojoCalcs, ...rojoFinalCalcs];
-    const additionalTotal = amarilloTotal + rojoTotal + rojoFinalTotal;
-    const presupTotal = presupuestoTotalIntermedio + rojoFinalTotal;
-
-    // Reparto proporcional con ajuste de residuo (Decimal.js): sin esto, cada
-    // celda se redondeaba a 2 decimales por separado y la suma de los meses
-    // casi nunca cuadraba exacto con el total de su propia fila (el usuario
-    // reportó diferencias de centavos en producción). El último período con
-    // peso > 0 absorbe el residuo — mismo patrón que ya usa el backend en
-    // CronoValorizadoController::distribuirPorDiasCalendario().
-    const propDist = (total: number): Record<string, number> => {
-        const r: Record<string, number> = {};
-        if (cdTotalReal <= 0) {
-            periodos.forEach((p) => {
-                r[p.key] = 0;
-            });
-            return r;
-        }
-
-        const totalDec = new Decimal(total);
-        let sumaAsignada = new Decimal(0);
-        let ultimaKey: string | null = null;
-
-        periodos.forEach((p) => {
-            const peso = cdPorPeriodo[p.key] ?? 0;
-            const monto = totalDec
-                .times(peso)
-                .dividedBy(cdTotalReal)
-                .toDecimalPlaces(2)
-                .toNumber();
-            r[p.key] = monto;
-            sumaAsignada = sumaAsignada.plus(monto);
-            if (peso !== 0) {
-                ultimaKey = p.key;
-            }
-        });
-
-        if (ultimaKey !== null) {
-            const residuo = totalDec.minus(sumaAsignada);
-            if (!residuo.isZero()) {
-                r[ultimaKey] = new Decimal(r[ultimaKey]).plus(residuo).toDecimalPlaces(2).toNumber();
-            }
-        }
-
-        return r;
-    };
+    const {
+        montoGG,
+        montoUT,
+        subTotal,
+        montoIGV,
+        presupI,
+        montoIGVMob,
+        subTotalII,
+        extraCalcs,
+        extraComponentsTotal,
+        romanList,
+        totalI_II,
+        amarillos,
+        rojosNormales,
+        rojosFinales,
+        amarilloCalcs,
+        rojoCalcs,
+        rojoFinalCalcs,
+        presupuestoSubTotal,
+        presupuestoTotalIntermedio,
+        presupuestoTotal: presupTotal,
+    } = resumenFinanciero;
+    // cdPorPeriodo/cdTotalReal/propDist ya están definidos más arriba (antes
+    // del return early), donde también se usan para reportar
+    // distribucionMensual al padre — ver el useEffect de onPresupuestoTotalChange.
 
     const distGG = propDist(montoGG);
     const distUT = propDist(montoUT);
@@ -694,14 +705,21 @@ const TablaValorizada: React.FC<Props> = ({
         avanceAcumuladoIntegrado[p.key] = presupTotal > 0 ? (acumuladoValorizado / presupTotal) * 100 : 0;
     });
 
-    const finTd = (v: number, key: string, cls: string) => (
-        <td
-            key={key}
-            className={`border border-slate-300 p-2 text-right text-[11px] font-medium tabular-nums ${cls} ${v > 0 ? 'text-slate-700' : 'text-slate-300'} ${key === mesPicoKey && v > 0 ? 'ring-1 ring-amber-400 ring-inset' : ''}`}
-        >
-            {v > 0 ? fmtN(v) : '—'}
-        </td>
-    );
+    const finTd = (v: number, key: string, cls: string) => {
+        const darkBackground = cls.includes('bg-slate-7') || cls.includes('bg-slate-8') || cls.includes('bg-slate-9');
+        const valueColor = darkBackground
+            ? (v > 0 ? 'text-white' : 'text-slate-500')
+            : (v > 0 ? 'text-slate-700' : 'text-slate-300');
+
+        return (
+            <td
+                key={key}
+                className={`border border-slate-300 p-2 text-right text-[11px] font-medium tabular-nums ${cls} ${valueColor} ${key === mesPicoKey && v > 0 ? 'ring-1 ring-amber-400 ring-inset' : ''}`}
+            >
+                {v > 0 ? fmtN(v) : '—'}
+            </td>
+        );
+    };
 
     const updateConcepto = (id: string, patch: Partial<ConceptoAdicional>) =>
         setAdditionalConcepts((current) =>
@@ -712,7 +730,7 @@ const TablaValorizada: React.FC<Props> = ({
     // tipo (% o monto), categoría (a qué etapa de la cascada pertenece) y su
     // valor. El monto ya viene calculado según su categoría (ver cálculo de
     // amarilloCalcs/rojoCalcs/rojoFinalCalcs arriba).
-    const renderConceptoRow = (concepto: ReturnType<typeof calcConcepto>) => {
+    const renderConceptoRow = (concepto: ConceptoCalculado) => {
         const distribucion = propDist(concepto.monto);
         return (
             <tr key={concepto.id} className="bg-slate-50 text-slate-800">
@@ -896,6 +914,7 @@ const TablaValorizada: React.FC<Props> = ({
                             const isLeaf = !hasKids;
                             const isCollapsed = collapsed.has(item.item);
                             const bg = bgNivel(n, isLeaf);
+                            const isDarkSummaryRow = !isLeaf && n === 0;
                             const desvio = isLeaf
                                 ? (desviaciones[item.id] ?? 0)
                                 : 0;
@@ -917,7 +936,7 @@ const TablaValorizada: React.FC<Props> = ({
                                     ref={rowVirtualizer.measureElement}
                                     className={`${bg || (idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/40')} transition-colors hover:bg-blue-50/30 ${tieneDesv ? 'ring-1 ring-rose-200 ring-inset' : ''}`}
                                 >
-                                    <td className="border border-slate-200 p-2 text-center text-slate-400 tabular-nums">
+                                    <td className={`border border-slate-200 p-2 text-center tabular-nums ${isDarkSummaryRow ? 'text-slate-200' : 'text-slate-400'}`}>
                                         {idx + 1}
                                     </td>
                                     <td
@@ -981,25 +1000,25 @@ const TablaValorizada: React.FC<Props> = ({
                                             )}
                                         </div>
                                     </td>
-                                    <td className="border border-slate-200 p-2 text-center text-[10px] text-slate-500 uppercase">
+                                    <td className={`border border-slate-200 p-2 text-center text-[10px] uppercase ${isDarkSummaryRow ? 'text-slate-200' : 'text-slate-500'}`}>
                                         {item.und || '—'}
                                     </td>
-                                    <td className="border border-slate-200 p-2 text-right font-mono text-slate-600 tabular-nums">
+                                    <td className={`border border-slate-200 p-2 text-right font-mono tabular-nums ${isDarkSummaryRow ? 'text-slate-100' : 'text-slate-600'}`}>
                                         {item.metrado > 0
                                             ? fmtN(item.metrado)
                                             : '—'}
                                     </td>
-                                    <td className="border border-slate-200 p-2 text-right font-mono text-slate-600 tabular-nums">
+                                    <td className={`border border-slate-200 p-2 text-right font-mono tabular-nums ${isDarkSummaryRow ? 'text-slate-100' : 'text-slate-600'}`}>
                                         {item.precio > 0
                                             ? fmtN(item.precio)
                                             : '—'}
                                     </td>
-                                    <td className="border border-slate-200 bg-blue-50/20 p-2 text-right font-bold text-blue-800 tabular-nums">
+                                    <td className={`border border-slate-200 p-2 text-right font-bold tabular-nums ${isDarkSummaryRow ? 'bg-blue-950/20 text-white' : 'bg-blue-50/20 text-blue-800'}`}>
                                         {item.parcial > 0
                                             ? fmtS(item.parcial)
                                             : '—'}
                                     </td>
-                                    <td className="border border-slate-200 bg-slate-50 p-2 text-center">
+                                    <td className={`border border-slate-200 p-2 text-center ${isDarkSummaryRow ? 'bg-slate-800 text-slate-200' : 'bg-slate-50'}`}>
                                         {isLeaf && (
                                             <div className="flex items-center justify-center gap-1">
                                                 <button
@@ -1042,7 +1061,7 @@ const TablaValorizada: React.FC<Props> = ({
                                             return (
                                                 <td
                                                     key={p.key}
-                                                    className={`border border-slate-200 p-2 text-right text-[11px] font-semibold tabular-nums ${monto > 0 ? 'text-slate-700' : 'text-slate-200'} ${isPico && monto > 0 ? 'bg-amber-50/30' : ''}`}
+                                                    className={`border border-slate-200 p-2 text-right text-[11px] font-semibold tabular-nums ${isDarkSummaryRow ? (monto > 0 ? 'text-white' : 'text-slate-500') : (monto > 0 ? 'text-slate-700' : 'text-slate-200')} ${isPico && monto > 0 ? (isDarkSummaryRow ? 'bg-amber-500/15' : 'bg-amber-50/30') : ''}`}
                                                 >
                                                     {monto > 0
                                                         ? viewMode === 'monto'
@@ -1399,8 +1418,11 @@ const TablaValorizada: React.FC<Props> = ({
                         {/* ── COMPONENTES EXTRA (III, IV, ...) ── */}
                         </React.Fragment>}
                         {extraCalcs.map((comp, idx) => {
-                            const componentIndex = idx + (hasComponentII ? 2 : 1);
-                            const roman = ROMAN[componentIndex] ?? `${componentIndex + 1}`;
+                            // Numeración arábiga independiente (1, 2, 3...) — no
+                            // roman ni ligada a hasComponentII, para no
+                            // confundirse con los componentes oficiales I
+                            // (Obra) / II (Mobiliario y Equipamiento).
+                            const numero = idx + 1;
                             return (
                                 <React.Fragment key={comp.id}>
                                     {/* Nombre + monto (editable) */}
@@ -1421,7 +1443,7 @@ const TablaValorizada: React.FC<Props> = ({
                                         <td className="sticky left-0 z-10 border border-slate-300 bg-white p-2">
                                             <div className="flex items-center gap-1.5">
                                                 <span className="shrink-0 text-[9px] font-black tracking-widest text-slate-400 uppercase">
-                                                    COMPONENTE {roman}:
+                                                    COMPONENTE {numero}:
                                                 </span>
                                                 <input
                                                     type="text"
@@ -1471,7 +1493,7 @@ const TablaValorizada: React.FC<Props> = ({
                                     <tr className="bg-white text-slate-700">
                                         <td className="border border-slate-300 p-2" />
                                         <td className="sticky left-0 z-10 border border-slate-300 bg-white p-2.5 text-left text-[11px] font-semibold tracking-wide uppercase">
-                                            IGV (Componente {roman})
+                                            IGV (Componente {numero})
                                         </td>
                                         <td className="border border-slate-300 p-2" />
                                         <td className="border border-slate-300 p-2" />
@@ -1503,7 +1525,7 @@ const TablaValorizada: React.FC<Props> = ({
                                             colSpan={6}
                                             className="border border-slate-300 p-2.5 text-right text-[10px] tracking-wider uppercase"
                                         >
-                                            SUB TOTAL COMPONENTE {roman}
+                                            SUB TOTAL COMPONENTE {numero}
                                         </td>
                                         <td className="border border-slate-300 bg-slate-200" />
                                         {periodos.map((p) => (
@@ -1524,25 +1546,34 @@ const TablaValorizada: React.FC<Props> = ({
                             );
                         })}
 
-                        {/* ── AGREGAR COMPONENTE ── */}
+                        {/* ── AGREGAR COMPONENTE ──
+                            Dos botones separados (antes uno solo hacía las dos
+                            cosas y el texto quedaba mal — activar Mobiliario
+                            "Componente II" oficial vs. agregar un componente
+                            genérico se confundían entre sí). */}
                         <tr>
                             <td
                                 colSpan={nCols}
                                 className="border border-dashed border-slate-300 bg-white p-2"
                             >
-                                <button
-                                    onClick={() => {
-                                        if (!hasComponentII) {
-                                            setHasComponentII(true);
-                                            return;
-                                        }
-                                        addExtraComponent();
-                                    }}
-                                    className="flex items-center gap-1.5 text-[10px] font-bold text-amber-600 transition-colors hover:text-amber-700"
-                                >
-                                    <Plus className="h-3.5 w-3.5" />
-                                    {hasComponentII ? 'Agregar Componente' : 'Agregar Componente II'}
-                                </button>
+                                <div className="flex items-center gap-4">
+                                    {!hasComponentII && (
+                                        <button
+                                            onClick={() => setHasComponentII(true)}
+                                            className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 transition-colors hover:text-slate-700"
+                                        >
+                                            <Plus className="h-3.5 w-3.5" />
+                                            Agregar Componente II (Mobiliario y Equipamiento)
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={addExtraComponent}
+                                        className="flex items-center gap-1.5 text-[10px] font-bold text-amber-600 transition-colors hover:text-amber-700"
+                                    >
+                                        <Plus className="h-3.5 w-3.5" />
+                                        Agregar Componente
+                                    </button>
+                                </div>
                             </td>
                         </tr>
 
@@ -1555,14 +1586,13 @@ const TablaValorizada: React.FC<Props> = ({
                                 TOTAL PRESUPUESTO DE OBRA COMPONENTE {romanList}
                             </td>
                             <td className="border border-slate-600 bg-slate-900" />
-                            {periodos.map((p) => (
-                                <td
-                                    key={p.key}
-                                    className="border border-slate-600 p-2 text-center text-[10px] text-slate-500"
-                                >
-                                    —
-                                </td>
-                            ))}
+                            {periodos.map((p) =>
+                                finTd(
+                                    propDist(totalI_II)[p.key] ?? 0,
+                                    p.key,
+                                    'bg-slate-800 text-slate-200',
+                                ),
+                            )}
                             <td className="sticky right-0 z-10 border border-slate-600 bg-slate-900 p-2.5 text-right text-[12px] font-bold tabular-nums">
                                 {fmtS(totalI_II)}
                             </td>

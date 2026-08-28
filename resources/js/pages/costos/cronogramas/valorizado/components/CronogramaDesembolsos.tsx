@@ -696,7 +696,7 @@ const CronogramaDesembolsos: React.FC<Props> = ({
                     background: C.white,
                 }}>
                     <KpiCard color={C.navy}    icon={<FileText style={{ width: 15, height: 15 }} />}
-                        label="Presupuesto de Obra"     value={fmtSoles(totalPresupuesto)}       sub="Monto contrato s/IGV" />
+                        label="Presupuesto de Obra"     value={fmtSoles(totalPresupuesto)}       sub="Monto del contrato (c/IGV)" />
                     <KpiCard color="#1A7A3A"   icon={<DollarSign style={{ width: 15, height: 15 }} />}
                         label="Adelanto Directo 10%"    value={fmtSoles(adelantoEfectivoTotal)}   sub="Efectivo — col. (1)" />
                     <KpiCard color={C.blue}    icon={<Layers style={{ width: 15, height: 15 }} />}

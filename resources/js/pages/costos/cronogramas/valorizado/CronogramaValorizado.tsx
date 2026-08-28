@@ -44,6 +44,18 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
     const [mostrarDesembolso, setMostrarDesembolso] = useState(false);
     const [vistaActual, setVistaActual] = useState<'valorizado' | 'materiales'>('valorizado');
     const [exportFinDefaults, setExportFinDefaults] = useState<FinDefaults>(props.finDefaults ?? {});
+    // "Presupuesto Total" real (Costo Directo + GG/Utilidad/IGV + Componentes
+    // + conceptos de valorización) Y su reparto mensual — los reporta
+    // TablaValorizada ya calculados (ver calcularResumenFinanciero.ts), y se
+    // actualizan cada vez que algo cambia ahí (%, componentes, conceptos).
+    // El Cronograma de Desembolsos debe basarse en este monto (el del
+    // contrato) tanto en el total como mes a mes, no en el Costo Directo
+    // puro (`totalesFinales`) — arranca con el Costo Directo como
+    // placeholder hasta el primer render de la tabla, que lo corrige de inmediato.
+    const [resumenFinancieroDesembolso, setResumenFinancieroDesembolso] = useState<{
+        total: number;
+        distribucionMensual: Record<string, number>;
+    }>({ total: props.totalPresupuesto, distribucionMensual: {} });
 
     const { toasts, show: showToast } = useToast();
 
@@ -141,11 +153,13 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
             projectData: projectDataExport,
             projectId: props.project,
             totalPresupuesto: props.totalPresupuesto,
+            totalPresupuestoDesembolso: resumenFinancieroDesembolso.total,
+            valorizacionMensualDesembolso: resumenFinancieroDesembolso.distribucionMensual,
             diasPorMes: props.diasPorMes || {},
             totalDias,
             finDefaults: exportFinDefaults,
         });
-    }, [itemsFiltrados, props.periodos, props.diasPorMes, props.totalPresupuesto, props.project, totalesFinales, props.projectName, viewMode, totalesPorItem, projectDataExport, exportFinDefaults]);
+    }, [itemsFiltrados, props.periodos, props.diasPorMes, props.totalPresupuesto, resumenFinancieroDesembolso, props.project, totalesFinales, props.projectName, viewMode, totalesPorItem, projectDataExport, exportFinDefaults]);
 
     const handleExportPDF = useCallback(() => {
         const totalDias = Number(projectDataExport?.duracion_dias) > 0
@@ -156,13 +170,32 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
             projectData: projectDataExport,
             projectId: props.project,
             totalPresupuesto: props.totalPresupuesto,
+            totalPresupuestoDesembolso: resumenFinancieroDesembolso.total,
+            valorizacionMensualDesembolso: resumenFinancieroDesembolso.distribucionMensual,
             diasPorMes: props.diasPorMes || {},
             totalDias,
             finDefaults: exportFinDefaults,
         });
-    }, [itemsFiltrados, props.periodos, props.diasPorMes, props.totalPresupuesto, props.project, totalesFinales, props.projectName, totalesPorItem, projectDataExport, exportFinDefaults]);
+    }, [itemsFiltrados, props.periodos, props.diasPorMes, props.totalPresupuesto, resumenFinancieroDesembolso, props.project, totalesFinales, props.projectName, totalesPorItem, projectDataExport, exportFinDefaults]);
 
-    // MES PICO 
+    // Reparto mensual para Desembolso: usa la valorización real (con GG/
+    // Utilidad/IGV/conceptos ya sumados), no el Costo Directo puro de
+    // `totalesFinales` — así cualquier cambio en Valorizado (%, componentes,
+    // conceptos) se refleja de inmediato en "Parcial Presupuesto"/"% Avance".
+    const valorizacionesMensualesDesembolso = React.useMemo(() => {
+        const { total, distribucionMensual } = resumenFinancieroDesembolso;
+        const resultado: Record<string, { monto: number; porcentaje: number }> = {};
+        props.periodos.forEach((p) => {
+            const monto = distribucionMensual[p.key] ?? 0;
+            resultado[p.key] = {
+                monto,
+                porcentaje: total > 0 ? (monto / total) * 100 : 0,
+            };
+        });
+        return resultado;
+    }, [resumenFinancieroDesembolso, props.periodos]);
+
+    // MES PICO
     const mesPicoKey = React.useMemo(() => {
         let max = 0; let key = '';
         Object.entries(totalesFinales).forEach(([k, v]) => {
@@ -296,6 +329,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                                         finDefaults={props.finDefaults}
                                         projectId={props.project}
                                         onFinDefaultsChange={setExportFinDefaults}
+                                        onPresupuestoTotalChange={setResumenFinancieroDesembolso}
                                     />
                                 </>
                             ) : (
@@ -331,8 +365,8 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                 {mostrarDesembolso && (
                     <CronogramaDesembolsos
                         periodos={props.periodos}
-                        totalPresupuesto={props.totalPresupuesto}
-                        valorizacionesMensuales={totalesFinales}
+                        totalPresupuesto={resumenFinancieroDesembolso.total}
+                        valorizacionesMensuales={valorizacionesMensualesDesembolso}
                         totalDias={Number(projectDataExport?.duracion_dias) > 0
                             ? Number(projectDataExport.duracion_dias)
                             : props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0)}
