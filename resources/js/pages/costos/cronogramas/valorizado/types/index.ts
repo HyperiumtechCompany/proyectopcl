@@ -66,11 +66,32 @@ export interface ComponenteExtra {
     monto: number;
 }
 
+/**
+ * "amarillo" y "rojo" replican la nomenclatura del Excel de referencia
+ * (plan_valorizado_compatibilidad.md):
+ *  - amarillo: se SUMA al Presupuestado de Obra (Componente I+II+extra) para
+ *    formar "Presupuesto Sub Total". Todos los amarillos comparten esa misma
+ *    base (no son cascada entre sí).
+ *  - rojo: % (o monto) aplicado sobre "Presupuesto Sub Total" — es decir,
+ *    YA con los amarillos sumados. Todos los rojos normales comparten esa
+ *    base entre sí (tampoco cascada entre ellos).
+ *  - rojo_final: un escalón más allá — aplicado sobre el resultado de sumar
+ *    los rojos normales (ej. Control Concurrente, que en el Excel se calcula
+ *    sobre el "Presupuesto Total" intermedio, no sobre el Sub Total).
+ * tipo ('porcentaje' | 'monto') es independiente de la categoría: un
+ * amarillo puede ser monto fijo (ej. costo real de elaborar el expediente
+ * técnico) o porcentaje, igual que un rojo.
+ * Por compatibilidad con datos guardados antes de que existiera este campo,
+ * `categoria` es opcional — ausente se trata como 'rojo' (ver TablaValorizada.tsx).
+ */
+export type CategoriaConcepto = 'amarillo' | 'rojo' | 'rojo_final';
+
 export interface ConceptoAdicional {
     id: string;
     name: string;
     tipo: 'porcentaje' | 'monto';
     valor: number;
+    categoria?: CategoriaConcepto;
 }
 
 export interface FinDefaults {

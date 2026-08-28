@@ -1,7 +1,49 @@
 import ExcelJS from 'exceljs';
+import Decimal from 'decimal.js';
 
 // TIPOS INTERNOS
 type ViewMode = 'monto' | 'porcentaje';
+
+/**
+ * Reparto proporcional con ajuste de residuo (Decimal.js) — mismo criterio
+ * que TablaValorizada.tsx y CronoValorizadoController::distribuirPorDiasCalendario():
+ * sin esto, cada celda mensual se redondea a 2 decimales por separado y la
+ * suma de los meses casi nunca cuadra exacto con el total de su propia fila.
+ * El último período con peso > 0 absorbe el residuo.
+ */
+function propDistConAjuste(
+    total: number,
+    periodos: any[],
+    cdPorPeriodo: Record<string, number>,
+    cdTotalReal: number,
+): Record<string, number> {
+    const r: Record<string, number> = {};
+    if (cdTotalReal <= 0) {
+        periodos.forEach((p) => { r[p.key] = 0; });
+        return r;
+    }
+
+    const totalDec = new Decimal(total);
+    let sumaAsignada = new Decimal(0);
+    let ultimaKey: string | null = null;
+
+    periodos.forEach((p) => {
+        const peso = cdPorPeriodo[p.key] ?? 0;
+        const monto = totalDec.times(peso).dividedBy(cdTotalReal).toDecimalPlaces(2).toNumber();
+        r[p.key] = monto;
+        sumaAsignada = sumaAsignada.plus(monto);
+        if (peso !== 0) ultimaKey = p.key;
+    });
+
+    if (ultimaKey !== null) {
+        const residuo = totalDec.minus(sumaAsignada);
+        if (!residuo.isZero()) {
+            r[ultimaKey] = new Decimal(r[ultimaKey]).plus(residuo).toDecimalPlaces(2).toNumber();
+        }
+    }
+
+    return r;
+}
 
 interface ExportarExcelOptions {
     totalPresupuesto?: number;
@@ -19,7 +61,17 @@ interface ExportarExcelOptions {
         montoMobiliario?: number;
         pctIGVMobiliario?: number;
         pctSupervision?: number;
-        conceptosAdicionales?: Array<{ id: string; name: string; tipo: 'porcentaje' | 'monto'; valor: number }>;
+        conceptosAdicionales?: Array<{
+            id: string;
+            name: string;
+            tipo: 'porcentaje' | 'monto';
+            valor: number;
+            // amarillo: suma al Presupuestado de Obra → Presupuesto Sub Total.
+            // rojo: % (o monto) sobre ese Sub Total. rojo_final: un escalón
+            // más (ej. Control Concurrente), sobre el resultado de los rojos.
+            // Ausente = tratar como 'rojo' (compatibilidad con datos viejos).
+            categoria?: 'amarillo' | 'rojo' | 'rojo_final';
+        }>;
     };
 }
 
@@ -1060,7 +1112,6 @@ function addFilasFinancierasValorizado(
         ['MOBILIARIO Y EQUIPAMIENTO', fin.montoMobiliario, propDist(fin.montoMobiliario)],
         [`IGV MOBILIARIO ${fin.pctIGVMobiliario.toFixed(2)}%`, montoIGVMob, propDist(montoIGVMob)],
         ['PRESUPUESTO I + II', totalI_II, propDist(totalI_II)],
-        ...additionalRows,
     ];
 
     let r = startRow + 1;
@@ -1093,7 +1144,7 @@ function addFilasFinancierasValorizado(
     style(labelCell, { bg: 'FF0F172A', fg: 'FFFFFFFF', bold: true, size: 10, hAlign: 'right', vAlign: 'middle' });
     borderAll(labelCell, 'FF0F172A');
 
-    const distPresTotal = propDist(presupI + additionalTotal);
+    const distPresTotal = propDist(presupTotal);
     periodos.forEach((p, i) => {
         const cell = ws.getCell(r, fixedCols + 1 + i);
         cell.value = distPresTotal[p.key] || null;
@@ -1328,11 +1379,8 @@ export async function exportarExcel(
     const cdPorPeriodo: Record<string, number> = {};
     periodos.forEach(p => { cdPorPeriodo[p.key] = totales[p.key]?.monto ?? 0; });
     const cdTotalReal = Object.values(cdPorPeriodo).reduce((a, b) => a + b, 0);
-    const propDist = (total: number): Record<string, number> => {
-        const r: Record<string, number> = {};
-        periodos.forEach(p => { r[p.key] = cdTotalReal > 0 ? total * ((cdPorPeriodo[p.key] ?? 0) / cdTotalReal) : 0; });
-        return r;
-    };
+    const propDist = (total: number): Record<string, number> =>
+        propDistConAjuste(total, periodos, cdPorPeriodo, cdTotalReal);
     const montoGG = totalPresupuesto * (fin.pctGastosGenerales / 100);
     const montoUT = totalPresupuesto * (fin.pctUtilidad / 100);
     const subTotal = totalPresupuesto + montoGG + montoUT;
@@ -1341,12 +1389,26 @@ export async function exportarExcel(
     const montoIGVMob = fin.montoMobiliario * (fin.pctIGVMobiliario / 100);
     const subTotalII = fin.montoMobiliario + montoIGVMob;
     const totalI_II = presupI + subTotalII;
-    const additionalRows = (options.finDefaults?.conceptosAdicionales ?? []).map((concepto) => {
-        const total = concepto.tipo === 'porcentaje' ? totalI_II * (concepto.valor / 100) : concepto.valor;
+
+    // Cascada de 3 etapas (igual que TablaValorizada.tsx y el Excel de
+    // referencia, planes/costos/plan_valorizado_compatibilidad.md secc. 7 y 13):
+    // amarillo (suma a Presupuesto Sub Total) → rojo (% sobre ese Sub Total)
+    // → rojo_final (ej. Control Concurrente, % sobre el intermedio).
+    const conceptos = options.finDefaults?.conceptosAdicionales ?? [];
+    const calcConcepto = (concepto: NonNullable<typeof conceptos>[number], base: number) => {
+        const total = concepto.tipo === 'porcentaje' ? base * (concepto.valor / 100) : concepto.valor;
         return { pct: concepto.tipo === 'porcentaje' ? `${concepto.valor.toFixed(2)}%` : 'monto', label: concepto.name, total };
-    });
-    const additionalTotal = additionalRows.reduce((sum, row) => sum + row.total, 0);
-    const presupTotal = totalI_II + additionalTotal;
+    };
+    const amarillos = conceptos.filter((c) => (c.categoria ?? 'rojo') === 'amarillo');
+    const rojosNormales = conceptos.filter((c) => (c.categoria ?? 'rojo') === 'rojo');
+    const rojosFinales = conceptos.filter((c) => (c.categoria ?? 'rojo') === 'rojo_final');
+
+    const amarilloRows = amarillos.map((c) => calcConcepto(c, totalI_II));
+    const presupuestoSubTotal = totalI_II + amarilloRows.reduce((sum, r) => sum + r.total, 0);
+    const rojoRows = rojosNormales.map((c) => calcConcepto(c, presupuestoSubTotal));
+    const presupuestoTotalIntermedio = presupuestoSubTotal + rojoRows.reduce((sum, r) => sum + r.total, 0);
+    const rojoFinalRows = rojosFinales.map((c) => calcConcepto(c, presupuestoTotalIntermedio));
+    const presupTotal = presupuestoTotalIntermedio + rojoFinalRows.reduce((sum, r) => sum + r.total, 0);
 
     const finRows: Array<{ pct?: string; label: string; total: number; dark?: boolean; gray?: boolean }> = [
         { label: 'COSTO DIRECTO', total: totalPresupuesto, gray: true },
@@ -1361,7 +1423,14 @@ export async function exportarExcel(
             { label: 'SUB TOTAL COMPONENTE II', total: subTotalII, gray: true },
         ] : []),
         { label: `TOTAL PRESUPUESTO DE OBRA COMPONENTE ${fin.montoMobiliario > 0 ? 'I+II' : 'I'}`, total: totalI_II, dark: true },
-        ...additionalRows,
+        // Amarillos y rojos van ANTES de "Presupuesto Total" — ese total ya
+        // los suma, así que deben verse justificados arriba (ver hallazgo
+        // del usuario sobre el Excel de referencia).
+        ...amarilloRows,
+        ...(amarillos.length > 0 ? [{ label: 'PRESUPUESTO SUB TOTAL', total: presupuestoSubTotal, gray: true }] : []),
+        ...rojoRows,
+        ...(rojosFinales.length > 0 ? [{ label: 'PRESUPUESTO TOTAL', total: presupuestoTotalIntermedio, dark: true }] : []),
+        ...rojoFinalRows,
         { label: 'PRESUPUESTO TOTAL', total: presupTotal, dark: true },
     ];
 
@@ -1403,14 +1472,19 @@ export async function exportarExcel(
     secVal.style = { font: fontX({ bold: true, size: 9, color: { argb: 'FF1F4E79' } }), fill: fillX('FFD9EAF7'), alignment: alignX('left'), border: borderX('FF334155') };
     rowIdx++;
 
-    const totalMensualGeneral = periodos.reduce((s, p) => s + (totales[p.key]?.monto ?? 0), 0);
-    const lastKey = periodos.length ? periodos[periodos.length - 1].key : '';
+    const distPresupuestoTotal = propDist(presupTotal);
+    let acumuladoIntegrado = 0;
+    const acumuladosIntegrados = periodos.map((p) => {
+        acumuladoIntegrado += distPresupuestoTotal[p.key] ?? 0;
+        return acumuladoIntegrado;
+    });
+    const totalMensualGeneral = presupTotal;
     const footerRows = [
-        { label: 'VALORIZACIÓN MENSUAL (S/.)', bg: 'FF5B9BD5', fg: 'FFFFFFFF', values: periodos.map(p => totales[p.key]?.monto ?? 0), total: totalMensualGeneral, fmt: '#,##0.00' },
-        { label: '% AVANCE MENSUAL', bg: 'FFD9EAF7', fg: 'FF000000', values: periodos.map(p => totales[p.key]?.porcentaje ?? 0), total: null, fmt: '0.000"%"' },
+        { label: 'VALORIZACIÓN MENSUAL (S/.)', bg: 'FF5B9BD5', fg: 'FFFFFFFF', values: periodos.map(p => distPresupuestoTotal[p.key] ?? 0), total: totalMensualGeneral, fmt: '#,##0.00' },
+        { label: '% AVANCE MENSUAL', bg: 'FFD9EAF7', fg: 'FF000000', values: periodos.map(p => presupTotal > 0 ? ((distPresupuestoTotal[p.key] ?? 0) / presupTotal) * 100 : 0), total: null, fmt: '0.000"%"' },
         { label: 'DÍAS TRABAJADOS', bg: 'FFD9EAF7', fg: 'FF000000', values: periodos.map(p => options.diasPorMes?.[p.key] ?? null), total: null, fmt: '0' },
-        { label: 'VALORIZACIÓN ACUMULADA (S/.)', bg: 'FF70AD47', fg: 'FFFFFFFF', values: periodos.map(p => totales[p.key]?.acumuladoMonto ?? 0), total: totales[lastKey]?.acumuladoMonto ?? totalMensualGeneral, fmt: '#,##0.00' },
-        { label: '% AVANCE ACUMULADO (CURVA S)', bg: 'FFE2EFDA', fg: 'FF000000', values: periodos.map(p => totales[p.key]?.acumuladoPorcentaje ?? 0), total: 100, fmt: '0.00"%"' },
+        { label: 'VALORIZACIÓN ACUMULADA (S/.)', bg: 'FF70AD47', fg: 'FFFFFFFF', values: acumuladosIntegrados, total: presupTotal, fmt: '#,##0.00' },
+        { label: '% AVANCE ACUMULADO (CURVA S)', bg: 'FFE2EFDA', fg: 'FF000000', values: acumuladosIntegrados.map(value => presupTotal > 0 ? (value / presupTotal) * 100 : 0), total: 100, fmt: '0.00"%"' },
     ];
 
     footerRows.forEach(fr => {
@@ -1472,15 +1546,14 @@ export async function exportarPDF(
     const fmt = (v: number) => (v ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const fmtS = (v: number) => `S/. ${fmt(v)}`;
     const esc = (v: any) => String(v ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch] as string));
-    const lastKey = periodos.length ? periodos[periodos.length - 1].key : '';
-    const totalMensualGeneral = periodos.reduce((s, p) => s + (totales[p.key]?.monto ?? 0), 0);
+    const totalMensualBase = periodos.reduce((s, p) => s + (totales[p.key]?.monto ?? 0), 0);
     const mesPicoKey = periodos.reduce((best: any, p: any) =>
         ((totales[p.key]?.monto ?? 0) > (totales[best?.key]?.monto ?? 0) ? p : best), periodos[0]
     )?.key;
 
     const totalPresupuesto = options.totalPresupuesto
         ?? items.reduce((s, it) => s + (Number(it.parcial) || 0), 0)
-        ?? totalMensualGeneral;
+        ?? totalMensualBase;
     const fin = {
         pctGastosGenerales: options.finDefaults?.pctGastosGenerales ?? 11.56,
         pctUtilidad: options.finDefaults?.pctUtilidad ?? 5.00,
@@ -1492,11 +1565,8 @@ export async function exportarPDF(
     const cdPorPeriodo: Record<string, number> = {};
     periodos.forEach(p => cdPorPeriodo[p.key] = totales[p.key]?.monto ?? 0);
     const cdTotalReal = Object.values(cdPorPeriodo).reduce((a, b) => a + b, 0);
-    const propDist = (total: number) => {
-        const r: Record<string, number> = {};
-        periodos.forEach(p => r[p.key] = cdTotalReal > 0 ? total * ((cdPorPeriodo[p.key] ?? 0) / cdTotalReal) : 0);
-        return r;
-    };
+    const propDist = (total: number): Record<string, number> =>
+        propDistConAjuste(total, periodos, cdPorPeriodo, cdTotalReal);
     const montoGG = totalPresupuesto * (fin.pctGastosGenerales / 100);
     const montoUT = totalPresupuesto * (fin.pctUtilidad / 100);
     const subTotal = totalPresupuesto + montoGG + montoUT;
@@ -1505,12 +1575,32 @@ export async function exportarPDF(
     const montoIGVMob = fin.montoMobiliario * (fin.pctIGVMobiliario / 100);
     const subTotalII = fin.montoMobiliario + montoIGVMob;
     const totalI_II = presupI + subTotalII;
-    const additionalRows = (options.finDefaults?.conceptosAdicionales ?? []).map((concepto) => {
-        const total = concepto.tipo === 'porcentaje' ? totalI_II * (concepto.valor / 100) : concepto.valor;
+
+    // Cascada de 3 etapas (igual que TablaValorizada.tsx y el Excel de
+    // referencia, planes/costos/plan_valorizado_compatibilidad.md secc. 7 y 13):
+    // amarillo (suma a Presupuesto Sub Total) → rojo (% sobre ese Sub Total)
+    // → rojo_final (ej. Control Concurrente, % sobre el intermedio).
+    const conceptos = options.finDefaults?.conceptosAdicionales ?? [];
+    const calcConceptoRow = (concepto: (typeof conceptos)[number], base: number) => {
+        const total = concepto.tipo === 'porcentaje' ? base * (concepto.valor / 100) : concepto.valor;
         return [concepto.name, concepto.tipo === 'porcentaje' ? `${concepto.valor.toFixed(2)}%` : 'monto', total, propDist(total), 'normal'];
+    };
+    const amarillosPdf = conceptos.filter((c) => (c.categoria ?? 'rojo') === 'amarillo');
+    const rojosNormalesPdf = conceptos.filter((c) => (c.categoria ?? 'rojo') === 'rojo');
+    const rojosFinalesPdf = conceptos.filter((c) => (c.categoria ?? 'rojo') === 'rojo_final');
+
+    const amarilloRowsPdf = amarillosPdf.map((c) => calcConceptoRow(c, totalI_II));
+    const presupuestoSubTotalPdf = totalI_II + amarilloRowsPdf.reduce((sum, r) => sum + Number(r[2]), 0);
+    const rojoRowsPdf = rojosNormalesPdf.map((c) => calcConceptoRow(c, presupuestoSubTotalPdf));
+    const presupuestoTotalIntermedioPdf = presupuestoSubTotalPdf + rojoRowsPdf.reduce((sum, r) => sum + Number(r[2]), 0);
+    const rojoFinalRowsPdf = rojosFinalesPdf.map((c) => calcConceptoRow(c, presupuestoTotalIntermedioPdf));
+    const presupTotal = presupuestoTotalIntermedioPdf + rojoFinalRowsPdf.reduce((sum, r) => sum + Number(r[2]), 0);
+    const distPresupuestoTotal = propDist(presupTotal);
+    let acumuladoIntegrado = 0;
+    const acumuladosIntegrados = periodos.map((p) => {
+        acumuladoIntegrado += distPresupuestoTotal[p.key] ?? 0;
+        return acumuladoIntegrado;
     });
-    const additionalTotal = additionalRows.reduce((sum, row) => sum + Number(row[2]), 0);
-    const presupTotal = totalI_II + additionalTotal;
 
     const header = (titulo: string) => `
         <div class="report-header">
@@ -1555,19 +1645,26 @@ export async function exportarPDF(
             ['SUB TOTAL COMPONENTE II', '', subTotalII, propDist(subTotalII), 'sub'],
         ] : []),
         [`TOTAL PRESUPUESTO DE OBRA COMPONENTE ${fin.montoMobiliario > 0 ? 'I+II' : 'I'}`, '', totalI_II, propDist(totalI_II), 'blue'],
-        ...additionalRows,
-        ['PRESUPUESTO TOTAL', '', presupTotal, propDist(presupI + additionalTotal), 'final'],
+        // Amarillos y rojos van ANTES de "Presupuesto Total" — ese total ya
+        // los suma, así que deben verse justificados arriba (ver hallazgo
+        // del usuario sobre el Excel de referencia).
+        ...amarilloRowsPdf,
+        ...(amarillosPdf.length > 0 ? [['PRESUPUESTO SUB TOTAL', '', presupuestoSubTotalPdf, propDist(presupuestoSubTotalPdf), 'sub']] : []),
+        ...rojoRowsPdf,
+        ...(rojosFinalesPdf.length > 0 ? [['PRESUPUESTO TOTAL', '', presupuestoTotalIntermedioPdf, propDist(presupuestoTotalIntermedioPdf), 'blue']] : []),
+        ...rojoFinalRowsPdf,
+        ['PRESUPUESTO TOTAL', '', presupTotal, propDist(presupTotal), 'final'],
     ].map(([label, pct, total, dist, kind]: any) => {
         const cells = periodos.map(p => `<td class="num ${p.key === mesPicoKey ? 'pico-cell' : ''}">${dist[p.key] ? fmt(dist[p.key]) : ''}</td>`).join('');
         return `<tr class="fin-${kind}"><td></td><td>${esc(pct)}</td><td colspan="4" class="desc bold">${esc(label)}</td><td class="num bold">${total ? fmtS(total) : ''}</td><td></td>${cells}<td class="num total">${total ? fmtS(total) : ''}</td></tr>`;
     }).join('');
 
     const footer = [
-        ['VALORIZACIÓN MENSUAL (S/.)', 'footer-blue', periodos.map(p => totales[p.key]?.monto ?? 0), totalMensualGeneral, '#,##0.00'],
-        ['% AVANCE MENSUAL', 'footer-light', periodos.map(p => totales[p.key]?.porcentaje ?? 0), null, 'pct'],
+        ['VALORIZACIÓN MENSUAL (S/.)', 'footer-blue', periodos.map(p => distPresupuestoTotal[p.key] ?? 0), presupTotal, '#,##0.00'],
+        ['% AVANCE MENSUAL', 'footer-light', periodos.map(p => presupTotal > 0 ? ((distPresupuestoTotal[p.key] ?? 0) / presupTotal) * 100 : 0), null, 'pct'],
         ['DÍAS TRABAJADOS', 'footer-light', periodos.map(p => options.diasPorMes?.[p.key] ?? ''), null, 'int'],
-        ['VALORIZACIÓN ACUMULADA (S/.)', 'footer-green', periodos.map(p => totales[p.key]?.acumuladoMonto ?? 0), totales[lastKey]?.acumuladoMonto ?? totalMensualGeneral, '#,##0.00'],
-        ['% AVANCE ACUMULADO (CURVA S)', 'footer-green2', periodos.map(p => totales[p.key]?.acumuladoPorcentaje ?? 0), 100, 'pct'],
+        ['VALORIZACIÓN ACUMULADA (S/.)', 'footer-green', acumuladosIntegrados, presupTotal, '#,##0.00'],
+        ['% AVANCE ACUMULADO (CURVA S)', 'footer-green2', acumuladosIntegrados.map(value => presupTotal > 0 ? (value / presupTotal) * 100 : 0), 100, 'pct'],
     ].map(([label, cls, vals, total, type]: any) => `<tr class="${cls}"><td colspan="8" class="right bold">${label}</td>${vals.map((v: any, i: number) => `<td class="num ${periodos[i]?.key === mesPicoKey ? 'pico-foot' : ''}">${type === 'pct' ? (v ? Number(v).toFixed(2) + '%' : '') : type === 'int' ? (v || '') : (v ? fmt(v) : '')}</td>`).join('')}<td class="num bold">${total ? (type === 'pct' ? Number(total).toFixed(2) + '%' : fmtS(total)) : ''}</td></tr>`).join('');
 
     const cronogramaTable = `<table class="main-table"><thead><tr><th>N°</th><th>ÍTEM</th><th class="desc">DESCRIPCIÓN</th><th>UND</th><th>METRADO</th><th>P.U. (S/.)</th><th class="parcial-h">PARCIAL (S/.)</th><th>ACC.</th>${periodHeaders}<th class="total-h">TOTAL<br><small>S/. acumulado</small></th></tr></thead><tbody>${itemRows}<tr class="section"><td colspan="${9 + periodos.length}">RESUMEN FINANCIERO DEL PRESUPUESTO</td></tr>${financialRows}<tr class="section"><td colspan="${9 + periodos.length}">VALORIZACIÓN Y AVANCE DE OBRA</td></tr>${footer}</tbody></table>`;

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import axios from 'axios';
+import Decimal from 'decimal.js';
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import type {
     ItemValorizado,
@@ -554,10 +555,6 @@ const TablaValorizada: React.FC<Props> = ({
             </div>
         );
 
-    const lastKey =
-        periodos.length > 0 ? periodos[periodos.length - 1].key : '';
-    const totalAcumuladoFinal = totales[lastKey]?.acumuladoMonto ?? 0;
-
     const costoDirecto =
         totalPresupuesto > 0 ? totalPresupuesto : totalGeneralPeriodos;
 
@@ -592,23 +589,89 @@ const TablaValorizada: React.FC<Props> = ({
 
     const totalI_II = presupI + subTotalII + extraComponentsTotal;
 
-    const additionalCalcs = additionalConcepts.map((concepto) => ({
+    // Cascada de 3 etapas (igual que el Excel de referencia,
+    // planes/costos/plan_valorizado_compatibilidad.md secciones 7 y 13):
+    // amarillos → Presupuesto Sub Total → rojos → Presupuesto Total
+    // (intermedio) → rojos_final (ej. Control Concurrente) → Presupuesto
+    // Total final. Cada tipo ('porcentaje' | 'monto') es independiente de
+    // la categoría: un amarillo puede ser % igual que un rojo puede ser
+    // monto fijo — solo cambia SOBRE QUÉ BASE se calcula el %.
+    const calcConcepto = (concepto: ConceptoAdicional, base: number) => ({
         ...concepto,
-        monto: concepto.tipo === 'porcentaje'
-            ? totalI_II * ((Number(concepto.valor) || 0) / 100)
-            : Number(concepto.valor) || 0,
-    }));
-    const additionalTotal = additionalCalcs.reduce((sum, concepto) => sum + concepto.monto, 0);
-    const presupTotal = totalI_II + additionalTotal;
+        monto:
+            concepto.tipo === 'porcentaje'
+                ? base * ((Number(concepto.valor) || 0) / 100)
+                : Number(concepto.valor) || 0,
+    });
 
+    const amarillos = additionalConcepts.filter(
+        (c) => (c.categoria ?? 'rojo') === 'amarillo',
+    );
+    const rojosNormales = additionalConcepts.filter(
+        (c) => (c.categoria ?? 'rojo') === 'rojo',
+    );
+    const rojosFinales = additionalConcepts.filter(
+        (c) => (c.categoria ?? 'rojo') === 'rojo_final',
+    );
+
+    // Etapa 1 — amarillos sobre el Presupuestado de Obra (Componente I+II+extra)
+    const amarilloCalcs = amarillos.map((c) => calcConcepto(c, totalI_II));
+    const amarilloTotal = amarilloCalcs.reduce((sum, c) => sum + c.monto, 0);
+    const presupuestoSubTotal = totalI_II + amarilloTotal;
+
+    // Etapa 2 — rojos normales sobre el Presupuesto Sub Total (YA con amarillos)
+    const rojoCalcs = rojosNormales.map((c) => calcConcepto(c, presupuestoSubTotal));
+    const rojoTotal = rojoCalcs.reduce((sum, c) => sum + c.monto, 0);
+    const presupuestoTotalIntermedio = presupuestoSubTotal + rojoTotal;
+
+    // Etapa 3 — rojo_final (ej. Control Concurrente) sobre el intermedio
+    const rojoFinalCalcs = rojosFinales.map((c) => calcConcepto(c, presupuestoTotalIntermedio));
+    const rojoFinalTotal = rojoFinalCalcs.reduce((sum, c) => sum + c.monto, 0);
+
+    const additionalCalcs = [...amarilloCalcs, ...rojoCalcs, ...rojoFinalCalcs];
+    const additionalTotal = amarilloTotal + rojoTotal + rojoFinalTotal;
+    const presupTotal = presupuestoTotalIntermedio + rojoFinalTotal;
+
+    // Reparto proporcional con ajuste de residuo (Decimal.js): sin esto, cada
+    // celda se redondeaba a 2 decimales por separado y la suma de los meses
+    // casi nunca cuadraba exacto con el total de su propia fila (el usuario
+    // reportó diferencias de centavos en producción). El último período con
+    // peso > 0 absorbe el residuo — mismo patrón que ya usa el backend en
+    // CronoValorizadoController::distribuirPorDiasCalendario().
     const propDist = (total: number): Record<string, number> => {
         const r: Record<string, number> = {};
+        if (cdTotalReal <= 0) {
+            periodos.forEach((p) => {
+                r[p.key] = 0;
+            });
+            return r;
+        }
+
+        const totalDec = new Decimal(total);
+        let sumaAsignada = new Decimal(0);
+        let ultimaKey: string | null = null;
+
         periodos.forEach((p) => {
-            r[p.key] =
-                cdTotalReal > 0
-                    ? total * ((cdPorPeriodo[p.key] ?? 0) / cdTotalReal)
-                    : 0;
+            const peso = cdPorPeriodo[p.key] ?? 0;
+            const monto = totalDec
+                .times(peso)
+                .dividedBy(cdTotalReal)
+                .toDecimalPlaces(2)
+                .toNumber();
+            r[p.key] = monto;
+            sumaAsignada = sumaAsignada.plus(monto);
+            if (peso !== 0) {
+                ultimaKey = p.key;
+            }
         });
+
+        if (ultimaKey !== null) {
+            const residuo = totalDec.minus(sumaAsignada);
+            if (!residuo.isZero()) {
+                r[ultimaKey] = new Decimal(r[ultimaKey]).plus(residuo).toDecimalPlaces(2).toNumber();
+            }
+        }
+
         return r;
     };
 
@@ -617,15 +680,18 @@ const TablaValorizada: React.FC<Props> = ({
     const distSub = propDist(subTotal);
     const distIGV = propDist(montoIGV);
     const distPresI = propDist(presupI);
-    const distAdditional = propDist(additionalTotal);
+    const distPresupuestoTotal = propDist(presupTotal);
 
-    // Avance acumulado
-    let acumCD = 0;
-    const avAcumReal: Record<string, number> = {};
+    let acumuladoValorizado = 0;
+    const valorizadoAcumulado: Record<string, number> = {};
+    const avanceMensualIntegrado: Record<string, number> = {};
+    const avanceAcumuladoIntegrado: Record<string, number> = {};
     periodos.forEach((p) => {
-        acumCD += cdPorPeriodo[p.key] ?? 0;
-        avAcumReal[p.key] =
-            costoDirecto > 0 ? (acumCD / costoDirecto) * 100 : 0;
+        const mensual = distPresupuestoTotal[p.key] ?? 0;
+        acumuladoValorizado += mensual;
+        valorizadoAcumulado[p.key] = acumuladoValorizado;
+        avanceMensualIntegrado[p.key] = presupTotal > 0 ? (mensual / presupTotal) * 100 : 0;
+        avanceAcumuladoIntegrado[p.key] = presupTotal > 0 ? (acumuladoValorizado / presupTotal) * 100 : 0;
     });
 
     const finTd = (v: number, key: string, cls: string) => (
@@ -636,6 +702,94 @@ const TablaValorizada: React.FC<Props> = ({
             {v > 0 ? fmtN(v) : '—'}
         </td>
     );
+
+    const updateConcepto = (id: string, patch: Partial<ConceptoAdicional>) =>
+        setAdditionalConcepts((current) =>
+            current.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+        );
+
+    // Fila editable de un "concepto de valorización" (amarillo o rojo): nombre,
+    // tipo (% o monto), categoría (a qué etapa de la cascada pertenece) y su
+    // valor. El monto ya viene calculado según su categoría (ver cálculo de
+    // amarilloCalcs/rojoCalcs/rojoFinalCalcs arriba).
+    const renderConceptoRow = (concepto: ReturnType<typeof calcConcepto>) => {
+        const distribucion = propDist(concepto.monto);
+        return (
+            <tr key={concepto.id} className="bg-slate-50 text-slate-800">
+                <td className="border border-slate-300 p-1 text-center">
+                    <button
+                        type="button"
+                        onClick={() =>
+                            setAdditionalConcepts((current) =>
+                                current.filter((item) => item.id !== concepto.id),
+                            )
+                        }
+                        title="Eliminar concepto"
+                        className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                    >
+                        <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                </td>
+                <td className="sticky left-0 z-10 border border-slate-300 bg-slate-50 p-1">
+                    <input
+                        value={concepto.name}
+                        onChange={(event) =>
+                            updateConcepto(concepto.id, { name: event.target.value })
+                        }
+                        className="w-full bg-transparent p-1 text-[11px] font-semibold uppercase outline-none"
+                    />
+                </td>
+                <td className="border border-slate-300 p-1">
+                    <select
+                        value={concepto.tipo}
+                        onChange={(event) =>
+                            updateConcepto(concepto.id, {
+                                tipo: event.target.value as ConceptoAdicional['tipo'],
+                            })
+                        }
+                        className="w-full bg-transparent text-[9px] outline-none"
+                        title="Tipo de valor"
+                    >
+                        <option value="porcentaje">%</option>
+                        <option value="monto">S/.</option>
+                    </select>
+                </td>
+                <td className="border border-slate-300 p-1">
+                    <select
+                        value={concepto.categoria ?? 'rojo'}
+                        onChange={(event) =>
+                            updateConcepto(concepto.id, {
+                                categoria: event.target.value as ConceptoAdicional['categoria'],
+                            })
+                        }
+                        className="w-full bg-transparent text-[8px] outline-none"
+                        title="Etapa de cálculo: amarillo suma al Sub Total; rojo aplica % sobre el Sub Total; rojo final aplica sobre el resultado de los rojos"
+                    >
+                        <option value="amarillo">Amarillo</option>
+                        <option value="rojo">Rojo</option>
+                        <option value="rojo_final">Rojo final</option>
+                    </select>
+                </td>
+                <td className="border border-slate-300 p-2" />
+                {concepto.tipo === 'porcentaje' ? (
+                    <PctCell
+                        value={Number(concepto.valor) || 0}
+                        onChange={(valor) => updateConcepto(concepto.id, { valor })}
+                    />
+                ) : (
+                    <MontoCell
+                        value={Number(concepto.valor) || 0}
+                        onChange={(valor) => updateConcepto(concepto.id, { valor })}
+                    />
+                )}
+                <td className="border border-slate-300 p-2" />
+                {periodos.map((p) => finTd(distribucion[p.key] ?? 0, p.key, 'bg-slate-50'))}
+                <td className="sticky right-0 z-10 border border-slate-300 bg-slate-50 p-2.5 text-right font-semibold tabular-nums">
+                    {fmtS(concepto.monto)}
+                </td>
+            </tr>
+        );
+    };
 
     return (
         <div
@@ -1427,22 +1581,89 @@ const TablaValorizada: React.FC<Props> = ({
                             />
                         </tr>
 
-                        {additionalCalcs.map((concepto) => {
-                            const distribucion = propDist(concepto.monto);
-                            return <tr key={concepto.id} className="bg-white text-slate-800">
-                                <td className="border border-slate-300 p-1 text-center"><button type="button" onClick={() => setAdditionalConcepts((current) => current.filter((item) => item.id !== concepto.id))} title="Eliminar concepto" className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button></td>
-                                <td className="sticky left-0 z-10 border border-slate-300 bg-white p-1"><input value={concepto.name} onChange={(event) => setAdditionalConcepts((current) => current.map((item) => item.id === concepto.id ? { ...item, name: event.target.value } : item))} className="w-full bg-transparent p-1 text-[11px] font-semibold uppercase outline-none" /></td>
-                                <td className="border border-slate-300 p-1"><select value={concepto.tipo} onChange={(event) => setAdditionalConcepts((current) => current.map((item) => item.id === concepto.id ? { ...item, tipo: event.target.value as ConceptoAdicional['tipo'] } : item))} className="w-full bg-transparent text-[9px] outline-none"><option value="porcentaje">%</option><option value="monto">S/.</option></select></td>
-                                <td className="border border-slate-300 p-2" /><td className="border border-slate-300 p-2" />
-                                <MontoCell value={concepto.valor} onChange={(valor) => setAdditionalConcepts((current) => current.map((item) => item.id === concepto.id ? { ...item, valor } : item))} />
-                                <td className="border border-slate-300 p-2" />
-                                {periodos.map((p) => finTd(distribucion[p.key] ?? 0, p.key, 'bg-white'))}
-                                <td className="sticky right-0 z-10 border border-slate-300 bg-white p-2.5 text-right font-semibold tabular-nums">{fmtS(concepto.monto)}</td>
-                            </tr>;
-                        })}
-                        <tr><td colSpan={nCols} className="border border-dashed border-slate-300 bg-white p-2"><button type="button" onClick={() => setAdditionalConcepts((current) => [...current, { id: crypto.randomUUID(), name: 'NUEVO CONCEPTO', tipo: 'porcentaje', valor: 0 }])} className="flex items-center gap-1.5 text-[10px] font-bold text-sky-600 hover:text-sky-700"><Plus className="h-3.5 w-3.5" />Agregar concepto adicional</button></td></tr>
+                        {/* ── CONCEPTOS AMARILLOS: se suman al Presupuestado de Obra ──
+                            (plan_valorizado_compatibilidad.md sección 6-7) */}
+                        {amarilloCalcs.map(renderConceptoRow)}
 
-                        {/* ── PRESUPUESTO TOTAL ── */}
+                        {amarillos.length > 0 && (
+                            <tr className="bg-slate-100 font-bold text-slate-800">
+                                <td
+                                    colSpan={6}
+                                    className="border border-slate-300 p-2.5 text-right text-[10px] tracking-wider uppercase"
+                                >
+                                    PRESUPUESTO SUB TOTAL
+                                </td>
+                                <td className="border border-slate-300 bg-slate-200" />
+                                {periodos.map((p) =>
+                                    finTd(
+                                        propDist(presupuestoSubTotal)[p.key] ?? 0,
+                                        p.key,
+                                        'bg-slate-50',
+                                    ),
+                                )}
+                                <td className="sticky right-0 z-10 border border-slate-300 bg-slate-100 p-2.5 text-right font-bold tabular-nums">
+                                    {fmtS(presupuestoSubTotal)}
+                                </td>
+                            </tr>
+                        )}
+
+                        {/* ── CONCEPTOS ROJOS: % (o monto) sobre el Presupuesto Sub Total ── */}
+                        {rojoCalcs.map(renderConceptoRow)}
+
+                        {/* ── PRESUPUESTO TOTAL (intermedio, solo si hay un "rojo final" después) ── */}
+                        {rojosFinales.length > 0 && (
+                            <tr className="bg-slate-800 font-bold text-white">
+                                <td
+                                    colSpan={6}
+                                    className="border border-slate-700 p-2.5 text-right text-[10px] tracking-widest uppercase"
+                                >
+                                    PRESUPUESTO TOTAL
+                                </td>
+                                <td className="border border-slate-700 bg-slate-900" />
+                                {periodos.map((p) =>
+                                    finTd(
+                                        propDist(presupuestoTotalIntermedio)[p.key] ?? 0,
+                                        p.key,
+                                        'bg-slate-700 text-slate-200',
+                                    ),
+                                )}
+                                <td className="sticky right-0 z-10 border border-slate-700 bg-slate-900 p-2.5 text-right font-bold text-white tabular-nums">
+                                    {fmtS(presupuestoTotalIntermedio)}
+                                </td>
+                            </tr>
+                        )}
+
+                        {/* ── CONCEPTOS ROJO_FINAL (ej. Control Concurrente): sobre el intermedio ── */}
+                        {rojoFinalCalcs.map(renderConceptoRow)}
+
+                        <tr>
+                            <td
+                                colSpan={nCols}
+                                className="border border-dashed border-slate-300 bg-white p-2"
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setAdditionalConcepts((current) => [
+                                            ...current,
+                                            {
+                                                id: crypto.randomUUID(),
+                                                name: 'NUEVO CONCEPTO',
+                                                tipo: 'porcentaje',
+                                                valor: 0,
+                                                categoria: 'rojo',
+                                            },
+                                        ])
+                                    }
+                                    className="flex items-center gap-1.5 text-[10px] font-bold text-amber-600 transition-colors hover:text-amber-700"
+                                >
+                                    <Plus className="h-3.5 w-3.5" />
+                                    Agregar concepto de valorización
+                                </button>
+                            </td>
+                        </tr>
+
+                        {/* ── PRESUPUESTO TOTAL (final) ── */}
                         <tr className="bg-slate-900 text-[12px] font-bold text-white">
                             <td
                                 colSpan={6}
@@ -1452,9 +1673,7 @@ const TablaValorizada: React.FC<Props> = ({
                             </td>
                             <td className="border border-slate-700" />
                             {periodos.map((p) => {
-                                const v =
-                                    (distPresI[p.key] ?? 0) +
-                                    (distAdditional[p.key] ?? 0);
+                                const v = distPresupuestoTotal[p.key] ?? 0;
                                 return (
                                     <td
                                         key={p.key}
@@ -1515,14 +1734,14 @@ const TablaValorizada: React.FC<Props> = ({
                                     key={p.key}
                                     className={`border border-[#1a3070] p-2.5 text-center tabular-nums ${p.key === mesPicoKey ? 'bg-amber-700' : ''}`}
                                 >
-                                    {(totales[p.key]?.monto ?? 0) > 0
-                                        ? fmtN(totales[p.key].monto)
+                                    {(distPresupuestoTotal[p.key] ?? 0) > 0
+                                        ? fmtN(distPresupuestoTotal[p.key])
                                         : '—'}
                                 </td>
                             ))}
                             <td className="sticky right-0 border border-[#1a3070] bg-emerald-900 p-2.5 text-center font-bold text-emerald-200 tabular-nums">
-                                {totalGeneralPeriodos > 0
-                                    ? fmtN(totalGeneralPeriodos)
+                                {presupTotal > 0
+                                    ? fmtN(presupTotal)
                                     : '—'}
                             </td>
                         </tr>
@@ -1541,8 +1760,8 @@ const TablaValorizada: React.FC<Props> = ({
                                     key={p.key}
                                     className="border border-[#2a3044] p-2 text-center tabular-nums"
                                 >
-                                    {(totales[p.key]?.porcentaje ?? 0) > 0
-                                        ? `${totales[p.key].porcentaje.toFixed(3)}%`
+                                    {(avanceMensualIntegrado[p.key] ?? 0) > 0
+                                        ? `${avanceMensualIntegrado[p.key].toFixed(3)}%`
                                         : '—'}
                                 </td>
                             ))}
@@ -1592,14 +1811,14 @@ const TablaValorizada: React.FC<Props> = ({
                                     key={p.key}
                                     className="border border-[#0e4025] p-2.5 text-center text-emerald-300 tabular-nums"
                                 >
-                                    {(totales[p.key]?.acumuladoMonto ?? 0) > 0
-                                        ? fmtN(totales[p.key].acumuladoMonto)
+                                    {(valorizadoAcumulado[p.key] ?? 0) > 0
+                                        ? fmtN(valorizadoAcumulado[p.key])
                                         : '—'}
                                 </td>
                             ))}
                             <td className="sticky right-0 border border-[#0e4025] bg-[#062010] p-2.5 text-center text-emerald-200 tabular-nums">
-                                {totalAcumuladoFinal > 0
-                                    ? fmtN(totalAcumuladoFinal)
+                                {presupTotal > 0
+                                    ? fmtN(presupTotal)
                                     : '—'}
                             </td>
                         </tr>
@@ -1614,8 +1833,7 @@ const TablaValorizada: React.FC<Props> = ({
                             </td>
                             <td className="border border-[#0e2a18]" />
                             {periodos.map((p) => {
-                                const pct =
-                                    totales[p.key]?.acumuladoPorcentaje ?? 0;
+                                const pct = avanceAcumuladoIntegrado[p.key] ?? 0;
                                 return (
                                     <td
                                         key={p.key}
@@ -1632,15 +1850,9 @@ const TablaValorizada: React.FC<Props> = ({
                                 );
                             })}
                             <td className="sticky right-0 border border-[#0e2a18] bg-[#062010] p-2 text-center">
-                                {totalAcumuladoFinal > 0 &&
-                                totalPresupuesto > 0 ? (
+                                {presupTotal > 0 ? (
                                     <span className="font-bold text-emerald-400">
-                                        {(
-                                            (totalAcumuladoFinal /
-                                                totalPresupuesto) *
-                                            100
-                                        ).toFixed(2)}
-                                        %
+                                        100.00%
                                     </span>
                                 ) : (
                                     '—'

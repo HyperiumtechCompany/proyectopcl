@@ -9,6 +9,8 @@ export interface SitePlanImportResult {
     /** Tamaño estimado en metros reales (heurística por extents, igual que el editor de interiores — el usuario puede recalibrar). */
     widthUnits: number;
     heightUnits: number;
+    /** true si no se pudo leer el tamaño real del archivo y se usó un tamaño provisional — el llamador debe insistir en la calibración. */
+    sizeIsGuess: boolean;
 }
 
 interface ImportState {
@@ -18,6 +20,69 @@ interface ImportState {
 
 function wait(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Reintenta leer las extents del documento — algunos DWG (confirmado por el
+ * usuario con un archivo real, "PLANTA GENERAL.dwg") tardan más que un DXF
+ * en tener `header.extMin/extMax`/`getExtents()` disponibles tras
+ * `openFile()`, o simplemente NUNCA los exponen (el editor de interiores ya
+ * convive con esto: trata "sin extents" como caso normal, no error — ver
+ * `Toolbar.tsx`, rama `else setDetectedScale(null)`). `null` tras agotar los
+ * intentos NO es un fallo fatal aquí tampoco — el llamador cae a un tamaño
+ * provisional y confía en la calibración manual.
+ */
+async function waitForExtents(
+    engine: ReturnType<typeof useMlightcadEngine>,
+    attempts = 6,
+    intervalMs = 300,
+): Promise<ReturnType<typeof engine.getDocumentExtents>> {
+    for (let attempt = 0; attempt < attempts; attempt++) {
+        const extents = engine.getDocumentExtents();
+        if (extents) return extents;
+        await wait(intervalMs);
+    }
+    return null;
+}
+
+/**
+ * Muestrea el canvas a baja resolución (rápido) y avisa si tiene algún
+ * píxel con brillo perceptible — el fondo del visor es negro puro, así que
+ * cualquier trazo cuenta como "ya hay algo dibujado".
+ */
+function canvasHasVisibleContent(source: HTMLCanvasElement): boolean {
+    const sampleSize = 48;
+    const sample = document.createElement('canvas');
+    sample.width = sampleSize;
+    sample.height = sampleSize;
+    const ctx = sample.getContext('2d');
+    if (!ctx) return true; // no se puede verificar — no bloquear la importación por esto
+    ctx.drawImage(source, 0, 0, sampleSize, sampleSize);
+    const { data } = ctx.getImageData(0, 0, sampleSize, sampleSize);
+    for (let i = 0; i < data.length; i += 4) {
+        if (data[i] > 20 || data[i + 1] > 20 || data[i + 2] > 20) return true;
+    }
+    return false;
+}
+
+/**
+ * El parseo/render de un DWG grande puede tardar varios segundos en un
+ * `message` handler del worker (confirmado real: 5.1s con un plano de
+ * colegio de ~2700 m² de detalle) — un tiempo de espera fijo capturaba el
+ * canvas todavía en negro. Se sondea el contenido real en vez de adivinar
+ * cuánto esperar; si se agota el presupuesto igual se captura lo que haya
+ * (mejor una imagen posiblemente incompleta que colgar la importación).
+ */
+async function waitForCanvasContent(
+    canvas: HTMLCanvasElement,
+    maxAttempts = 15,
+    intervalMs = 400,
+): Promise<boolean> {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (canvasHasVisibleContent(canvas)) return true;
+        await wait(intervalMs);
+    }
+    return canvasHasVisibleContent(canvas);
 }
 
 /**
@@ -50,9 +115,12 @@ export function useSitePlanImport(projectId: number, generalModuleId: number) {
             try {
                 await engine.initViewer(containerRef.current);
                 // El motor necesita un instante tras initViewer antes de que
-                // sus comandos respondan de forma confiable — mismo margen
-                // que usa MlightcadCanvas2D.tsx tras su propio initViewer.
-                await wait(100);
+                // sus comandos respondan de forma confiable — el editor de
+                // interiores nunca corre esto pegado a `openFile` (su
+                // `initViewer` corre al montar el canvas, minutos antes de
+                // que el usuario suba un archivo), así que aquí se le da
+                // más margen a propósito.
+                await wait(300);
 
                 const opened = await engine.openFile(file);
                 if (!opened) {
@@ -61,20 +129,33 @@ export function useSitePlanImport(projectId: number, generalModuleId: number) {
                     );
                 }
 
-                engine.setViewOrigin();
-                engine.fitToView();
-                await wait(150);
-
-                const extents = engine.getDocumentExtents();
-                if (!extents) {
-                    throw new Error('No se pudo leer el tamaño del plano.');
-                }
-
                 const canvas =
                     containerRef.current.querySelector('canvas');
                 if (!canvas) {
                     throw new Error(
                         'No se pudo capturar la imagen del plano.',
+                    );
+                }
+
+                engine.setViewOrigin();
+                engine.fitToView();
+                // Mismo margen (500ms) que usa el editor de interiores entre
+                // abrir el archivo y leer sus extents (Toolbar.tsx).
+                await wait(500);
+
+                const extents = await waitForExtents(engine);
+                // Re-encuadra por si la primera llamada (antes de que las
+                // extents estuvieran listas) no tuvo nada que enmarcar.
+                engine.fitToView();
+
+                // El parseo/render puede seguir en curso más allá de todo lo
+                // anterior (confirmado real: 5+ segundos en un DWG grande) —
+                // se espera contenido real en el canvas en vez de un tiempo
+                // fijo, hasta ~6s adicionales de margen.
+                const hasContent = await waitForCanvasContent(canvas);
+                if (!hasContent) {
+                    throw new Error(
+                        'El plano tardó demasiado en renderizarse (puede ser muy pesado). Intenta de nuevo o exporta una versión más liviana.',
                     );
                 }
 
@@ -87,20 +168,30 @@ export function useSitePlanImport(projectId: number, generalModuleId: number) {
                     );
                 }
 
-                // Misma heurística de respaldo que el editor de interiores
-                // usa cuando el DXF no declara $INSUNITS: infiere mm/cm/m
-                // por el tamaño de los extents. El usuario puede corregir
-                // con la calibración manual si el resultado no coincide.
-                const scale = detectScaleFromExtents({
-                    min_x: extents.minX,
-                    min_y: extents.minY,
-                    max_x: extents.maxX,
-                    max_y: extents.maxY,
-                });
-                const widthUnits =
-                    (extents.maxX - extents.minX) * scale.factor;
-                const heightUnits =
-                    (extents.maxY - extents.minY) * scale.factor;
+                let widthUnits: number;
+                let heightUnits: number;
+                const sizeIsGuess = extents === null;
+                if (extents) {
+                    // Misma heurística de respaldo que el editor de
+                    // interiores usa cuando el DXF no declara $INSUNITS:
+                    // infiere mm/cm/m por el tamaño de los extents.
+                    const scale = detectScaleFromExtents({
+                        min_x: extents.minX,
+                        min_y: extents.minY,
+                        max_x: extents.maxX,
+                        max_y: extents.maxY,
+                    });
+                    widthUnits = (extents.maxX - extents.minX) * scale.factor;
+                    heightUnits =
+                        (extents.maxY - extents.minY) * scale.factor;
+                } else {
+                    // Sin extents disponibles (algunos DWG no las exponen):
+                    // tamaño provisional que conserva la proporción real del
+                    // canvas capturado — la calibración manual (obligatoria
+                    // justo después de importar) corrige el tamaño real.
+                    widthUnits = canvas.width / 20;
+                    heightUnits = canvas.height / 20;
+                }
 
                 const baseName = file.name.replace(/\.(dxf|dwg)$/i, '');
                 const pngFile = new File([blob], `${baseName}.png`, {
@@ -118,6 +209,7 @@ export function useSitePlanImport(projectId: number, generalModuleId: number) {
                     originalName: file.name,
                     widthUnits: Math.max(1, widthUnits),
                     heightUnits: Math.max(1, heightUnits),
+                    sizeIsGuess,
                 };
             } catch (error) {
                 const message =

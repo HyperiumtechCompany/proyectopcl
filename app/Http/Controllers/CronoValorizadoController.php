@@ -61,6 +61,13 @@ class CronoValorizadoController extends Controller
                 ? Storage::url($costoProject->plantilla_logo_der)
                 : null,
         ];
+        $calendarConfigJson = DB::table('cronogramas')
+            ->where('project_id', (string) $projectId)
+            ->value('config_json');
+        $calendarConfig = $calendarConfigJson ? json_decode($calendarConfigJson, true) : [];
+        $calendarSettings = is_array($calendarConfig['calendar_settings'] ?? null)
+            ? $calendarConfig['calendar_settings']
+            : null;
 
         // ── 1. Leer presupuesto_general (TODAS las partidas con metrado > 0) ──
         $presupuesto = DB::connection('costos_tenant')
@@ -114,17 +121,25 @@ class CronoValorizadoController extends Controller
             fn ($c) => ! empty($c->fecha_inicio) && ! empty($c->fecha_fin)
         );
 
-        if ($fechasProgramadas->isNotEmpty()) {
-            $inicio = Carbon::parse($fechasProgramadas->min('fecha_inicio'))->startOfMonth();
-            $fin = Carbon::parse($fechasProgramadas->max('fecha_fin'))->endOfMonth();
+        if (! empty($calendarSettings['projectStart']) && ! empty($calendarSettings['projectEnd'])) {
+            $rangoInicio = Carbon::parse($calendarSettings['projectStart'])->startOfDay();
+            $rangoFin = Carbon::parse($calendarSettings['projectEnd'])->startOfDay();
+        } elseif ($fechasProgramadas->isNotEmpty()) {
+            $rangoInicio = Carbon::parse($fechasProgramadas->min('fecha_inicio'))->startOfDay();
+            $rangoFin = Carbon::parse($fechasProgramadas->max('fecha_fin'))->startOfDay();
         } else {
-            $inicio = $costoProject->fecha_inicio
-                ? Carbon::parse($costoProject->fecha_inicio)->startOfMonth()
-                : now()->startOfMonth();
-            $fin = $costoProject->fecha_fin
-                ? Carbon::parse($costoProject->fecha_fin)->endOfMonth()
-                : $inicio->copy()->addMonths(5);
+            $rangoInicio = $costoProject->fecha_inicio
+                ? Carbon::parse($costoProject->fecha_inicio)->startOfDay()
+                : now()->startOfDay();
+            $rangoFin = $costoProject->fecha_fin
+                ? Carbon::parse($costoProject->fecha_fin)->startOfDay()
+                : $rangoInicio->copy()->addMonths(5);
         }
+        $inicio = $rangoInicio->copy()->startOfMonth();
+        $fin = $rangoFin->copy()->endOfMonth();
+        $projectData['fecha_inicio'] = $rangoInicio->toDateString();
+        $projectData['fecha_fin'] = $rangoFin->toDateString();
+        $projectData['duracion_dias'] = $rangoInicio->diffInDays($rangoFin) + 1;
 
         $periodos = $modoCalculo === self::MODO_30_DIAS
             ? $this->generarPeriodos30Dias($inicio->toDateString(), $fin->toDateString())
@@ -135,8 +150,8 @@ class CronoValorizadoController extends Controller
 
         // ── 3. Días por mes ──
         $diasPorMesProyecto = $this->calcularDiasPorMes(
-            $inicio->toDateString(),
-            $fin->toDateString(),
+            $rangoInicio->toDateString(),
+            $rangoFin->toDateString(),
             $clavesPeriodos
         );
 
@@ -155,7 +170,16 @@ class CronoValorizadoController extends Controller
 
         foreach ($presupuesto as $pItem) {
             $partida = trim($pItem->partida ?? '');
-            $parcial = (float) ($pItem->parcial ?? 0);
+            // presupuesto_general.parcial es DECIMAL(15,4) — hereda la precisión de
+            // metrado × precio_unitario, pero el valorizado reparte y muestra en
+            // soles-céntimos (2 decimales). Si se reparte el valor crudo de 4
+            // decimales, el residuo de redondeo (ej. 10644.804 → nunca alcanzable
+            // exacto en céntimos) se pierde en silencio y dispara "desvío" en
+            // decenas de partidas a la vez. Redondear aquí, UNA vez, deja
+            // $parcial como la cifra de dinero real — todo lo que reparte sobre
+            // ella después (distribuirPorDiasCalendario/distribucionUniforme)
+            // sí puede cuadrar exacto al céntimo.
+            $parcial = round((float) ($pItem->parcial ?? 0), 2);
             $metrado = (float) ($pItem->metrado ?? 0);
             $precio = (float) ($pItem->precio_unitario ?? 0);
 
@@ -387,16 +411,49 @@ class CronoValorizadoController extends Controller
     // DISTRIBUCIÓN DE COSTOS
     // =========================================================================
 
+    /**
+     * Reparto uniforme (fallback) para partidas sin fechas programadas en
+     * Cronograma General. A diferencia de distribuirPorDiasCalendario()/
+     * distribuirPorDias30(), a esta le faltaba el ajuste de residuo: dividir
+     * $parcial entre N períodos y redondear cada cuota a 2 decimales por
+     * separado casi nunca suma exacto de vuelta a $parcial (ej. 10644.804/4 =
+     * 2661.201 → redondea a 2661.20 × 4 = 10644.80, perdiendo 0.4 céntimos) —
+     * eso disparaba la alerta de "desvío" en TODAS las partidas sin fecha
+     * programada. Mismo patrón de "el último período absorbe el residuo" que
+     * ya usan las otras dos funciones de reparto.
+     */
     private function distribucionUniforme(float $parcial, array $periodos): array
     {
         $countPeriodos = count($periodos);
         $distribucion = [];
 
+        if ($parcial <= 0 || $countPeriodos === 0) {
+            foreach ($periodos as $periodo) {
+                $distribucion[$periodo['key']] = ['monto' => 0.0, 'porcentaje' => 0.0];
+            }
+
+            return $distribucion;
+        }
+
+        $montoPorPeriodo = round($parcial / $countPeriodos, 2);
+        $sumaAsignada = 0.0;
+        $ultimaKey = null;
+
         foreach ($periodos as $periodo) {
             $distribucion[$periodo['key']] = [
-                'monto' => $parcial > 0 && $countPeriodos > 0 ? round($parcial / $countPeriodos, 2) : 0.0,
-                'porcentaje' => $parcial > 0 && $countPeriodos > 0 ? round((1 / $countPeriodos) * 100, 6) : 0.0,
+                'monto' => $montoPorPeriodo,
+                'porcentaje' => round((1 / $countPeriodos) * 100, 6),
             ];
+            $sumaAsignada += $montoPorPeriodo;
+            $ultimaKey = $periodo['key'];
+        }
+
+        if ($ultimaKey !== null) {
+            $residuo = round($parcial - $sumaAsignada, 2);
+            $distribucion[$ultimaKey]['monto'] = round($distribucion[$ultimaKey]['monto'] + $residuo, 2);
+            $distribucion[$ultimaKey]['porcentaje'] = round(
+                ($distribucion[$ultimaKey]['monto'] / $parcial) * 100, 6
+            );
         }
 
         return $distribucion;
@@ -888,11 +945,23 @@ class CronoValorizadoController extends Controller
             : (is_array($componentesExtraRaw) ? $componentesExtraRaw : []);
         $conceptosRaw = $snapshot?->conceptos_adicionales_json ?? null;
         $conceptos = $conceptosRaw === null
-            ? (((float) ($snapshot?->total_supervision ?? 0)) > 0 ? [[
+            ? ($supervisionTotal > 0 ? [[
                 'id' => 'supervision',
                 'name' => 'GASTOS DE SUPERVISIÓN Y LIQUIDACIÓN',
-                'tipo' => 'porcentaje',
-                'valor' => $costoDirecto > 0 ? round(((float) $snapshot->total_supervision / $costoDirecto) * 100, 4) : 0,
+                // Monto fijo, NO porcentaje: un concepto tipo "porcentaje" se
+                // aplica sobre la base de SU categoría (ver TablaValorizada.tsx,
+                // cascada amarillo→rojo→rojo_final), no sobre Costo Directo.
+                // Expresar la migración como % de Costo Directo aquí
+                // produciría, al aplicarse sobre una base mayor, un monto
+                // INFLADO frente al total_supervision real. Con monto fijo,
+                // el valor migrado es exacto la primera vez; el usuario puede
+                // cambiarlo a "%" manualmente si prefiere que escale a futuro.
+                'tipo' => 'monto',
+                'valor' => round($supervisionTotal, 4),
+                // 'rojo': se aplica sobre el Presupuesto Sub Total (Componente
+                // I+II+extra + amarillos) — igual que estaba antes de este
+                // modelo, cuando Supervisión se sumaba después del Componente I+II.
+                'categoria' => 'rojo',
             ]] : [])
             : (is_string($conceptosRaw) ? (json_decode($conceptosRaw, true) ?? []) : $conceptosRaw);
 

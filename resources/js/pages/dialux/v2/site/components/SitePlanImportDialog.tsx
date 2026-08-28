@@ -75,10 +75,10 @@ export function SitePlanImportDialog({
                 )}
                 {processing && (
                     <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                        Procesando {fileName}…
-                        {loadProgress > 0
-                            ? ` ${Math.round(loadProgress * 100)}%`
-                            : ''}
+                        Procesando {fileName}…{' '}
+                        {loadProgress > 0 && loadProgress < 100
+                            ? `${Math.round(loadProgress)}%`
+                            : 'puede tardar varios segundos con planos pesados'}
                     </p>
                 )}
                 {error && (
