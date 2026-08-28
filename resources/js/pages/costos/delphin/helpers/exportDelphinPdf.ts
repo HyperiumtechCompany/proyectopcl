@@ -4,6 +4,8 @@ import { saveAs } from 'file-saver';
 import axios from 'axios';
 import type { DelphinRow } from '../types';
 import type { DelphinExportContent } from './exportDelphin';
+import type { ResumenPresupuesto } from '../types';
+import { buildBudgetExportSummary } from './budgetExportSummary';
 import { orderAcusForExport } from './acuExportOrder';
 
 // ── Colores RGB para jsPDF ────────────────────────────────────────────────────
@@ -216,7 +218,7 @@ async function addPageHeader(
 }
 
 // ── Presupuesto ───────────────────────────────────────────────────────────────
-async function buildPresupuestoPdf(doc: jsPDF, rows: DelphinRow[], projectName: string, proyecto: any) {
+async function buildPresupuestoPdf(doc: jsPDF, rows: DelphinRow[], projectName: string, proyecto: any, resumenPresupuesto?: ResumenPresupuesto, isFiltered = false) {
     const startY = await addPageHeader(doc, projectName, 'Resumen de Presupuesto', proyecto);
     const meta = rowMeta(rows);
     const totalPres = rows
@@ -236,7 +238,11 @@ async function buildPresupuestoPdf(doc: jsPDF, rows: DelphinRow[], projectName: 
             fmtNum(row.parcial || row.metrado * row.precio_unitario || 0),
         ];
     });
-    body.push(['', '', 'TOTAL PRESUPUESTO', '', '', '', fmtNum(totalPres)]);
+    const summary = buildBudgetExportSummary(totalPres, resumenPresupuesto, isFiltered);
+    body.push(['', '', 'COSTO DIRECTO', '', '', '', fmtNum(summary.costoDirecto)]);
+    body.push(['', '', 'GASTOS GENERALES', '', `${summary.gastosGeneralesPorcentaje.toFixed(2)}%`, '', fmtNum(summary.gastosGenerales)]);
+    body.push(['', '', 'UTILIDAD', '', `${summary.utilidadPorcentaje.toFixed(2)}%`, '', fmtNum(summary.utilidad)]);
+    body.push(['', '', 'TOTAL', '', '', '', fmtNum(summary.total)]);
 
     autoTable(doc, {
         startY,
@@ -553,7 +559,8 @@ export async function exportDelphinPdf(
     projectName: string,
     projectData?: any,
     selectedSpecialties?: string[],
-    formulaData?: any
+    formulaData?: any,
+    resumenPresupuesto?: ResumenPresupuesto,
 ): Promise<void> {
 
     const filteredRows = selectedSpecialties && selectedSpecialties.length > 0
@@ -575,7 +582,7 @@ export async function exportDelphinPdf(
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
     if (content === 'budget_only' || content === 'budget_gantt') {
-        await buildPresupuestoPdf(doc, filteredRows, projectName, projectData);
+        await buildPresupuestoPdf(doc, filteredRows, projectName, projectData, resumenPresupuesto, Boolean(selectedSpecialties?.length));
 
         try {
             const res = await axios.get(`/costos/proyectos/${projectData.id}/presupuesto/acus/export-data`);

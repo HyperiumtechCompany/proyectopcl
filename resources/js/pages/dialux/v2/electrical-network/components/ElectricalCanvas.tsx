@@ -62,6 +62,8 @@ interface Props {
     calculations: EdgeCalculation[];
     issues: GraphIssue[];
     onViewInCtTable?: (nodeId: string) => void;
+    /** Navega al editor de emplazamiento para dibujar/ver el trazado físico de este alimentador. Recibe el id del EDGE (no del nodo). */
+    onViewInSitePlan?: (edgeId: string) => void;
 }
 
 const FIXED_NODE_TYPES = new Set([
@@ -96,6 +98,7 @@ export function ElectricalCanvas({
     calculations,
     issues,
     onViewInCtTable,
+    onViewInSitePlan,
 }: Props) {
     const disconnectedNodeIds = new Set(
         issues
@@ -148,7 +151,14 @@ export function ElectricalCanvas({
         point.x = clientX;
         point.y = clientY;
         const matrix = svg.getScreenCTM();
-        return matrix ? point.matrixTransform(matrix.inverse()) : point;
+        const transformed = matrix ? point.matrixTransform(matrix.inverse()) : point;
+        // Reconstruido como objeto plano — un DOMPoint/SVGPoint nativo tiene
+        // x/y como accessors del prototipo (no propiedades propias), así que
+        // si algún llamador lo guarda tal cual (en vez de solo leer .x/.y
+        // para aritmética, como hace hoy `onMove`), `JSON.stringify` del
+        // autoguardado lo serializa como `{}` y se pierde en silencio — bug
+        // real confirmado en el mismo patrón de `SiteCanvas2D.tsx`.
+        return { x: transformed.x, y: transformed.y };
     };
     const zoomAt = (clientX: number, clientY: number, factor: number) => {
         const point = toSvgPoint(clientX, clientY);
@@ -727,6 +737,20 @@ export function ElectricalCanvas({
                             }}
                         >
                             Ver en tabla CT
+                        </button>
+                    )}
+                    {onViewInSitePlan && (
+                        <button
+                            type="button"
+                            disabled={!contextIncomingEdge}
+                            className="block w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-200 dark:hover:bg-white/5"
+                            onClick={() => {
+                                if (contextIncomingEdge)
+                                    onViewInSitePlan(contextIncomingEdge.id);
+                                setContextMenu(undefined);
+                            }}
+                        >
+                            Ver trazado en emplazamiento
                         </button>
                     )}
                 </div>

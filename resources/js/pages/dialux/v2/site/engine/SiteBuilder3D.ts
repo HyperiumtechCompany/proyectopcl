@@ -1,0 +1,498 @@
+import {
+    Color3,
+    DirectionalLight,
+    HemisphericLight,
+    Mesh,
+    MeshBuilder,
+    ShadowGenerator,
+    StandardMaterial,
+    TransformNode,
+    Vector3,
+    type ArcRotateCamera,
+    type Scene,
+} from '@babylonjs/core';
+import { House3DBuilder } from '@/pages/dialux/engine/House3DBuilder';
+import type { Scene as EditorScene } from '@/pages/dialux/hooks/useEditorStore';
+import type { EdgeCalculation } from '../../electrical-network/domain/calculations';
+import { deriveFeederStatus, feederStatusColor } from '../domain/feederSync';
+import { boundingBox } from '../domain/geometry';
+import type {
+    FeederPath,
+    Point2D,
+    SiteData,
+    SiteElement,
+} from '../domain/types';
+
+export interface SiteModuleScene {
+    moduleId: number;
+    moduleName: string;
+    data: Record<string, unknown> & { scenes: EditorScene[] };
+}
+
+function hexToColor3(hex: string): Color3 {
+    return Color3.FromHexString(hex);
+}
+
+function centroid(vertices: Point2D[]): Point2D {
+    const sum = vertices.reduce(
+        (acc, v) => ({ x: acc.x + v.x, y: acc.y + v.y }),
+        { x: 0, y: 0 },
+    );
+    return { x: sum.x / vertices.length, y: sum.y / vertices.length };
+}
+
+/**
+ * Motor 3D del emplazamiento (Fase 4.1). Construye un mesh por elemento del
+ * plano, siguiendo la MISMA convención de ejes que `House3DBuilder` (el
+ * motor de interiores ya existente): X/Y del plano 2D → X/Z del mundo 3D,
+ * sin invertir ningún signo — a diferencia del exportador DXF, que sí
+ * necesita invertir Y porque CAD usa una convención de mundo distinta a la
+ * del canvas (ver memoria `dialux-dxf-conductors-must-be-arcs`). Aquí ambos
+ * lados (canvas 2D del emplazamiento y esta vista 3D) son del mismo editor,
+ * así que no aplica esa corrección.
+ *
+ * Cada elemento se ancla en su propio `TransformNode` centrado en su
+ * centroide — la geometría del mesh se construye en espacio LOCAL a ese
+ * nodo, no en coordenadas de mundo directas. Esto permite reposicionar un
+ * elemento moviendo un solo nodo, y es lo que hace posible incrustar el
+ * interior de un módulo hijo (Fase 4.1, "módulos hijos read-only") sin que
+ * su propio sistema de coordenadas (arbitrario, propio de su editor) choque
+ * con la posición real del bloque en el emplazamiento.
+ */
+export class SiteBuilder3D {
+    scene: Scene;
+    camera: ArcRotateCamera | null;
+    shadowGen: ShadowGenerator | null = null;
+    elementNodes: Map<string, TransformNode> = new Map();
+    feederMeshes: Mesh[] = [];
+    /** Un `House3DBuilder` propio por bloque de edificio con interior cargado — se dispone junto con el nodo del elemento. */
+    childBuilders: Map<string, House3DBuilder> = new Map();
+    private matCache: Map<string, StandardMaterial> = new Map();
+
+    constructor(scene: Scene, camera?: ArcRotateCamera) {
+        this.scene = scene;
+        this.camera = camera ?? null;
+    }
+
+    setupLights() {
+        const ambient = new HemisphericLight(
+            'site_hemi',
+            new Vector3(0, 1, 0),
+            this.scene,
+        );
+        ambient.intensity = 0.6;
+        ambient.diffuse = new Color3(0.95, 0.97, 1.0);
+        ambient.groundColor = new Color3(0.3, 0.28, 0.22);
+
+        const sun = new DirectionalLight(
+            'site_sun',
+            new Vector3(-0.5, -1.5, -0.8).normalize(),
+            this.scene,
+        );
+        sun.intensity = 1.1;
+        sun.diffuse = new Color3(1.0, 0.97, 0.9);
+        sun.position = new Vector3(40, 60, 40);
+
+        this.shadowGen = new ShadowGenerator(1024, sun);
+        this.shadowGen.useBlurExponentialShadowMap = true;
+        this.shadowGen.blurKernel = 16;
+
+        return { ambient, sun };
+    }
+
+    private matFor(hex: string, alpha = 1, specular = 0.05): StandardMaterial {
+        const key = `${hex}:${alpha}:${specular}`;
+        const cached = this.matCache.get(key);
+        if (cached) return cached;
+        const mat = new StandardMaterial(`site_mat_${key}`, this.scene);
+        mat.diffuseColor = hexToColor3(hex);
+        mat.specularColor = new Color3(specular, specular, specular);
+        if (alpha < 1) {
+            mat.alpha = alpha;
+            mat.backFaceCulling = false;
+        }
+        this.matCache.set(key, mat);
+        return mat;
+    }
+
+    /** Reconstruye todo el emplazamiento — dispone lo anterior primero (mismo patrón que `syncAllFloors`). */
+    sync(
+        siteData: SiteData,
+        moduleScenes: SiteModuleScene[] = [],
+        feederCalculations: EdgeCalculation[] = [],
+        showInteriors = false,
+    ) {
+        this.disposeContent();
+        const scaleM = siteData.terrainScaleM || 1;
+        const visibleTypes = new Set(
+            siteData.layers
+                .filter((layer) => layer.visible)
+                .flatMap((layer) => layer.types),
+        );
+
+        for (const element of siteData.elements) {
+            if (element.visible === false) continue;
+            if (!visibleTypes.has(element.type)) continue;
+            if (element.vertices.length < 3) continue;
+            try {
+                this.buildElement(element, scaleM, moduleScenes, showInteriors);
+            } catch (error) {
+                console.warn(
+                    `No se pudo construir el elemento de emplazamiento ${element.id} (${element.type})`,
+                    error,
+                );
+            }
+        }
+
+        for (const path of siteData.feederPaths) {
+            try {
+                this.buildFeeder(path, scaleM, feederCalculations);
+            } catch (error) {
+                console.warn(
+                    `No se pudo construir el trazado del alimentador ${path.id}`,
+                    error,
+                );
+            }
+        }
+
+        this.frameCamera(siteData, scaleM);
+    }
+
+    private buildElement(
+        element: SiteElement,
+        scaleM: number,
+        moduleScenes: SiteModuleScene[],
+        showInteriors: boolean,
+    ) {
+        switch (element.type) {
+            case 'terrain':
+                this.buildFlatSlab(element, scaleM, 0.3, 0);
+                return;
+            case 'street':
+            case 'green_area':
+            case 'parking':
+            case 'court':
+            case 'ramp':
+                this.buildFlatSlab(element, scaleM, 0.06, 0.02);
+                return;
+            case 'custom_zone':
+                this.buildFlatSlab(element, scaleM, 0.04, 0.03, 0.5);
+                return;
+            case 'pool':
+                this.buildPool(element, scaleM);
+                return;
+            case 'building_block':
+                this.buildBuildingBlock(
+                    element,
+                    scaleM,
+                    moduleScenes,
+                    showInteriors,
+                );
+                return;
+            case 'fence':
+                this.buildExtrudedMass(element, scaleM, element.heightM ?? 3);
+                return;
+            case 'tg_location':
+                this.buildCabinet(element, scaleM);
+                return;
+            case 'transformer':
+                this.buildTransformer(element, scaleM);
+                return;
+            case 'pole':
+                this.buildPole(element, scaleM);
+                return;
+            case 'gate':
+                this.buildExtrudedMass(element, scaleM, element.heightM ?? 2);
+                return;
+        }
+    }
+
+    /** TransformNode anclado al centroide del elemento — punto de referencia común para todas las variantes de construcción. */
+    private anchorNode(element: SiteElement, scaleM: number): {
+        node: TransformNode;
+        localVertices: Vector3[];
+        center: Point2D;
+    } {
+        const center = centroid(element.vertices);
+        const node = new TransformNode(`site_${element.id}`, this.scene);
+        node.position.set(center.x * scaleM, 0, center.y * scaleM);
+        this.elementNodes.set(element.id, node);
+        const localVertices = element.vertices.map(
+            (v) =>
+                new Vector3(
+                    (v.x - center.x) * scaleM,
+                    0,
+                    (v.y - center.y) * scaleM,
+                ),
+        );
+        return { node, localVertices, center };
+    }
+
+    /** Losa plana (terreno, calles, áreas verdes, etc.) — extruida hacia abajo desde `topY`. */
+    private buildFlatSlab(
+        element: SiteElement,
+        scaleM: number,
+        depth: number,
+        topY: number,
+        alpha = 1,
+    ) {
+        const { node, localVertices } = this.anchorNode(element, scaleM);
+        const slab = MeshBuilder.CreatePolygon(
+            `site_slab_${element.id}`,
+            { shape: localVertices, depth, sideOrientation: Mesh.DOUBLESIDE },
+            this.scene,
+        );
+        slab.position.y = topY + depth;
+        slab.material = this.matFor(
+            element.style.fillColor,
+            alpha * (element.style.opacity ?? 1),
+        );
+        slab.receiveShadows = true;
+        slab.parent = node;
+    }
+
+    /** Masa extruida hacia arriba desde el suelo (cercos, portones, bloques sin interior cargado). */
+    private buildExtrudedMass(
+        element: SiteElement,
+        scaleM: number,
+        heightM: number,
+    ): TransformNode {
+        const { node, localVertices } = this.anchorNode(element, scaleM);
+        const mass = MeshBuilder.CreatePolygon(
+            `site_mass_${element.id}`,
+            {
+                shape: localVertices,
+                depth: heightM,
+                sideOrientation: Mesh.DOUBLESIDE,
+            },
+            this.scene,
+        );
+        mass.position.y = heightM;
+        mass.material = this.matFor(
+            element.style.fillColor,
+            element.style.opacity ?? 1,
+        );
+        mass.receiveShadows = true;
+        mass.checkCollisions = false;
+        this.shadowGen?.addShadowCaster(mass);
+        mass.parent = node;
+        return node;
+    }
+
+    /** Piscina: caja hundida con un plano de agua translúcido al ras del terreno. */
+    private buildPool(element: SiteElement, scaleM: number) {
+        const { node, localVertices } = this.anchorNode(element, scaleM);
+        const basinDepth = 1.4;
+        const basin = MeshBuilder.CreatePolygon(
+            `site_pool_basin_${element.id}`,
+            {
+                shape: localVertices,
+                depth: basinDepth,
+                sideOrientation: Mesh.DOUBLESIDE,
+            },
+            this.scene,
+        );
+        basin.position.y = 0;
+        basin.material = this.matFor('#94a3b8', 1, 0.1);
+        basin.parent = node;
+
+        const water = MeshBuilder.CreatePolygon(
+            `site_pool_water_${element.id}`,
+            { shape: localVertices, depth: 0.05, sideOrientation: Mesh.DOUBLESIDE },
+            this.scene,
+        );
+        water.position.y = -0.15;
+        water.material = this.matFor(element.style.fillColor, 0.75, 0.4);
+        water.parent = node;
+    }
+
+    /** Bloque de edificación: masa extruida + (opcional) interior real del módulo vinculado. */
+    private buildBuildingBlock(
+        element: SiteElement,
+        scaleM: number,
+        moduleScenes: SiteModuleScene[],
+        showInteriors: boolean,
+    ) {
+        const node = this.buildExtrudedMass(element, scaleM, element.heightM ?? 9);
+        if (!showInteriors || element.moduleId === undefined) return;
+        const moduleData = moduleScenes.find(
+            (candidate) => candidate.moduleId === element.moduleId,
+        );
+        const scenes = moduleData?.data?.scenes;
+        if (!scenes || scenes.length === 0) return;
+
+        try {
+            const childBuilder = new House3DBuilder(this.scene);
+            childBuilder.syncAllFloors(scenes, [], false, 'functional', false, null, true);
+
+            // El módulo hijo trae su propio sistema de coordenadas (arbitrario,
+            // propio de SU editor) — se centra su huella (bounding box del
+            // primer piso) en el origen del nodo del bloque, que ya está
+            // anclado en el centroide real del emplazamiento.
+            const groundFloor = [...scenes].sort(
+                (a, b) => a.floorIndex - b.floorIndex,
+            )[0];
+            const footprint = (groundFloor?.rooms ?? []).flatMap(
+                (room) => room.vertices,
+            );
+            const offset = new TransformNode(
+                `site_interior_offset_${element.id}`,
+                this.scene,
+            );
+            offset.parent = node;
+            if (footprint.length > 0) {
+                const bounds = boundingBox(footprint);
+                offset.position.set(
+                    -(bounds.minX + bounds.maxX) / 2,
+                    0,
+                    -(bounds.minY + bounds.maxY) / 2,
+                );
+            }
+            childBuilder.floorNodes.forEach((floorNode) => {
+                floorNode.parent = offset;
+            });
+            childBuilder.meshMap.forEach((meshes) =>
+                meshes.forEach((mesh) => {
+                    mesh.isPickable = false;
+                }),
+            );
+            this.childBuilders.set(element.id, childBuilder);
+        } catch (error) {
+            console.warn(
+                `No se pudo cargar el interior del módulo ${element.moduleId} en el emplazamiento`,
+                error,
+            );
+        }
+    }
+
+    /** Tablero General: gabinete simple (caja) en su footprint real. */
+    private buildCabinet(element: SiteElement, scaleM: number) {
+        const { node } = this.anchorNode(element, scaleM);
+        const bounds = boundingBox(element.vertices);
+        const width = Math.max(0.4, (bounds.maxX - bounds.minX) * scaleM);
+        const depth = Math.max(0.3, (bounds.maxY - bounds.minY) * scaleM);
+        const cabinet = MeshBuilder.CreateBox(
+            `site_tg_${element.id}`,
+            { width, height: 2, depth },
+            this.scene,
+        );
+        cabinet.position.y = 1;
+        cabinet.material = this.matFor(element.style.fillColor, 1, 0.3);
+        cabinet.parent = node;
+    }
+
+    /** Transformador: cilindro (cuba) + caja (radiadores/tapa). */
+    private buildTransformer(element: SiteElement, scaleM: number) {
+        const { node } = this.anchorNode(element, scaleM);
+        const bounds = boundingBox(element.vertices);
+        const diameter = Math.max(
+            0.6,
+            Math.min(
+                (bounds.maxX - bounds.minX) * scaleM,
+                (bounds.maxY - bounds.minY) * scaleM,
+            ),
+        );
+        const tank = MeshBuilder.CreateCylinder(
+            `site_transformer_tank_${element.id}`,
+            { diameter, height: 1.6 },
+            this.scene,
+        );
+        tank.position.y = 0.8;
+        tank.material = this.matFor('#6b7280', 1, 0.25);
+        tank.parent = node;
+
+        const lid = MeshBuilder.CreateBox(
+            `site_transformer_lid_${element.id}`,
+            { width: diameter * 0.7, height: 0.3, depth: diameter * 0.7 },
+            this.scene,
+        );
+        lid.position.y = 1.75;
+        lid.material = this.matFor(element.style.fillColor, 1, 0.3);
+        lid.parent = node;
+    }
+
+    /** Poste de alumbrado exterior: fuste delgado + cabeza esférica. */
+    private buildPole(element: SiteElement, scaleM: number) {
+        const { node } = this.anchorNode(element, scaleM);
+        const shaftHeight = element.heightM ?? 6;
+        const shaft = MeshBuilder.CreateCylinder(
+            `site_pole_shaft_${element.id}`,
+            { diameter: 0.15, height: shaftHeight },
+            this.scene,
+        );
+        shaft.position.y = shaftHeight / 2;
+        shaft.material = this.matFor('#6b7280', 1, 0.2);
+        shaft.parent = node;
+
+        const head = MeshBuilder.CreateSphere(
+            `site_pole_head_${element.id}`,
+            { diameter: 0.4 },
+            this.scene,
+        );
+        head.position.y = shaftHeight;
+        head.material = this.matFor(element.style.fillColor, 1, 0.1);
+        head.parent = node;
+    }
+
+    /** Tubo que sigue el trazado real del alimentador, coloreado por su estado de caída de tensión. */
+    private buildFeeder(
+        path: FeederPath,
+        scaleM: number,
+        calculations: EdgeCalculation[],
+    ) {
+        if (path.waypoints.length < 2) return;
+        const points = path.waypoints.map(
+            (point) => new Vector3(point.x * scaleM, 0.06, point.y * scaleM),
+        );
+        const tube = MeshBuilder.CreateTube(
+            `site_feeder_${path.id}`,
+            { path: points, radius: 0.08, sideOrientation: Mesh.DOUBLESIDE },
+            this.scene,
+        );
+        const status = deriveFeederStatus(path.networkEdgeId, calculations);
+        tube.material = this.matFor(
+            path.style?.color ?? feederStatusColor(status),
+            1,
+            0.15,
+        );
+        this.feederMeshes.push(tube);
+    }
+
+    private frameCamera(siteData: SiteData, scaleM: number) {
+        if (!this.camera) return;
+        const allVertices = siteData.elements.flatMap(
+            (element) => element.vertices,
+        );
+        if (allVertices.length === 0) return;
+        const bounds = boundingBox(allVertices);
+        const center = new Vector3(
+            ((bounds.minX + bounds.maxX) / 2) * scaleM,
+            0,
+            ((bounds.minY + bounds.maxY) / 2) * scaleM,
+        );
+        const size = Math.max(
+            (bounds.maxX - bounds.minX) * scaleM,
+            (bounds.maxY - bounds.minY) * scaleM,
+        );
+        this.camera.setTarget(center);
+        this.camera.radius = Math.max(20, size * 1.3);
+    }
+
+    /** Elimina todo lo construido (elementos, alimentadores, interiores de módulos hijos) — no toca cámara/luces. */
+    private disposeContent() {
+        this.elementNodes.forEach((node) => node.dispose());
+        this.elementNodes.clear();
+        this.feederMeshes.forEach((mesh) => mesh.dispose());
+        this.feederMeshes = [];
+        this.childBuilders.forEach((builder) => builder.dispose());
+        this.childBuilders.clear();
+    }
+
+    dispose() {
+        this.disposeContent();
+        this.matCache.forEach((mat) => mat.dispose());
+        this.matCache.clear();
+        this.shadowGen?.dispose();
+        this.shadowGen = null;
+    }
+}

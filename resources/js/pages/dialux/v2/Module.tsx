@@ -5,11 +5,13 @@ import { EditorLayout } from '@/pages/dialux/components/EditorLayout';
 import { ensureStandardDataLoaded } from '@/pages/dialux/hooks/normativeRemoteData';
 import {useEditorStore, type Project as EditorProject} from '@/pages/dialux/hooks/useEditorStore';
 import type { BreadcrumbItem } from '@/types';
-import { ModuleSidebar } from './components/ModuleSidebar';
 import { GeneralWorkspaceTabs } from './components/GeneralWorkspaceTabs';
+import { ModuleSidebar } from './components/ModuleSidebar';
 import { useDialuxModuleSync } from './hooks/useDialuxModuleSync';
 import { useModuleActions } from './hooks/useModuleActions';
 import { createBlankModuleProject } from './lib/createBlankModuleProject';
+import { SiteEditor2D } from './site/components/SiteEditor2D';
+import { SiteViewer3DPage } from './site/components/SiteViewer3DPage';
 import type {DialuxV2EditorModule,DialuxV2Module,DialuxV2Project} from './types';
 
 interface Props {
@@ -105,7 +107,23 @@ export default function DialuxV2Module({
                             </div>
                         )}
                         <div className="min-h-0 flex-1 overflow-hidden">
-                            <EditorLayout />
+                            {module.kind === 'general' &&
+                            initialView === '2d' ? (
+                                <SiteEditor2D
+                                    projectId={project.id}
+                                    modules={modules
+                                        .filter((item) => item.kind !== 'general')
+                                        .map((item) => ({
+                                            id: item.id,
+                                            name: item.name,
+                                        }))}
+                                />
+                            ) : module.kind === 'general' &&
+                              initialView === '3d' ? (
+                                <SiteViewer3DPage projectId={project.id} />
+                            ) : (
+                                <EditorLayout />
+                            )}
                         </div>
                     </div>
                 </div>

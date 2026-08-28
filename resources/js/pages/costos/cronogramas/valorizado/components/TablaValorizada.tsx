@@ -6,16 +6,22 @@ import {
     TrendingUp,
     AlertTriangle,
     Lock,
+    Plus,
+    Trash2,
 } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import React, { useState, useRef, useMemo, useCallback } from 'react';
+import axios from 'axios';
+import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import type {
     ItemValorizado,
     Periodo,
     ViewMode,
     TotalesColumna,
     FinDefaults,
+    ComponenteExtra,
 } from '../types';
+
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
 // FORMATOS
 const fmtN = (v: number) =>
@@ -272,6 +278,9 @@ interface Props {
     // Valores iniciales de la sección financiera (% reales del presupuesto,
     // ver CronoValorizadoController::resolveFinDefaults())
     finDefaults?: FinDefaults;
+    // Proyecto actual — para persistir altas/bajas de componentes extra en
+    // gg_consolidado (mismo endpoint que usa el panel Consolidado).
+    projectId?: string;
 }
 
 // COMPONENTE PRINCIPAL
@@ -294,6 +303,7 @@ const TablaValorizada: React.FC<Props> = ({
     totalesPorItem = {},
     totalGeneralPeriodos = 0,
     finDefaults = {},
+    projectId,
 }) => {
     const tableRef = useRef<HTMLDivElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -307,9 +317,84 @@ const TablaValorizada: React.FC<Props> = ({
         pctIGVMobiliario: finDefaults.pctIGVMobiliario ?? 18.0,
         pctSupervision: finDefaults.pctSupervision ?? 5.13,
     });
+    const [hasComponentII, setHasComponentII] = useState(
+        () => (finDefaults.montoMobiliario ?? 0) > 0,
+    );
     const setPct = useCallback((key: keyof FinancieroState, val: number) => {
         setFin((prev) => ({ ...prev, [key]: val }));
     }, []);
+    const removeComponentII = useCallback(() => {
+        if (!window.confirm('¿Eliminar el Componente II de este presupuesto?')) return;
+
+        setHasComponentII(false);
+        setFin((prev) => ({ ...prev, montoMobiliario: 0 }));
+        if (projectId) {
+            void axios.patch(
+                `/costos/proyectos/${projectId}/presupuesto/consolidado/snapshot`,
+                { componente_ii_monto: 0 },
+            );
+        }
+    }, [projectId]);
+
+    // ── Componentes extra (III, IV, ...) ──────────────────────────────────
+    // Mismo dato que el panel Consolidado (gg_consolidado.componentes_extra_json):
+    // se editan aquí y se persisten en el mismo snapshot, para que ambas
+    // pantallas siempre coincidan (una sola fuente de verdad).
+    const [extraComponents, setExtraComponents] = useState<ComponenteExtra[]>(
+        () => finDefaults.componentesExtra ?? [],
+    );
+    const extraSeeded = useRef(false);
+
+    const addExtraComponent = useCallback(() => {
+        setExtraComponents((prev) => [
+            ...prev,
+            {
+                id: crypto.randomUUID(),
+                name: 'NUEVO COMPONENTE',
+                monto: 0,
+            },
+        ]);
+    }, []);
+    const removeExtraComponent = useCallback((id: string) => {
+        setExtraComponents((prev) => prev.filter((c) => c.id !== id));
+    }, []);
+    const updateExtraComponent = useCallback(
+        (id: string, field: 'name' | 'monto', value: string | number) => {
+            setExtraComponents((prev) =>
+                prev.map((c) => (c.id === id ? { ...c, [field]: value } : c)),
+            );
+        },
+        [],
+    );
+
+    // Persistencia con debounce, igual que ConsolidadoPanel.tsx. Solo se
+    // manda `componentes_extra` — el backend conserva GG/Utilidad/IGV/
+    // Mobiliario ya guardados (ver PresupuestoController::recalculateConsolidadoSnapshot,
+    // que hace fallback a $existing cuando un campo no llega en el request).
+    useEffect(() => {
+        if (!extraSeeded.current) {
+            extraSeeded.current = true;
+            return;
+        }
+        if (!projectId) return;
+        const timer = setTimeout(() => {
+            void axios
+                .patch(
+                    `/costos/proyectos/${projectId}/presupuesto/consolidado/snapshot`,
+                    {
+                        componentes_extra: extraComponents.map((c) => ({
+                            id: c.id,
+                            name: c.name,
+                            monto: Number(c.monto) || 0,
+                        })),
+                    },
+                )
+                .catch(() => {
+                    // silencioso: no bloquea la edición local si falla el guardado
+                });
+        }, 800);
+        return () => clearTimeout(timer);
+    }, [extraComponents, projectId]);
 
     const toggleCollapse = useCallback((code: string) => {
         setCollapsed((prev) => {
@@ -473,7 +558,22 @@ const TablaValorizada: React.FC<Props> = ({
 
     const montoIGVMob = fin.montoMobiliario * (fin.pctIGVMobiliario / 100);
     const subTotalII = fin.montoMobiliario + montoIGVMob;
-    const totalI_II = presupI + subTotalII;
+
+    // Componentes extra (III, IV, ...): igual tratamiento que Componente II
+    // (monto fijo + IGV, sin distribuir por mes — no son avance de obra).
+    const extraCalcs = extraComponents.map((c) => {
+        const monto = Number(c.monto) || 0;
+        const igv = monto * (fin.pctIGVMobiliario / 100);
+        return { ...c, monto, igv, subtotal: monto + igv };
+    });
+    const extraComponentsTotal = extraCalcs.reduce(
+        (acc, c) => acc + c.subtotal,
+        0,
+    );
+    const componentCount = 1 + (hasComponentII ? 1 : 0) + extraComponents.length;
+    const romanList = ROMAN.slice(0, componentCount).join('+');
+
+    const totalI_II = presupI + subTotalII + extraComponentsTotal;
 
     const montoSup = presupI * (fin.pctSupervision / 100);
     const presupTotal = totalI_II + montoSup;
@@ -1012,6 +1112,7 @@ const TablaValorizada: React.FC<Props> = ({
                             </td>
                         </tr>
 
+                        {hasComponentII && <React.Fragment>
                         {/* SEPARADOR COMPONENTE II */}
                         <tr>
                             <td
@@ -1027,8 +1128,15 @@ const TablaValorizada: React.FC<Props> = ({
 
                         {/* ── MOBILIARIO Y EQUIPAMIENTO COMP. II ── */}
                         <tr className="bg-white text-slate-700">
-                            <td className="border border-slate-300 p-2 text-center text-[9px] text-slate-400 italic">
-                                monto
+                            <td className="border border-slate-300 p-1 text-center">
+                                <button
+                                    type="button"
+                                    onClick={removeComponentII}
+                                    title="Eliminar Componente II"
+                                    className="rounded p-1 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                </button>
                             </td>
                             <td className="sticky left-0 z-10 border border-slate-300 bg-white p-2.5 text-left text-[11px] font-semibold tracking-wide uppercase">
                                 MOBILIARIO Y EQUIPAMIENTO COMPONENTE II
@@ -1111,13 +1219,163 @@ const TablaValorizada: React.FC<Props> = ({
                             </td>
                         </tr>
 
-                        {/* ── TOTAL PRESUPUESTO COMPONENTE I+II ── */}
+                        {/* ── COMPONENTES EXTRA (III, IV, ...) ── */}
+                        </React.Fragment>}
+                        {extraCalcs.map((comp, idx) => {
+                            const componentIndex = idx + (hasComponentII ? 2 : 1);
+                            const roman = ROMAN[componentIndex] ?? `${componentIndex + 1}`;
+                            return (
+                                <React.Fragment key={comp.id}>
+                                    {/* Nombre + monto (editable) */}
+                                    <tr className="bg-white text-slate-700">
+                                        <td className="border border-slate-300 p-1 text-center">
+                                            <button
+                                                onClick={() =>
+                                                    removeExtraComponent(
+                                                        comp.id,
+                                                    )
+                                                }
+                                                className="rounded p-1 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                                                title="Quitar componente"
+                                            >
+                                                <Trash2 className="h-3 w-3" />
+                                            </button>
+                                        </td>
+                                        <td className="sticky left-0 z-10 border border-slate-300 bg-white p-2">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="shrink-0 text-[9px] font-black tracking-widest text-slate-400 uppercase">
+                                                    COMPONENTE {roman}:
+                                                </span>
+                                                <input
+                                                    type="text"
+                                                    value={comp.name}
+                                                    onChange={(e) =>
+                                                        updateExtraComponent(
+                                                            comp.id,
+                                                            'name',
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    placeholder="NOMBRE DEL COMPONENTE"
+                                                    className="min-w-0 flex-1 border-b border-dashed border-slate-300 bg-transparent text-[11px] font-semibold tracking-wide text-slate-800 uppercase outline-none focus:border-blue-400"
+                                                />
+                                            </div>
+                                        </td>
+                                        <td className="border border-slate-300 p-2" />
+                                        <td className="border border-slate-300 p-2" />
+                                        <td className="border border-slate-300 p-2" />
+                                        <MontoCell
+                                            value={comp.monto}
+                                            onChange={(v) =>
+                                                updateExtraComponent(
+                                                    comp.id,
+                                                    'monto',
+                                                    v,
+                                                )
+                                            }
+                                        />
+                                        <td className="border border-slate-300 p-2" />
+                                        {periodos.map((p) => (
+                                            <td
+                                                key={p.key}
+                                                className="border border-slate-300 p-2 text-center text-[10px] text-slate-300"
+                                            >
+                                                —
+                                            </td>
+                                        ))}
+                                        <td className="sticky right-0 z-10 border border-slate-300 bg-white p-2.5 text-right font-semibold tabular-nums">
+                                            {comp.monto > 0
+                                                ? fmtS(comp.monto)
+                                                : '—'}
+                                        </td>
+                                    </tr>
+
+                                    {/* IGV del componente extra */}
+                                    <tr className="bg-white text-slate-700">
+                                        <td className="border border-slate-300 p-2" />
+                                        <td className="sticky left-0 z-10 border border-slate-300 bg-white p-2.5 text-left text-[11px] font-semibold tracking-wide uppercase">
+                                            IGV (Componente {roman})
+                                        </td>
+                                        <td className="border border-slate-300 p-2" />
+                                        <td className="border border-slate-300 p-2" />
+                                        <td className="border border-slate-300 p-2" />
+                                        <td className="border border-slate-300 p-2.5 text-right font-semibold tabular-nums">
+                                            {comp.monto > 0
+                                                ? fmtS(comp.igv)
+                                                : '—'}
+                                        </td>
+                                        <td className="border border-slate-300 p-2" />
+                                        {periodos.map((p) => (
+                                            <td
+                                                key={p.key}
+                                                className="border border-slate-300 p-2 text-center text-[10px] text-slate-300"
+                                            >
+                                                —
+                                            </td>
+                                        ))}
+                                        <td className="sticky right-0 z-10 border border-slate-300 bg-white p-2.5 text-right font-semibold tabular-nums">
+                                            {comp.monto > 0
+                                                ? fmtS(comp.igv)
+                                                : '—'}
+                                        </td>
+                                    </tr>
+
+                                    {/* Sub total del componente extra */}
+                                    <tr className="bg-slate-100 font-bold text-slate-800">
+                                        <td
+                                            colSpan={6}
+                                            className="border border-slate-300 p-2.5 text-right text-[10px] tracking-wider uppercase"
+                                        >
+                                            SUB TOTAL COMPONENTE {roman}
+                                        </td>
+                                        <td className="border border-slate-300 bg-slate-200" />
+                                        {periodos.map((p) => (
+                                            <td
+                                                key={p.key}
+                                                className="border border-slate-300 p-2 text-center text-[10px] text-slate-300"
+                                            >
+                                                —
+                                            </td>
+                                        ))}
+                                        <td className="sticky right-0 z-10 border border-slate-300 bg-slate-100 p-2.5 text-right font-bold tabular-nums">
+                                            {comp.subtotal > 0
+                                                ? fmtS(comp.subtotal)
+                                                : '—'}
+                                        </td>
+                                    </tr>
+                                </React.Fragment>
+                            );
+                        })}
+
+                        {/* ── AGREGAR COMPONENTE ── */}
+                        <tr>
+                            <td
+                                colSpan={nCols}
+                                className="border border-dashed border-slate-300 bg-white p-2"
+                            >
+                                <button
+                                    onClick={() => {
+                                        if (!hasComponentII) {
+                                            setHasComponentII(true);
+                                            return;
+                                        }
+                                        addExtraComponent();
+                                    }}
+                                    className="flex items-center gap-1.5 text-[10px] font-bold text-amber-600 transition-colors hover:text-amber-700"
+                                >
+                                    <Plus className="h-3.5 w-3.5" />
+                                    {hasComponentII ? 'Agregar Componente' : 'Agregar Componente II'}
+                                </button>
+                            </td>
+                        </tr>
+
+                        {/* ── TOTAL PRESUPUESTO COMPONENTE I+II+... ── */}
                         <tr className="bg-slate-800 font-bold text-white">
                             <td
                                 colSpan={6}
                                 className="border border-slate-600 p-2.5 text-right text-[10px] tracking-wide uppercase"
                             >
-                                TOTAL PRESUPUESTO DE OBRA COMPONENTE I+II
+                                TOTAL PRESUPUESTO DE OBRA COMPONENTE {romanList}
                             </td>
                             <td className="border border-slate-600 bg-slate-900" />
                             {periodos.map((p) => (

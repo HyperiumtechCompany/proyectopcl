@@ -1346,10 +1346,12 @@ export async function exportarExcel(
         { label: 'SUB TOTAL', total: subTotal, gray: true },
         { pct: `${fin.pctIGV.toFixed(2)}%`, label: 'I.G.V.', total: montoIGV },
         { label: 'PRESUPUESTO DE OBRA INFRAESTRUCTURA COMPONENTE I', total: presupI, dark: true },
-        { pct: 'monto', label: 'MOBILIARIO Y EQUIPAMIENTO COMPONENTE II', total: fin.montoMobiliario },
-        { pct: `${fin.pctIGVMobiliario.toFixed(2)}%`, label: 'IGV (MOBILIARIO Y EQUIPAMIENTO)', total: montoIGVMob },
-        { label: 'SUB TOTAL COMPONENTE II', total: subTotalII, gray: true },
-        { label: 'TOTAL PRESUPUESTO DE OBRA COMPONENTE I+II', total: totalI_II, dark: true },
+        ...(fin.montoMobiliario > 0 ? [
+            { pct: 'monto', label: 'MOBILIARIO Y EQUIPAMIENTO COMPONENTE II', total: fin.montoMobiliario },
+            { pct: `${fin.pctIGVMobiliario.toFixed(2)}%`, label: 'IGV (MOBILIARIO Y EQUIPAMIENTO)', total: montoIGVMob },
+            { label: 'SUB TOTAL COMPONENTE II', total: subTotalII, gray: true },
+        ] : []),
+        { label: `TOTAL PRESUPUESTO DE OBRA COMPONENTE ${fin.montoMobiliario > 0 ? 'I+II' : 'I'}`, total: totalI_II, dark: true },
         { pct: `${fin.pctSupervision.toFixed(2)}%`, label: 'GASTOS DE SUPERVISIÓN Y LIQUIDACIÓN', total: montoSup },
         { label: 'PRESUPUESTO TOTAL', total: presupTotal, dark: true },
     ];
@@ -1534,10 +1536,12 @@ export async function exportarPDF(
         ['SUB TOTAL', '', subTotal, propDist(subTotal), 'sub'],
         ['I.G.V.', `${fin.pctIGV.toFixed(2)}%`, montoIGV, propDist(montoIGV), 'normal'],
         ['PRESUPUESTO DE OBRA INFRAESTRUCTURA COMPONENTE I', '', presupI, propDist(presupI), 'blue'],
-        ['MOBILIARIO Y EQUIPAMIENTO COMPONENTE II', 'monto', fin.montoMobiliario, propDist(fin.montoMobiliario), 'normal'],
-        ['IGV (MOBILIARIO Y EQUIPAMIENTO)', `${fin.pctIGVMobiliario.toFixed(2)}%`, montoIGVMob, propDist(montoIGVMob), 'normal'],
-        ['SUB TOTAL COMPONENTE II', '', subTotalII, propDist(subTotalII), 'sub'],
-        ['TOTAL PRESUPUESTO DE OBRA COMPONENTE I+II', '', totalI_II, propDist(totalI_II), 'blue'],
+        ...(fin.montoMobiliario > 0 ? [
+            ['MOBILIARIO Y EQUIPAMIENTO COMPONENTE II', 'monto', fin.montoMobiliario, propDist(fin.montoMobiliario), 'normal'],
+            ['IGV (MOBILIARIO Y EQUIPAMIENTO)', `${fin.pctIGVMobiliario.toFixed(2)}%`, montoIGVMob, propDist(montoIGVMob), 'normal'],
+            ['SUB TOTAL COMPONENTE II', '', subTotalII, propDist(subTotalII), 'sub'],
+        ] : []),
+        [`TOTAL PRESUPUESTO DE OBRA COMPONENTE ${fin.montoMobiliario > 0 ? 'I+II' : 'I'}`, '', totalI_II, propDist(totalI_II), 'blue'],
         ['GASTOS DE SUPERVISIÓN Y LIQUIDACIÓN', `${fin.pctSupervision.toFixed(2)}%`, montoSup, propDist(montoSup), 'normal'],
         ['PRESUPUESTO TOTAL', '', presupTotal, propDist(presupI + montoSup), 'final'],
     ].map(([label, pct, total, dist, kind]: any) => {

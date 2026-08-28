@@ -31,7 +31,7 @@ export interface ElectricalEdge {
     sourceNodeId: string;
     targetNodeId: string;
     label?: string;
-    lengthMode: 'manual' | 'plan' | 'combined';
+    lengthMode: 'manual' | 'plan' | 'combined' | 'site';
     horizontalLengthM: number;
     verticalLengthM: number;
     conductorType: string;

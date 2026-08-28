@@ -23,6 +23,7 @@ class ElectricalNetworkController extends Controller
     {
         $this->authorizeProyecto($dialuxProject);
         $network = $this->networks->networkFor($dialuxProject);
+        $generalModule = $dialuxProject->modules()->where('kind', 'general')->first(['id', 'data']);
         $payload = [
             'network' => ['version' => $network->version, 'data' => $network->data],
             'ports' => $this->networks->portsFor($dialuxProject),
@@ -37,6 +38,11 @@ class ElectricalNetworkController extends Controller
                     'scenes' => $module->data['scenes'] ?? [],
                 ])
                 ->values(),
+            // Trazados de alimentadores dibujados en el emplazamiento (Módulo
+            // General, vista 2D) — vive en el mismo documento que el resto del
+            // editor de sitio, no en su propia tabla. Se usa solo para
+            // sincronizar la longitud de los alimentadores (`lengthMode: 'site'`).
+            'siteData' => $generalModule?->data['site'] ?? null,
         ];
 
         if (request()->wantsJson()) {
@@ -45,7 +51,7 @@ class ElectricalNetworkController extends Controller
 
         return Inertia::render('dialux/v2/ElectricalNetwork', [
             'project' => ['id' => $dialuxProject->id, 'name' => $dialuxProject->name],
-            'generalModuleId' => $dialuxProject->modules()->where('kind', 'general')->value('id'),
+            'generalModuleId' => $generalModule?->id,
             ...$payload,
         ]);
     }

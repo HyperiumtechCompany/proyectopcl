@@ -5,6 +5,8 @@ import { saveAs } from 'file-saver';
 import axios from 'axios';
 import type { DelphinRow } from '../types';
 import type { DelphinExportContent } from './exportDelphin';
+import type { ResumenPresupuesto } from '../types';
+import { buildBudgetExportSummary } from './budgetExportSummary';
 import { orderAcusForExport } from './acuExportOrder';
 
 // ─── ESPECIALIDADES ─────────────────────────────────────────────────────────────
@@ -345,7 +347,9 @@ async function buildPresupuestoSheet(
     rows: DelphinRow[],
     proyecto: any,
     projectName: string,
-    workbook: ExcelJS.Workbook
+    workbook: ExcelJS.Workbook,
+    resumenPresupuesto?: ResumenPresupuesto,
+    isFiltered = false,
 ) {
 
     const totalColumnas = 7;
@@ -429,23 +433,32 @@ async function buildPresupuestoSheet(
         .filter((r) => (r.nivel ?? 1) === 1)
         .reduce((s, r) => s + (r.parcial || r.metrado * r.precio_unitario || 0), 0);
 
-    const totalRow = filaActual;
-    ws.getCell(totalRow, 1).value = '';
-    ws.getCell(totalRow, 2).value = '';
-    ws.getCell(totalRow, 3).value = 'TOTAL PRESUPUESTO';
-    ws.getCell(totalRow, 4).value = '';
-    ws.getCell(totalRow, 5).value = '';
-    ws.getCell(totalRow, 6).value = '';
-    ws.getCell(totalRow, 7).value = totalPres;
+    const summary = buildBudgetExportSummary(totalPres, resumenPresupuesto, isFiltered);
+    const summaryRows = [
+        { label: 'COSTO DIRECTO', amount: summary.costoDirecto },
+        { label: 'GASTOS GENERALES', percentage: summary.gastosGeneralesPorcentaje, amount: summary.gastosGenerales },
+        { label: 'UTILIDAD', percentage: summary.utilidadPorcentaje, amount: summary.utilidad },
+        { label: 'TOTAL', amount: summary.total, isTotal: true },
+    ];
 
-    for (let c = 1; c <= totalColumnas; c++) {
-        const cell = ws.getCell(totalRow, c);
-        fill(cell, C.totalBg);
-        font(cell, C.totalFg, true, 10);
-        border(cell);
-        cell.alignment = { vertical: 'middle', horizontal: c === 7 ? 'right' : 'center' };
-        if (c === 7) cell.numFmt = '#,##0.00';
-    }
+    summaryRows.forEach((summaryRow, index) => {
+        const rowNumber = filaActual + index;
+        ws.getCell(rowNumber, 3).value = summaryRow.label;
+        if (summaryRow.percentage !== undefined) {
+            ws.getCell(rowNumber, 5).value = summaryRow.percentage / 100;
+            ws.getCell(rowNumber, 5).numFmt = '0.00%';
+        }
+        ws.getCell(rowNumber, 7).value = summaryRow.amount;
+        ws.getCell(rowNumber, 7).numFmt = '#,##0.00';
+
+        for (let c = 1; c <= totalColumnas; c++) {
+            const cell = ws.getCell(rowNumber, c);
+            fill(cell, summaryRow.isTotal ? C.totalBg : C.titulo2Bg);
+            font(cell, summaryRow.isTotal ? C.totalFg : C.titulo2Fg, true, 10);
+            border(cell);
+            cell.alignment = { vertical: 'middle', horizontal: c === 5 || c === 7 ? 'right' : 'center' };
+        }
+    });
 
     ws.views = [{ state: 'frozen', ySplit: filaActual - rows.length - 1 }];
 }
@@ -845,7 +858,8 @@ export async function exportDelphinExcel(
     projectName: string,
     proyecto?: any,
     selectedSpecialties?: string[],
-    formulaData?: any
+    formulaData?: any,
+    resumenPresupuesto?: ResumenPresupuesto,
 ): Promise<void> {
     // Filtrar filas por especialidades seleccionadas
     const filteredRows = selectedSpecialties && selectedSpecialties.length > 0
@@ -858,7 +872,7 @@ export async function exportDelphinExcel(
 
     if (content === 'budget_only' || content === 'budget_gantt') {
         const ws = wb.addWorksheet('Presupuesto General');
-        await buildPresupuestoSheet(ws, filteredRows, proyecto, projectName, wb);
+        await buildPresupuestoSheet(ws, filteredRows, proyecto, projectName, wb, resumenPresupuesto, Boolean(selectedSpecialties?.length));
         
         try {
             const res = await axios.get(`/costos/proyectos/${proyecto.id}/presupuesto/acus/export-data`);

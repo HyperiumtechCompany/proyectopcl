@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { Box, Network, PanelsTopLeft } from 'lucide-react';
+import { Box, Map, Network } from 'lucide-react';
 
 export type GeneralWorkspaceView = '2d' | '3d' | 'network';
 
@@ -10,8 +10,8 @@ interface Props {
 }
 
 const views = [
-    { key: '2d', label: 'Plano 2D', icon: PanelsTopLeft },
-    { key: '3d', label: 'Modelo 3D', icon: Box },
+    { key: '2d', label: 'Emplazamiento 2D', icon: Map },
+    { key: '3d', label: 'Vista 3D Exterior', icon: Box },
     { key: 'network', label: 'Red y CT', icon: Network },
 ] as const;
 

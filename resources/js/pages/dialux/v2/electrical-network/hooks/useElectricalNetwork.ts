@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { ConductorCatalog } from '@/pages/dialux/electrical/engine/types';
+import { syncFeederLengths } from '../../site/domain/feederSync';
+import type { FeederPath } from '../../site/domain/types';
 import { calculateElectricalNetwork } from '../domain/calculations';
 import { canConnect, validateElectricalNetwork } from '../domain/graph';
 import type {
@@ -10,7 +13,6 @@ import type {
     Point,
 } from '../domain/types';
 import { saveElectricalNetwork } from '../lib/networkApi';
-import type { ConductorCatalog } from '@/pages/dialux/electrical/engine/types';
 
 const id = () => crypto.randomUUID();
 
@@ -89,6 +91,7 @@ export function useElectricalNetwork(
     ports: ModuleElectricalPort[],
     conductors: ConductorCatalog[],
     panelFeederGeometry: PanelFeederGeometry = {},
+    feederPaths: FeederPath[] = [],
 ) {
     const [snapshot, setSnapshot] = useState(initial);
     const [selectedId, setSelectedId] = useState<string>();
@@ -111,7 +114,11 @@ export function useElectricalNetwork(
             snapshot.data.nodes.map((node) => [node.id, node]),
         );
         let changed = false;
-        const edges = snapshot.data.edges.map((edge) => {
+        let edges = snapshot.data.edges.map((edge) => {
+            // Un edge con trazado en el emplazamiento (`site/domain/feederSync`)
+            // se sincroniza más abajo, con la longitud real de la polilínea —
+            // no con la geometría del módulo.
+            if (edge.lengthMode === 'site') return edge;
             if (
                 edge.lengthMode === 'manual' &&
                 edge.horizontalLengthM + edge.verticalLengthM > 0
@@ -134,18 +141,27 @@ export function useElectricalNetwork(
             changed = true;
             return { ...edge, ...derived };
         });
+        // Si un alimentador tiene un trazado vinculado en el emplazamiento,
+        // ese trazado manda sobre cualquier otro modo (incluso si acaba de
+        // vincularse recién: pasa a 'site' aquí mismo).
+        const synced = syncFeederLengths(edges, feederPaths);
+        if (synced.some((edge, index) => edge !== edges[index])) {
+            edges = synced;
+            changed = true;
+        }
         if (!changed) return;
         setSnapshot((current) => ({ ...current, data: { ...current.data, edges } }));
         setDirty(true);
         // Deps: `panelFeederGeometry` cambia cuando la geometría real de un
-        // módulo cambia (altura de montaje, elevación de piso); el largo de
-        // `edges` cambia cuando se conecta/desconecta un tablero (p.ej.
-        // `connectModuleToTg`, cuyo cálculo inicial de longitud puede quedar
-        // corto — este efecto lo corrige de inmediato con la MISMA fórmula
-        // canónica). No se agrega `snapshot` completo para no reejecutar
-        // esto en cada edición manual del usuario.
+        // módulo cambia (altura de montaje, elevación de piso); `feederPaths`
+        // cambia cuando el usuario dibuja/edita un trazado en el emplazamiento;
+        // el largo de `edges` cambia cuando se conecta/desconecta un tablero
+        // (p.ej. `connectModuleToTg`, cuyo cálculo inicial de longitud puede
+        // quedar corto — este efecto lo corrige de inmediato con la MISMA
+        // fórmula canónica). No se agrega `snapshot` completo para no
+        // reejecutar esto en cada edición manual del usuario.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [panelFeederGeometry, snapshot.data.edges.length]);
+    }, [panelFeederGeometry, feederPaths, snapshot.data.edges.length]);
     const issues = useMemo(
         () => validateElectricalNetwork(snapshot.data),
         [snapshot.data],

@@ -86,13 +86,14 @@ interface Props {
         plantilla_logo_der_url: string | null;
     };
     formulaMonomios?: MonomioExport[];
+    resumenPresupuesto: import('../types').ResumenPresupuesto;
     availableSpecialties?: { id: string; label: string; icon?: string }[];
     onClose: () => void;
 }
 
 export function DelphinExportModal({
     open, rows, tasks, calendarSettings, projectName, project, projectData,
-    formulaMonomios,
+    formulaMonomios, resumenPresupuesto,
     availableSpecialties = [], onClose,
 }: Props) {
 
@@ -130,6 +131,7 @@ export function DelphinExportModal({
                 formulaMonomios ?? [],  // ← pasar el array crudo directamente
                 tasks,
                 calendarSettings,
+                resumenPresupuesto,
             );
         } catch (error) {
             console.error('doExport error:', error);

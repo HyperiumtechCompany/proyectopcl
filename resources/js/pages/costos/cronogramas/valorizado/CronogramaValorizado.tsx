@@ -287,6 +287,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                                         totalesPorItem={totalesPorItem}
                                         totalGeneralPeriodos={totalGeneralPeriodos}
                                         finDefaults={props.finDefaults}
+                                        projectId={props.project}
                                     />
                                 </>
                             ) : (

@@ -25,6 +25,7 @@ import { parseMSProjectXML } from '../cronogramas/v2/utils/importMSProject';
 import { router } from '@inertiajs/react';
 import { AcuPanel } from '../presupuesto/components/AcuPanel';
 import { ImportExcelPresupuestoModal } from '../presupuesto/components/ImportExcelPresupuestoModal';
+import { ImportMetradosModal } from '../presupuesto/components/ImportMetradosModal';
 import { usePresupuestoAcu } from '../presupuesto/hooks/usePresupuestoAcu';
 import { useProjectParamsStore } from '../presupuesto/stores/projectParamsStore';
 import { DelphinGrid } from './components/DelphinGrid';
@@ -227,6 +228,7 @@ export default function DelphinView({
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [exportOpen, setExportOpen] = useState(false);
     const [importExcelOpen, setImportExcelOpen] = useState(false);
+    const [importMetradosOpen, setImportMetradosOpen] = useState(false);
     const [insumosOpen, setInsumosOpen] = useState(false);
     const [insumosScope, setInsumosScope] = useState<InsumosScope>('presupuesto');
     const [ganttBarLabel, setGanttBarLabel] = useState<GanttBarLabel>('descripcion');
@@ -938,6 +940,7 @@ export default function DelphinView({
     const handleToggleCritical = useCallback(() => setShowCriticalPath((p) => !p), []);
     const handleOpenSettingsClick = useCallback(() => setSettingsOpen(true), []);
     const handleOpenImportExcelClick = useCallback(() => setImportExcelOpen(true), []);
+    const handleOpenImportMetradosClick = useCallback(() => setImportMetradosOpen(true), []);
     const handleOpenInsumosModal = useCallback((scope: InsumosScope) => {
         setInsumosScope(scope);
         setInsumosOpen(true);
@@ -988,6 +991,7 @@ export default function DelphinView({
                     onOpenSettings={handleOpenSettingsClick}
                     onImport={handleImportClick}
                     onImportExcel={handleOpenImportExcelClick}
+                    onImportMetrados={handleOpenImportMetradosClick}
                     onOpenInsumos={handleOpenInsumosModal}
 
                     isParentSelected={isParentSelected}
@@ -1225,6 +1229,7 @@ export default function DelphinView({
                     project={project}
                     projectData={projectData}
                     formulaMonomios={formulaMonomios}
+                    resumenPresupuesto={resumenPresupuesto}
                     availableSpecialties={availableSpecialties}
                     onClose={() => setExportOpen(false)}
                 />
@@ -1246,6 +1251,14 @@ export default function DelphinView({
                     onClose={() => setImportExcelOpen(false)}
                     onBudgetImported={importDelphinRows}
                     onAcusImported={handleAcusImported} />
+                <ImportMetradosModal
+                    projectId={project_id_int}
+                    isOpen={importMetradosOpen}
+                    onClose={() => setImportMetradosOpen(false)}
+                    onSuccess={() => {
+                        setImportMetradosOpen(false);
+                        router.reload();
+                    }} />
                 <InsumosConsolidadosModal
                     open={insumosOpen}
                     acuRows={acuRows}

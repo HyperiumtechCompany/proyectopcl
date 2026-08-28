@@ -60,6 +60,12 @@ export type ModoCalculo = 'calendario' | '30dias';
  * en vez de placeholders fijos. Siguen siendo editables ahí (clic en la
  * celda), esto solo evita arrancar con un % que no es el real del proyecto.
  */
+export interface ComponenteExtra {
+    id:    string;
+    name:  string;
+    monto: number;
+}
+
 export interface FinDefaults {
     pctGastosGenerales?: number;
     pctUtilidad?:        number;
@@ -67,6 +73,7 @@ export interface FinDefaults {
     montoMobiliario?:    number;
     pctIGVMobiliario?:   number;
     pctSupervision?:     number;
+    componentesExtra?:   ComponenteExtra[];
 }
 
 export interface ValorizadoProps {

@@ -1,4 +1,4 @@
-import type { DelphinRow } from '../types';
+import type { DelphinRow, ResumenPresupuesto } from '../types';
 import { exportDelphinExcel } from './exportDelphinExcel';
 import { exportDelphinPdf } from './exportDelphinPdf';
 import { exportDelphinMSP } from './exportDelphinMSP';
@@ -100,6 +100,7 @@ export async function exportDelphin(
     formulaMonomios: MonomioExport[] = [],
     ganttTasks: GanttTask[] = [],
     calendarSettings?: GanttCalendarSettings,
+    resumenPresupuesto?: ResumenPresupuesto,
 ) {
     
     // ── FÓRMULA POLINÓMICA ──────────────────────────────────────────────────
@@ -133,9 +134,9 @@ export async function exportDelphin(
     // ── OTROS CONTENIDOS ─────────────────────────────────────────────────────
     switch (format) {
         case 'excel':
-            return exportDelphinExcel(content, rows, projectName, projectData, selectedSpecialties);
+            return exportDelphinExcel(content, rows, projectName, projectData, selectedSpecialties, undefined, resumenPresupuesto);
         case 'pdf':
-            return exportDelphinPdf(content, rows, projectName, projectData, selectedSpecialties);
+            return exportDelphinPdf(content, rows, projectName, projectData, selectedSpecialties, undefined, resumenPresupuesto);
         case 'msp':
             return exportDelphinMSP(ganttTasks, projectName, calendarSettings);
         default:

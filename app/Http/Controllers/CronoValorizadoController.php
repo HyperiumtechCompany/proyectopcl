@@ -12,6 +12,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class CronoValorizadoController extends Controller
@@ -880,6 +881,11 @@ class CronoValorizadoController extends Controller
 
         $supervisionTotal = (float) ($snapshot?->total_supervision ?? 0);
 
+        $componentesExtraRaw = $snapshot?->componentes_extra_json ?? '[]';
+        $componentesExtra = is_string($componentesExtraRaw)
+            ? (json_decode($componentesExtraRaw, true) ?? [])
+            : (is_array($componentesExtraRaw) ? $componentesExtraRaw : []);
+
         return [
             'pctGastosGenerales' => $costoDirecto > 0
                 ? round(($gastosGenerales / $costoDirecto) * 100, 4)
@@ -891,6 +897,18 @@ class CronoValorizadoController extends Controller
             'pctSupervision' => $costoDirecto > 0
                 ? round(($supervisionTotal / $costoDirecto) * 100, 4)
                 : 0.0,
+            // Componentes extra (III, IV, ...) del mismo snapshot que usa el
+            // panel Consolidado — se editan/agregan/quitan desde el valorizado
+            // pero se guardan en gg_consolidado, la misma fuente única, para
+            // que ambas pantallas siempre muestren lo mismo.
+            'componentesExtra' => array_values(array_map(
+                fn ($c) => [
+                    'id' => (string) ($c['id'] ?? Str::uuid()),
+                    'name' => (string) ($c['name'] ?? 'NUEVO COMPONENTE'),
+                    'monto' => (float) ($c['monto'] ?? 0),
+                ],
+                $componentesExtra
+            )),
         ];
     }
 

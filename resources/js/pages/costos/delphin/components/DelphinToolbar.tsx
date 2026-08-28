@@ -78,6 +78,7 @@ interface Props {
     onOpenSettings: () => void;
     onImport?: () => void;
     onImportExcel?: () => void;
+    onImportMetrados?: () => void;
     onOpenInsumos?: (scope: InsumosScope) => void;
 
     // Formula polinómica
@@ -169,6 +170,57 @@ function InsumosDropdown({ onSelect }: { onSelect?: (scope: InsumosScope) => voi
                     <button type="button" className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-sky-600 hover:text-white dark:text-slate-200 dark:hover:bg-sky-700" onClick={() => select('presupuesto')}>
                         <span className="block font-medium">Insumos por presupuesto</span>
                         <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">Consolidado general del proyecto</span>
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function ImportBudgetDropdown({
+    onImportMetrados,
+    onImportExcel,
+}: {
+    onImportMetrados?: () => void;
+    onImportExcel?: () => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const close = (event: MouseEvent) => {
+            if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+    }, [open]);
+
+    const select = (callback?: () => void) => {
+        setOpen(false);
+        callback?.();
+    };
+
+    return (
+        <div ref={ref} className="relative">
+            <button
+                type="button"
+                title="Importar presupuesto"
+                className="flex shrink-0 items-center gap-1.5 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+                onClick={() => setOpen((current) => !current)}>
+                <Upload size={13} />
+                <span className="hidden sm:inline">Importar</span>
+                <ChevronDown size={11} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+            {open && (
+                <div className="absolute right-0 top-full z-[100] mt-1 w-64 overflow-hidden rounded border border-slate-200 bg-white py-1 shadow-2xl dark:border-slate-600 dark:bg-slate-800">
+                    <button type="button" className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-sky-600 hover:text-white dark:text-slate-200 dark:hover:bg-sky-700" onClick={() => select(onImportMetrados)}>
+                        <span className="block font-medium">Desde metrados del proyecto</span>
+                        <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">Reutiliza las estructuras existentes por especialidad</span>
+                    </button>
+                    <button type="button" className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-sky-600 hover:text-white dark:text-slate-200 dark:hover:bg-sky-700" onClick={() => select(onImportExcel)}>
+                        <span className="block font-medium">Desde Excel Delphin</span>
+                        <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">Importa presupuesto y ACUs desde el archivo</span>
                     </button>
                 </div>
             )}
@@ -342,7 +394,7 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
     onMoveUp, onMoveDown, onDuplicate, onExpandAll, onCollapseAll,
     zoomLevel, showCriticalPath, schedulingMode, ganttBarLabel,
     onZoomChange, onToggleCritical, onSchedulingMode, onBarLabelChange,
-    onOpenSettings, onImport, onImportExcel, onOpenInsumos, onExport,
+    onOpenSettings, onImport, onImportExcel, onImportMetrados, onOpenInsumos, onExport,
     isParentSelected, onFormulaView,
     incompatiblesCount, onOpenCompatibilidad,
     budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt, onNavigateValorizado, project
@@ -620,12 +672,9 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                 {mode === 'budget' && (
                     <>
                         <InsumosDropdown onSelect={onOpenInsumos} />
-                        <Btn
-                            icon={<Upload size={13} />}
-                            label="Imp. Excel"
-                            title="Importar presupuesto y ACUs desde Excel (Delphin Express)"
-                            variant="default"
-                            onClick={onImportExcel} />
+                        <ImportBudgetDropdown
+                            onImportMetrados={onImportMetrados}
+                            onImportExcel={onImportExcel} />
                     </>
                 )}
                 {mode === 'cpm' && (

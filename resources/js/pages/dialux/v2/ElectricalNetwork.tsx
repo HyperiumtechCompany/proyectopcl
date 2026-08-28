@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     AlertTriangle,
     Network,
@@ -29,6 +29,7 @@ import type {
     ModuleElectricalPort,
 } from './electrical-network/domain/types';
 import { useElectricalNetwork } from './electrical-network/hooks/useElectricalNetwork';
+import type { SiteData } from './site/domain/types';
 
 const defined = <T extends Record<string, unknown>>(values: T): Partial<T> =>
     Object.fromEntries(
@@ -42,6 +43,7 @@ export default function ElectricalNetworkPage({
     conductors,
     moduleScenes,
     generalModuleId,
+    siteData,
 }: {
     project: { id: number; name: string };
     network: ElectricalNetworkSnapshot;
@@ -54,6 +56,7 @@ export default function ElectricalNetworkPage({
         scenes: Scene[];
     }>;
     generalModuleId: number | null;
+    siteData: SiteData | null;
 }) {
     const [modulesData, setModulesData] = useState(moduleScenes);
     const [workspaceView, setWorkspaceView] = useState<'diagram' | 'ct'>(
@@ -228,13 +231,21 @@ export default function ElectricalNetworkPage({
             }),
         );
     };
+    const feederPaths = siteData?.feederPaths ?? [];
     const editor = useElectricalNetwork(
         project.id,
         network,
         ports,
         conductors,
         panelFeederGeometry,
+        feederPaths,
     );
+    const viewFeederInSitePlan = (edgeId: string) => {
+        if (!generalModuleId) return;
+        router.visit(
+            `/dialux-v2/projects/${project.id}/modules/${generalModuleId}?view=2d&feederEdge=${edgeId}`,
+        );
+    };
     // Caída de tensión aguas arriba (en voltios) que la red general ya
     // calculó desde el TG real hasta el tablero raíz de cada módulo
     // (`editor.calculations[].accumulatedVoltageDropV`), indexada por el
@@ -517,6 +528,11 @@ export default function ElectricalNetworkPage({
                                     editor.setSelectedId(nodeId);
                                     setWorkspaceView('ct');
                                 }}
+                                onViewInSitePlan={
+                                    generalModuleId
+                                        ? viewFeederInSitePlan
+                                        : undefined
+                                }
                             />
                         </main>
                         <div className="flex w-full min-h-0 flex-col overflow-y-auto xl:w-80">
