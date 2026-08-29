@@ -1136,9 +1136,16 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         // interceptar el evento antes que el atajo global de EditorLayout.
         useEffect(() => {
             const handler = (e: KeyboardEvent) => {
+                // No secuestrar teclas cuando el foco está en un control de UI
+                // (input, botón, select, combobox, diálogo/menú abierto…): un
+                // Enter/Escape ahí es para ESE control, no para el trazo del
+                // canvas. Mientras se dibuja, `e.target` es el SVG del canvas o
+                // un hijo suyo, que no matchea este selector.
+                const target = e.target as HTMLElement | null;
                 if (
-                    e.target instanceof HTMLInputElement ||
-                    e.target instanceof HTMLTextAreaElement
+                    target?.closest?.(
+                        'input, textarea, select, button, a[href], [contenteditable="true"], [role="dialog"], [role="menu"], [role="listbox"], [role="combobox"], [role="textbox"]',
+                    )
                 ) {
                     return;
                 }
@@ -1892,10 +1899,13 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         if (!isInteractiveMode) return;
                         // Doble clic cierra el polígono en curso (recinto,
                         // pasadizo, área de proyección de luminarias…) sin
-                        // exigir volver a clavar el primer vértice. Si no
-                        // había un polígono abierto, cae al cierre de
-                        // muro/medición de área.
-                        if (!finishDrawPolygon(setRoomVertices)) onDoubleClick();
+                        // exigir volver a clavar el primer vértice. `true` =
+                        // el 2º clic del doble clic ya metió un vértice extra,
+                        // descartarlo. Si no había un polígono abierto, cae al
+                        // cierre de muro/medición de área.
+                        if (!finishDrawPolygon(setRoomVertices, true)) {
+                            onDoubleClick();
+                        }
                     }}
                     onContextMenu={(event) => {
                         event.preventDefault();

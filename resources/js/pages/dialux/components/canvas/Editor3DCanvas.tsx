@@ -31,6 +31,12 @@ import {
     resolveRoomCeilingHeight,
 } from '@/pages/dialux/engine/fixtureHeights';
 import { House3DBuilder } from '@/pages/dialux/engine/House3DBuilder';
+import {
+    computeWorldOrigin,
+    translateLightingResultForRender,
+    translateSceneForRender,
+    type WorldOrigin,
+} from '@/pages/dialux/engine/sceneWorldOrigin';
 import { findAmbientSpaceAtPoint } from '@/pages/dialux/hooks/ambientSpaces';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 
@@ -47,6 +53,12 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
     const builderRef = useRef<House3DBuilder | null>(null);
     const cameraRef = useRef<ArcRotateCamera | null>(null);
     const syncFrameRef = useRef<number | null>(null);
+    /**
+     * Offset aplicado a la geometría 3D cuando el proyecto está georreferenciado
+     * lejos del origen (ver `sceneWorldOrigin.ts`). `null` = sin traslación. El
+     * picking 3D suma esto de vuelta para escribir coordenadas del store reales.
+     */
+    const worldOriginRef = useRef<WorldOrigin | null>(null);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -114,8 +126,11 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
             ) {
                 const editorScene = st.activeScene();
                 if (!editorScene) return;
-                const pickedX = pickResult.pickedPoint.x;
-                const pickedY = pickResult.pickedPoint.z;
+                // El punto pickeado está en el espacio 3D trasladado; se suma
+                // el offset de regreso para escribir coordenadas del store reales.
+                const origin = worldOriginRef.current;
+                const pickedX = pickResult.pickedPoint.x + (origin?.x ?? 0);
+                const pickedY = pickResult.pickedPoint.z + (origin?.y ?? 0);
                 const ambient = findAmbientSpaceAtPoint(editorScene, {
                     x: pickedX,
                     y: pickedY,
@@ -215,9 +230,27 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
                         })
                         .map(([, result]) => result);
 
+                    // Recentrado para planos georreferenciados (UTM): el
+                    // `House3DBuilder` recibe copias trasladadas al origen; el
+                    // store no se toca (ver `sceneWorldOrigin.ts`). Para un
+                    // proyecto normal `origin` es `null` y no se copia nada.
+                    const sourceScenes = freshState.project?.scenes ?? [];
+                    const origin = computeWorldOrigin(sourceScenes);
+                    worldOriginRef.current = origin;
+                    const renderScenes = origin
+                        ? sourceScenes.map((s) =>
+                              translateSceneForRender(s, origin),
+                          )
+                        : sourceScenes;
+                    const renderResults = origin
+                        ? activeResults.map((r) =>
+                              translateLightingResultForRender(r, origin),
+                          )
+                        : activeResults;
+
                     builderRef.current.syncAllFloors(
-                        freshState.project?.scenes ?? [],
-                        activeResults,
+                        renderScenes,
+                        renderResults,
                         freshState.ui.showIsolux,
                         freshState.ui.isoluxMode,
                         freshState.ui.showRoof,

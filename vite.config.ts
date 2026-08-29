@@ -112,5 +112,13 @@ export default defineConfig(({ command }) => ({
     test: {
         environment: 'node',
         include: ['resources/js/**/*.test.ts', 'resources/js/**/*.test.tsx'],
+        // El motor de tablas UGR (salas de referencia CIE) y los benchmarks de
+        // paridad DIALux evo hacen cálculo pesado real: ~2-4 s cada uno en
+        // aislamiento, pero al correr el suite entero en paralelo la
+        // contención de CPU los empuja más allá del default de 5 s de Vitest
+        // y fallan por timeout sin ser una regresión. 20 s da margen sin
+        // ocultar un cuelgue real.
+        testTimeout: 20_000,
+        hookTimeout: 20_000,
     },
 }));

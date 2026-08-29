@@ -46,7 +46,12 @@ const AreaLabel = memo(function AreaLabel({
     const subFontSize = safeNum(Math.max(7, 8.5 * zoom));
     const rows = arrangement.config.rows;
     const cols = arrangement.config.columns;
-    const gridText = rows > 0 && cols > 0 ? `${rows}×${cols}` : null;
+    // `rows×cols` es la disposición PEDIDA; solo se muestra cuando coincide con
+    // la cantidad realmente colocada. Si el reparto consciente de obstáculos,
+    // un borrado parcial o una reorganización cambiaron el total, mostrar
+    // `3×4` junto a `9 luminarias` sería contradictorio — en ese caso se omite.
+    const gridText =
+        rows > 0 && cols > 0 && rows * cols === count ? `${rows}×${cols}` : null;
 
     return (
         <g pointerEvents="none">

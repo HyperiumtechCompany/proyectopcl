@@ -324,12 +324,22 @@ export function useCanvasInteraction(opts: InteractionOptions) {
     /**
      * Umbral de cierre de polígono adaptativo al zoom.
      * A zoom 1x → 26px. A zoom 2x → 13px. A zoom 4x → 12px (mínimo).
-     * Radio generoso para que cerrar sobre el primer vértice no exija pulso
-     * fino (el usuario también puede cerrar con doble clic o Enter, ver
-     * `finishDrawPolygon`). Sigue siendo lo bastante chico como para que un
-     * muro corto no se autocierre antes de tiempo.
+     * Radio generoso para que cerrar un recinto/área de proyección sobre el
+     * primer vértice no exija pulso fino (también se puede cerrar con doble
+     * clic o Enter, ver `finishDrawPolygon`). El cierre de recinto está
+     * protegido por `roomVertices.length > 2`, así que este radio grande solo
+     * actúa a partir del 4º clic.
      */
     const closeThresholdPx = Math.max(12, 26 / zoom);
+
+    /**
+     * Umbral de cierre para MUROS/tabiques (polilínea): más chico que el de
+     * recinto. El bloque de muro solo exige 1 vértice previo para cerrar, así
+     * que un radio grande hacía que un muro corto se descartara como bucle
+     * degenerado `[v1, v1]` al colocar el 2º punto cerca del 1º. Se mantiene
+     * el valor histórico.
+     */
+    const wallCloseThresholdPx = Math.max(8, 20 / zoom);
 
     /**
      * En modo libre, desactivar el snap a entidades DXF.
@@ -632,15 +642,27 @@ export function useCanvasInteraction(opts: InteractionOptions) {
 
     /**
      * Cierra el polígono en curso SIN exigir que el último clic caiga sobre el
-     * primer vértice — para atarlo a doble clic / Enter / clic derecho. Quita
-     * primero los vértices finales casi duplicados (el segundo clic de un
-     * doble clic cae sobre el primero). Devuelve true si cerró algo.
+     * primer vértice — para atarlo a doble clic / Enter / clic derecho.
+     *
+     * `fromDoubleClick`: el 2º `mousedown` de un doble clic ya insertó un
+     * vértice extra (casi sobre el anterior) ANTES de que llegue este
+     * handler; con `true` se descarta ese último vértice incondicionalmente
+     * (igual que el camino de clic-sobre-el-primero descarta el clic de
+     * cierre). Con Enter no hay vértice espurio, así que es `false`. En ambos
+     * casos se hace además una pasada de dedupe por si quedaran vértices
+     * finales colineales/duplicados. Devuelve true si cerró algo.
      */
     const finishDrawPolygon = useCallback(
-        (setRoomVertices: (v: CanvasPoint[]) => void): boolean => {
+        (
+            setRoomVertices: (v: CanvasPoint[]) => void,
+            fromDoubleClick = false,
+        ): boolean => {
             if (!isPolygonDrawTool()) return false;
             const s = stateRef.current;
             let verts = [...s.roomVertices];
+            if (fromDoubleClick && verts.length > 0) {
+                verts = verts.slice(0, -1);
+            }
             while (
                 verts.length >= 2 &&
                 Math.hypot(
@@ -718,7 +740,10 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             if (isWallTool(activeTool)) {
                 if (!s.wallVertices) s.wallVertices = [];
                 const newPoint = canvasToScene(cx, cy);
-                if (s.wallVertices.length > 0) {
+                // Se exigen ≥2 vértices previos antes de permitir el cierre en
+                // bucle: con 1 solo, `[...wallVertices, wallVertices[0]]` daba
+                // un muro degenerado `[v1, v1]`.
+                if (s.wallVertices.length >= 2) {
                     const first = sceneToCanvas(
                         s.wallVertices[0].x,
                         s.wallVertices[0].y,
@@ -731,7 +756,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                         newPointScreen.x - first.x,
                         newPointScreen.y - first.y,
                     );
-                    if (dist < closeThresholdPx) {
+                    if (dist < wallCloseThresholdPx) {
                         const closed = [...s.wallVertices, s.wallVertices[0]];
                         if (activeTool === 'partition') {
                             onAddPartition?.(closed);
@@ -754,8 +779,10 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         [
             activeTool,
             closeThresholdPx,
+            wallCloseThresholdPx,
             sceneToCanvas,
             canvasToScene,
+            emitPolygonClose,
             onAddRoom,
             onAddWall,
             onAddPartition,

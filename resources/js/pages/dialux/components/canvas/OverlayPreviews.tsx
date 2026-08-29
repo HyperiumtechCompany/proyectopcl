@@ -17,6 +17,43 @@ import { pointsToSvgString, safeNum } from './canvasUtils';
  */
 const FIXTURE_GRID_PREVIEW_MOUNTING_HEIGHT = 2.7;
 
+/**
+ * `calculateObstacleAwareFixtureGridPositions` hace resta booleana CSG +
+ * pole-of-inaccessibility cuando hay columnas/vigas; corría en cada render
+ * mientras el área de proyección está pendiente de confirmar. Caché de 1
+ * entrada por firma de entrada (el área y los obstáculos no cambian entre
+ * dibujar el polígono y confirmar en el panel; solo cambian filas/columnas).
+ * En espacio de escena — el mapeo a pantalla (que sí depende de pan/zoom) se
+ * aplica después.
+ */
+let gridPreviewCacheKey = '';
+let gridPreviewCacheValue: { x: number; y: number }[] = [];
+function memoizedGridPreviewPositions(
+    area: CanvasPoint[],
+    obstacles: StructuralObstacle[],
+    rows: number,
+    columns: number,
+): { x: number; y: number }[] {
+    const key =
+        `${rows}x${columns}|` +
+        area.map((v) => `${v.x.toFixed(3)},${v.y.toFixed(3)}`).join(';') +
+        '|' +
+        obstacles
+            .map((o) => `${o.id}:${o.obstacleType}:${o.vertices.length}`)
+            .join(',');
+    if (key !== gridPreviewCacheKey) {
+        gridPreviewCacheKey = key;
+        gridPreviewCacheValue = calculateObstacleAwareFixtureGridPositions(
+            area,
+            obstacles,
+            FIXTURE_GRID_PREVIEW_MOUNTING_HEIGHT,
+            rows,
+            columns,
+        );
+    }
+    return gridPreviewCacheValue;
+}
+
 interface Props {
     roomVertices: CanvasPoint[];
     roomPreviewPoint: CanvasPoint | null;
@@ -310,10 +347,9 @@ export const OverlayPreviews = memo(function OverlayPreviews({
             {pendingFixtureGridArea && pendingFixtureGridArea.length >= 3 &&
                 (() => {
                     const screenPoly = pendingFixtureGridArea.map(screenPoint);
-                    const previewCenters = calculateObstacleAwareFixtureGridPositions(
+                    const previewCenters = memoizedGridPreviewPositions(
                         pendingFixtureGridArea,
                         structuralObstacles,
-                        FIXTURE_GRID_PREVIEW_MOUNTING_HEIGHT,
                         fixtureGridAreaRows,
                         fixtureGridAreaColumns,
                     ).map(screenPoint);

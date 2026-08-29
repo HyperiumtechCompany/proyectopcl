@@ -68,7 +68,6 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         totalesFinales,
         totalesPorItem,
         totalGeneralPeriodos,
-        totalParcial,
         curvaSData,
         montoAcumuladoTotal,
         desviaciones,
@@ -153,14 +152,14 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         exportarExcel(items, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem, {
             projectData: projectDataExport,
             projectId: props.project,
-            totalPresupuesto: totalParcial,
+            totalPresupuesto: props.totalPresupuesto,
             totalPresupuestoDesembolso: resumenFinancieroDesembolso.total,
             valorizacionMensualDesembolso: resumenFinancieroDesembolso.distribucionMensual,
             diasPorMes: props.diasPorMes || {},
             totalDias,
             finDefaults: exportFinDefaults,
         });
-    }, [items, props.periodos, props.diasPorMes, totalParcial, resumenFinancieroDesembolso, props.project, totalesFinales, props.projectName, viewMode, totalesPorItem, projectDataExport, exportFinDefaults]);
+    }, [items, props.periodos, props.diasPorMes, props.totalPresupuesto, resumenFinancieroDesembolso, props.project, totalesFinales, props.projectName, viewMode, totalesPorItem, projectDataExport, exportFinDefaults]);
 
     const handleExportPDF = useCallback(() => {
         const totalDias = Number(projectDataExport?.duracion_dias) > 0
@@ -170,14 +169,14 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         exportarPDF(items, props.periodos, totalesFinales, props.projectName, totalesPorItem, {
             projectData: projectDataExport,
             projectId: props.project,
-            totalPresupuesto: totalParcial,
+            totalPresupuesto: props.totalPresupuesto,
             totalPresupuestoDesembolso: resumenFinancieroDesembolso.total,
             valorizacionMensualDesembolso: resumenFinancieroDesembolso.distribucionMensual,
             diasPorMes: props.diasPorMes || {},
             totalDias,
             finDefaults: exportFinDefaults,
         });
-    }, [items, props.periodos, props.diasPorMes, totalParcial, resumenFinancieroDesembolso, props.project, totalesFinales, props.projectName, totalesPorItem, projectDataExport, exportFinDefaults]);
+    }, [items, props.periodos, props.diasPorMes, props.totalPresupuesto, resumenFinancieroDesembolso, props.project, totalesFinales, props.projectName, totalesPorItem, projectDataExport, exportFinDefaults]);
 
     // Reparto mensual para Desembolso: usa la valorización real (con GG/
     // Utilidad/IGV/conceptos ya sumados), no el Costo Directo puro de
@@ -314,7 +313,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                                         periodos={props.periodos}
                                         viewMode={viewMode}
                                         totales={totalesFinales}
-                                        totalPresupuesto={totalParcial}
+                                        totalPresupuesto={props.totalPresupuesto}
                                         onEditarCelda={editarCelda}
                                         onRedistribuir={redistribuirItem}
                                         onRedistribuirGauss={redistribuirGaussItem}

@@ -12,6 +12,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import axios from 'axios';
 import Decimal from 'decimal.js';
+import { ajustarResiduoMonetario } from '../helpers/ajustarResiduoMonetario';
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import type {
     ItemValorizado,
@@ -401,11 +402,22 @@ const TablaValorizada: React.FC<Props> = ({
     // mes (`totalesFinales`) en vez de la valorización real (con GG/Utilidad/
     // IGV/conceptos ya sumados) — cualquier cambio en los conceptos de
     // Valorizado no se reflejaba ahí ("sigue con 79, no veo cambios").
-    const cdPorPeriodo: Record<string, number> = {};
+    let cdPorPeriodo: Record<string, number> = {};
     periodos.forEach((p) => {
         cdPorPeriodo[p.key] = totales[p.key]?.monto ?? 0;
     });
+    cdPorPeriodo = ajustarResiduoMonetario(
+        cdPorPeriodo,
+        periodos.map((p) => p.key),
+        costoDirectoResumen,
+    );
     const cdTotalReal = Object.values(cdPorPeriodo).reduce((a, b) => a + b, 0);
+
+    // Presupuesto suma los parciales con su precisión interna y redondea una
+    // sola vez al final. El cronograma reparte cada partida en céntimos, por lo
+    // que sumar esos redondeos puede diferir S/ 0.01. El último período activo
+    // absorbe únicamente ese residuo para que F28 y sus meses concilien con el
+    // Costo Directo oficial, sin alterar las partidas individuales.
 
     // Reparto proporcional con ajuste de residuo (Decimal.js): sin esto, cada
     // celda se redondeaba a 2 decimales por separado y la suma de los meses
