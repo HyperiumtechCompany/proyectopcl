@@ -91,6 +91,44 @@ export function calculateObstacleAwareFixtureGridPositions(
     rowGuides?: number[],
     columnGuides?: number[],
 ): Vertex[] {
+    if (roomVertices.length < 3) return [];
+
+    // Todo el cálculo se hace en un espacio local (restando el mínimo del
+    // polígono) y las posiciones se trasladan de vuelta. Con planos
+    // georreferenciados en UTM (coordenadas ~1e7) la resta booleana / pole of
+    // inaccessibility de `computeValidInstallationZones` y la fórmula shoelace
+    // de los centroides pierden precisión y esparcen las luminarias fuera del
+    // área dibujada. En espacio local (dimensiones del ambiente, ~metros) el
+    // cálculo es exacto. La distribución de luminarias es invariante a la
+    // traslación.
+    const ox = Math.min(...roomVertices.map((v) => v.x));
+    const oy = Math.min(...roomVertices.map((v) => v.y));
+    const localRoom = roomVertices.map((v) => ({ x: v.x - ox, y: v.y - oy }));
+    const localObstacles = obstacles.map((o) => ({
+        ...o,
+        vertices: o.vertices.map((v) => ({ x: v.x - ox, y: v.y - oy })),
+    }));
+
+    return calculateObstacleAwareFixtureGridPositionsLocal(
+        localRoom,
+        localObstacles,
+        mountingHeight,
+        rows,
+        columns,
+        rowGuides,
+        columnGuides,
+    ).map((p) => ({ x: p.x + ox, y: p.y + oy }));
+}
+
+function calculateObstacleAwareFixtureGridPositionsLocal(
+    roomVertices: Vertex[],
+    obstacles: StructuralObstacle[],
+    mountingHeight: number,
+    rows: number,
+    columns: number,
+    rowGuides?: number[],
+    columnGuides?: number[],
+): Vertex[] {
     const safeRows = Math.max(1, Math.round(rows));
     const safeCols = Math.max(1, Math.round(columns));
     // Cubiertas, cielorrasos y rampas son superficies constructivas/rutas;

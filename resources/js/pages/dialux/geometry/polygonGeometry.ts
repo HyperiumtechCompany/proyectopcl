@@ -117,11 +117,20 @@ export function sanitizePolygon(vertices: WorldPoint[]): WorldPoint[] {
 export function polygonSignedArea(vertices: WorldPoint[]): number {
     const ring = sanitizePolygon(vertices);
     if (ring.length < 3) return 0;
+    // Origen local en el primer vértice: sin restarlo, la fórmula shoelace
+    // sufre cancelación catastrófica con coordenadas grandes (planos
+    // georreferenciados UTM, ~1e7): `a.x*b.y` y `b.x*a.y` valen ~1e14 y su
+    // diferencia real es de unas decenas → se pierden casi todos los dígitos
+    // significativos y el área (y todo lo que dependa de ella) sale mal. El
+    // área es invariante a la traslación, así que restar el origen no cambia
+    // el resultado, solo lo hace numéricamente estable.
+    const ox = ring[0].x;
+    const oy = ring[0].y;
     let sum = 0;
     for (let i = 0; i < ring.length; i++) {
         const a = ring[i];
         const b = ring[(i + 1) % ring.length];
-        sum += a.x * b.y - b.x * a.y;
+        sum += (a.x - ox) * (b.y - oy) - (b.x - ox) * (a.y - oy);
     }
     return sum / 2;
 }
@@ -164,16 +173,25 @@ export function polygonCentroid(vertices: WorldPoint[]): WorldPoint | null {
         }
         return { x: sx / ring.length, y: sy / ring.length };
     }
+    // Mismo motivo que en `polygonSignedArea`: se calcula en un origen local
+    // (primer vértice) y se traslada el resultado de vuelta, para no perder
+    // precisión con coordenadas UTM.
+    const ox = ring[0].x;
+    const oy = ring[0].y;
     let cx = 0;
     let cy = 0;
     for (let i = 0; i < ring.length; i++) {
         const a = ring[i];
         const b = ring[(i + 1) % ring.length];
-        const cross = a.x * b.y - b.x * a.y;
-        cx += (a.x + b.x) * cross;
-        cy += (a.y + b.y) * cross;
+        const ax = a.x - ox;
+        const ay = a.y - oy;
+        const bx = b.x - ox;
+        const by = b.y - oy;
+        const cross = ax * by - bx * ay;
+        cx += (ax + bx) * cross;
+        cy += (ay + by) * cross;
     }
-    return { x: cx / (6 * signed), y: cy / (6 * signed) };
+    return { x: cx / (6 * signed) + ox, y: cy / (6 * signed) + oy };
 }
 
 /** Test punto-en-polígono por ray casting. Borde cuenta como dentro. */

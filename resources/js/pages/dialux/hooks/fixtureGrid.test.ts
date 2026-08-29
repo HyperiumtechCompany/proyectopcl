@@ -201,6 +201,86 @@ describe('calculateObstacleAwareFixtureGridPositions', () => {
         expect(rightCount).toBeGreaterThan(0);
         expect(leftCount + rightCount).toBe(positions.length);
     });
+
+    // Plano georreferenciado en UTM (coordenadas ~1e7): sin recentrado, la
+    // cancelación catastrófica de la shoelace y la baja precisión de
+    // polygon-clipping esparcían las luminarias lejos del área dibujada.
+    it('proyecta dentro del área aunque el polígono esté en coordenadas UTM', () => {
+        const ox = 393_468.36;
+        const oy = 8_955_872.41;
+        // Un ambiente en forma de L (5 vértices → camino con centroide real y clamp)
+        const lShapeLocal = [
+            { x: 0, y: 0 },
+            { x: 6, y: 0 },
+            { x: 6, y: 6 },
+            { x: 3, y: 6 },
+            { x: 3, y: 3 },
+            { x: 0, y: 3 },
+        ];
+        const lShapeUtm = lShapeLocal.map((v) => ({ x: v.x + ox, y: v.y + oy }));
+
+        const local = calculateObstacleAwareFixtureGridPositions(lShapeLocal, [], 2.7, 2, 3);
+        const utm = calculateObstacleAwareFixtureGridPositions(lShapeUtm, [], 2.7, 2, 3);
+
+        expect(utm).toHaveLength(local.length);
+        utm.forEach((p, i) => {
+            // mismo resultado que en local, solo trasladado
+            expect(p.x - ox).toBeCloseTo(local[i].x, 6);
+            expect(p.y - oy).toBeCloseTo(local[i].y, 6);
+            // y realmente cae dentro del polígono UTM
+            expect(isPointInPolygon(p, lShapeUtm)).toBe(true);
+        });
+    });
+
+    it('con obstáculos (viga) y polígono en UTM, reparte dentro del área y no dispersa', () => {
+        const ox = 393_468.36;
+        const oy = 8_955_872.41;
+        const roomLocal = [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 10, y: 8 },
+            { x: 0, y: 8 },
+        ];
+        const beamLocal: StructuralObstacle = {
+            id: 'v1', name: 'Viga', obstacleType: 'beam',
+            vertices: [{ x: 4, y: -1 }, { x: 6, y: -1 }, { x: 6, y: 9 }, { x: 4, y: 9 }],
+            height: 0.4, elevation: 0,
+        };
+        const roomUtm = roomLocal.map((v) => ({ x: v.x + ox, y: v.y + oy }));
+        const beamUtm: StructuralObstacle = {
+            ...beamLocal,
+            vertices: beamLocal.vertices.map((v) => ({ x: v.x + ox, y: v.y + oy })),
+        };
+
+        const utm = calculateObstacleAwareFixtureGridPositions(roomUtm, [beamUtm], 2.7, 2, 4);
+
+        expect(utm.length).toBeGreaterThan(0);
+        utm.forEach((p) => {
+            expect(isPointInPolygon(p, roomUtm)).toBe(true);
+            // ningún foco a más de 1 m fuera del bbox del ambiente
+            expect(p.x).toBeGreaterThan(ox - 1);
+            expect(p.x).toBeLessThan(ox + 11);
+            expect(p.y).toBeGreaterThan(oy - 1);
+            expect(p.y).toBeLessThan(oy + 9);
+        });
+    });
+
+    it('polygonCentroid es estable en coordenadas UTM', () => {
+        const ox = 393_468.36;
+        const oy = 8_955_872.41;
+        const poly = [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 10, y: 4 },
+            { x: 4, y: 4 },
+            { x: 4, y: 8 },
+            { x: 0, y: 8 },
+        ];
+        const cLocal = polygonCentroid(poly);
+        const cUtm = polygonCentroid(poly.map((v) => ({ x: v.x + ox, y: v.y + oy })));
+        expect(cUtm.x - ox).toBeCloseTo(cLocal.x, 6);
+        expect(cUtm.y - oy).toBeCloseTo(cLocal.y, 6);
+    });
 });
 
 describe('normalizeGuideBoundaries', () => {

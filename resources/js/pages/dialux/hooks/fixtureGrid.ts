@@ -56,16 +56,28 @@ export function polygonCentroid(vertices: Vertex[]): Vertex {
         };
     }
 
+    // Origen local en el primer vértice: la fórmula shoelace pierde casi toda
+    // la precisión con coordenadas grandes (planos georreferenciados UTM,
+    // ~1e7) porque `a.x*b.y - b.x*a.y` resta dos números de ~1e14 cuya
+    // diferencia real es de decenas. Sin esto, el centroide de un polígono de
+    // >4 vértices salía desviado ~10 m y las luminarias proyectadas caían
+    // fuera del área dibujada. El centroide es invariante a la traslación.
+    const ox = vertices[0].x;
+    const oy = vertices[0].y;
     let area = 0;
     let cx = 0;
     let cy = 0;
     for (let i = 0; i < vertices.length; i++) {
         const a = vertices[i];
         const b = vertices[(i + 1) % vertices.length];
-        const cross = a.x * b.y - b.x * a.y;
+        const ax = a.x - ox;
+        const ay = a.y - oy;
+        const bx = b.x - ox;
+        const by = b.y - oy;
+        const cross = ax * by - bx * ay;
         area += cross;
-        cx += (a.x + b.x) * cross;
-        cy += (a.y + b.y) * cross;
+        cx += (ax + bx) * cross;
+        cy += (ay + by) * cross;
     }
     area /= 2;
 
@@ -77,7 +89,7 @@ export function polygonCentroid(vertices: Vertex[]): Vertex {
         };
     }
 
-    return { x: cx / (6 * area), y: cy / (6 * area) };
+    return { x: cx / (6 * area) + ox, y: cy / (6 * area) + oy };
 }
 
 /** Ray casting estándar — true si `point` cae dentro del polígono `vertices`. */
