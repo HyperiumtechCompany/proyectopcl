@@ -49,6 +49,7 @@ import {
 import { detectDxfUnitFromHeader } from '@/pages/dialux/hooks/dxfFallbackParser';
 import { findAmbientSpaceAtPoint } from '@/pages/dialux/hooks/ambientSpaces';
 import { polygonCentroid } from '@/pages/dialux/hooks/fixtureGrid';
+import { ddbg } from '@/pages/dialux/lib/dialuxDebug';
 import {
     calculateObstacleAwareFixtureGridPositions,
     computeFixtureGroupAreaVertices,
@@ -147,6 +148,32 @@ export const Toolbar: React.FC = () => {
             ambientVertices: vertices,
         });
         store.setPendingFixtureGridArea(null);
+
+        // Diagnóstico (solo con `localStorage['dialux:debug']='1'` o
+        // `?dialuxdebug=1`): permite verificar en producción, sin consola
+        // normal, que las luminarias caen dentro del área dibujada.
+        const placed = store
+            .activeScene()
+            ?.fixtures.filter((f) => newIds.includes(f.id))
+            .map((f) => ({ x: Number(f.x.toFixed(2)), y: Number(f.y.toFixed(2)) }));
+        const xs = vertices.map((v) => v.x);
+        const ys = vertices.map((v) => v.y);
+        ddbg('fixture-grid', {
+            areaVertices: vertices.length,
+            areaBBox: {
+                minX: Math.min(...xs),
+                maxX: Math.max(...xs),
+                minY: Math.min(...ys),
+                maxY: Math.max(...ys),
+            },
+            centroid: center,
+            roomId: roomId ?? null,
+            rows: store.ui.fixtureGridRows,
+            columns: store.ui.fixtureGridCols,
+            placedCount: placed?.length ?? 0,
+            placed,
+        });
+
         if (newIds.length > 0) {
             store.setSelectedId(null);
             store.setSelectedFixtureIds(newIds);
