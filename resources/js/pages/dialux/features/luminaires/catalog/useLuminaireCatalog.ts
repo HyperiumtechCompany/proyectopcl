@@ -13,6 +13,19 @@ import { productToFixtureFields } from './fixtureMappers';
 
 const ITEMS_PER_PAGE = 10;
 
+/**
+ * Catálogo estático de luminarias (`fixtureCatalog`): DESHABILITADO a pedido
+ * del usuario (2026-08-29). Esos ítems usan una curva fotométrica sintética
+ * genérica (no LDT/IES real de fabricante), así que el cálculo final del
+ * proyecto no cuadra y genera confusión: el usuario espera insertar solo las
+ * luminarias reales que importó (`.ldt`/`.ies`) o creó manualmente. Para
+ * reactivarlo, poner esta constante en `true` — nada más cambió.
+ */
+const STATIC_FIXTURE_CATALOG_ENABLED = false;
+const availableFixtureCatalog: FixtureCatalogItem[] = STATIC_FIXTURE_CATALOG_ENABLED
+    ? fixtureCatalog
+    : [];
+
 export interface UseLuminaireCatalogOptions {
     filterBrand?: string;
     search?: string;
@@ -61,7 +74,7 @@ export function useLuminaireCatalog(options: UseLuminaireCatalogOptions) {
 
     const fixturePageSize = fixtureItemsPerPage ?? ITEMS_PER_PAGE;
 
-    const filteredFixtures = fixtureCatalog.filter((item) => {
+    const filteredFixtures = availableFixtureCatalog.filter((item) => {
         if (filterBrand && filterBrand !== 'Todas' && item.brand !== filterBrand) return false;
         if (search && !item.label.toLowerCase().includes(search.toLowerCase()) && !item.brand.toLowerCase().includes(search.toLowerCase()))
             return false;

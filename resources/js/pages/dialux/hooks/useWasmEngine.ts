@@ -6,9 +6,11 @@ import {
 import { useEditorStore } from './useEditorStore';
 import type { DxfEntity, DxfExtents } from './useEditorStore';
 
+type WasmInitArg = URL | { module_or_path: URL };
+
 export interface DialuxWasmModule {
-    default?: (wasmUrl?: URL) => Promise<unknown> | unknown;
-    init?: (wasmUrl?: URL) => Promise<unknown> | unknown;
+    default?: (arg?: WasmInitArg) => Promise<unknown> | unknown;
+    init?: (arg?: WasmInitArg) => Promise<unknown> | unknown;
     parse_dxf_web: (text: string) => string;
 }
 
@@ -53,10 +55,14 @@ export async function loadWasmModule(): Promise<DialuxWasmModule | null> {
         // también se refresque, no solo el glue JS.
         const wasmUrl = new URL(`/dialux-core/pkg/dialux_core_bg.wasm?${cacheBust}`, window.location.origin);
 
+        // wasm-bindgen (target web) actual espera un objeto
+        // `{ module_or_path }`; pasar la URL suelta funciona pero emite
+        // `using deprecated parameters for the initialization function`.
+        const initArg = { module_or_path: wasmUrl };
         if (typeof loadedModule.default === 'function') {
-            await loadedModule.default(wasmUrl);
+            await loadedModule.default(initArg);
         } else if (typeof loadedModule.init === 'function') {
-            await loadedModule.init(wasmUrl);
+            await loadedModule.init(initArg);
         } else {
             throw new Error('El modulo WASM no expone default() ni init()');
         }

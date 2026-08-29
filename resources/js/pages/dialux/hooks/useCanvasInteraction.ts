@@ -323,10 +323,13 @@ export function useCanvasInteraction(opts: InteractionOptions) {
 
     /**
      * Umbral de cierre de polígono adaptativo al zoom.
-     * A zoom 1x → 20px. A zoom 2x → 10px. A zoom 4x → 8px (mínimo).
-     * Esto evita que muros cortos se autocierren prematuramente.
+     * A zoom 1x → 26px. A zoom 2x → 13px. A zoom 4x → 12px (mínimo).
+     * Radio generoso para que cerrar sobre el primer vértice no exija pulso
+     * fino (el usuario también puede cerrar con doble clic o Enter, ver
+     * `finishDrawPolygon`). Sigue siendo lo bastante chico como para que un
+     * muro corto no se autocierre antes de tiempo.
      */
-    const closeThresholdPx = Math.max(8, 20 / zoom);
+    const closeThresholdPx = Math.max(12, 26 / zoom);
 
     /**
      * En modo libre, desactivar el snap a entidades DXF.
@@ -602,6 +605,65 @@ export function useCanvasInteraction(opts: InteractionOptions) {
      * umbral adaptativo al zoom. Devuelve true si la herramienta activa era
      * room/corridor/stair/wall (el punto fue consumido).
      */
+    /** True para las herramientas que dibujan un polígono cerrado vértice a vértice. */
+    const isPolygonDrawTool = useCallback(
+        (): boolean =>
+            activeTool === 'room' ||
+            activeTool === 'corridor' ||
+            activeTool === 'stair' ||
+            activeTool === 'structural-obstacle' ||
+            (activeTool === 'fixture-grid' && fixtureGridAreaMode === 'draw'),
+        [activeTool, fixtureGridAreaMode],
+    );
+
+    /** Dispara la acción de cierre correcta según la herramienta de polígono activa. */
+    const emitPolygonClose = useCallback(
+        (vertices: CanvasPoint[]) => {
+            if (activeTool === 'structural-obstacle') {
+                onAddStructuralObstacle?.(vertices);
+            } else if (activeTool === 'fixture-grid') {
+                onCloseFixtureGridArea?.(vertices);
+            } else {
+                onAddRoom(vertices);
+            }
+        },
+        [activeTool, onAddStructuralObstacle, onCloseFixtureGridArea, onAddRoom],
+    );
+
+    /**
+     * Cierra el polígono en curso SIN exigir que el último clic caiga sobre el
+     * primer vértice — para atarlo a doble clic / Enter / clic derecho. Quita
+     * primero los vértices finales casi duplicados (el segundo clic de un
+     * doble clic cae sobre el primero). Devuelve true si cerró algo.
+     */
+    const finishDrawPolygon = useCallback(
+        (setRoomVertices: (v: CanvasPoint[]) => void): boolean => {
+            if (!isPolygonDrawTool()) return false;
+            const s = stateRef.current;
+            let verts = [...s.roomVertices];
+            while (
+                verts.length >= 2 &&
+                Math.hypot(
+                    verts[verts.length - 1].x - verts[verts.length - 2].x,
+                    verts[verts.length - 1].y - verts[verts.length - 2].y,
+                ) < 1e-3
+            ) {
+                verts = verts.slice(0, -1);
+            }
+            if (verts.length < 3) return false;
+            emitPolygonClose(verts);
+            stateRef.current = {
+                ...s,
+                isDrawing: false,
+                roomVertices: [],
+                previewPoint: null,
+            };
+            setRoomVertices([]);
+            return true;
+        },
+        [isPolygonDrawTool, emitPolygonClose],
+    );
+
     const commitDrawVertex = useCallback(
         (
             cx: number,
@@ -628,13 +690,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                         Math.hypot(first.x - cx, first.y - cy) <
                         closeThresholdPx
                     ) {
-                        if (activeTool === 'structural-obstacle') {
-                            onAddStructuralObstacle?.(s.roomVertices);
-                        } else if (activeTool === 'fixture-grid') {
-                            onCloseFixtureGridArea?.(s.roomVertices);
-                        } else {
-                            onAddRoom(s.roomVertices);
-                        }
+                        emitPolygonClose(s.roomVertices);
                         stateRef.current = {
                             ...s,
                             isDrawing: false,
@@ -2339,6 +2395,41 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         [activeTool],
     );
 
+    /**
+     * Descarta por completo el trazo en curso (polígono, muro o medición de
+     * área) sin confirmarlo — para atarlo a Escape. Devuelve true si había
+     * algo que descartar.
+     */
+    const cancelDraft = useCallback(
+        (
+            setRoomVertices: (v: CanvasPoint[]) => void,
+            setWallPreview: (p: CanvasPoint[] | null) => void,
+            setMeasureAreaVertices: (v: CanvasPoint[]) => void,
+        ): boolean => {
+            const s = stateRef.current;
+            let had = false;
+            if (s.roomVertices.length > 0) {
+                s.roomVertices = [];
+                s.previewPoint = null;
+                setRoomVertices([]);
+                had = true;
+            }
+            if ((s.wallVertices?.length ?? 0) > 0) {
+                s.wallVertices = [];
+                setWallPreview(null);
+                had = true;
+            }
+            if (s.measureAreaVertices.length > 0) {
+                s.measureAreaVertices = [];
+                setMeasureAreaVertices([]);
+                had = true;
+            }
+            if (had) s.isDrawing = false;
+            return had;
+        },
+        [],
+    );
+
     return {
         onMouseDown,
         onMouseMove,
@@ -2346,7 +2437,13 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         onDoubleClick: handleDoubleClick,
         isDragging: () => stateRef.current.isDragging,
         undoLastDraftVertex,
+        cancelDraft,
         commitDrawVertex,
+        finishDrawPolygon,
+        /** True si la herramienta activa dibuja un polígono cerrado (recinto, área de proyección…). */
+        isPolygonDrawTool,
+        /** Radio de cierre de polígono en px de canvas (para la ayuda visual sobre el primer vértice). */
+        closeThresholdPx,
         getDraftPrevPoint,
         beginWireFromNode,
     };

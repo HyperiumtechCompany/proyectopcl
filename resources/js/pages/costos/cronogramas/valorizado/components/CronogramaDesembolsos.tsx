@@ -5,6 +5,7 @@ import {
     Layers, FileText
 } from 'lucide-react';
 import { Periodo } from '../types';
+import { calcularDesembolso } from '../helpers/calcularDesembolso';
 
 // TIPOS
 
@@ -70,6 +71,7 @@ interface FilaMensual {
     desembolsoMensual: number;
     desembolsoAcumulado: number;
     pctDesembolso: number;
+    pctDesembolsoAcumulado: number;
     label: string;
 }
 
@@ -519,48 +521,42 @@ const CronogramaDesembolsos: React.FC<Props> = ({
     const [cTooltip, setCTooltip]   = useState<CurveTooltipState | null>(null);
     const chartRef = useRef<HTMLDivElement>(null);
 
-    // Montos totales 
-    const adelantoEfectivoTotal   = totalPresupuesto * ADELANTO_EFECTIVO_PCT;
-    const adelantoMaterialesTotal = totalPresupuesto * ADELANTO_MATERIALES_PCT;
-    const totalAdelantoInicial    = adelantoEfectivoTotal + adelantoMaterialesTotal;
-    const flujoTotal              = totalPresupuesto + totalAdelantoInicial;
+    const calculoDesembolso = useMemo(() => calcularDesembolso(
+        totalPresupuesto,
+        periodos.map((p) => ({
+            key: p.key,
+            label: p.labelCal ?? p.label,
+            dias: diasPorMes[p.key] ?? 0,
+            valorizacion: valorizacionesMensuales[p.key]?.monto ?? 0,
+        })),
+        ADELANTO_EFECTIVO_PCT,
+        ADELANTO_MATERIALES_PCT,
+    ), [totalPresupuesto, periodos, diasPorMes, valorizacionesMensuales]);
+    const adelantoEfectivoTotal = calculoDesembolso.adelantoEfectivo;
+    const adelantoMaterialesTotal = calculoDesembolso.adelantoMateriales;
+    const totalAdelantoInicial = calculoDesembolso.adelantoTotal;
+    const flujoTotal = totalPresupuesto;
 
     // Cálculo mensual 
     const datosMensuales = useMemo<FilaMensual[]>(() => {
-        let desembolsoAcumulado = totalAdelantoInicial;
-        const totalDiasProyecto = Object.values(diasPorMes).reduce((a, b) => a + b, 0) || totalDias || 1;
-
-        return periodos.map((p) => {
-            const diasMes      = diasPorMes[p.key] ?? 0;
-            const valorizacion = valorizacionesMensuales[p.key]?.monto ?? 0;
-            const pctAvance    = valorizacionesMensuales[p.key]?.porcentaje ?? 0;
-
-            const factorDias         = totalDiasProyecto > 0 ? diasMes / totalDiasProyecto : 0;
-            const adelantoEfectivo   = adelantoEfectivoTotal   * factorDias;
-            const adelantoMateriales = adelantoMaterialesTotal * factorDias;
-            const totalAdelanto      = adelantoEfectivo + adelantoMateriales;
-            const desembolsoMensual  = totalAdelanto + valorizacion;
-
-            desembolsoAcumulado += desembolsoMensual;
-            const pctDesembolso = flujoTotal > 0 ? (desembolsoAcumulado / flujoTotal) * 100 : 0;
-
+        return calculoDesembolso.filas.map((fila) => {
             return {
-                key:                  p.key,
-                diasCalendario:       diasMes,
-                diasBloqueCalendario: diasMes,
-                adelantoEfectivo,
-                adelantoMateriales,
-                totalAdelanto,
-                valorizacion,
-                pctAvance,
-                desembolsoMensual,
-                desembolsoAcumulado,
-                pctDesembolso,
-                label: p.labelCal ?? p.label,
+                key: fila.key,
+                diasCalendario: fila.calendario,
+                diasBloqueCalendario: fila.dias,
+                adelantoEfectivo: fila.amortizacionEfectivo,
+                adelantoMateriales: fila.amortizacionMateriales,
+                totalAdelanto: fila.amortizacionTotal,
+                valorizacion: fila.valorizacion,
+                pctAvance: fila.pctAvance,
+                desembolsoMensual: fila.desembolsoMensual,
+                desembolsoAcumulado: fila.desembolsoAcumulado,
+                pctDesembolso: fila.pctDesembolso,
+                pctDesembolsoAcumulado: fila.pctDesembolsoAcumulado,
+                label: fila.label,
             };
         });
-    }, [periodos, valorizacionesMensuales, diasPorMes, totalDias, totalAdelantoInicial,
-        adelantoEfectivoTotal, adelantoMaterialesTotal, flujoTotal]);
+    }, [calculoDesembolso]);
 
     const maxDesembolsoMensual = useMemo(
         () => Math.max(...datosMensuales.map((d) => d.desembolsoMensual), 1),
@@ -576,17 +572,9 @@ const CronogramaDesembolsos: React.FC<Props> = ({
     );
 
     const curvaS = useMemo(() => {
-        const raw       = datosMensuales.map((d) => ({ label: d.label, acumulado: d.desembolsoAcumulado, pct: d.pctDesembolso }));
-        const lastPct   = raw[raw.length - 1]?.pct || 100;
-        const scale     = lastPct > 0 ? 100 / lastPct : 1;   // factor para llevar el último a 100 %
-        const lastAcum  = raw[raw.length - 1]?.acumulado || flujoTotal;
-        const scaleAcum = lastAcum > 0 ? flujoTotal / lastAcum : 1;
-        return raw.map((r, i) => ({
-            label:     r.label,
-            acumulado: i === raw.length - 1 ? flujoTotal          : r.acumulado * scaleAcum,
-            pct:       i === raw.length - 1 ? 100                 : r.pct       * scale,
-        }));
-    }, [datosMensuales, flujoTotal]);
+        const raw       = datosMensuales.map((d) => ({ label: d.label, acumulado: d.desembolsoAcumulado, pct: d.pctDesembolsoAcumulado }));
+        return raw;
+    }, [datosMensuales]);
 
     
     const getOffset = (e: React.MouseEvent<SVGElement>) => {
@@ -788,7 +776,7 @@ const CronogramaDesembolsos: React.FC<Props> = ({
                                         <td style={tdExcel({ textAlign: 'right', color: C.muted, fontStyle: 'italic', borderRight: `2px solid ${C.borderB}` })}>—</td>
                                         <td style={tdExcel({ textAlign: 'right', color: C.greenText, fontWeight: 900 })}>{fmtSoles(totalAdelantoInicial)}</td>
                                         <td style={tdExcel({ textAlign: 'right', color: C.greenText, fontWeight: 900 })}>
-                                            {fmtPct(flujoTotal > 0 ? (totalAdelantoInicial / flujoTotal) * 100 : 0)}
+                                            {fmtPct(totalPresupuesto > 0 ? (totalAdelantoInicial / totalPresupuesto) * 100 : 0)}
                                         </td>
                                     </tr>
 
@@ -854,7 +842,7 @@ const CronogramaDesembolsos: React.FC<Props> = ({
                                         <td style={{ ...tdExcel(), textAlign: 'right', color: C.white, borderRight: `2px solid rgba(255,255,255,0.15)`, borderColor: C.navyMid }}>{fmtSoles(totalAdelantoInicial)}</td>
                                         <td style={{ ...tdExcel(), textAlign: 'right', color: '#BFDBFE', borderColor: C.navyMid }}>{fmtSoles(totalPresupuesto)}</td>
                                         <td style={{ ...tdExcel(), textAlign: 'right', color: '#C4B5FD', borderRight: `2px solid rgba(255,255,255,0.15)`, borderColor: C.navyMid }}>100.00%</td>
-                                        <td style={{ ...tdExcel(), textAlign: 'right', color: '#FDE68A', fontSize: 13, borderColor: C.navyMid }}>{fmtSoles(flujoTotal)}</td>
+                                        <td style={{ ...tdExcel(), textAlign: 'right', color: '#FDE68A', fontSize: 13, borderColor: C.navyMid }}>{fmtSoles(calculoDesembolso.totalDesembolsado)}</td>
                                         <td style={{ ...tdExcel(), textAlign: 'right', color: '#6EE7B7', borderColor: C.navyMid }}>100.00%</td>
                                     </tr>
 

@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import Decimal from 'decimal.js';
 import { calcularResumenFinanciero } from './calcularResumenFinanciero';
+import { calcularDesembolso } from './calcularDesembolso';
 import type { FinDefaults } from '../types';
 
 // TIPOS INTERNOS
@@ -575,47 +576,33 @@ function buildDesembolsoData(periodos: any[], totales: any, options: ExportarExc
     const adelantoDirecto = totalPresupuesto * 0.10;
     const adelantoMateriales = totalPresupuesto * 0.20;
     const adelantoTotal = adelantoDirecto + adelantoMateriales;
-    const flujoTotal = totalPresupuesto + adelantoTotal;
-    const totalDiasProyecto = totalDias || 1;
-
-    let acumulado = adelantoTotal;
-    let diasAcumulados = 0;
-    const filas = periodos.map((p: any): FilaDesembolso => {
+    const calculo = calcularDesembolso(totalPresupuesto, periodos.map((p: any) => {
         const dias = diasPorMes[p.key] ?? 0;
-        diasAcumulados += dias;
         const valorizacion = options.valorizacionMensualDesembolso?.[p.key] ?? totales[p.key]?.monto ?? 0;
-        const pctAvance = options.valorizacionMensualDesembolso
-            ? (totalPresupuesto > 0 ? (valorizacion / totalPresupuesto) * 100 : 0)
-            : totales[p.key]?.porcentaje ?? 0;
-        const factor = totalDiasProyecto > 0 ? dias / totalDiasProyecto : 0;
-        const adelantoEfectivo = adelantoDirecto * factor;
-        const adelantoMat = adelantoMateriales * factor;
-        const totalAdelanto = adelantoEfectivo + adelantoMat;
-        const desembolsoMensual = totalAdelanto + valorizacion;
-        acumulado += desembolsoMensual;
-
+        return { key: p.key, label: p.labelCal ?? p.label, dias, valorizacion };
+    }));
+    const flujoTotal = totalPresupuesto;
+    const filas = calculo.filas.map((f): FilaDesembolso => {
         return {
-            key: p.key,
-            label: p.labelCal ?? p.label,
-            dias,
-            diasAcumulados,
-            adelantoEfectivo,
-            adelantoMateriales: adelantoMat,
-            totalAdelanto,
-            valorizacion,
-            pctAvance,
-            desembolsoMensual,
-            desembolsoAcumulado: acumulado,
-            pctDesembolso: flujoTotal > 0 ? acumulado / flujoTotal : 0,
+            key: f.key,
+            label: f.label,
+            dias: f.dias,
+            diasAcumulados: f.calendario,
+            adelantoEfectivo: f.amortizacionEfectivo,
+            adelantoMateriales: f.amortizacionMateriales,
+            totalAdelanto: f.amortizacionTotal,
+            valorizacion: f.valorizacion,
+            pctAvance: f.pctAvance,
+            desembolsoMensual: f.desembolsoMensual,
+            desembolsoAcumulado: f.desembolsoAcumulado,
+            pctDesembolso: f.pctDesembolso / 100,
         };
     });
 
-    const lastPct = filas[filas.length - 1]?.pctDesembolso || 1;
-    const lastAcum = filas[filas.length - 1]?.desembolsoAcumulado || flujoTotal || 1;
-    const curva = filas.map((f, i) => ({
+    const curva = calculo.filas.map((f) => ({
         label: f.label,
-        acumulado: i === filas.length - 1 ? flujoTotal : f.desembolsoAcumulado * (flujoTotal / lastAcum),
-        pct: i === filas.length - 1 ? 100 : f.pctDesembolso * (100 / lastPct),
+        acumulado: f.desembolsoAcumulado,
+        pct: f.pctDesembolsoAcumulado,
     }));
 
     return {
@@ -625,7 +612,7 @@ function buildDesembolsoData(periodos: any[], totales: any, options: ExportarExc
         adelantoMateriales,
         adelantoTotal,
         flujoTotal,
-        totalValorizacion: filas.reduce((s, f) => s + f.valorizacion, 0),
+        totalValorizacion: calculo.totalValorizacion,
         maxDesembolso: Math.max(...filas.map(f => f.desembolsoMensual), 1),
         filas,
         curva,
@@ -979,6 +966,7 @@ async function addChartImageSheet(
     });
 
     let r = 39;
+    const auxiliaryTableStartRow = r;
     const headers = type === 'gauss'
         ? ['PERÍODO', 'DÍAS', 'ADELANTO', 'VALORIZACIÓN', 'DESEMBOLSO', '% DESEMBOLSO', 'DESCRIPCIÓN']
         : ['PERÍODO', 'ACUMULADO S/.', '% ACUMULADO', 'DESCRIPCIÓN'];
@@ -1054,6 +1042,12 @@ async function addChartImageSheet(
             });
             r++;
         });
+    }
+
+    // La tabla conserva los datos de respaldo del gráfico, pero permanece
+    // oculta al abrir o imprimir para evitar duplicidad visual y observaciones.
+    for (let row = auxiliaryTableStartRow; row < r; row++) {
+        ws.getRow(row).hidden = true;
     }
 }
 

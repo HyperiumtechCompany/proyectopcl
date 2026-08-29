@@ -6,7 +6,7 @@ import laravel from 'laravel-vite-plugin';
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath, URL } from 'node:url';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   resolve: {
     // Una ruta con `/resources` se interpreta desde la raiz de la unidad en
     // Windows (C:\\resources). Resolver el alias desde este archivo funciona
@@ -83,6 +83,25 @@ export default defineConfig({
 
     esbuild: {
         jsx: 'automatic',
+        // Producción: sin ruido de consola. En `vite build` se eliminan del
+        // bundle los `console.log/info/debug/warn/trace` (quedan sin efecto)
+        // y los `debugger`. Se conserva `console.error` a propósito: un error
+        // real debe seguir siendo visible para diagnosticar producción. No
+        // aplica en `serve`/HMR ni en los tests. El backend ya corre con
+        // APP_DEBUG=false; esto es el equivalente para el frontend React.
+        // Nota: los archivos precompilados servidos desde `public/` (ej.
+        // dialux-core/pkg, cad-workers) NO pasan por esbuild.
+        pure:
+            command === 'build'
+                ? [
+                      'console.log',
+                      'console.info',
+                      'console.debug',
+                      'console.warn',
+                      'console.trace',
+                  ]
+                : [],
+        drop: command === 'build' ? ['debugger'] : [],
     },
 
 
@@ -94,4 +113,4 @@ export default defineConfig({
         environment: 'node',
         include: ['resources/js/**/*.test.ts', 'resources/js/**/*.test.tsx'],
     },
-});
+}));

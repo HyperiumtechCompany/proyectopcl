@@ -43,14 +43,16 @@ export function productToFixtureFields(product: ImportedLuminaireProduct): Parti
     };
 }
 
-/** Un producto (importado o del catálogo estático) "coincide" con la plantilla actual del store — usado para resaltar el ítem activo. */
+/**
+ * Un producto importado "coincide" con la plantilla actual del store — usado
+ * para resaltar el ítem activo. El único identificador fiable es `productId`
+ * (lo asigna `productToFixtureFields`): sin él, dos productos distintos con la
+ * misma marca/lúmenes/tipo se resaltaban a la vez, y un producto importado se
+ * resaltaba junto a un ítem del catálogo estático de specs equivalentes.
+ */
 export function isImportedProductActive(
     product: ImportedLuminaireProduct,
-    fixtureTemplate: { brand?: string; lumens?: number; fixtureType?: Fixture['fixtureType'] },
+    fixtureTemplate: { productId?: number | null },
 ): boolean {
-    return (
-        fixtureTemplate.brand === (product.manufacturer ?? undefined) &&
-        fixtureTemplate.lumens === (product.total_lumens ?? 1000) &&
-        fixtureTemplate.fixtureType === toFixtureType(product.fixture_type)
-    );
+    return fixtureTemplate.productId != null && fixtureTemplate.productId === product.id;
 }

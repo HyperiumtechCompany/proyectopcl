@@ -153,6 +153,7 @@ import { IsoluxLayer } from './IsoluxLayer';
 import { OverlayCanopies } from './OverlayCanopies';
 import { OverlayDoors } from './OverlayDoors';
 import { OverlayElectricalDevices } from './OverlayElectricalDevices';
+import { OverlayFixtureArrangementAreas } from './OverlayFixtureArrangementAreas';
 import { OverlayFixtureGridGuides } from './OverlayFixtureGridGuides';
 import { OverlayFixtures } from './OverlayFixtures';
 import { DynamicInputOverlay } from './DynamicInputOverlay';
@@ -528,7 +529,11 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             onDoubleClick,
             isDragging: isDraggingFn,
             undoLastDraftVertex,
+            cancelDraft,
             commitDrawVertex,
+            finishDrawPolygon,
+            isPolygonDrawTool,
+            closeThresholdPx,
             getDraftPrevPoint,
             beginWireFromNode,
         } = useCanvasInteraction({
@@ -1137,6 +1142,32 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 ) {
                     return;
                 }
+
+                // Enter: cierra el polígono en curso (recinto, área de
+                // proyección…) sin tener que clavar el primer vértice.
+                if (e.key === 'Enter') {
+                    if (finishDrawPolygon(setRoomVertices)) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                    return;
+                }
+
+                // Escape: abandona el trazo en curso.
+                if (e.key === 'Escape') {
+                    if (
+                        cancelDraft(
+                            setRoomVertices,
+                            setWallPreview,
+                            setMeasureAreaVertices,
+                        )
+                    ) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                    return;
+                }
+
                 if (!(e.ctrlKey || e.metaKey) || e.shiftKey) return;
                 if (e.key.toLowerCase() !== 'z') return;
 
@@ -1153,7 +1184,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
 
             window.addEventListener('keydown', handler, true);
             return () => window.removeEventListener('keydown', handler, true);
-        }, [undoLastDraftVertex]);
+        }, [undoLastDraftVertex, cancelDraft, finishDrawPolygon]);
 
         // Espejo en React state del trazo abandonado al cambiar de herramienta.
         // useCanvasInteraction ya limpia su ref interno (stateRef) al cambiar
@@ -1857,7 +1888,15 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                                 setWireReconnectPreview,
                             );
                     }}
-                    onDoubleClick={onDoubleClick}
+                    onDoubleClick={() => {
+                        if (!isInteractiveMode) return;
+                        // Doble clic cierra el polígono en curso (recinto,
+                        // pasadizo, área de proyección de luminarias…) sin
+                        // exigir volver a clavar el primer vértice. Si no
+                        // había un polígono abierto, cae al cierre de
+                        // muro/medición de área.
+                        if (!finishDrawPolygon(setRoomVertices)) onDoubleClick();
+                    }}
                     onContextMenu={(event) => {
                         event.preventDefault();
                         const rect =
@@ -2013,11 +2052,15 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         pendingFixtureGridArea={ui.pendingFixtureGridArea}
                         fixtureGridAreaRows={ui.fixtureGridRows}
                         fixtureGridAreaColumns={ui.fixtureGridCols}
+                        structuralObstacles={scene?.structuralObstacles ?? []}
                         screenPoint={screenPoint}
                         measureCadDistanceFromScreen={
                             measureCadDistanceFromScreen
                         }
                         angleSnapMode={ui.angleSnapMode}
+                        polygonCloseTargetPx={
+                            isPolygonDrawTool() ? closeThresholdPx : 0
+                        }
                         hideLabel={dynInputVisible}
                     />
                     <OverlayRooms
@@ -2101,6 +2144,12 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         hacer zoom hasta encontrar un punto del símbolo fuera
                         del cable). Switches/dispositivos ya se pintaban después
                         de OverlayWires; esto iguala el criterio para fixtures. */}
+                    <OverlayFixtureArrangementAreas
+                        arrangements={scene?.fixtureArrangements ?? []}
+                        fixtures={scene?.fixtures ?? []}
+                        zoom={zoom}
+                        screenPoint={screenPoint}
+                    />
                     <OverlayFixtures
                         fixtures={
                             ui.electricalLayerVisibility.fixtures

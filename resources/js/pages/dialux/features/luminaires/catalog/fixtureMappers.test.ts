@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { isFixtureMatch } from '@/pages/dialux/components/catalogData';
 import type { ImportedLuminaireProduct } from './catalogApi';
-import { productToFixtureFields } from './fixtureMappers';
+import { isImportedProductActive, productToFixtureFields } from './fixtureMappers';
 
 function buildProduct(overrides: Partial<ImportedLuminaireProduct> = {}): ImportedLuminaireProduct {
     return {
@@ -72,5 +73,30 @@ describe('Ronda 21j — productToFixtureFields copia metadata/luminous_opening',
         const fields = productToFixtureFields(product);
 
         expect(fields.cri).toBeNull();
+    });
+});
+
+describe('resaltado de ítem activo — catálogo vs importado no pueden estar activos a la vez', () => {
+    it('un producto importado solo queda activo si su id coincide con productId de la plantilla', () => {
+        const productA = buildProduct({ id: 10 });
+        const productB = buildProduct({ id: 11 }); // mismas specs, distinto id
+
+        const template = productToFixtureFields(productA);
+
+        expect(isImportedProductActive(productA, template)).toBe(true);
+        expect(isImportedProductActive(productB, template)).toBe(false);
+    });
+
+    it('sin productId en la plantilla (ej. ítem de catálogo estático), ningún importado queda activo', () => {
+        const product = buildProduct({ id: 10 });
+
+        expect(isImportedProductActive(product, { productId: undefined })).toBe(false);
+    });
+
+    it('con la plantilla apuntando a un producto importado, ningún ítem del catálogo estático coincide', () => {
+        const template = productToFixtureFields(buildProduct({ id: 10, total_lumens: 6000, fixture_type: 'panel', fixture_shape: 'rectangular' }));
+        const staticItem = { fixtureType: 'panel' as const, fixtureShape: 'rectangular' as const, lumens: 6000, catalogSymbol: 'rect_red' };
+
+        expect(isFixtureMatch(staticItem, template)).toBe(false);
     });
 });

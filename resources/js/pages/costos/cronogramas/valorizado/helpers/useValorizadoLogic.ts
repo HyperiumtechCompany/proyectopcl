@@ -3,6 +3,7 @@ import type {
     ItemValorizado, Periodo, ViewMode, ModoCalculo,
     TotalesColumna, DistribucionMes,
 } from '../types';
+import { calcularCostoDirectoParcial } from './calcularCostoDirecto';
 
 // UTILIDADES
 
@@ -130,6 +131,7 @@ export const useValorizadoLogic = (
             distribucion: normalizarDistribucion(item, periodos),
         }))
     );
+    const totalParcial = useMemo(() => calcularCostoDirectoParcial(items), [items]);
 
     const editarCelda = useCallback((
         itemId:     number | string,
@@ -237,14 +239,14 @@ export const useValorizadoLogic = (
 
             totales[p.key] = {
                 monto:               montoMes,
-                porcentaje:          totalPresupuesto > 0 ? (montoMes / totalPresupuesto) * 100 : 0,
+                porcentaje:          totalParcial > 0 ? (montoMes / totalParcial) * 100 : 0,
                 acumuladoMonto:      acumMonto,
-                acumuladoPorcentaje: totalPresupuesto > 0 ? (acumMonto / totalPresupuesto) * 100 : 0,
+                acumuladoPorcentaje: totalParcial > 0 ? (acumMonto / totalParcial) * 100 : 0,
             };
         });
 
         return totales;
-    }, [items, periodos, totalPresupuesto]);
+    }, [items, periodos, totalParcial]);
 
     const totalGeneralPeriodos = useMemo(() => {
         return Object.values(totalesFinales).reduce((acc, t) => acc + t.monto, 0);
@@ -322,6 +324,7 @@ export const useValorizadoLogic = (
         totalesFinales,
         totalesPorItem,         
         totalGeneralPeriodos,    
+        totalParcial,
         curvaSData,
         montoAcumuladoTotal,
         // Validación

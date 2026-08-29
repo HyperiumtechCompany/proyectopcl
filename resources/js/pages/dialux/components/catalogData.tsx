@@ -629,6 +629,10 @@ export const corridorCatalog: CorridorCatalogItem[] = [
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 
 export const isFixtureMatch = (a?: Partial<Fixture>, b?: Partial<Fixture>) => {
+    // Si la plantilla activa proviene de un producto importado (tiene productId),
+    // ningún ítem del catálogo estático coincide — evita resaltar dos ítems a la
+    // vez (uno importado + uno de catálogo con specs equivalentes).
+    if (b?.productId != null) return false;
     if (a?.catalogSymbol && b?.catalogSymbol) return a.catalogSymbol === b.catalogSymbol;
     return a?.fixtureType === b?.fixtureType && a?.fixtureShape === b?.fixtureShape && a?.lumens === b?.lumens;
 };

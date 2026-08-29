@@ -4,9 +4,18 @@
  */
 
 import React, { memo } from 'react';
-import { calculateFixtureGridPositions } from '@/pages/dialux/hooks/fixtureGrid';
+import { calculateObstacleAwareFixtureGridPositions } from '@/pages/dialux/hooks/fixtureGridObstacles';
 import type { CanvasPoint } from '@/pages/dialux/hooks/useCanvasInteraction';
+import type { StructuralObstacle } from '@/pages/dialux/hooks/types';
 import { pointsToSvgString, safeNum } from './canvasUtils';
+
+/**
+ * Altura de montaje con la que `buildFixtureGridObjects` genera la grilla
+ * proyectada (`config.mountingHeight ?? 2.7`, y el flujo de "Dibujar área" no
+ * pasa mountingHeight). El preview debe usar la misma para que las zonas
+ * válidas alrededor de columnas/vigas coincidan con el resultado real.
+ */
+const FIXTURE_GRID_PREVIEW_MOUNTING_HEIGHT = 2.7;
 
 interface Props {
     roomVertices: CanvasPoint[];
@@ -18,12 +27,21 @@ interface Props {
     /** Filas/columnas objetivo, para previsualizar los centros proyectados dentro del area */
     fixtureGridAreaRows?: number;
     fixtureGridAreaColumns?: number;
+    /** Obstaculos estructurales del piso activo — el preview reparte la grilla evitandolos, igual que el resultado real */
+    structuralObstacles?: StructuralObstacle[];
     screenPoint: (p: { x: number; y: number }) => { x: number; y: number };
     measureCadDistanceFromScreen?: (
         p1: CanvasPoint,
         p2: CanvasPoint,
     ) => number;
     angleSnapMode?: 'smart' | 'free' | 'orthogonal' | 'diagonal' | 'fine';
+    /**
+     * Radio (px de pantalla) dentro del cual un clic sobre el primer vértice
+     * cierra el polígono. > 0 solo para herramientas de polígono (recinto,
+     * área de proyección…). Dibuja un blanco sobre el primer vértice para que
+     * cerrar no exija pulso fino; se resalta al acercar el cursor.
+     */
+    polygonCloseTargetPx?: number;
     /** Oculta el badge de texto (distancia/ángulo) cuando el input dinámico
      * editable (DynamicInputOverlay) ya está mostrando el mismo dato — evita
      * dos globitos superpuestos con la misma info. La guía punteada y el
@@ -103,15 +121,30 @@ export const OverlayPreviews = memo(function OverlayPreviews({
     pendingFixtureGridArea,
     fixtureGridAreaRows = 1,
     fixtureGridAreaColumns = 1,
+    structuralObstacles = [],
     screenPoint,
     measureCadDistanceFromScreen,
     angleSnapMode = 'free',
+    polygonCloseTargetPx = 0,
     hideLabel = false,
 }: Props) {
     const screenRoomVertices = roomVertices.map(screenPoint);
     const screenRoomPreviewPoint = roomPreviewPoint
         ? screenPoint(roomPreviewPoint)
         : null;
+
+    // Blanco de cierre sobre el primer vértice del polígono en curso.
+    const closeTarget =
+        polygonCloseTargetPx > 0 && screenRoomVertices.length >= 3
+            ? screenRoomVertices[0]
+            : null;
+    const nearClose =
+        closeTarget && screenRoomPreviewPoint
+            ? Math.hypot(
+                  screenRoomPreviewPoint.x - closeTarget.x,
+                  screenRoomPreviewPoint.y - closeTarget.y,
+              ) <= polygonCloseTargetPx
+            : false;
     const screenWallPreview = wallPreview ? wallPreview.map(screenPoint) : null;
     const screenCanopyPreview = canopyPreview
         ? {
@@ -129,17 +162,22 @@ export const OverlayPreviews = memo(function OverlayPreviews({
                             screenRoomPreviewPoint
                                 ? [
                                       ...screenRoomVertices,
-                                      screenRoomPreviewPoint,
+                                      nearClose && closeTarget
+                                          ? closeTarget
+                                          : screenRoomPreviewPoint,
+                                      ...(nearClose && closeTarget
+                                          ? [screenRoomVertices[0]]
+                                          : []),
                                   ]
                                 : screenRoomVertices,
                         )}
-                        stroke="#60a5fa"
+                        stroke={nearClose ? '#22c55e' : '#60a5fa'}
                         strokeWidth={2}
                         fill="none"
                         strokeDasharray="6 4"
                         opacity={0.9}
                     />
-                    {screenRoomPreviewPoint && (
+                    {screenRoomPreviewPoint && !nearClose && (
                         <>
                             <circle
                                 cx={safeNum(screenRoomPreviewPoint.x)}
@@ -159,6 +197,37 @@ export const OverlayPreviews = memo(function OverlayPreviews({
                                     measureCadDistanceFromScreen,
                                     angleSnapMode,
                                 )}
+                        </>
+                    )}
+                    {closeTarget && (
+                        <>
+                            <circle
+                                cx={safeNum(closeTarget.x)}
+                                cy={safeNum(closeTarget.y)}
+                                r={nearClose ? 9 : 6}
+                                fill={
+                                    nearClose
+                                        ? 'rgba(34,197,94,0.25)'
+                                        : 'rgba(96,165,250,0.15)'
+                                }
+                                stroke={nearClose ? '#22c55e' : '#60a5fa'}
+                                strokeWidth={nearClose ? 2.5 : 1.5}
+                            />
+                            {nearClose && (
+                                <text
+                                    x={safeNum(closeTarget.x + 12)}
+                                    y={safeNum(closeTarget.y - 12)}
+                                    fill="#4ade80"
+                                    fontSize={11}
+                                    fontFamily="sans-serif"
+                                    fontWeight={700}
+                                    stroke="#052e16"
+                                    strokeWidth={3}
+                                    paintOrder="stroke"
+                                >
+                                    Cerrar
+                                </text>
+                            )}
                         </>
                     )}
                 </>
@@ -241,8 +310,10 @@ export const OverlayPreviews = memo(function OverlayPreviews({
             {pendingFixtureGridArea && pendingFixtureGridArea.length >= 3 &&
                 (() => {
                     const screenPoly = pendingFixtureGridArea.map(screenPoint);
-                    const previewCenters = calculateFixtureGridPositions(
+                    const previewCenters = calculateObstacleAwareFixtureGridPositions(
                         pendingFixtureGridArea,
+                        structuralObstacles,
+                        FIXTURE_GRID_PREVIEW_MOUNTING_HEIGHT,
                         fixtureGridAreaRows,
                         fixtureGridAreaColumns,
                     ).map(screenPoint);

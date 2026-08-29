@@ -1293,11 +1293,14 @@ const TablaValorizada: React.FC<Props> = ({
                         {/* ── PRESUPUESTADO COMP. I ── */}
                         <tr className="bg-slate-700 font-bold text-white">
                             <td
-                                colSpan={6}
+                                colSpan={5}
                                 className="border border-slate-600 p-2.5 text-right text-[10px] tracking-wide uppercase"
                             >
                                 PRESUPUESTADO DE OBRA INFRAESTRUCTURA COMPONENTE
                                 I
+                            </td>
+                            <td className="border border-slate-600 bg-slate-800 p-2.5 text-right font-bold text-emerald-300 tabular-nums">
+                                {fmtS(presupI)}
                             </td>
                             <td className="border border-slate-600 bg-slate-800" />
                             {periodos.map((p) =>
@@ -1400,10 +1403,13 @@ const TablaValorizada: React.FC<Props> = ({
                         {/* ── SUB TOTAL COMPONENTE II ── */}
                         <tr className="bg-slate-100 font-bold text-slate-800">
                             <td
-                                colSpan={6}
+                                colSpan={5}
                                 className="border border-slate-300 p-2.5 text-right text-[10px] tracking-wider uppercase"
                             >
                                 SUB TOTAL COMPONENTE II
+                            </td>
+                            <td className="border border-slate-300 bg-slate-100 p-2.5 text-right font-bold tabular-nums">
+                                {subTotalII > 0 ? fmtS(subTotalII) : '—'}
                             </td>
                             <td className="border border-slate-300 bg-slate-200" />
                             {periodos.map((p) => (
@@ -1526,10 +1532,13 @@ const TablaValorizada: React.FC<Props> = ({
                                     {/* Sub total del componente extra */}
                                     <tr className="bg-slate-100 font-bold text-slate-800">
                                         <td
-                                            colSpan={6}
+                                            colSpan={5}
                                             className="border border-slate-300 p-2.5 text-right text-[10px] tracking-wider uppercase"
                                         >
                                             SUB TOTAL COMPONENTE {numero}
+                                        </td>
+                                        <td className="border border-slate-300 bg-slate-100 p-2.5 text-right font-bold tabular-nums">
+                                            {comp.subtotal > 0 ? fmtS(comp.subtotal) : '—'}
                                         </td>
                                         <td className="border border-slate-300 bg-slate-200" />
                                         {periodos.map((p) => (
@@ -1584,10 +1593,13 @@ const TablaValorizada: React.FC<Props> = ({
                         {/* ── TOTAL PRESUPUESTO COMPONENTE I+II+... ── */}
                         <tr className="bg-slate-800 font-bold text-white">
                             <td
-                                colSpan={6}
+                                colSpan={5}
                                 className="border border-slate-600 p-2.5 text-right text-[10px] tracking-wide uppercase"
                             >
                                 TOTAL PRESUPUESTO DE OBRA COMPONENTE {romanList}
+                            </td>
+                            <td className="border border-slate-600 bg-slate-900 p-2.5 text-right font-bold text-emerald-300 tabular-nums">
+                                {fmtS(totalI_II)}
                             </td>
                             <td className="border border-slate-600 bg-slate-900" />
                             {periodos.map((p) =>
@@ -1622,10 +1634,13 @@ const TablaValorizada: React.FC<Props> = ({
                         {amarillos.length > 0 && (
                             <tr className="bg-slate-100 font-bold text-slate-800">
                                 <td
-                                    colSpan={6}
+                                    colSpan={5}
                                     className="border border-slate-300 p-2.5 text-right text-[10px] tracking-wider uppercase"
                                 >
                                     PRESUPUESTO SUB TOTAL
+                                </td>
+                                <td className="border border-slate-300 bg-slate-100 p-2.5 text-right font-bold tabular-nums">
+                                    {fmtS(presupuestoSubTotal)}
                                 </td>
                                 <td className="border border-slate-300 bg-slate-200" />
                                 {periodos.map((p) =>
@@ -1648,10 +1663,13 @@ const TablaValorizada: React.FC<Props> = ({
                         {rojosFinales.length > 0 && (
                             <tr className="bg-slate-800 font-bold text-white">
                                 <td
-                                    colSpan={6}
+                                    colSpan={5}
                                     className="border border-slate-700 p-2.5 text-right text-[10px] tracking-widest uppercase"
                                 >
                                     PRESUPUESTO TOTAL
+                                </td>
+                                <td className="border border-slate-700 bg-slate-900 p-2.5 text-right font-bold text-emerald-300 tabular-nums">
+                                    {fmtS(presupuestoTotalIntermedio)}
                                 </td>
                                 <td className="border border-slate-700 bg-slate-900" />
                                 {periodos.map((p) =>

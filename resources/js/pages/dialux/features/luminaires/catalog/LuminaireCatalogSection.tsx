@@ -157,7 +157,22 @@ export function LuminaireCatalogSection({ isCompactFixtureGrid, ...hookOptions }
                 />
             )}
 
-            {isCompactFixtureGrid && (
+            {isCompactFixtureGrid && visibleImportedProducts.length === 0 && visibleFixtures.length === 0 && (
+                <div className="flex min-h-[17.5rem] flex-col items-center justify-center gap-2 rounded border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center dark:border-slate-700 dark:bg-slate-900/40">
+                    <Upload size={20} className="text-amber-500" />
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                        Aún no hay luminarias en tu catálogo
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                        Importa el archivo fotométrico real (.ldt / .ies) de la
+                        luminaria que vas a usar, o créala manualmente, con el
+                        botón de abajo. El catálogo genérico se retiró porque sus
+                        curvas sintéticas no cuadran con el cálculo final.
+                    </p>
+                </div>
+            )}
+
+            {isCompactFixtureGrid && (visibleImportedProducts.length > 0 || visibleFixtures.length > 0) && (
                 <div className="grid min-h-[17.5rem] grid-cols-3 grid-rows-5 gap-1">
                     {visibleImportedProducts.map((product) => {
                         const isActive = isImportedProductActive(product, fixtureTemplate);
