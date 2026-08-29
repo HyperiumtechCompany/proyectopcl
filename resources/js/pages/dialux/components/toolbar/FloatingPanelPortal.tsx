@@ -52,12 +52,17 @@ export const FloatingPanelPortal: React.FC<FloatingPanelPortalProps> = ({
     const panelRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        let rafId: number | null = null;
+        let prevKey = '';
+
         const update = () => {
+            rafId = null;
             if (!anchorRef.current) return;
 
             const rect = anchorRef.current.getBoundingClientRect();
             const toolbarElement = document.getElementById(TOOLBAR_RAIL_ID);
-            const toolbarRight = toolbarElement?.getBoundingClientRect().right ?? 0;
+            const toolbarRight =
+                toolbarElement?.getBoundingClientRect().right ?? 0;
             // `.contains()` cubre el caso normal, pero si por lo que sea falla
             // (portal intermedio, timing) igual detectamos por geometría: un
             // ancla cuyo borde izquierdo cae dentro del riel es del riel — así
@@ -66,8 +71,9 @@ export const FloatingPanelPortal: React.FC<FloatingPanelPortalProps> = ({
                 (toolbarElement?.contains(anchorRef.current) ?? false) ||
                 (toolbarElement !== null && rect.left < toolbarRight);
             const headerBottom =
-                document.getElementById('dialux-header')?.getBoundingClientRect()
-                    .bottom ?? 0;
+                document
+                    .getElementById('dialux-header')
+                    ?.getBoundingClientRect().bottom ?? 0;
             const widthPx = { sm: 220, md: 268, lg: 328, xl: 392 }[width];
             const minWidth = 140;
             let panelWidth: number;
@@ -75,7 +81,8 @@ export const FloatingPanelPortal: React.FC<FloatingPanelPortalProps> = ({
 
             if (isToolbarAnchor) {
                 const rightEdge = Math.max(rect.right, toolbarRight);
-                const rightAvailable = window.innerWidth - rightEdge - PANEL_GAP_X - 16;
+                const rightAvailable =
+                    window.innerWidth - rightEdge - PANEL_GAP_X - 16;
                 const leftAvailable = rect.left - PANEL_GAP_X - 16;
 
                 if (rightAvailable >= minWidth) {
@@ -85,18 +92,42 @@ export const FloatingPanelPortal: React.FC<FloatingPanelPortalProps> = ({
                     panelWidth = Math.min(widthPx, leftAvailable);
                     left = Math.max(8, rect.left - PANEL_GAP_X - panelWidth);
                 } else {
-                    panelWidth = Math.min(widthPx, Math.max(minWidth, window.innerWidth - 32));
-                    left = Math.max(8, Math.min(rightEdge + PANEL_GAP_X, window.innerWidth - panelWidth - 16));
+                    panelWidth = Math.min(
+                        widthPx,
+                        Math.max(minWidth, window.innerWidth - 32),
+                    );
+                    left = Math.max(
+                        8,
+                        Math.min(
+                            rightEdge + PANEL_GAP_X,
+                            window.innerWidth - panelWidth - 16,
+                        ),
+                    );
                 }
             } else {
-                const maxAllowedWidth = Math.max(minWidth, window.innerWidth - 32);
+                const maxAllowedWidth = Math.max(
+                    minWidth,
+                    window.innerWidth - 32,
+                );
                 panelWidth = Math.min(widthPx, maxAllowedWidth);
 
-                const leftAligned = Math.max(16, Math.min(rect.left, window.innerWidth - panelWidth - 16));
-                const rightAligned = Math.max(16, Math.min(rect.right - panelWidth, window.innerWidth - panelWidth - 16));
+                const leftAligned = Math.max(
+                    16,
+                    Math.min(rect.left, window.innerWidth - panelWidth - 16),
+                );
+                const rightAligned = Math.max(
+                    16,
+                    Math.min(
+                        rect.right - panelWidth,
+                        window.innerWidth - panelWidth - 16,
+                    ),
+                );
 
                 if (rect.left + panelWidth <= window.innerWidth - 16) {
-                    left = rect.left > window.innerWidth / 2 ? rightAligned : leftAligned;
+                    left =
+                        rect.left > window.innerWidth / 2
+                            ? rightAligned
+                            : leftAligned;
                 } else if (rect.right - panelWidth >= 16) {
                     left = rightAligned;
                 } else {
@@ -105,33 +136,60 @@ export const FloatingPanelPortal: React.FC<FloatingPanelPortalProps> = ({
             }
 
             let pos: { top?: number; bottom?: number; maxH?: string };
-            const availableBelow = window.innerHeight - Math.max(rect.bottom, headerBottom) - PANEL_GAP_Y;
+            const availableBelow =
+                window.innerHeight -
+                Math.max(rect.bottom, headerBottom) -
+                PANEL_GAP_Y;
             const availableAbove = rect.top - headerBottom - PANEL_GAP_Y;
-            const openAbove = availableAbove >= availableBelow && availableAbove >= 140;
+            const openAbove =
+                availableAbove >= availableBelow && availableAbove >= 140;
 
             if (openAbove) {
-                const bottom = Math.max(PANEL_GAP_Y, window.innerHeight - rect.top + PANEL_GAP_Y);
+                const bottom = Math.max(
+                    PANEL_GAP_Y,
+                    window.innerHeight - rect.top + PANEL_GAP_Y,
+                );
                 pos = dropdown
                     ? { bottom }
                     : { bottom, maxH: `${Math.max(0, availableAbove)}px` };
             } else {
-                const top = Math.max(headerBottom + PANEL_GAP_Y, rect.bottom + PANEL_GAP_Y);
+                const top = Math.max(
+                    headerBottom + PANEL_GAP_Y,
+                    rect.bottom + PANEL_GAP_Y,
+                );
                 pos = dropdown
                     ? { top }
                     : { top, maxH: `${Math.max(0, availableBelow)}px` };
             }
 
+            // Evita el re-render (y el forced reflow que dispara al volver a
+            // medir) cuando el resultado no cambió — el listener de scroll en
+            // captura se dispara con CUALQUIER scroll del documento, incluido
+            // el de listas internas que no mueven el panel.
+            const nextKey = `${pos.top ?? ''}|${pos.bottom ?? ''}|${pos.maxH ?? ''}|${left}|${panelWidth}`;
+            if (nextKey === prevKey) return;
+            prevKey = nextKey;
             setLayout({ ...pos, left, width: panelWidth });
         };
 
+        // rAF-throttle: coalesce múltiples scroll/resize por frame en una sola
+        // pasada de layout en vez de N getBoundingClientRect() sincronizados.
+        const schedule = () => {
+            if (rafId === null) rafId = requestAnimationFrame(update);
+        };
+
         update();
-        window.addEventListener('resize', update);
-        window.addEventListener('scroll', update);
-        document.addEventListener('scroll', update, true);
+        window.addEventListener('resize', schedule);
+        window.addEventListener('scroll', schedule, { passive: true });
+        document.addEventListener('scroll', schedule, {
+            passive: true,
+            capture: true,
+        });
         return () => {
-            window.removeEventListener('resize', update);
-            window.removeEventListener('scroll', update);
-            document.removeEventListener('scroll', update, true);
+            if (rafId !== null) cancelAnimationFrame(rafId);
+            window.removeEventListener('resize', schedule);
+            window.removeEventListener('scroll', schedule);
+            document.removeEventListener('scroll', schedule, true);
         };
     }, [anchorRef, width, dropdown]);
 
@@ -169,19 +227,23 @@ export const FloatingPanelPortal: React.FC<FloatingPanelPortalProps> = ({
             ref={panelRef}
             id="dialux-floating-panel"
             style={style}
-            className={`flex flex-col rounded-lg border border-slate-200 dark:border-gray-700/60 bg-white dark:bg-[#191c2c] shadow-2xl ring-1 ring-black/10 dark:ring-black/50 ${dropdown ? 'overflow-visible' : 'overflow-hidden'}`}
+            className={`flex flex-col rounded-lg border border-slate-200 bg-white shadow-2xl ring-1 ring-black/10 dark:border-gray-700/60 dark:bg-[#191c2c] dark:ring-black/50 ${dropdown ? 'overflow-visible' : 'overflow-hidden'}`}
         >
             {/* Header (optional for compact dropdowns) */}
             {!hideHeader && (
-                <div className="flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-gray-700/50 bg-slate-50 dark:bg-[#1e2236] px-3 py-2">
+                <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2 dark:border-gray-700/50 dark:bg-[#1e2236]">
                     <div className="flex items-center gap-2 text-slate-800 dark:text-gray-200">
-                        <span className="text-slate-500 dark:text-gray-400">{icon}</span>
-                        <span className="text-[11.5px] font-bold tracking-wide">{title}</span>
+                        <span className="text-slate-500 dark:text-gray-400">
+                            {icon}
+                        </span>
+                        <span className="text-[11.5px] font-bold tracking-wide">
+                            {title}
+                        </span>
                     </div>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="flex h-5 w-5 items-center justify-center rounded text-slate-400 dark:text-gray-500 transition-colors hover:bg-slate-200 dark:hover:bg-gray-600/40 hover:text-slate-700 dark:hover:text-gray-300"
+                        className="flex h-5 w-5 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:text-gray-500 dark:hover:bg-gray-600/40 dark:hover:text-gray-300"
                     >
                         <X size={10} />
                     </button>

@@ -59,6 +59,13 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
      * picking 3D suma esto de vuelta para escribir coordenadas del store reales.
      */
     const worldOriginRef = useRef<WorldOrigin | null>(null);
+    /** `isVisible` accesible desde la suscripción al store (creada una sola vez). */
+    const isVisibleRef = useRef(isVisible);
+    /** true si hay cambios sin reflejar en la escena 3D (edición con 3D oculto, o primer montaje). */
+    const pendingSyncRef = useRef(true);
+    /** Función de re-sincronización, seteada dentro del efecto de montaje. */
+    const runSyncRef = useRef<(() => void) | null>(null);
+    isVisibleRef.current = isVisible;
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -175,10 +182,75 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
             }
         };
 
-        engine.runRenderLoop(() => scene.render());
+        // El bucle de render de Babylon solo corre cuando la vista 3D está a la
+        // vista. Renderizar un canvas oculto (display:none) a 60fps era puro
+        // gasto de GPU/CPU mientras se trabaja en 2D.
+        engine.runRenderLoop(() => {
+            if (isVisibleRef.current) scene.render();
+        });
 
         const onResize = () => engine.resize();
         globalThis.addEventListener('resize', onResize);
+
+        const runSync = () => {
+            pendingSyncRef.current = false;
+            if (syncFrameRef.current !== null) {
+                cancelAnimationFrame(syncFrameRef.current);
+            }
+            syncFrameRef.current = requestAnimationFrame(() => {
+                syncFrameRef.current = null;
+                if (!builderRef.current || scene.isDisposed) return;
+
+                const freshState = useEditorStore.getState();
+                // Antes se pasaba un único `state.result` (el ambiente
+                // seleccionado) — con 2+ ambientes calculados en el mismo
+                // piso (ej. Aula 1°/Aula 2°) el isolux 3D solo mostraba
+                // uno. Ahora se pasan TODOS los resultados del piso
+                // activo (`resultsByRoom`, la misma fuente que ya usa la
+                // tabla de resultados 2D para mostrar ambos).
+                const activeScene = (freshState.project?.scenes ?? []).find(
+                    (s) => s.id === freshState.activeSceneId,
+                );
+                const activeRoomIds = new Set(
+                    (activeScene?.rooms ?? []).map((r) => r.id),
+                );
+                const activeResults = Object.entries(freshState.resultsByRoom)
+                    .filter(([roomId]) => {
+                        const baseId = roomId.split('::ambient-')[0]!;
+                        return activeRoomIds.has(baseId);
+                    })
+                    .map(([, result]) => result);
+
+                // Recentrado para planos georreferenciados (UTM): el
+                // `House3DBuilder` recibe copias trasladadas al origen; el
+                // store no se toca (ver `sceneWorldOrigin.ts`). Para un
+                // proyecto normal `origin` es `null` y no se copia nada.
+                const sourceScenes = freshState.project?.scenes ?? [];
+                const origin = computeWorldOrigin(sourceScenes);
+                worldOriginRef.current = origin;
+                const renderScenes = origin
+                    ? sourceScenes.map((s) =>
+                          translateSceneForRender(s, origin),
+                      )
+                    : sourceScenes;
+                const renderResults = origin
+                    ? activeResults.map((r) =>
+                          translateLightingResultForRender(r, origin),
+                      )
+                    : activeResults;
+
+                builderRef.current.syncAllFloors(
+                    renderScenes,
+                    renderResults,
+                    freshState.ui.showIsolux,
+                    freshState.ui.isoluxMode,
+                    freshState.ui.showRoof,
+                    freshState.activeSceneId,
+                    freshState.ui.showAllFloors,
+                );
+            });
+        };
+        runSyncRef.current = runSync;
 
         const unsub = useEditorStore.subscribe(
             (state) => ({
@@ -194,76 +266,26 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
                     .map((s) => `${s.id}:${s.visible ?? true}`)
                     .join(','),
             }),
-            (_snapshot) => {
+            () => {
                 const state = useEditorStore.getState();
                 const allScenes = state.project?.scenes ?? [];
-                const activeSceneId = state.activeSceneId;
                 if (!builderRef.current || allScenes.length === 0) return;
 
-                if (syncFrameRef.current !== null) {
-                    cancelAnimationFrame(syncFrameRef.current);
+                // Con el 3D oculto no se reconstruye la escena (era ~65ms por
+                // cada edición hecha en 2D); solo se marca como pendiente y se
+                // sincroniza una vez al volver a la vista 3D.
+                if (!isVisibleRef.current) {
+                    pendingSyncRef.current = true;
+                    return;
                 }
-
-                syncFrameRef.current = requestAnimationFrame(() => {
-                    syncFrameRef.current = null;
-                    if (!builderRef.current || scene.isDisposed) return;
-
-                    const freshState = useEditorStore.getState();
-                    // Antes se pasaba un único `state.result` (el ambiente
-                    // seleccionado) — con 2+ ambientes calculados en el mismo
-                    // piso (ej. Aula 1°/Aula 2°) el isolux 3D solo mostraba
-                    // uno. Ahora se pasan TODOS los resultados del piso
-                    // activo (`resultsByRoom`, la misma fuente que ya usa la
-                    // tabla de resultados 2D para mostrar ambos).
-                    const activeScene = (freshState.project?.scenes ?? []).find(
-                        (s) => s.id === freshState.activeSceneId,
-                    );
-                    const activeRoomIds = new Set(
-                        (activeScene?.rooms ?? []).map((r) => r.id),
-                    );
-                    const activeResults = Object.entries(
-                        freshState.resultsByRoom,
-                    )
-                        .filter(([roomId]) => {
-                            const baseId = roomId.split('::ambient-')[0]!;
-                            return activeRoomIds.has(baseId);
-                        })
-                        .map(([, result]) => result);
-
-                    // Recentrado para planos georreferenciados (UTM): el
-                    // `House3DBuilder` recibe copias trasladadas al origen; el
-                    // store no se toca (ver `sceneWorldOrigin.ts`). Para un
-                    // proyecto normal `origin` es `null` y no se copia nada.
-                    const sourceScenes = freshState.project?.scenes ?? [];
-                    const origin = computeWorldOrigin(sourceScenes);
-                    worldOriginRef.current = origin;
-                    const renderScenes = origin
-                        ? sourceScenes.map((s) =>
-                              translateSceneForRender(s, origin),
-                          )
-                        : sourceScenes;
-                    const renderResults = origin
-                        ? activeResults.map((r) =>
-                              translateLightingResultForRender(r, origin),
-                          )
-                        : activeResults;
-
-                    builderRef.current.syncAllFloors(
-                        renderScenes,
-                        renderResults,
-                        freshState.ui.showIsolux,
-                        freshState.ui.isoluxMode,
-                        freshState.ui.showRoof,
-                        freshState.activeSceneId,
-                        freshState.ui.showAllFloors,
-                    );
-                });
+                runSync();
             },
         );
 
         return () => {
             globalThis.removeEventListener('resize', onResize);
             unsub();
+            runSyncRef.current = null;
             if (syncFrameRef.current !== null) {
                 cancelAnimationFrame(syncFrameRef.current);
                 syncFrameRef.current = null;
@@ -275,13 +297,18 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
         };
     }, []);
 
+    // Al volver a la vista 3D: reajustar el canvas y, si hubo ediciones
+    // mientras estaba oculto (o es la primera vez), reconstruir la escena.
     useEffect(() => {
-        if (isVisible && engineRef.current) {
-            const raf = requestAnimationFrame(() => {
-                engineRef.current?.resize();
-            });
-            return () => cancelAnimationFrame(raf);
-        }
+        if (!isVisible || !engineRef.current) return;
+        const raf = requestAnimationFrame(() => {
+            engineRef.current?.resize();
+            if (pendingSyncRef.current) {
+                pendingSyncRef.current = false;
+                runSyncRef.current?.();
+            }
+        });
+        return () => cancelAnimationFrame(raf);
     }, [isVisible]);
 
     const handleDoubleClick = useCallback(() => {

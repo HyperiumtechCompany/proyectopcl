@@ -16,13 +16,20 @@
 
 let cachedEnabled: boolean | null = null;
 
+/** Cualquier valor que no sea claramente "apagado" cuenta como activado. */
+function isTruthyFlag(value: string | null | undefined): boolean {
+    if (value == null) return false;
+    const v = value.trim().toLowerCase();
+    return v !== '' && v !== '0' && v !== 'false' && v !== 'off' && v !== 'no';
+}
+
 export function isDialuxDebugEnabled(): boolean {
     if (cachedEnabled !== null) return cachedEnabled;
     let enabled = false;
     try {
         if (
             typeof localStorage !== 'undefined' &&
-            localStorage.getItem('dialux:debug') === '1'
+            isTruthyFlag(localStorage.getItem('dialux:debug'))
         ) {
             enabled = true;
         }
@@ -30,11 +37,11 @@ export function isDialuxDebugEnabled(): boolean {
         // localStorage puede lanzar en modo incógnito / con cookies bloqueadas
     }
     try {
-        if (
-            typeof location !== 'undefined' &&
-            /[?&]dialuxdebug=1(?:&|$)/.test(location.search)
-        ) {
-            enabled = true;
+        if (typeof location !== 'undefined') {
+            const m = /[?&]dialuxdebug(?:=([^&]*))?(?:&|$)/.exec(
+                location.search,
+            );
+            if (m && isTruthyFlag(m[1] ?? '1')) enabled = true;
         }
     } catch {
         // location siempre existe en el navegador; guard por SSR/tests

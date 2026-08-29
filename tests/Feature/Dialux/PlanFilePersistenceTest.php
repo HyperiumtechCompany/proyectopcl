@@ -114,6 +114,57 @@ it('permite reutilizar el plano de otro piso sin duplicar el archivo', function 
         ->assertSuccessful();
 });
 
+it('lista los planos por piso e indica cuáles comparten archivo', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::create([
+        'user_id' => $user->id,
+        'name' => 'Proyecto multipiso',
+        'data' => [
+            'id' => 'project-data',
+            'name' => 'Proyecto multipiso',
+            'scenes' => [
+                ['id' => 'floor-1', 'name' => 'Primer piso'],
+                ['id' => 'floor-2', 'name' => 'Segundo piso'],
+                ['id' => 'floor-3', 'name' => 'Tercer piso'],
+            ],
+        ],
+    ]);
+
+    // floor-1 y floor-2 comparten plano; floor-3 tiene el suyo.
+    $this->actingAs($user)->post(
+        route('dialux.plans.store', [$project, 'floor-1']),
+        ['plan' => UploadedFile::fake()->createWithContent('tipica.dxf', 'A')],
+    )->assertSuccessful();
+    $this->actingAs($user)
+        ->postJson(route('dialux.plans.link', [$project, 'floor-2']), ['source_scene_id' => 'floor-1'])
+        ->assertSuccessful();
+    $this->actingAs($user)->post(
+        route('dialux.plans.store', [$project, 'floor-3']),
+        ['plan' => UploadedFile::fake()->createWithContent('atico.dxf', 'B')],
+    )->assertSuccessful();
+
+    $response = $this->actingAs($user)
+        ->getJson(route('dialux.plans.index', [$project]))
+        ->assertSuccessful();
+
+    $bindings = collect($response->json('bindings'))->keyBy('scene_id');
+    expect($bindings)->toHaveCount(3);
+    expect($bindings['floor-1']['plan_id'])->toBe($bindings['floor-2']['plan_id']);
+    expect($bindings['floor-3']['plan_id'])->not->toBe($bindings['floor-1']['plan_id']);
+    expect($bindings['floor-1']['original_name'])->toBe('tipica.dxf');
+    expect($bindings['floor-3']['original_name'])->toBe('atico.dxf');
+});
+
+it('el index de planos rechaza a otro usuario', function () {
+    $owner = User::factory()->create();
+    $project = dialuxProjectWithFloor($owner);
+    $intruder = User::factory()->create();
+
+    $this->actingAs($intruder)
+        ->getJson(route('dialux.plans.index', [$project]))
+        ->assertForbidden();
+});
+
 it('borra el archivo físico solo cuando ningún otro piso lo referencia', function () {
     $user = User::factory()->create();
     $project = DialuxProject::create([

@@ -18,8 +18,6 @@ import {
     Trash2,
     Upload,
     Wrench,
-    Search,
-    X,
 } from 'lucide-react';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import Swal from 'sweetalert2';
@@ -67,7 +65,7 @@ import {
     type IfcImportPreview,
 } from '@/pages/dialux/hooks/ifcImport/ifcImportPipeline';
 import { getEffectiveScale } from './canvas/canvasUtils';
-import { CatalogPanel } from './CatalogPanel';
+import { FixtureGridProjectionDialog } from './FixtureGridProjectionDialog';
 import { IfcImportDialog, type IfcImportSelection } from './IfcImportDialog';
 import { ImportLuminairesModal } from './ImportLuminairesModal';
 import { FloatingPanelPortal } from './toolbar/FloatingPanelPortal';
@@ -123,8 +121,6 @@ export const Toolbar: React.FC = () => {
     const [symmetryWarning, setSymmetryWarning] =
         useState<SymmetryCheckResult | null>(null);
 
-    const [gridSearch, setGridSearch] = useState('');
-
     /**
      * Confirma el area de proyeccion recien dibujada (herramienta Luminarias,
      * modo "Dibujar area"): recien AHORA se crean las luminarias reales,
@@ -134,28 +130,35 @@ export const Toolbar: React.FC = () => {
      * con modulos vecinos ya existentes (misma fila/columna, adyacentes).
      */
     const handleConfirmFixtureGridArea = useCallback(() => {
-        const vertices = store.ui.pendingFixtureGridArea;
+        // `getState()` en vez de cerrar sobre `store` → callback estable
+        // (`[]`), para que el `memo` de `FixtureGridProjectionDialog` funcione.
+        const s = useEditorStore.getState();
+        const vertices = s.ui.pendingFixtureGridArea;
         if (!vertices || vertices.length < 3) return;
         const center = polygonCentroid(vertices);
-        const scene = store.activeScene();
+        const scene = s.activeScene();
         const ambient = scene ? findAmbientSpaceAtPoint(scene, center) : null;
         const roomId = ambient?.sourceRoom.id;
-        const newIds = store.addFixtureGrid({
+        const newIds = s.addFixtureGrid({
             roomId,
-            rows: store.ui.fixtureGridRows,
-            columns: store.ui.fixtureGridCols,
-            fixtureTemplate: store.ui.fixtureTemplate,
+            rows: s.ui.fixtureGridRows,
+            columns: s.ui.fixtureGridCols,
+            fixtureTemplate: s.ui.fixtureTemplate,
             ambientVertices: vertices,
         });
-        store.setPendingFixtureGridArea(null);
+        s.setPendingFixtureGridArea(null);
 
         // Diagnóstico (solo con `localStorage['dialux:debug']='1'` o
         // `?dialuxdebug=1`): permite verificar en producción, sin consola
         // normal, que las luminarias caen dentro del área dibujada.
-        const placed = store
+        const placed = useEditorStore
+            .getState()
             .activeScene()
             ?.fixtures.filter((f) => newIds.includes(f.id))
-            .map((f) => ({ x: Number(f.x.toFixed(2)), y: Number(f.y.toFixed(2)) }));
+            .map((f) => ({
+                x: Number(f.x.toFixed(2)),
+                y: Number(f.y.toFixed(2)),
+            }));
         const xs = vertices.map((v) => v.x);
         const ys = vertices.map((v) => v.y);
         ddbg('fixture-grid', {
@@ -168,18 +171,18 @@ export const Toolbar: React.FC = () => {
             },
             centroid: center,
             roomId: roomId ?? null,
-            rows: store.ui.fixtureGridRows,
-            columns: store.ui.fixtureGridCols,
+            rows: s.ui.fixtureGridRows,
+            columns: s.ui.fixtureGridCols,
             placedCount: placed?.length ?? 0,
             placed,
         });
 
         if (newIds.length > 0) {
-            store.setSelectedId(null);
-            store.setSelectedFixtureIds(newIds);
-            store.setTool('select');
+            s.setSelectedId(null);
+            s.setSelectedFixtureIds(newIds);
+            s.setTool('select');
 
-            const freshScene = store.activeScene();
+            const freshScene = useEditorStore.getState().activeScene();
             const newGroupId = freshScene?.fixtures.find((f) =>
                 newIds.includes(f.id),
             )?.gridGroupId;
@@ -193,7 +196,7 @@ export const Toolbar: React.FC = () => {
                 'No se pudo generar la grilla. El área proyectada puede ser muy pequeña.',
             );
         }
-    }, [store]);
+    }, []);
 
     /**
      * Aplica una correccion de simetria: por cada modulo afectado, recalcula
@@ -279,8 +282,12 @@ export const Toolbar: React.FC = () => {
     );
 
     const handleCancelFixtureGridArea = useCallback(() => {
-        store.setPendingFixtureGridArea(null);
-    }, [store]);
+        useEditorStore.getState().setPendingFixtureGridArea(null);
+    }, []);
+
+    const handleOpenImportLuminairesModal = useCallback(() => {
+        setIsImportLuminairesModalOpen(true);
+    }, []);
     const setProjectName = useCallback(
         (name: string) => {
             if (!store.project) return;
@@ -899,9 +906,7 @@ export const Toolbar: React.FC = () => {
                         pendingArea={store.ui.pendingFixtureGridArea}
                         onConfirmPendingArea={handleConfirmFixtureGridArea}
                         onCancelPendingArea={handleCancelFixtureGridArea}
-                        onOpenImportModal={() =>
-                            setIsImportLuminairesModalOpen(true)
-                        }
+                        onOpenImportModal={handleOpenImportLuminairesModal}
                         onSetElecDevice={(type, label, properties) => {
                             store.setElectricalDeviceTemplate(
                                 type,
@@ -1226,145 +1231,11 @@ export const Toolbar: React.FC = () => {
                 </DialogContent>
             </Dialog>
 
-            {/* ── Import Luminaires Modal ── */}
-            <Dialog
-                open={Boolean(store.ui.pendingFixtureGridArea)}
-                onOpenChange={(open) => {
-                    if (!open) handleCancelFixtureGridArea();
-                }}
-            >
-                <DialogContent className="max-h-[88vh] max-w-3xl overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>
-                            Configurar proyección de luminarias
-                        </DialogTitle>
-                        <DialogDescription>
-                            El área dibujada tiene{' '}
-                            {store.ui.pendingFixtureGridArea?.length ?? 0}{' '}
-                            vértices. Elige la luminaria y define la
-                            distribución antes de insertarla.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="grid gap-4 md:grid-cols-[180px_1fr]">
-                        <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/60">
-                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">
-                                Distribución
-                            </p>
-                            <div className="grid grid-cols-2 gap-2">
-                                <label className="grid gap-1 text-xs text-slate-600 dark:text-slate-300">
-                                    <span>Filas</span>
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        max={20}
-                                        value={store.ui.fixtureGridRows}
-                                        onChange={(event) =>
-                                            store.setFixtureGridRows(
-                                                Number(event.target.value),
-                                            )
-                                        }
-                                        className="h-9 rounded-md border border-slate-300 bg-white px-2 text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                                    />
-                                </label>
-                                <label className="grid gap-1 text-xs text-slate-600 dark:text-slate-300">
-                                    <span>Columnas</span>
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        max={20}
-                                        value={store.ui.fixtureGridCols}
-                                        onChange={(event) =>
-                                            store.setFixtureGridCols(
-                                                Number(event.target.value),
-                                            )
-                                        }
-                                        className="h-9 rounded-md border border-slate-300 bg-white px-2 text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                                    />
-                                </label>
-                            </div>
-                            <div className="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-center dark:border-cyan-900 dark:bg-cyan-950/30">
-                                <span className="block text-lg font-bold text-cyan-700 dark:text-cyan-300">
-                                    {store.ui.fixtureGridRows}×
-                                    {store.ui.fixtureGridCols}
-                                </span>
-                                <span className="text-[10px] text-cyan-700/80 dark:text-cyan-400">
-                                    {store.ui.fixtureGridRows *
-                                        store.ui.fixtureGridCols}{' '}
-                                    luminarias
-                                </span>
-                            </div>
-                            <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-                                Modelo seleccionado:{' '}
-                                <strong className="text-slate-700 dark:text-slate-200">
-                                    {store.ui.fixtureTemplate.name ??
-                                        'Luminaria'}
-                                </strong>
-                            </p>
-                        </div>
-
-                        <div className="min-h-0 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
-                            <div className="relative mb-3">
-                                <Search
-                                    size={14}
-                                    className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-500"
-                                />
-                                <input
-                                    type="text"
-                                    value={gridSearch}
-                                    onChange={(e) => setGridSearch(e.target.value)}
-                                    placeholder="Buscar luminaria por nombre o fabricante..."
-                                    className="h-9 w-full rounded-lg border border-slate-300 bg-white pr-10 pl-9 text-sm text-slate-900 placeholder:text-slate-500 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
-                                />
-                                {gridSearch && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setGridSearch('')}
-                                        className="absolute top-1/2 right-3 -translate-y-1/2 rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                                    >
-                                        <X size={14} />
-                                    </button>
-                                )}
-                            </div>
-                            <CatalogPanel
-                                filterCategory="luminaires"
-                                variant="compact-grid"
-                                fixtureItemsPerPage={15}
-                                search={gridSearch}
-                                onSelect={() => store.setTool('fixture-grid')}
-                            />
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    setIsImportLuminairesModalOpen(true)
-                                }
-                                className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-700/50 dark:bg-amber-950/20 dark:text-amber-300 dark:hover:bg-amber-900/30"
-                            >
-                                <Upload size={13} />
-                                Importar o crear luminaria
-                            </button>
-                        </div>
-                    </div>
-
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={handleCancelFixtureGridArea}
-                        >
-                            Cancelar
-                        </Button>
-                        <Button
-                            className="bg-cyan-600 text-white hover:bg-cyan-500"
-                            onClick={handleConfirmFixtureGridArea}
-                        >
-                            Insertar{' '}
-                            {store.ui.fixtureGridRows *
-                                store.ui.fixtureGridCols}{' '}
-                            luminarias
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <FixtureGridProjectionDialog
+                onConfirm={handleConfirmFixtureGridArea}
+                onCancel={handleCancelFixtureGridArea}
+                onOpenImportModal={handleOpenImportLuminairesModal}
+            />
 
             <ImportLuminairesModal
                 open={isImportLuminairesModalOpen}

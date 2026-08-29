@@ -119,9 +119,46 @@ const getCsrfHeaders = (): Record<string, string> => {
 
 const jsonRequestConfig = { headers: { Accept: 'application/json', ...getCsrfHeaders() }, withCredentials: true };
 
+/**
+ * Caché stale-while-revalidate del catálogo importado. Cada apertura del panel
+ * de luminarias (modal de proyección incl.) montaba `useLuminaireCatalog`, que
+ * disparaba este GET — el grid quedaba vacío hasta que la red respondía y el
+ * modal "abría lento". Ahora: si hay caché fresca (<TTL) se devuelve al
+ * instante; si está vieja se devuelve igual y se revalida en segundo plano;
+ * las mutaciones (crear/editar/eliminar/compartir) la invalidan.
+ */
+let importedProductsCache: { data: ImportedLuminaireProduct[]; at: number } | null = null;
+let importedProductsInFlight: Promise<ImportedLuminaireProduct[]> | null = null;
+const IMPORTED_PRODUCTS_TTL_MS = 30_000;
+
+function fetchImportedProductsFromServer(): Promise<ImportedLuminaireProduct[]> {
+    importedProductsInFlight ??= axios
+        .get<{ products: ImportedLuminaireProduct[] }>(productRoutes.index.url())
+        .then((response) => {
+            const data = response.data.products ?? [];
+            importedProductsCache = { data, at: Date.now() };
+            return data;
+        })
+        .finally(() => {
+            importedProductsInFlight = null;
+        });
+    return importedProductsInFlight;
+}
+
 export async function fetchImportedProducts(): Promise<ImportedLuminaireProduct[]> {
-    const response = await axios.get<{ products: ImportedLuminaireProduct[] }>(productRoutes.index.url());
-    return response.data.products ?? [];
+    if (importedProductsCache) {
+        const age = Date.now() - importedProductsCache.at;
+        if (age >= IMPORTED_PRODUCTS_TTL_MS) {
+            void fetchImportedProductsFromServer(); // revalida en segundo plano
+        }
+        return importedProductsCache.data;
+    }
+    return fetchImportedProductsFromServer();
+}
+
+/** Fuerza que la próxima `fetchImportedProducts` vuelva a pedir al servidor. */
+export function invalidateImportedProductsCache(): void {
+    importedProductsCache = null;
 }
 
 export async function shareProduct(productId: number, isGlobal: boolean): Promise<ImportedLuminaireProduct> {

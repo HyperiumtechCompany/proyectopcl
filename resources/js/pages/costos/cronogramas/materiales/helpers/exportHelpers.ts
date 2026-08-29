@@ -1,4 +1,4 @@
-﻿import ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { MaterialItem, Periodo, ViewMode } from '../types';
 
@@ -564,7 +564,7 @@ function buildSubtotalRow(
 
     ws.mergeCells(rowNum, actualCol(1), rowNum, actualCol(colFixed));
     const lbl = ws.getCell(rowNum, actualCol(1));
-    lbl.value = `SUBTOTAL ${meta.label} (${items.length})`;
+    lbl.value = `Total ${meta.label}`;
     lbl.style = {
         font:      mkFont({ bold: true, size: 8, color: { argb: 'FF374151' } }),
         fill:      mkFill(meta.subArgb),
@@ -913,10 +913,30 @@ export const exportarMaterialesExcel = async (
     // ── Datos (desde firstDataRow+2) 
     let currentRow = firstDataRow + 2;
 
-    materiales.forEach((mat, i) => {
-        buildDataRow(ws, mat, i, periodos, viewMode, mesPicoKey, currentRow, COL_FIXED, i % 2 !== 0);
-        currentRow++;
-    });
+    if (filtroEsTodo) {
+        const grupos = agruparPorTipo(materiales);
+        let globalIndex = 0;
+        
+        for (const [tipo, items] of grupos) {
+            items.forEach((mat) => {
+                buildDataRow(ws, mat, globalIndex, periodos, viewMode, mesPicoKey, currentRow, COL_FIXED, globalIndex % 2 !== 0);
+                currentRow++;
+                globalIndex++;
+            });
+            buildSubtotalRow(ws, tipo, items, periodos, mesPicoKey, currentRow, COL_FIXED, TOTAL_COLS);
+            currentRow++;
+        }
+    } else {
+        materiales.forEach((mat, i) => {
+            buildDataRow(ws, mat, i, periodos, viewMode, mesPicoKey, currentRow, COL_FIXED, i % 2 !== 0);
+            currentRow++;
+        });
+        if (materiales.length > 0) {
+            const tipo = tipoFiltroActivo || materiales[0].tipo || 'otros';
+            buildSubtotalRow(ws, tipo, materiales, periodos, mesPicoKey, currentRow, COL_FIXED, TOTAL_COLS);
+            currentRow++;
+        }
+    }
 
     // ── Fila de porcentajes 
     buildPctRow(ws, materiales, periodos, mesPicoKey, currentRow, COL_FIXED);

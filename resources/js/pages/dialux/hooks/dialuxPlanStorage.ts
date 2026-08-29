@@ -77,15 +77,20 @@ export async function loadDialuxPlan(
     if (typeof indexedDB === 'undefined') return null;
 
     const db = await openPlanDatabase();
-    const plan = await new Promise<StoredDialuxPlan | null>((resolve, reject) => {
-        const transaction = db.transaction(STORE_NAME, 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.get(planKey(projectId, sceneId));
+    const plan = await new Promise<StoredDialuxPlan | null>(
+        (resolve, reject) => {
+            const transaction = db.transaction(STORE_NAME, 'readonly');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.get(planKey(projectId, sceneId));
 
-        request.onsuccess = () =>
-            resolve((request.result as StoredDialuxPlanRecord | undefined) ?? null);
-        request.onerror = () => reject(request.error);
-    });
+            request.onsuccess = () =>
+                resolve(
+                    (request.result as StoredDialuxPlanRecord | undefined) ??
+                        null,
+                );
+            request.onerror = () => reject(request.error);
+        },
+    );
     db.close();
 
     return plan;
@@ -117,7 +122,11 @@ function readXsrfTokenFromCookie(): string {
  * piso de origen sí lo tuviera. `moduleId` es opcional: `undefined` conserva
  * el comportamiento de v1 exacto (mismo llamador, mismo resultado).
  */
-function planFileUrl(projectId: string, sceneId: string, moduleId?: string): string {
+function planFileUrl(
+    projectId: string,
+    sceneId: string,
+    moduleId?: string,
+): string {
     return moduleId
         ? `/dialux-v2/projects/${encodeURIComponent(projectId)}/modules/${encodeURIComponent(moduleId)}/plans/${encodeURIComponent(sceneId)}`
         : `/dialux/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(sceneId)}`;
@@ -132,25 +141,26 @@ export async function uploadDialuxPlanFile(
     const formData = new FormData();
     formData.append('plan', file);
 
-    const response = await fetch(
-        planFileUrl(projectId, sceneId, moduleId),
-        {
-            method: 'POST',
-            headers: {
-                Accept: 'application/json',
-                'X-XSRF-TOKEN': readXsrfTokenFromCookie(),
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            credentials: 'same-origin',
-            body: formData,
+    const response = await fetch(planFileUrl(projectId, sceneId, moduleId), {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'X-XSRF-TOKEN': readXsrfTokenFromCookie(),
+            'X-Requested-With': 'XMLHttpRequest',
         },
-    );
+        credentials: 'same-origin',
+        body: formData,
+    });
 
     if (!response.ok) {
-        throw new Error(`No se pudo guardar el plano en el servidor (HTTP ${response.status}).`);
+        throw new Error(
+            `No se pudo guardar el plano en el servidor (HTTP ${response.status}).`,
+        );
     }
 
-    const body = (await response.json().catch(() => null)) as { warning?: string | null } | null;
+    const body = (await response.json().catch(() => null)) as {
+        warning?: string | null;
+    } | null;
     return { warning: body?.warning ?? null };
 }
 
@@ -159,20 +169,19 @@ export async function loadDialuxPlanFromServer(
     sceneId: string,
     moduleId?: string,
 ): Promise<StoredDialuxPlan | null> {
-    const response = await fetch(
-        planFileUrl(projectId, sceneId, moduleId),
-        {
-            headers: {
-                Accept: 'application/octet-stream',
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            credentials: 'same-origin',
+    const response = await fetch(planFileUrl(projectId, sceneId, moduleId), {
+        headers: {
+            Accept: 'application/octet-stream',
+            'X-Requested-With': 'XMLHttpRequest',
         },
-    );
+        credentials: 'same-origin',
+    });
 
     if (response.status === 404) return null;
     if (!response.ok) {
-        throw new Error(`No se pudo descargar el plano (HTTP ${response.status}).`);
+        throw new Error(
+            `No se pudo descargar el plano (HTTP ${response.status}).`,
+        );
     }
 
     const blob = await response.blob();
@@ -181,7 +190,9 @@ export async function loadDialuxPlanFromServer(
     return {
         projectId,
         sceneId,
-        fileName: encodedName ? decodeURIComponent(encodedName) : `plano-${sceneId}.dxf`,
+        fileName: encodedName
+            ? decodeURIComponent(encodedName)
+            : `plano-${sceneId}.dxf`,
         mimeType: blob.type || 'application/octet-stream',
         lastModified: Date.now(),
         blob,
@@ -203,10 +214,17 @@ export async function uploadLocalDialuxPlanIfMissing(
 
     if (response.ok) return;
     if (response.status !== 404) {
-        throw new Error(`No se pudo verificar el plano remoto (HTTP ${response.status}).`);
+        throw new Error(
+            `No se pudo verificar el plano remoto (HTTP ${response.status}).`,
+        );
     }
 
-    await uploadDialuxPlanFile(projectId, sceneId, storedDialuxPlanToFile(plan), moduleId);
+    await uploadDialuxPlanFile(
+        projectId,
+        sceneId,
+        storedDialuxPlanToFile(plan),
+        moduleId,
+    );
 }
 
 /**
@@ -237,19 +255,71 @@ export async function linkDialuxPlanFile(
 
     if (response.status === 404) return false;
     if (!response.ok) {
-        throw new Error(`No se pudo reutilizar el plano en el servidor (HTTP ${response.status}).`);
+        throw new Error(
+            `No se pudo reutilizar el plano en el servidor (HTTP ${response.status}).`,
+        );
     }
 
     const localSource = await loadDialuxPlan(projectId, sourceSceneId);
     if (localSource) {
-        await saveDialuxPlanFile(projectId, sceneId, storedDialuxPlanToFile(localSource));
+        await saveDialuxPlanFile(
+            projectId,
+            sceneId,
+            storedDialuxPlanToFile(localSource),
+        );
     }
 
     return true;
 }
 
+/** Vínculo piso→archivo devuelto por `GET .../plans`. */
+export interface DialuxPlanBinding {
+    scene_id: string;
+    plan_id: number;
+    original_name: string | null;
+    size_bytes: number | null;
+}
+
+function plansCollectionUrl(projectId: string, moduleId?: string): string {
+    return moduleId
+        ? `/dialux-v2/projects/${encodeURIComponent(projectId)}/modules/${encodeURIComponent(moduleId)}/plans`
+        : `/dialux/${encodeURIComponent(projectId)}/plans`;
+}
+
+/**
+ * Devuelve, por piso con plano, a qué archivo apunta — para que el editor
+ * muestre si el plano de un piso es propio o compartido con otros pisos
+ * (varios `scene_id` con el mismo `plan_id`).
+ */
+export async function fetchDialuxPlanBindings(
+    projectId: string,
+    moduleId?: string,
+): Promise<DialuxPlanBinding[]> {
+    const response = await fetch(plansCollectionUrl(projectId, moduleId), {
+        method: 'GET',
+        headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'same-origin',
+    });
+    if (!response.ok) {
+        throw new Error(
+            `No se pudieron cargar los planos (HTTP ${response.status}).`,
+        );
+    }
+    const body = (await response.json().catch(() => null)) as {
+        bindings?: DialuxPlanBinding[];
+    } | null;
+    return body?.bindings ?? [];
+}
+
 /** Elimina el vínculo del plano de un piso (ej. al borrarlo). */
-export async function unlinkDialuxPlanFile(projectId: string, sceneId: string, moduleId?: string): Promise<void> {
+export async function unlinkDialuxPlanFile(
+    projectId: string,
+    sceneId: string,
+    moduleId?: string,
+): Promise<void> {
     await fetch(planFileUrl(projectId, sceneId, moduleId), {
         method: 'DELETE',
         headers: {

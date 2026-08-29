@@ -3,30 +3,85 @@
  */
 
 import { Link } from '@inertiajs/react';
-import { AlertTriangle, ArrowLeft, Calculator, Check, ChevronDown, Download, Eye, EyeOff, FileCode, FileText, Lightbulb, Pencil, X } from 'lucide-react';
-import React, { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    AlertTriangle,
+    ArrowLeft,
+    Calculator,
+    Check,
+    ChevronDown,
+    Download,
+    Eye,
+    EyeOff,
+    FileCode,
+    FileText,
+    Lightbulb,
+    Pencil,
+    Upload,
+    X,
+} from 'lucide-react';
+import React, {
+    memo,
+    startTransition,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { buildCalculationSnapshot } from '@/pages/dialux/domain/calculation/buildCalculationSnapshot';
 import { buildProductionCalculationConfig } from '@/pages/dialux/domain/calculation/productionCalculationConfig';
 import { runDirectPreviewEngine } from '@/pages/dialux/domain/calculation/runDirectPreviewEngine';
 import { isCalculationRunStale } from '@/pages/dialux/domain/calculation/staleness';
 import type { CalculationRun } from '@/pages/dialux/domain/calculation/types';
-import { useDialuxEmergencyPdfExport, useDialuxPdfExport } from '@/pages/dialux/export';
+import {
+    useDialuxEmergencyPdfExport,
+    useDialuxPdfExport,
+} from '@/pages/dialux/export';
 import { deriveSceneAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
 import {
     connectedCircuitConductorIds,
     panelBoundaryIds,
 } from '@/pages/dialux/hooks/conductorCircuitGroups';
-import { linkDialuxPlanFile, unlinkDialuxPlanFile } from '@/pages/dialux/hooks/dialuxPlanStorage';
+import {
+    fetchDialuxPlanBindings,
+    linkDialuxPlanFile,
+    saveDialuxPlanFile,
+    unlinkDialuxPlanFile,
+    uploadDialuxPlanFile,
+    type DialuxPlanBinding,
+} from '@/pages/dialux/hooks/dialuxPlanStorage';
 import { useDialuxCalculationWorker } from '@/pages/dialux/hooks/useDialuxCalculationWorker';
-import { markDialuxPlanSyncFailed } from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
-import { createScaleConfig, useEditorStore, useShow3DView } from '@/pages/dialux/hooks/useEditorStore';
+import {
+    markDialuxPlanSyncFailed,
+    markDialuxPlanSyncOk,
+} from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
+import {
+    createScaleConfig,
+    useEditorStore,
+    useShow3DView,
+} from '@/pages/dialux/hooks/useEditorStore';
 import { useLightingEngine } from '@/pages/dialux/hooks/useLightingEngine';
 import type { Conductor } from '@/pages/dialux/hooks/types';
 import { getFixturesForRoom } from '@/pages/dialux/hooks/roomLighting';
-import { calculatePanelCircuitSummaries, calculateProjectPanelCircuitSummaries, calculateRoomWireSummary, resolveProjectTreeConformingSections, validateSceneOutlets } from '@/pages/dialux/hooks/wireLengthCalculations';
+import {
+    calculatePanelCircuitSummaries,
+    calculateProjectPanelCircuitSummaries,
+    calculateRoomWireSummary,
+    resolveProjectTreeConformingSections,
+    validateSceneOutlets,
+} from '@/pages/dialux/hooks/wireLengthCalculations';
 import { Editor3DCanvas } from './canvas/Editor3DCanvas';
-import { CtPanelOutputsDialog, type CtCircuitPatch } from './CtPanelOutputsDialog';
+import {
+    CtPanelOutputsDialog,
+    type CtCircuitPatch,
+} from './CtPanelOutputsDialog';
 import { MlightcadCanvas2D } from './canvas/MlightcadCanvas2D';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
 import { DxfExportDialog } from './DxfExportDialog';
@@ -88,14 +143,20 @@ export const EditorLayout = memo(function EditorLayout() {
     const setCalculating = useEditorStore((s) => s.setCalculating);
     const setResultsByRoom = useEditorStore((s) => s.setResultsByRoom);
     const setResult = useEditorStore((s) => s.setResult);
-    const setLastCalculationRun = useEditorStore((s) => s.setLastCalculationRun);
+    const setLastCalculationRun = useEditorStore(
+        (s) => s.setLastCalculationRun,
+    );
     const setTool = useEditorStore((s) => s.setTool);
     const setSelectedId = useEditorStore((s) => s.setSelectedId);
     const selectedFixtureIds = useEditorStore((s) => s.ui.selectedFixtureIds);
     const requestDelete = useEditorStore((s) => s.requestDelete);
     const pendingDeletion = useEditorStore((s) => s.pendingDeletion);
-    const confirmPendingDeletion = useEditorStore((s) => s.confirmPendingDeletion);
-    const cancelPendingDeletion = useEditorStore((s) => s.cancelPendingDeletion);
+    const confirmPendingDeletion = useEditorStore(
+        (s) => s.confirmPendingDeletion,
+    );
+    const cancelPendingDeletion = useEditorStore(
+        (s) => s.cancelPendingDeletion,
+    );
     const undo = useEditorStore((s) => s.undo);
     const redo = useEditorStore((s) => s.redo);
     const historyCanUndo = useEditorStore((s) => s.historyCanUndo);
@@ -110,7 +171,9 @@ export const EditorLayout = memo(function EditorLayout() {
     const duplicateFloor = useEditorStore((s) => s.duplicateFloor);
     const updateFloor = useEditorStore((s) => s.updateFloor);
     const getFloorsSorted = useEditorStore((s) => s.getFloorsSorted);
-    const toggleFloorVisibility = useEditorStore((s) => s.toggleFloorVisibility);
+    const toggleFloorVisibility = useEditorStore(
+        (s) => s.toggleFloorVisibility,
+    );
     const toggleAllFloors = useEditorStore((s) => s.toggleAllFloors);
     const showAllFloors = useEditorStore((s) => s.ui.showAllFloors);
     const bumpPlanReloadTick = useEditorStore((s) => s.bumpPlanReloadTick);
@@ -122,6 +185,10 @@ export const EditorLayout = memo(function EditorLayout() {
     const [floorNameDraft, setFloorNameDraft] = useState('');
     const [showWireCalc, setShowWireCalc] = useState(false);
     const [isReusingFloorPlan, setIsReusingFloorPlan] = useState(false);
+    const [planBindings, setPlanBindings] = useState<DialuxPlanBinding[]>([]);
+    const [isImportingFloorPlan, setIsImportingFloorPlan] = useState(false);
+    const floorPlanInputRef = useRef<HTMLInputElement>(null);
+    const planReloadTick = useEditorStore((s) => s.ui.planReloadTick);
     const [panelCircuitSummaries, setPanelCircuitSummaries] = useState<
         ReturnType<typeof calculatePanelCircuitSummaries>
     >([]);
@@ -141,8 +208,12 @@ export const EditorLayout = memo(function EditorLayout() {
         setIsCtCalculating(true);
         const initialFrame = window.requestAnimationFrame(() => {
             if (cancelled) return;
-            setPanelCircuitSummaries(calculateProjectPanelCircuitSummaries(scenes));
-            setOutletValidations(scenes.flatMap((scene) => validateSceneOutlets(scene)));
+            setPanelCircuitSummaries(
+                calculateProjectPanelCircuitSummaries(scenes),
+            );
+            setOutletValidations(
+                scenes.flatMap((scene) => validateSceneOutlets(scene)),
+            );
             setIsCtCalculating(false);
         });
 
@@ -166,13 +237,18 @@ export const EditorLayout = memo(function EditorLayout() {
             if (room) return room;
         }
 
-        const conductor = activeScene.conductors?.find((c) => c.id === selectedId);
+        const conductor = activeScene.conductors?.find(
+            (c) => c.id === selectedId,
+        );
         if (conductor) {
             const endpointFixture = activeScene.fixtures.find(
-                (f) => f.id === conductor.sourceId || f.id === conductor.targetId,
+                (f) =>
+                    f.id === conductor.sourceId || f.id === conductor.targetId,
             );
             if (endpointFixture?.roomId) {
-                const room = activeScene.rooms.find((r) => r.id === endpointFixture.roomId);
+                const room = activeScene.rooms.find(
+                    (r) => r.id === endpointFixture.roomId,
+                );
                 if (room) return room;
             }
         }
@@ -190,13 +266,9 @@ export const EditorLayout = memo(function EditorLayout() {
         };
     }, [showWireCalc, activeScene, selectedRoom]);
     const updateCtCircuit = useCallback(
-        (
-            levelId: string,
-            conductorId: string,
-            patch: CtCircuitPatch,
-        ) => {
+        (levelId: string, conductorId: string, patch: CtCircuitPatch) => {
             if (!project) return;
-            
+
             // Interceptar actualizaciones de feeders sintéticos (resúmenes de tableros TD/TG)
             // para redirigir las ediciones a las propiedades del panel correspondiente.
             if (conductorId.startsWith('synthetic-feeder-')) {
@@ -207,32 +279,83 @@ export const EditorLayout = memo(function EditorLayout() {
                         scene.id !== levelId
                             ? scene
                             : {
-                                ...scene,
-                                electricalDevices: (scene.electricalDevices ?? []).map(
-                                    (device) =>
-                                        device.id === panelId
-                                            ? {
+                                  ...scene,
+                                  electricalDevices: (
+                                      scene.electricalDevices ?? []
+                                  ).map((device) =>
+                                      device.id === panelId
+                                          ? {
                                                 ...device,
                                                 properties: {
-                                                    ...(device.properties ?? {}),
-                                                    ...(patch.demandFactor !== undefined && { defaultDemandFactor: patch.demandFactor }),
-                                                    ...(patch.powerFactor !== undefined && { defaultPowerFactor: patch.powerFactor }),
-                                                    ...(patch.designFactor !== undefined && { designFactor: patch.designFactor }),
-                                                    ...(patch.ambientTemperatureC !== undefined && { ambientTemperatureC: patch.ambientTemperatureC }),
-                                                    ...(patch.conductorType !== undefined && { wireType: patch.conductorType }),
-                                                    ...(patch.groupedCircuitCount !== undefined && { groupedCircuitCount: patch.groupedCircuitCount }),
-                                                    ...(patch.groupingFactor !== undefined && { groupingFactor: patch.groupingFactor }),
-                                                    ...(patch.temperatureFactor !== undefined && { temperatureFactor: patch.temperatureFactor }),
-                                                    ...(patch.earthSectionMm2 !== undefined && { earthSectionMm2: patch.earthSectionMm2 }),
-                                                    ...(patch.itm !== undefined && { itm: patch.itm }),
-                                                    ...(patch.dif !== undefined && { dif: patch.dif }),
-                                                    ...(patch.system !== undefined && { phases: patch.system.toString() }),
-                                                    ...(patch.phaseBalance !== undefined && { phaseBalance: patch.phaseBalance }),
+                                                    ...(device.properties ??
+                                                        {}),
+                                                    ...(patch.demandFactor !==
+                                                        undefined && {
+                                                        defaultDemandFactor:
+                                                            patch.demandFactor,
+                                                    }),
+                                                    ...(patch.powerFactor !==
+                                                        undefined && {
+                                                        defaultPowerFactor:
+                                                            patch.powerFactor,
+                                                    }),
+                                                    ...(patch.designFactor !==
+                                                        undefined && {
+                                                        designFactor:
+                                                            patch.designFactor,
+                                                    }),
+                                                    ...(patch.ambientTemperatureC !==
+                                                        undefined && {
+                                                        ambientTemperatureC:
+                                                            patch.ambientTemperatureC,
+                                                    }),
+                                                    ...(patch.conductorType !==
+                                                        undefined && {
+                                                        wireType:
+                                                            patch.conductorType,
+                                                    }),
+                                                    ...(patch.groupedCircuitCount !==
+                                                        undefined && {
+                                                        groupedCircuitCount:
+                                                            patch.groupedCircuitCount,
+                                                    }),
+                                                    ...(patch.groupingFactor !==
+                                                        undefined && {
+                                                        groupingFactor:
+                                                            patch.groupingFactor,
+                                                    }),
+                                                    ...(patch.temperatureFactor !==
+                                                        undefined && {
+                                                        temperatureFactor:
+                                                            patch.temperatureFactor,
+                                                    }),
+                                                    ...(patch.earthSectionMm2 !==
+                                                        undefined && {
+                                                        earthSectionMm2:
+                                                            patch.earthSectionMm2,
+                                                    }),
+                                                    ...(patch.itm !==
+                                                        undefined && {
+                                                        itm: patch.itm,
+                                                    }),
+                                                    ...(patch.dif !==
+                                                        undefined && {
+                                                        dif: patch.dif,
+                                                    }),
+                                                    ...(patch.system !==
+                                                        undefined && {
+                                                        phases: patch.system.toString(),
+                                                    }),
+                                                    ...(patch.phaseBalance !==
+                                                        undefined && {
+                                                        phaseBalance:
+                                                            patch.phaseBalance,
+                                                    }),
                                                 },
                                             }
-                                            : device,
-                                ),
-                            },
+                                          : device,
+                                  ),
+                              },
                     ),
                 });
                 return;
@@ -244,21 +367,25 @@ export const EditorLayout = memo(function EditorLayout() {
                     scene.id !== levelId
                         ? scene
                         : {
-                            ...scene,
-                            conductors: (scene.conductors ?? []).map(
-                                (conductor) =>
-                                    conductor.id === conductorId
-                                        ? {
-                                            ...conductor,
-                                            ...(patch.conductorType !== undefined && { conductorType: patch.conductorType }),
-                                            ct: {
-                                                ...(conductor.ct ?? {}),
-                                                ...patch,
-                                            },
-                                        }
-                                        : conductor,
-                            ),
-                        },
+                              ...scene,
+                              conductors: (scene.conductors ?? []).map(
+                                  (conductor) =>
+                                      conductor.id === conductorId
+                                          ? {
+                                                ...conductor,
+                                                ...(patch.conductorType !==
+                                                    undefined && {
+                                                    conductorType:
+                                                        patch.conductorType,
+                                                }),
+                                                ct: {
+                                                    ...(conductor.ct ?? {}),
+                                                    ...patch,
+                                                },
+                                            }
+                                          : conductor,
+                              ),
+                          },
                 ),
             });
         },
@@ -277,32 +404,41 @@ export const EditorLayout = memo(function EditorLayout() {
                     scene.id !== levelId
                         ? scene
                         : {
-                            ...scene,
-                            electricalDevices: syntheticPanelId
-                                ? (scene.electricalDevices ?? []).map((device) =>
-                                      device.id === syntheticPanelId
-                                          ? { ...device, properties: { ...(device.properties ?? {}), sectionMm2 } }
-                                          : device,
-                                  )
-                                : scene.electricalDevices,
-                            conductors: (scene.conductors ?? []).map(
-                                (conductor) =>
-                                    conductor.id === conductorId
-                                        ? {
-                                            ...conductor,
-                                            sectionMm2,
-                                            // Limpia el amperaje nominal manual para que se
-                                            // recalcule de la tabla de ampacidad con la nueva
-                                            // sección (si el usuario no lo había forzado, ya
-                                            // era undefined y esto es un no-op).
-                                            ct: {
-                                                ...(conductor.ct ?? {}),
-                                                nominalCableCurrentA: undefined,
-                                            },
-                                        }
-                                        : conductor,
-                            ),
-                        },
+                              ...scene,
+                              electricalDevices: syntheticPanelId
+                                  ? (scene.electricalDevices ?? []).map(
+                                        (device) =>
+                                            device.id === syntheticPanelId
+                                                ? {
+                                                      ...device,
+                                                      properties: {
+                                                          ...(device.properties ??
+                                                              {}),
+                                                          sectionMm2,
+                                                      },
+                                                  }
+                                                : device,
+                                    )
+                                  : scene.electricalDevices,
+                              conductors: (scene.conductors ?? []).map(
+                                  (conductor) =>
+                                      conductor.id === conductorId
+                                          ? {
+                                                ...conductor,
+                                                sectionMm2,
+                                                // Limpia el amperaje nominal manual para que se
+                                                // recalcule de la tabla de ampacidad con la nueva
+                                                // sección (si el usuario no lo había forzado, ya
+                                                // era undefined y esto es un no-op).
+                                                ct: {
+                                                    ...(conductor.ct ?? {}),
+                                                    nominalCableCurrentA:
+                                                        undefined,
+                                                },
+                                            }
+                                          : conductor,
+                              ),
+                          },
                 ),
             });
         },
@@ -323,15 +459,31 @@ export const EditorLayout = memo(function EditorLayout() {
             scenes: project.scenes.map((scene) => {
                 return {
                     ...scene,
-                    electricalDevices: (scene.electricalDevices ?? []).map((device) => {
-                        const fix = fixes.find((item) => item.levelId === scene.id && item.panelId === device.id && item.isPanelSummary);
-                        return fix ? { ...device, properties: { ...(device.properties ?? {}), sectionMm2: fix.sectionMm2 } } : device;
-                    }),
+                    electricalDevices: (scene.electricalDevices ?? []).map(
+                        (device) => {
+                            const fix = fixes.find(
+                                (item) =>
+                                    item.levelId === scene.id &&
+                                    item.panelId === device.id &&
+                                    item.isPanelSummary,
+                            );
+                            return fix
+                                ? {
+                                      ...device,
+                                      properties: {
+                                          ...(device.properties ?? {}),
+                                          sectionMm2: fix.sectionMm2,
+                                      },
+                                  }
+                                : device;
+                        },
+                    ),
                     conductors: (scene.conductors ?? []).map((conductor) =>
                         fixById.has(conductor.id)
                             ? {
                                   ...conductor,
-                                  sectionMm2: fixById.get(conductor.id)!.sectionMm2,
+                                  sectionMm2: fixById.get(conductor.id)!
+                                      .sectionMm2,
                                   ct: {
                                       ...(conductor.ct ?? {}),
                                       nominalCableCurrentA: undefined,
@@ -347,7 +499,8 @@ export const EditorLayout = memo(function EditorLayout() {
     const engine = useLightingEngine();
     const calcWorker = useDialuxCalculationWorker();
     const { exportPdf, isExporting, exportStep } = useDialuxPdfExport();
-    const { exportEmergencyPdf, isExporting: isExportingEmergency } = useDialuxEmergencyPdfExport();
+    const { exportEmergencyPdf, isExporting: isExportingEmergency } =
+        useDialuxEmergencyPdfExport();
 
     const floorsSorted = getFloorsSorted();
 
@@ -357,12 +510,23 @@ export const EditorLayout = memo(function EditorLayout() {
     // 4to piso) subiendo un archivo distinto desde la barra de
     // herramientas; eso desvincula solo ese piso sin afectar a los demás.
     const linkInheritedPlan = useCallback(
-        async (newSceneId: string, sourceSceneId: string | null): Promise<void> => {
+        async (
+            newSceneId: string,
+            sourceSceneId: string | null,
+        ): Promise<void> => {
             if (!project?.id || !sourceSceneId) return;
             try {
-                await linkDialuxPlanFile(project.id, newSceneId, sourceSceneId, project.moduleId);
+                await linkDialuxPlanFile(
+                    project.id,
+                    newSceneId,
+                    sourceSceneId,
+                    project.moduleId,
+                );
             } catch (error) {
-                console.warn('No se pudo heredar el plano del piso de origen.', error);
+                console.warn(
+                    'No se pudo heredar el plano del piso de origen.',
+                    error,
+                );
                 markDialuxPlanSyncFailed(newSceneId);
             }
         },
@@ -373,38 +537,86 @@ export const EditorLayout = memo(function EditorLayout() {
     // activo: así el canvas nunca llega a preguntar por el servidor antes
     // de que exista el vínculo (evitaría un "piso en blanco" momentáneo).
     const handleAddFloorAbove = useCallback(() => {
-        const maxIndex = Math.max(...floorsSorted.map((f) => f.floorIndex ?? 0), 0);
+        const maxIndex = Math.max(
+            ...floorsSorted.map((f) => f.floorIndex ?? 0),
+            0,
+        );
         const sourceSceneId = activeSceneId;
         const newId = addFloor(`Piso ${maxIndex + 1}`, maxIndex + 1, 3.0);
-        void linkInheritedPlan(newId, sourceSceneId).finally(() => setActiveScene(newId));
-    }, [activeSceneId, addFloor, floorsSorted, linkInheritedPlan, setActiveScene]);
+        void linkInheritedPlan(newId, sourceSceneId).finally(() =>
+            setActiveScene(newId),
+        );
+    }, [
+        activeSceneId,
+        addFloor,
+        floorsSorted,
+        linkInheritedPlan,
+        setActiveScene,
+    ]);
 
     const handleAddBasement = useCallback(() => {
-        const minIndex = Math.min(...floorsSorted.map((f) => f.floorIndex ?? 0), 0);
+        const minIndex = Math.min(
+            ...floorsSorted.map((f) => f.floorIndex ?? 0),
+            0,
+        );
         const sourceSceneId = activeSceneId;
-        const newId = addFloor(`Sótano ${Math.abs(minIndex - 1)}`, minIndex - 1, 3.0);
-        void linkInheritedPlan(newId, sourceSceneId).finally(() => setActiveScene(newId));
-    }, [activeSceneId, addFloor, floorsSorted, linkInheritedPlan, setActiveScene]);
+        const newId = addFloor(
+            `Sótano ${Math.abs(minIndex - 1)}`,
+            minIndex - 1,
+            3.0,
+        );
+        void linkInheritedPlan(newId, sourceSceneId).finally(() =>
+            setActiveScene(newId),
+        );
+    }, [
+        activeSceneId,
+        addFloor,
+        floorsSorted,
+        linkInheritedPlan,
+        setActiveScene,
+    ]);
 
     const handleDuplicateFloor = useCallback(() => {
         if (!activeSceneId || !activeScene) return;
-        const maxIndex = Math.max(...floorsSorted.map((f) => f.floorIndex ?? 0), 0);
+        const maxIndex = Math.max(
+            ...floorsSorted.map((f) => f.floorIndex ?? 0),
+            0,
+        );
         const newId = duplicateFloor(
             activeSceneId,
             maxIndex + 1,
             `${activeScene.name} (copia)`,
         );
-        void linkInheritedPlan(newId, activeSceneId).finally(() => setActiveScene(newId));
-    }, [activeSceneId, activeScene, duplicateFloor, floorsSorted, linkInheritedPlan, setActiveScene]);
+        void linkInheritedPlan(newId, activeSceneId).finally(() =>
+            setActiveScene(newId),
+        );
+    }, [
+        activeSceneId,
+        activeScene,
+        duplicateFloor,
+        floorsSorted,
+        linkInheritedPlan,
+        setActiveScene,
+    ]);
 
     const handleRemoveFloor = useCallback(() => {
         if (!activeSceneId || floorsSorted.length <= 1) return;
         const removedSceneId = activeSceneId;
         removeFloor(removedSceneId);
         if (project?.id) {
-            void unlinkDialuxPlanFile(project.id, removedSceneId, project.moduleId);
+            void unlinkDialuxPlanFile(
+                project.id,
+                removedSceneId,
+                project.moduleId,
+            );
         }
-    }, [activeSceneId, floorsSorted.length, project?.id, project?.moduleId, removeFloor]);
+    }, [
+        activeSceneId,
+        floorsSorted.length,
+        project?.id,
+        project?.moduleId,
+        removeFloor,
+    ]);
 
     // Para pisos que ya existían antes de que se agregara la herencia
     // automática de plano (o si el usuario simplemente cambió de opinión),
@@ -415,16 +627,77 @@ export const EditorLayout = memo(function EditorLayout() {
             if (!activeSceneId || !project?.id || !sourceSceneId) return;
             setIsReusingFloorPlan(true);
             try {
-                await linkDialuxPlanFile(project.id, activeSceneId, sourceSceneId, project.moduleId);
+                await linkDialuxPlanFile(
+                    project.id,
+                    activeSceneId,
+                    sourceSceneId,
+                    project.moduleId,
+                );
                 bumpPlanReloadTick();
             } catch (error) {
-                console.warn('No se pudo reutilizar el plano del piso seleccionado.', error);
+                console.warn(
+                    'No se pudo reutilizar el plano del piso seleccionado.',
+                    error,
+                );
                 markDialuxPlanSyncFailed(activeSceneId);
             } finally {
                 setIsReusingFloorPlan(false);
             }
         },
         [activeSceneId, project?.id, project?.moduleId, bumpPlanReloadTick],
+    );
+
+    // Mapa piso→archivo de plano, para mostrar si el plano del piso activo es
+    // propio o compartido con otros pisos. Se refresca al montar y cada vez
+    // que un vínculo puede haber cambiado (`planReloadTick`).
+    const refreshPlanBindings = useCallback(async () => {
+        if (!project?.id) return;
+        try {
+            setPlanBindings(
+                await fetchDialuxPlanBindings(project.id, project.moduleId),
+            );
+        } catch (error) {
+            console.warn('No se pudieron cargar los planos por piso.', error);
+        }
+    }, [project?.id, project?.moduleId]);
+
+    useEffect(() => {
+        void refreshPlanBindings();
+    }, [refreshPlanBindings, planReloadTick]);
+
+    /** Importa un DXF/DWG propio para el piso activo (no toca los demás pisos). */
+    const handleImportFloorPlanFile = useCallback(
+        async (file: File) => {
+            if (!project?.id || !activeSceneId) return;
+            setIsImportingFloorPlan(true);
+            try {
+                await saveDialuxPlanFile(project.id, activeSceneId, file);
+                await uploadDialuxPlanFile(
+                    project.id,
+                    activeSceneId,
+                    file,
+                    project.moduleId,
+                );
+                markDialuxPlanSyncOk(activeSceneId);
+                bumpPlanReloadTick();
+                await refreshPlanBindings();
+            } catch (error) {
+                console.warn(
+                    'No se pudo importar el plano para este piso.',
+                    error,
+                );
+                markDialuxPlanSyncFailed(activeSceneId);
+            } finally {
+                setIsImportingFloorPlan(false);
+            }
+        },
+        [
+            project?.id,
+            project?.moduleId,
+            activeSceneId,
+            bumpPlanReloadTick,
+            refreshPlanBindings,
+        ],
     );
 
     const handleStartFloorNameEdit = useCallback(() => {
@@ -446,6 +719,28 @@ export const EditorLayout = memo(function EditorLayout() {
         return `S${Math.abs(f.floorIndex)} · ${f.name}`;
     };
 
+    /**
+     * Estado del plano del piso activo: sin plano / propio de este piso /
+     * compartido con otros pisos (mismo `plan_id`). Lo usa el panel de pisos
+     * para dejar claro cuándo hace falta importar un plano distinto.
+     */
+    const activeFloorPlanStatus = useMemo(() => {
+        const own = planBindings.find((b) => b.scene_id === activeSceneId);
+        if (!own) return { kind: 'none' as const };
+        const sharedWith = planBindings
+            .filter(
+                (b) =>
+                    b.plan_id === own.plan_id && b.scene_id !== activeSceneId,
+            )
+            .map((b) => floorsSorted.find((f) => f.id === b.scene_id))
+            .filter((f): f is NonNullable<typeof f> => Boolean(f))
+            .map((f) =>
+                floorLabel({ floorIndex: f.floorIndex ?? 0, name: f.name }),
+            );
+        return sharedWith.length > 0
+            ? { kind: 'shared' as const, sharedWith, name: own.original_name }
+            : { kind: 'own' as const, name: own.original_name };
+    }, [planBindings, activeSceneId, floorsSorted]);
 
     const handleExportPdf = useCallback(() => {
         void exportPdf().catch((error: unknown) => {
@@ -474,7 +769,12 @@ export const EditorLayout = memo(function EditorLayout() {
 
     const runCalc = useCallback(async () => {
         const scenes = project?.scenes ?? [];
-        if (!project || !engine.ready || !scenes.some((scene) => scene.rooms.length > 0)) return;
+        if (
+            !project ||
+            !engine.ready ||
+            !scenes.some((scene) => scene.rooms.length > 0)
+        )
+            return;
 
         // Config "de producción" (mantenimiento real del proyecto, malla
         // adaptativa, exclusión de zona marginal e interreflexión iterativa
@@ -531,22 +831,30 @@ export const EditorLayout = memo(function EditorLayout() {
             }
 
             setLastCalculationRun(run);
-            const resultByObjectId = new Map(run.surfaces.map((surface) => [surface.objectId, surface.result]));
+            const resultByObjectId = new Map(
+                run.surfaces.map((surface) => [
+                    surface.objectId,
+                    surface.result,
+                ]),
+            );
 
-            const calculations: RoomResultSummary[] = ambientsByScene.flatMap(({ scene, ambients }) =>
-                ambients
-                    .filter((ambient) => resultByObjectId.has(ambient.room.id))
-                    .map((ambient) => ({
-                        room: ambient.room,
-                        fixtures: ambient.fixtures,
-                        result: resultByObjectId.get(ambient.room.id)!,
-                        sourceRoomName: ambient.roomName,
-                        sourceRoomId: ambient.roomId,
-                        ambientConfigKey: ambient.configKey,
-                        levelId: scene.id,
-                        levelName: scene.name,
-                        levelIndex: scene.floorIndex ?? 0,
-                    })),
+            const calculations: RoomResultSummary[] = ambientsByScene.flatMap(
+                ({ scene, ambients }) =>
+                    ambients
+                        .filter((ambient) =>
+                            resultByObjectId.has(ambient.room.id),
+                        )
+                        .map((ambient) => ({
+                            room: ambient.room,
+                            fixtures: ambient.fixtures,
+                            result: resultByObjectId.get(ambient.room.id)!,
+                            sourceRoomName: ambient.roomName,
+                            sourceRoomId: ambient.roomId,
+                            ambientConfigKey: ambient.configKey,
+                            levelId: scene.id,
+                            levelName: scene.name,
+                            levelIndex: scene.floorIndex ?? 0,
+                        })),
             );
 
             // Una tabla con muchos ambientes es trabajo visual no urgente;
@@ -722,7 +1030,9 @@ export const EditorLayout = memo(function EditorLayout() {
                     } else if (
                         e.shiftKey &&
                         selectedId &&
-                        activeScene?.conductors?.some((item) => item.id === selectedId)
+                        activeScene?.conductors?.some(
+                            (item) => item.id === selectedId,
+                        )
                     ) {
                         const conductorIds = connectedCircuitConductorIds(
                             activeScene.conductors,
@@ -764,13 +1074,16 @@ export const EditorLayout = memo(function EditorLayout() {
     ]);
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-gray-50 dark:bg-[#0d0f14] text-gray-800 dark:text-gray-800 dark:text-gray-200 select-none">
-            <header id="dialux-header" className="sticky top-0 z-50 flex h-11 shrink-0 items-center gap-1.5 overflow-x-hidden border-b border-gray-300 dark:border-gray-800/60 bg-white dark:bg-[#161820] px-2 sm:gap-3 sm:px-4">
+        <div className="flex h-full flex-col overflow-hidden bg-gray-50 text-gray-800 select-none dark:bg-[#0d0f14] dark:text-gray-200 dark:text-gray-800">
+            <header
+                id="dialux-header"
+                className="sticky top-0 z-50 flex h-11 shrink-0 items-center gap-1.5 overflow-x-hidden border-b border-gray-300 bg-white px-2 sm:gap-3 sm:px-4 dark:border-gray-800/60 dark:bg-[#161820]"
+            >
                 <Link
                     id="dialux-btn-back-to-list"
                     href="/dialux"
                     title="Volver a mis proyectos"
-                    className="flex items-center gap-1.5 rounded border border-gray-300 dark:border-gray-700/60 px-2 py-1 text-xs text-slate-600 dark:text-gray-400 transition-colors hover:border-slate-400 dark:hover:border-gray-600 hover:text-slate-800 dark:hover:text-gray-200"
+                    className="flex items-center gap-1.5 rounded border border-gray-300 px-2 py-1 text-xs text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-800 dark:border-gray-700/60 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:text-gray-200"
                 >
                     <ArrowLeft size={13} />
                     Proyectos
@@ -783,7 +1096,7 @@ export const EditorLayout = memo(function EditorLayout() {
                     </span>
                 </div>
 
-                <span className="hidden max-w-28 truncate text-xs text-gray-500 dark:text-gray-500 md:block">
+                <span className="hidden max-w-28 truncate text-xs text-gray-500 md:block dark:text-gray-500">
                     {projectName}
                 </span>
 
@@ -801,18 +1114,20 @@ export const EditorLayout = memo(function EditorLayout() {
                             ref={floorSelectorRef}
                             onClick={() => setShowFloorPanel((v) => !v)}
                             title="Gestionar pisos"
-                            className={`flex items-center gap-1.5 rounded border px-2 py-1 text-[10px] font-semibold transition-all ${showFloorPanel
-                                ? 'border-amber-600/60 bg-amber-950/60 text-amber-300'
-                                : 'border-slate-300 dark:border-slate-700/60 bg-slate-200 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 hover:border-amber-700/40 hover:text-amber-300'
-                                }`}
+                            className={`flex items-center gap-1.5 rounded border px-2 py-1 text-[10px] font-semibold transition-all ${
+                                showFloorPanel
+                                    ? 'border-amber-600/60 bg-amber-950/60 text-amber-300'
+                                    : 'border-slate-300 bg-slate-200 text-slate-700 hover:border-amber-700/40 hover:text-amber-300 dark:border-slate-700/60 dark:bg-slate-900/60 dark:text-slate-300'
+                            }`}
                         >
                             <span className="text-amber-400">⬛</span>
                             <span>
                                 {activeScene
                                     ? floorLabel({
-                                        floorIndex: activeScene.floorIndex ?? 0,
-                                        name: activeScene.name,
-                                    })
+                                          floorIndex:
+                                              activeScene.floorIndex ?? 0,
+                                          name: activeScene.name,
+                                      })
                                     : '—'}
                             </span>
                             {floorsSorted.length > 1 && (
@@ -833,61 +1148,107 @@ export const EditorLayout = memo(function EditorLayout() {
                                 hideHeader
                                 width="md"
                             >
-                                <div className="border-b border-slate-300 dark:border-slate-700/40 px-3 py-1.5 text-[9px] font-bold tracking-widest text-slate-500 uppercase">
+                                <div className="border-b border-slate-300 px-3 py-1.5 text-[9px] font-bold tracking-widest text-slate-500 uppercase dark:border-slate-700/40">
                                     Pisos del Proyecto
                                 </div>
                                 <div className="max-h-52 overflow-y-auto py-1">
-                                    {[...floorsSorted].reverse().map((floor) => (
-                                        <div
-                                            key={floor.id}
-                                            className={`flex w-full items-center gap-1 px-2 py-1 text-[11px] transition-colors ${floor.id === activeSceneId
-                                                ? 'bg-amber-900/30'
-                                                : 'hover:bg-slate-200 dark:bg-slate-800/60'
+                                    {[...floorsSorted]
+                                        .reverse()
+                                        .map((floor) => (
+                                            <div
+                                                key={floor.id}
+                                                className={`flex w-full items-center gap-1 px-2 py-1 text-[11px] transition-colors ${
+                                                    floor.id === activeSceneId
+                                                        ? 'bg-amber-900/30'
+                                                        : 'hover:bg-slate-200 dark:bg-slate-800/60'
                                                 }`}
-                                        >
-                                            {/* Eye toggle */}
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); toggleFloorVisibility(floor.id); }}
-                                                title={(floor.visible ?? true) ? 'Ocultar piso' : 'Mostrar piso'}
-                                                className="shrink-0 rounded p-0.5 text-slate-500 hover:text-amber-300"
                                             >
-                                                {(floor.visible ?? true)
-                                                    ? <Eye size={11} />
-                                                    : <EyeOff size={11} className="text-slate-700" />
-                                                }
-                                            </button>
-                                            {/* Floor selector */}
-                                            <button
-                                                onClick={() => { setActiveScene(floor.id); setShowFloorPanel(false); }}
-                                                className={`flex flex-1 items-center gap-2 text-left ${floor.id === activeSceneId ? 'text-amber-300' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100'
+                                                {/* Eye toggle */}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        toggleFloorVisibility(
+                                                            floor.id,
+                                                        );
+                                                    }}
+                                                    title={
+                                                        (floor.visible ?? true)
+                                                            ? 'Ocultar piso'
+                                                            : 'Mostrar piso'
+                                                    }
+                                                    className="shrink-0 rounded p-0.5 text-slate-500 hover:text-amber-300"
+                                                >
+                                                    {(floor.visible ?? true) ? (
+                                                        <Eye size={11} />
+                                                    ) : (
+                                                        <EyeOff
+                                                            size={11}
+                                                            className="text-slate-700"
+                                                        />
+                                                    )}
+                                                </button>
+                                                {/* Floor selector */}
+                                                <button
+                                                    onClick={() => {
+                                                        setActiveScene(
+                                                            floor.id,
+                                                        );
+                                                        setShowFloorPanel(
+                                                            false,
+                                                        );
+                                                    }}
+                                                    className={`flex flex-1 items-center gap-2 text-left ${
+                                                        floor.id ===
+                                                        activeSceneId
+                                                            ? 'text-amber-300'
+                                                            : 'text-slate-600 hover:text-slate-900 dark:text-slate-100 dark:text-slate-400'
                                                     } ${(floor.visible ?? true) ? '' : 'opacity-40'}`}
-                                            >
-                                                <span className="font-mono text-[9px] w-6 text-center text-slate-500">
-                                                    {floor.floorIndex === 0 ? 'PB' : floor.floorIndex > 0 ? `P${floor.floorIndex}` : `S${Math.abs(floor.floorIndex)}`}
-                                                </span>
-                                                <span className="flex-1 truncate">{floor.name}</span>
-                                                <span className="text-[9px] text-slate-600 font-mono">
-                                                    {(floor.floorElevation ?? 0).toFixed(1)}m
-                                                </span>
-                                                {floor.id === activeSceneId && (
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                                                )}
-                                            </button>
-                                        </div>
-                                    ))}
+                                                >
+                                                    <span className="w-6 text-center font-mono text-[9px] text-slate-500">
+                                                        {floor.floorIndex === 0
+                                                            ? 'PB'
+                                                            : floor.floorIndex >
+                                                                0
+                                                              ? `P${floor.floorIndex}`
+                                                              : `S${Math.abs(floor.floorIndex)}`}
+                                                    </span>
+                                                    <span className="flex-1 truncate">
+                                                        {floor.name}
+                                                    </span>
+                                                    <span className="font-mono text-[9px] text-slate-600">
+                                                        {(
+                                                            floor.floorElevation ??
+                                                            0
+                                                        ).toFixed(1)}
+                                                        m
+                                                    </span>
+                                                    {floor.id ===
+                                                        activeSceneId && (
+                                                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                                                    )}
+                                                </button>
+                                            </div>
+                                        ))}
                                 </div>
-                                <div className="border-t border-slate-300 dark:border-slate-700/40 p-1.5 space-y-1">
+                                <div className="space-y-1 border-t border-slate-300 p-1.5 dark:border-slate-700/40">
                                     {/* Ver todos los pisos toggle */}
                                     <button
                                         onClick={toggleAllFloors}
-                                        className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-[10px] transition-colors ${showAllFloors
-                                            ? 'bg-cyan-900/40 text-cyan-300'
-                                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-700/50 hover:text-slate-900 dark:text-slate-100'
-                                            }`}
-                                        title={showAllFloors ? 'Mostrar solo piso activo' : 'Ver todos los pisos superpuestos'}
+                                        className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-[10px] transition-colors ${
+                                            showAllFloors
+                                                ? 'bg-cyan-900/40 text-cyan-300'
+                                                : 'text-slate-600 hover:bg-slate-700/50 hover:text-slate-900 dark:text-slate-100 dark:text-slate-400'
+                                        }`}
+                                        title={
+                                            showAllFloors
+                                                ? 'Mostrar solo piso activo'
+                                                : 'Ver todos los pisos superpuestos'
+                                        }
                                     >
                                         <Eye size={11} />
-                                        {showAllFloors ? 'Modo: Todos los pisos' : 'Ver todos los pisos'}
+                                        {showAllFloors
+                                            ? 'Modo: Todos los pisos'
+                                            : 'Ver todos los pisos'}
                                     </button>
                                     {editingFloorName ? (
                                         <form
@@ -895,31 +1256,46 @@ export const EditorLayout = memo(function EditorLayout() {
                                                 event.preventDefault();
                                                 handleSaveFloorName();
                                             }}
-                                            className="flex items-center gap-1 px-1">
+                                            className="flex items-center gap-1 px-1"
+                                        >
                                             <input
                                                 autoFocus
                                                 value={floorNameDraft}
-                                                onChange={(event) => setFloorNameDraft(event.target.value)}
+                                                onChange={(event) =>
+                                                    setFloorNameDraft(
+                                                        event.target.value,
+                                                    )
+                                                }
                                                 onKeyDown={(event) => {
-                                                    if (event.key === 'Escape') {
-                                                        setEditingFloorName(false);
+                                                    if (
+                                                        event.key === 'Escape'
+                                                    ) {
+                                                        setEditingFloorName(
+                                                            false,
+                                                        );
                                                     }
                                                 }}
                                                 aria-label="Nombre del piso"
-                                                className="min-w-0 flex-1 rounded border border-amber-700/60 bg-slate-300 dark:bg-slate-950 px-2 py-1 text-[10px] text-slate-900 dark:text-slate-100 outline-none focus:border-amber-400"
+                                                className="min-w-0 flex-1 rounded border border-amber-700/60 bg-slate-300 px-2 py-1 text-[10px] text-slate-900 outline-none focus:border-amber-400 dark:bg-slate-950 dark:text-slate-100"
                                             />
                                             <button
                                                 type="submit"
-                                                disabled={floorNameDraft.trim() === ''}
+                                                disabled={
+                                                    floorNameDraft.trim() === ''
+                                                }
                                                 title="Guardar nombre"
-                                                className="rounded p-1 text-emerald-400 hover:bg-emerald-950/50 disabled:opacity-30">
+                                                className="rounded p-1 text-emerald-400 hover:bg-emerald-950/50 disabled:opacity-30"
+                                            >
                                                 <Check size={12} />
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => setEditingFloorName(false)}
+                                                onClick={() =>
+                                                    setEditingFloorName(false)
+                                                }
                                                 title="Cancelar edición"
-                                                className="rounded p-1 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 hover:text-slate-800 dark:text-slate-200">
+                                                className="rounded p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-800 dark:bg-slate-800 dark:text-slate-200"
+                                            >
                                                 <X size={12} />
                                             </button>
                                         </form>
@@ -928,8 +1304,9 @@ export const EditorLayout = memo(function EditorLayout() {
                                             type="button"
                                             onClick={handleStartFloorNameEdit}
                                             disabled={!activeScene}
-                                            className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[10px] text-slate-600 dark:text-slate-400 transition-colors hover:bg-slate-700/50 hover:text-slate-900 dark:text-slate-100 disabled:opacity-30"
-                                            title="Editar nombre del piso activo">
+                                            className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[10px] text-slate-600 transition-colors hover:bg-slate-700/50 hover:text-slate-900 disabled:opacity-30 dark:text-slate-100 dark:text-slate-400"
+                                            title="Editar nombre del piso activo"
+                                        >
                                             <Pencil size={11} />
                                             Editar nombre
                                         </button>
@@ -943,25 +1320,105 @@ export const EditorLayout = memo(function EditorLayout() {
                                                     min={1}
                                                     max={20}
                                                     step={0.05}
-                                                    value={activeScene.floorHeight ?? 3}
+                                                    value={
+                                                        activeScene.floorHeight ??
+                                                        3
+                                                    }
                                                     onChange={(event) => {
-                                                        const floorHeight = Number(event.target.value);
+                                                        const floorHeight =
+                                                            Number(
+                                                                event.target
+                                                                    .value,
+                                                            );
                                                         if (
-                                                            Number.isFinite(floorHeight) &&
+                                                            Number.isFinite(
+                                                                floorHeight,
+                                                            ) &&
                                                             floorHeight >= 1 &&
                                                             floorHeight <= 20
                                                         ) {
-                                                            updateFloor(activeScene.id, {
-                                                                floorHeight,
-                                                            });
+                                                            updateFloor(
+                                                                activeScene.id,
+                                                                {
+                                                                    floorHeight,
+                                                                },
+                                                            );
                                                         }
                                                     }}
                                                     aria-label="Altura piso a techo"
-                                                    className="w-16 rounded border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950 px-1.5 py-1 text-right font-mono text-[10px] text-cyan-300 outline-none focus:border-cyan-500"
+                                                    className="w-16 rounded border border-slate-300 bg-slate-300 px-1.5 py-1 text-right font-mono text-[10px] text-cyan-300 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-950"
                                                 />
                                                 <span>m</span>
                                             </span>
                                         </label>
+                                    )}
+                                    {activeScene && (
+                                        <div className="space-y-1 rounded border border-slate-300 bg-slate-100/60 px-2 py-1.5 dark:border-slate-700/60 dark:bg-slate-900/40">
+                                            <p className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">
+                                                Plano de este piso
+                                            </p>
+                                            <p className="text-[10px] leading-snug text-slate-600 dark:text-slate-300">
+                                                {activeFloorPlanStatus.kind ===
+                                                    'none' && (
+                                                    <span className="text-amber-600 dark:text-amber-400">
+                                                        Sin plano — importá uno
+                                                        abajo.
+                                                    </span>
+                                                )}
+                                                {activeFloorPlanStatus.kind ===
+                                                    'own' && (
+                                                    <span className="text-emerald-600 dark:text-emerald-400">
+                                                        Plano propio de este
+                                                        piso
+                                                        {activeFloorPlanStatus.name
+                                                            ? ` (${activeFloorPlanStatus.name})`
+                                                            : ''}
+                                                    </span>
+                                                )}
+                                                {activeFloorPlanStatus.kind ===
+                                                    'shared' && (
+                                                    <span>
+                                                        Compartido con:{' '}
+                                                        <span className="text-cyan-600 dark:text-cyan-300">
+                                                            {activeFloorPlanStatus.sharedWith.join(
+                                                                ', ',
+                                                            )}
+                                                        </span>
+                                                        . Si este piso tiene
+                                                        otra distribución,
+                                                        importá su propio plano.
+                                                    </span>
+                                                )}
+                                            </p>
+                                            <input
+                                                ref={floorPlanInputRef}
+                                                type="file"
+                                                accept=".dxf,.dwg"
+                                                className="hidden"
+                                                onChange={(event) => {
+                                                    const file =
+                                                        event.target.files?.[0];
+                                                    event.target.value = '';
+                                                    if (file)
+                                                        void handleImportFloorPlanFile(
+                                                            file,
+                                                        );
+                                                }}
+                                            />
+                                            <button
+                                                type="button"
+                                                disabled={isImportingFloorPlan}
+                                                onClick={() =>
+                                                    floorPlanInputRef.current?.click()
+                                                }
+                                                className="flex w-full items-center justify-center gap-1.5 rounded border border-cyan-500/40 bg-cyan-50 px-2 py-1 text-[10px] font-medium text-cyan-700 transition-colors hover:bg-cyan-100 disabled:opacity-50 dark:border-cyan-700/40 dark:bg-cyan-950/30 dark:text-cyan-300 dark:hover:bg-cyan-900/40"
+                                            >
+                                                <Upload size={11} />
+                                                {isImportingFloorPlan
+                                                    ? 'Importando…'
+                                                    : 'Importar plano distinto para este piso'}
+                                            </button>
+                                        </div>
                                     )}
                                     {activeScene && floorsSorted.length > 1 && (
                                         <label className="flex items-center justify-between gap-2 rounded px-2 py-1 text-[10px] text-slate-600 dark:text-slate-400">
@@ -970,21 +1427,39 @@ export const EditorLayout = memo(function EditorLayout() {
                                                 value=""
                                                 disabled={isReusingFloorPlan}
                                                 onChange={(event) => {
-                                                    const sourceId = event.target.value;
-                                                    if (sourceId) void handleReuseFloorPlan(sourceId);
+                                                    const sourceId =
+                                                        event.target.value;
+                                                    if (sourceId)
+                                                        void handleReuseFloorPlan(
+                                                            sourceId,
+                                                        );
                                                     event.target.value = '';
                                                 }}
                                                 aria-label="Copiar plano de otro piso"
-                                                className="min-w-0 max-w-28 rounded border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950 px-1.5 py-1 text-[10px] text-cyan-300 outline-none focus:border-cyan-500 disabled:opacity-50"
+                                                className="max-w-28 min-w-0 rounded border border-slate-300 bg-slate-300 px-1.5 py-1 text-[10px] text-cyan-300 outline-none focus:border-cyan-500 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950"
                                             >
                                                 <option value="">
-                                                    {isReusingFloorPlan ? 'Copiando…' : 'Elegir piso…'}
+                                                    {isReusingFloorPlan
+                                                        ? 'Copiando…'
+                                                        : 'Elegir piso…'}
                                                 </option>
                                                 {floorsSorted
-                                                    .filter((f) => f.id !== activeScene.id)
+                                                    .filter(
+                                                        (f) =>
+                                                            f.id !==
+                                                            activeScene.id,
+                                                    )
                                                     .map((f) => (
-                                                        <option key={f.id} value={f.id}>
-                                                            {floorLabel({ floorIndex: f.floorIndex ?? 0, name: f.name })}
+                                                        <option
+                                                            key={f.id}
+                                                            value={f.id}
+                                                        >
+                                                            {floorLabel({
+                                                                floorIndex:
+                                                                    f.floorIndex ??
+                                                                    0,
+                                                                name: f.name,
+                                                            })}
                                                         </option>
                                                     ))}
                                             </select>
@@ -992,28 +1467,40 @@ export const EditorLayout = memo(function EditorLayout() {
                                     )}
                                     <div className="grid grid-cols-2 gap-1">
                                         <button
-                                            onClick={() => { handleAddFloorAbove(); setShowFloorPanel(false); }}
-                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-slate-600 dark:text-slate-400 hover:bg-slate-700/50 hover:text-slate-900 dark:text-slate-100"
+                                            onClick={() => {
+                                                handleAddFloorAbove();
+                                                setShowFloorPanel(false);
+                                            }}
+                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-slate-600 hover:bg-slate-700/50 hover:text-slate-900 dark:text-slate-100 dark:text-slate-400"
                                             title="Agregar piso arriba"
                                         >
                                             <span>↑</span> Piso arriba
                                         </button>
                                         <button
-                                            onClick={() => { handleAddBasement(); setShowFloorPanel(false); }}
-                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-slate-600 dark:text-slate-400 hover:bg-slate-700/50 hover:text-slate-900 dark:text-slate-100"
+                                            onClick={() => {
+                                                handleAddBasement();
+                                                setShowFloorPanel(false);
+                                            }}
+                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-slate-600 hover:bg-slate-700/50 hover:text-slate-900 dark:text-slate-100 dark:text-slate-400"
                                             title="Agregar sótano"
                                         >
                                             <span>↓</span> Sótano
                                         </button>
                                         <button
-                                            onClick={() => { handleDuplicateFloor(); setShowFloorPanel(false); }}
-                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-slate-600 dark:text-slate-400 hover:bg-slate-700/50 hover:text-slate-900 dark:text-slate-100"
+                                            onClick={() => {
+                                                handleDuplicateFloor();
+                                                setShowFloorPanel(false);
+                                            }}
+                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-slate-600 hover:bg-slate-700/50 hover:text-slate-900 dark:text-slate-100 dark:text-slate-400"
                                             title="Duplicar piso activo"
                                         >
                                             <span>⧉</span> Duplicar
                                         </button>
                                         <button
-                                            onClick={() => { handleRemoveFloor(); setShowFloorPanel(false); }}
+                                            onClick={() => {
+                                                handleRemoveFloor();
+                                                setShowFloorPanel(false);
+                                            }}
                                             disabled={floorsSorted.length <= 1}
                                             className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-red-500 hover:bg-red-950/40 disabled:cursor-not-allowed disabled:opacity-30"
                                             title="Eliminar piso activo"
@@ -1032,7 +1519,7 @@ export const EditorLayout = memo(function EditorLayout() {
                         onClick={() => undo()}
                         disabled={!historyCanUndo}
                         title="Deshacer (Ctrl+Z)"
-                        className="rounded border border-gray-300 dark:border-gray-700/60 px-2 py-1 text-xs text-slate-600 dark:text-gray-400 transition-colors hover:border-slate-400 dark:hover:border-gray-600 hover:text-slate-800 dark:hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
+                        className="rounded border border-gray-300 px-2 py-1 text-xs text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-700/60 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:text-gray-200"
                     >
                         ↶
                     </button>
@@ -1040,7 +1527,7 @@ export const EditorLayout = memo(function EditorLayout() {
                         onClick={() => redo()}
                         disabled={!historyCanRedo}
                         title="Rehacer (Ctrl+Y / Ctrl+Shift+Z)"
-                        className="rounded border border-gray-300 dark:border-gray-700/60 px-2 py-1 text-xs text-slate-600 dark:text-gray-400 transition-colors hover:border-slate-400 dark:hover:border-gray-600 hover:text-slate-800 dark:hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
+                        className="rounded border border-gray-300 px-2 py-1 text-xs text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-700/60 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:text-gray-200"
                     >
                         ↷
                     </button>
@@ -1050,31 +1537,38 @@ export const EditorLayout = memo(function EditorLayout() {
 
                 <button
                     onClick={toggle3DView}
-                    className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs transition-all ${show3DView
-                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-700/80 dark:text-purple-200'
-                        : 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200 dark:bg-cyan-700/80 dark:text-cyan-200 dark:hover:bg-cyan-600/80'
-                        }`}
+                    className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs transition-all ${
+                        show3DView
+                            ? 'bg-purple-100 text-purple-700 dark:bg-purple-700/80 dark:text-purple-200'
+                            : 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200 dark:bg-cyan-700/80 dark:text-cyan-200 dark:hover:bg-cyan-600/80'
+                    }`}
                     title={
                         show3DView ? 'Cambiar a vista 2D' : 'Cambiar a vista 3D'
-                    }>
+                    }
+                >
                     {show3DView ? '3D' : '2D'}
                 </button>
 
                 {show3DView && (
                     <button
                         onClick={toggleRoof}
-                        className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs transition-all ${showRoof
-                            ? 'bg-slate-700 text-slate-100'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-900/70 dark:text-slate-400 dark:hover:bg-slate-800'
-                            }`}
-                        title={showRoof ? 'Ocultar techo 3D' : 'Mostrar techo 3D'}
+                        className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs transition-all ${
+                            showRoof
+                                ? 'bg-slate-700 text-slate-100'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-900/70 dark:text-slate-400 dark:hover:bg-slate-800'
+                        }`}
+                        title={
+                            showRoof ? 'Ocultar techo 3D' : 'Mostrar techo 3D'
+                        }
                     >
                         {showRoof ? <Eye size={13} /> : <EyeOff size={13} />}
                         Techo
                     </button>
                 )}
 
-                <span className="hidden lg:block"><WasmBadge ready={engine.ready} label="Motor JS" /></span>
+                <span className="hidden lg:block">
+                    <WasmBadge ready={engine.ready} label="Motor JS" />
+                </span>
 
                 <div className="flex items-center gap-1 sm:gap-2">
                     <button
@@ -1082,9 +1576,16 @@ export const EditorLayout = memo(function EditorLayout() {
                         onClick={runCalc}
                         disabled={!engine.ready || isCalculating || !hasRooms}
                         className="flex items-center gap-1.5 rounded bg-gradient-to-r from-green-700/80 to-emerald-700/80 px-2 py-1.5 text-xs text-green-200 shadow-sm transition-all hover:from-green-600/80 hover:to-emerald-600/80 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"
-                        title={isCalculating ? 'Calculando...' : 'Calcular iluminación'}>
+                        title={
+                            isCalculating
+                                ? 'Calculando...'
+                                : 'Calcular iluminación'
+                        }
+                    >
                         <Calculator size={13} />
-                        <span className="hidden sm:inline">{isCalculating ? 'Calculando...' : 'Calcular'}</span>
+                        <span className="hidden sm:inline">
+                            {isCalculating ? 'Calculando...' : 'Calcular'}
+                        </span>
                     </button>
 
                     {isCalculating && (
@@ -1113,8 +1614,12 @@ export const EditorLayout = memo(function EditorLayout() {
                         id="dialux-btn-calculo-ct"
                         onClick={() => setShowWireCalc(true)}
                         disabled={!activeScene}
-                        className="flex items-center gap-1.5 rounded border border-cyan-200 dark:border-cyan-700/40 bg-cyan-50 dark:bg-cyan-950/60 px-2 py-1.5 text-xs text-cyan-700 dark:text-cyan-100 transition-all hover:bg-cyan-100 dark:hover:bg-cyan-900/70 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"
-                        title={selectedRoom ? `Cálculo CT — ${selectedRoom.name}` : 'Selecciona un ambiente, una luminaria o un cable (en el panel Objetos) para ver su Cálculo CT'}
+                        className="flex items-center gap-1.5 rounded border border-cyan-200 bg-cyan-50 px-2 py-1.5 text-xs text-cyan-700 transition-all hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3 dark:border-cyan-700/40 dark:bg-cyan-950/60 dark:text-cyan-100 dark:hover:bg-cyan-900/70"
+                        title={
+                            selectedRoom
+                                ? `Cálculo CT — ${selectedRoom.name}`
+                                : 'Selecciona un ambiente, una luminaria o un cable (en el panel Objetos) para ver su Cálculo CT'
+                        }
                     >
                         <Calculator size={13} />
                         <span className="hidden sm:inline">Cálculo CT</span>
@@ -1126,13 +1631,14 @@ export const EditorLayout = memo(function EditorLayout() {
                             ref={exportBtnRef}
                             onClick={() => setShowExportMenu((prev) => !prev)}
                             disabled={!project}
-                            className="flex items-center gap-1.5 rounded border border-cyan-200 dark:border-cyan-700/40 bg-cyan-50 dark:bg-cyan-950/60 px-2 py-1.5 text-xs text-cyan-700 dark:text-cyan-100 transition-all hover:bg-cyan-100 dark:hover:bg-cyan-900/70 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"
-                            title="Exportar proyecto">
+                            className="flex items-center gap-1.5 rounded border border-cyan-200 bg-cyan-50 px-2 py-1.5 text-xs text-cyan-700 transition-all hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3 dark:border-cyan-700/40 dark:bg-cyan-950/60 dark:text-cyan-100 dark:hover:bg-cyan-900/70"
+                            title="Exportar proyecto"
+                        >
                             <Download size={13} />
                             <span className="hidden sm:inline">
                                 {isExporting
-                                    ? exportStep || "Exportando PDF..."
-                                    : "Exportar"}
+                                    ? exportStep || 'Exportando PDF...'
+                                    : 'Exportar'}
                             </span>
                             <ChevronDown size={13} />
                         </button>
@@ -1154,7 +1660,8 @@ export const EditorLayout = memo(function EditorLayout() {
                                         handleExportPdf();
                                     }}
                                     disabled={!project || isExporting}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-900 dark:text-slate-100 transition hover:bg-cyan-900/50 disabled:cursor-not-allowed disabled:opacity-40">
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-900 transition hover:bg-cyan-900/50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-100"
+                                >
                                     <FileText size={13} />
                                     Exportar PDF
                                 </button>
@@ -1166,7 +1673,8 @@ export const EditorLayout = memo(function EditorLayout() {
                                         setShowDxfExportDialog(true);
                                     }}
                                     disabled={!project}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-900 dark:text-slate-100 transition hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-40">
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-900 transition hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-100"
+                                >
                                     <FileCode size={13} />
                                     Exportar DXF
                                 </button>
@@ -1180,9 +1688,12 @@ export const EditorLayout = memo(function EditorLayout() {
                                     }}
                                     disabled={!project || isExportingEmergency}
                                     title="Informe separado de alumbrado de emergencia (RNE A.130 / EN 1838) — nunca se confunde con el PDF normal"
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-amber-200 transition hover:bg-amber-900/50 disabled:cursor-not-allowed disabled:opacity-40">
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-amber-200 transition hover:bg-amber-900/50 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
                                     <AlertTriangle size={13} />
-                                    {isExportingEmergency ? 'Generando...' : 'Informe de emergencia'}
+                                    {isExportingEmergency
+                                        ? 'Generando...'
+                                        : 'Informe de emergencia'}
                                 </button>
                             </FloatingPanelPortal>
                         )}
@@ -1196,9 +1707,10 @@ export const EditorLayout = memo(function EditorLayout() {
                 <main className="relative flex flex-1 flex-col overflow-hidden">
                     <div
                         className="relative flex h-full w-full flex-1 flex-col overflow-hidden"
-                        style={{ display: show3DView ? 'none' : 'flex' }}>
+                        style={{ display: show3DView ? 'none' : 'flex' }}
+                    >
                         <MlightcadCanvas2D isVisible={!show3DView} />
-                        <div className="pointer-events-none absolute top-1 left-1 rounded border border-cyan-900/30 bg-slate-200 dark:bg-slate-900/60 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-cyan-800">
+                        <div className="pointer-events-none absolute top-1 left-1 rounded border border-cyan-900/30 bg-slate-200 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-cyan-800 dark:bg-slate-900/60">
                             2D - mlightcad
                         </div>
                         <MlightcadLayerPanel />
@@ -1206,7 +1718,8 @@ export const EditorLayout = memo(function EditorLayout() {
 
                     <div
                         className="relative h-full w-full flex-1"
-                        style={{ display: show3DView ? 'flex' : 'none' }}>
+                        style={{ display: show3DView ? 'flex' : 'none' }}
+                    >
                         <Editor3DCanvas isVisible={show3DView} />
                     </div>
                 </main>
@@ -1222,21 +1735,27 @@ export const EditorLayout = memo(function EditorLayout() {
                 onConfirm={confirmPendingDeletion}
             />
 
-            <DxfExportDialog open={showDxfExportDialog} onOpenChange={setShowDxfExportDialog} />
+            <DxfExportDialog
+                open={showDxfExportDialog}
+                onOpenChange={setShowDxfExportDialog}
+            />
 
             <Dialog open={resultsModalOpen} onOpenChange={setResultsModalOpen}>
-                <DialogContent className="flex h-[96dvh] w-[calc(100vw-0.5rem)] max-w-none flex-col gap-0 overflow-hidden border-slate-300 bg-gray-100 p-0 text-slate-900 dark:border-slate-800 dark:bg-[#090b10] dark:text-slate-100 sm:h-[94dvh] sm:w-[99vw] sm:max-w-none">
-                    <DialogHeader className="shrink-0 border-b border-slate-300 dark:border-slate-800/80 px-4 py-4 pr-12 text-left sm:px-6 sm:py-5">
-                        <DialogTitle className="text-base font-semibold tracking-tight text-slate-900 dark:text-white sm:text-lg">
+                <DialogContent className="flex h-[96dvh] w-[calc(100vw-0.5rem)] max-w-none flex-col gap-0 overflow-hidden border-slate-300 bg-gray-100 p-0 text-slate-900 sm:h-[94dvh] sm:w-[99vw] sm:max-w-none dark:border-slate-800 dark:bg-[#090b10] dark:text-slate-100">
+                    <DialogHeader className="shrink-0 border-b border-slate-300 px-4 py-4 pr-12 text-left sm:px-6 sm:py-5 dark:border-slate-800/80">
+                        <DialogTitle className="text-base font-semibold tracking-tight text-slate-900 sm:text-lg dark:text-white">
                             Resultados de iluminacion por recinto
                         </DialogTitle>
-                        <DialogDescription className="max-w-3xl text-xs leading-relaxed text-slate-600 dark:text-slate-400 sm:text-sm">
+                        <DialogDescription className="max-w-3xl text-xs leading-relaxed text-slate-600 sm:text-sm dark:text-slate-400">
                             Se captura la luminaria insertada en cada espacio y
                             se resume el calculo en una tabla.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="min-h-0 flex-1 overflow-y-auto p-2 sm:p-3">
-                        <ResultsPanel rooms={roomResults} calculationRun={lastCalculationRun} />
+                        <ResultsPanel
+                            rooms={roomResults}
+                            calculationRun={lastCalculationRun}
+                        />
                     </div>
                 </DialogContent>
             </Dialog>
@@ -1254,7 +1773,6 @@ export const EditorLayout = memo(function EditorLayout() {
                     selectedRoom={selectedCtRoomSummary}
                 />
             )}
-
         </div>
     );
 });

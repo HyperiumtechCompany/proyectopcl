@@ -5,6 +5,7 @@ import {
     deleteProduct as deleteProductRequest,
     fetchImportedProducts,
     fetchPhotometricWeb as fetchPhotometricWebRequest,
+    invalidateImportedProductsCache,
     shareProduct as shareProductRequest,
     type ImportedLuminaireProduct,
     type PhotometricWeb,
@@ -185,6 +186,7 @@ export function useLuminaireCatalog(options: UseLuminaireCatalogOptions) {
         try {
             const updated = await shareProductRequest(product.id, nextIsGlobal);
             setImportedProducts((products) => products.map((p) => (p.id === product.id ? { ...p, ...updated } : p)));
+            invalidateImportedProductsCache();
         } catch (error) {
             console.error('[DIAlux] No se pudo cambiar el estado de compartido', error);
         } finally {
@@ -203,6 +205,7 @@ export function useLuminaireCatalog(options: UseLuminaireCatalogOptions) {
         try {
             await deleteProductRequest(product.id);
             setImportedProducts((products) => products.filter((p) => p.id !== product.id));
+            invalidateImportedProductsCache();
         } catch (error) {
             console.error('[DIAlux] No se pudo eliminar la luminaria', error);
         } finally {
@@ -212,6 +215,7 @@ export function useLuminaireCatalog(options: UseLuminaireCatalogOptions) {
 
     const addImportedProduct = (product: ImportedLuminaireProduct) => {
         setImportedProducts((products) => [product, ...products.filter((p) => p.id !== product.id)]);
+        invalidateImportedProductsCache();
     };
 
     return {

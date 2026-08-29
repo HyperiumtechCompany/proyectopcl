@@ -72,7 +72,11 @@ import {
 } from '@/pages/dialux/hooks/wireLegacySync';
 
 import { createCanvasTransforms } from '@/pages/dialux/geometry/coordinateTransform';
-import { autoDetectClosedRegion, segmentsFromVertexRing, type Segment } from '@/pages/dialux/geometry/autoDetectClosedRegion';
+import {
+    autoDetectClosedRegion,
+    segmentsFromVertexRing,
+    type Segment,
+} from '@/pages/dialux/geometry/autoDetectClosedRegion';
 import type { DxfEntity } from '@/pages/dialux/hooks/types';
 
 /**
@@ -85,7 +89,13 @@ import type { DxfEntity } from '@/pages/dialux/hooks/types';
  * que siempre.
  */
 /** Segmentos-cuerda que aproximan un arco DXF (`start_angle`/`end_angle` en grados, sentido antihorario, convención DXF estándar). */
-function arcToSegments(cx: number, cy: number, r: number, startDeg: number, endDeg: number): Segment[] {
+function arcToSegments(
+    cx: number,
+    cy: number,
+    r: number,
+    startDeg: number,
+    endDeg: number,
+): Segment[] {
     const STEPS = 16;
     let sweep = endDeg - startDeg;
     if (sweep <= 0) sweep += 360;
@@ -119,15 +129,27 @@ function arcToSegments(cx: number, cy: number, r: number, startDeg: number, endD
  */
 function dxfEntityToAutoDetectSegments(ent: DxfEntity): Segment[] {
     if (ent.type === 'line') {
-        return [{ start: { x: ent.x1, y: ent.y1 }, end: { x: ent.x2, y: ent.y2 } }];
+        return [
+            { start: { x: ent.x1, y: ent.y1 }, end: { x: ent.x2, y: ent.y2 } },
+        ];
     }
-    if (ent.type === 'polyline' || ent.type === 'polygon' || ent.type === 'solid') {
+    if (
+        ent.type === 'polyline' ||
+        ent.type === 'polygon' ||
+        ent.type === 'solid'
+    ) {
         const vertices = ent.vertices.map(([x, y]) => ({ x, y }));
         const closed = 'closed' in ent && ent.closed;
         return segmentsFromVertexRing(vertices, Boolean(closed));
     }
     if (ent.type === 'arc') {
-        return arcToSegments(ent.cx, ent.cy, ent.r, ent.start_angle, ent.end_angle);
+        return arcToSegments(
+            ent.cx,
+            ent.cy,
+            ent.r,
+            ent.start_angle,
+            ent.end_angle,
+        );
     }
     return [];
 }
@@ -243,7 +265,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             point: CanvasPoint;
         } | null>(null);
         /** Ronda 30: guía de alineación visible mientras se arrastra un vértice de Room/Wall (metros de escena, ver `AlignmentGuide`). */
-        const [alignmentGuide, setAlignmentGuide] = useState<AlignmentGuide | null>(null);
+        const [alignmentGuide, setAlignmentGuide] =
+            useState<AlignmentGuide | null>(null);
         const [calibrationLine, setCalibrationLine] = useState<{
             start: CanvasPoint;
             end: CanvasPoint;
@@ -431,22 +454,19 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                       ? 'antipanic-area'
                       : (ui.roomTypeTemplate ?? 'room');
             const stairCount =
-                scene?.rooms.filter((r) => r.roomType === 'stair').length ??
-                0;
+                scene?.rooms.filter((r) => r.roomType === 'stair').length ?? 0;
             const corridorCount =
-                scene?.rooms.filter((r) => r.roomType === 'corridor')
-                    .length ?? 0;
+                scene?.rooms.filter((r) => r.roomType === 'corridor').length ??
+                0;
             const ambientCount =
-                scene?.rooms.filter((r) => r.roomType === 'ambient')
-                    .length ?? 0;
+                scene?.rooms.filter((r) => r.roomType === 'ambient').length ??
+                0;
             const roomCount =
-                scene?.rooms.filter(
-                    (r) => !r.roomType || r.roomType === 'room',
-                ).length ?? 0;
+                scene?.rooms.filter((r) => !r.roomType || r.roomType === 'room')
+                    .length ?? 0;
             const evacuationRouteCount =
-                scene?.rooms.filter(
-                    (r) => r.roomType === 'evacuation-route',
-                ).length ?? 0;
+                scene?.rooms.filter((r) => r.roomType === 'evacuation-route')
+                    .length ?? 0;
             const antipanicAreaCount =
                 scene?.rooms.filter((r) => r.roomType === 'antipanic-area')
                     .length ?? 0;
@@ -791,8 +811,12 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             onAddRoom: handleAddRoom,
             onAutoDetectRoom: (seedPoint) => {
                 const segments: Segment[] = [
-                    ...(store.dxfEntities ?? []).flatMap(dxfEntityToAutoDetectSegments),
-                    ...(scene?.walls ?? []).flatMap((wall) => segmentsFromVertexRing(wall.vertices, false)),
+                    ...(store.dxfEntities ?? []).flatMap(
+                        dxfEntityToAutoDetectSegments,
+                    ),
+                    ...(scene?.walls ?? []).flatMap((wall) =>
+                        segmentsFromVertexRing(wall.vertices, false),
+                    ),
                 ];
                 const result = autoDetectClosedRegion(seedPoint, segments);
                 if (!result.ok) return false;
@@ -1625,28 +1649,37 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         ]);
 
         // ── Re-activación de la vista 2D (volviendo de 3D) ────────────────────────
-        // Cuando el canvas 2D estaba oculto (display:none) mlightcad no actualiza
-        // su viewport. Al hacerse visible necesitamos:
-        //   1. Despachar resize para que three.js recalcule dimensiones
-        //   2. Llamar fitToView / zoom para re-dibujar la escena CAD correctamente
+        // Con el contenedor en display:none el canvas queda 0×0 y mlightcad no
+        // redibuja. Al volver a mostrarse hay que esperar a que el layout tenga
+        // dimensiones reales (no un timeout fijo, que a veces era prematuro y
+        // dejaba la vista en blanco "hasta actualizarla"), luego re-medir y
+        // forzar el redibujo — SIN `fitToView`, para conservar el zoom/pan del
+        // usuario.
         useEffect(() => {
             if (!isVisible || !engine.isReady) return;
-            let raf: number;
+            let raf = 0;
+            let tries = 0;
             const activate = () => {
-                window.dispatchEvent(new Event('resize'));
-                // Pequeño delay para que el resize se asiente antes del zoom
-                raf = requestAnimationFrame(() => {
-                    engine.fitToView?.();
-                    setViewTick((t) => t + 1); // Forzar re-cálculo del overlay SVG
-                });
+                const el = wrapperRef.current;
+                const w = el?.clientWidth ?? 0;
+                const h = el?.clientHeight ?? 0;
+                if (w > 0 && h > 0) {
+                    setSize((prev) =>
+                        Math.abs(prev.w - w) > 1 || Math.abs(prev.h - h) > 1
+                            ? { w, h }
+                            : prev,
+                    );
+                    window.dispatchEvent(new Event('resize'));
+                    raf = requestAnimationFrame(() =>
+                        setViewTick((t) => t + 1),
+                    );
+                    return;
+                }
+                if (tries++ < 30) raf = requestAnimationFrame(activate);
             };
-            // Pequeño delay inicial para asegurar que la visibilidad está completamente aplicada
-            const timeoutId = setTimeout(activate, 50);
-            return () => {
-                clearTimeout(timeoutId);
-                cancelAnimationFrame(raf);
-            };
-        }, [isVisible, engine.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+            raf = requestAnimationFrame(activate);
+            return () => cancelAnimationFrame(raf);
+        }, [isVisible, engine.isReady]);
 
         // ── ResizeObserver con debounce ────────────────────────────────────────────
         // Sin debounce, un resize animado (ej. apertura del sidebar) dispara
@@ -1973,7 +2006,12 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         event.stopPropagation();
                         store.setSelectedId(node.id);
                         store.setTool('wire');
-                        beginWireFromNode(node.id, node.type, family, routeType);
+                        beginWireFromNode(
+                            node.id,
+                            node.type,
+                            family,
+                            routeType,
+                        );
                     }}
                 >
                     <CanvasSvgDefs />
@@ -2239,7 +2277,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                                                 visibleCalibrationLine.start.x,
                                             visibleCalibrationLine.end.y -
                                                 visibleCalibrationLine.start.y,
-                                        ) / (effectiveScale > 0 ? effectiveScale : 1)
+                                        ) /
+                                        (effectiveScale > 0
+                                            ? effectiveScale
+                                            : 1)
                                     ).toFixed(4)} ud CAD — Shift = ortogonal`
                                   : null
                         }

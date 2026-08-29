@@ -23,6 +23,30 @@ class PlanFileController extends Controller
     use DetectsDwgCompatibility;
 
     /**
+     * Devuelve, para cada piso del proyecto que tiene plano, a qué archivo
+     * apunta. Permite al editor mostrar por piso si su plano es propio o
+     * compartido con otros pisos (varios `scene_id` con el mismo `plan_id`).
+     */
+    public function index(DialuxProject $dialuxProject): JsonResponse
+    {
+        $this->authorizeProyecto($dialuxProject);
+
+        $bindings = DialuxPlanFile::query()
+            ->where('dialux_project_id', $dialuxProject->id)
+            ->with('plan:id,original_name,size_bytes')
+            ->get()
+            ->map(fn (DialuxPlanFile $binding): array => [
+                'scene_id' => $binding->scene_id,
+                'plan_id' => $binding->dialux_plan_id,
+                'original_name' => $binding->plan?->original_name,
+                'size_bytes' => $binding->plan?->size_bytes,
+            ])
+            ->values();
+
+        return response()->json(['bindings' => $bindings]);
+    }
+
+    /**
      * Sube un plano DXF/DWG nuevo y lo vincula al piso indicado. Si el piso
      * ya tenía un plano propio (no compartido con otros pisos), el archivo
      * anterior se reemplaza; si era compartido, los demás pisos conservan

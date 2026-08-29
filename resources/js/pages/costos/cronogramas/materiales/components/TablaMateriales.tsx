@@ -472,140 +472,194 @@ const TablaMateriales: React.FC<Props> = ({
 
                     {/* ══ CUERPO ══ */}
                     <tbody>
-                        {materiales.map((mat, idx) => {
-                            const isExpanded = expanded === `${mat.descripcion}-${idx}`;
-                            const meta       = getTipoMeta(mat.tipo || 'otros');
-                            const rowBg      = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
-                            const borderColor = '#d1d5db';
-
-                            return (
-                                <React.Fragment key={`${mat.descripcion}-${idx}`}>
-                                    <tr
-                                        style={{ cursor: 'pointer', background: rowBg }}
-                                        onDoubleClick={() => setExpanded(isExpanded ? null : `${mat.descripcion}-${idx}`)}
-                                        title="Doble clic para ver detalles del insumo"
-                                        onMouseEnter={e => (e.currentTarget.style.background = '#eff6ff')}
-                                        onMouseLeave={e => (e.currentTarget.style.background = rowBg)}
-                                    >
-                                        {/* TIPO */}
-                                        <td style={{
-                                            ...TD_BASE,
-                                            position: 'sticky', left: 0, zIndex: 10,
-                                            background: rowBg, ...STICKY_SHADOW,
-                                            textAlign: 'center',
-                                        }}>
-                                            <span style={{
-                                                display: 'inline-block',
-                                                background: meta.bg, color: meta.text,
-                                                border: `1px solid ${meta.border}`,
-                                                borderRadius: 4, padding: '2px 6px',
-                                                fontSize: 9, fontWeight: 700,
-                                                textTransform: 'uppercase', letterSpacing: '0.04em',
-                                            }}>
-                                                {meta.label}
-                                            </span>
-                                        </td>
-
-                                        {/* PARTIDA */}
-                                        <td style={{
-                                            ...TD_BASE,
-                                            position: 'sticky', left: 110, zIndex: 10,
-                                            background: rowBg, textAlign: 'center',
-                                        }}>
-                                            <span style={{
-                                                display: 'inline-block',
-                                                background: '#eff6ff', color: '#1d4ed8',
-                                                border: '1px solid #bfdbfe',
-                                                borderRadius: 4, padding: '2px 7px',
-                                                fontSize: 10, fontWeight: 700, fontFamily: 'monospace',
-                                            }}>
-                                                {mat.partida_origen || '—'}
-                                            </span>
-                                        </td>
-
-                                        {/* DESCRIPCIÓN */}
-                                        <td style={{
-                                            ...TD_BASE,
-                                            position: 'sticky', left: 206, zIndex: 10,
-                                            background: rowBg, ...STICKY_SHADOW,
-                                            maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis',
-                                            fontWeight: isExpanded ? 700 : 400,
-                                            color: '#1e293b',
-                                        }}
-                                            title={mat.descripcion}
-                                        >
+                        {(() => {
+                            const rows: React.ReactNode[] = [];
+                            
+                            const TIPOS_ORDEN = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'subpartidas', 'otros'];
+                            const grupos = new Map<string, MaterialItem[]>();
+                            TIPOS_ORDEN.forEach(t => grupos.set(t, []));
+                            
+                            materiales.forEach(m => {
+                                const t = m.tipo || 'otros';
+                                if (!grupos.has(t)) grupos.set(t, []);
+                                grupos.get(t)!.push(m);
+                            });
+                            
+                            let globalIdx = 0;
+                            
+                            grupos.forEach((items, tipo) => {
+                                if (items.length === 0) return;
+                                const meta = getTipoMeta(tipo);
+                                
+                                items.forEach((mat) => {
+                                    const isExpanded = expanded === `${mat.descripcion}-${globalIdx}`;
+                                    const rowBg      = globalIdx % 2 === 0 ? '#ffffff' : '#f8fafc';
+                                    
+                                    rows.push(
+                                        <React.Fragment key={`${mat.descripcion}-${globalIdx}`}>
+                                            <tr
+                                                style={{ cursor: 'pointer', background: rowBg }}
+                                                onDoubleClick={() => setExpanded(isExpanded ? null : `${mat.descripcion}-${globalIdx}`)}
+                                                title="Doble clic para ver detalles del insumo"
+                                                onMouseEnter={e => (e.currentTarget.style.background = '#eff6ff')}
+                                                onMouseLeave={e => (e.currentTarget.style.background = rowBg)}
+                                            >
+                                                {/* TIPO */}
+                                                <td style={{
+                                                    ...TD_BASE,
+                                                    position: 'sticky', left: 0, zIndex: 10,
+                                                    background: rowBg, ...STICKY_SHADOW,
+                                                    textAlign: 'center',
+                                                }}>
+                                                    <span style={{
+                                                        display: 'inline-block',
+                                                        background: meta.bg, color: meta.text,
+                                                        border: `1px solid ${meta.border}`,
+                                                        borderRadius: 4, padding: '2px 6px',
+                                                        fontSize: 9, fontWeight: 700,
+                                                        textTransform: 'uppercase', letterSpacing: '0.04em',
+                                                    }}>
+                                                        {meta.label}
+                                                    </span>
+                                                </td>
+        
+                                                {/* PARTIDA */}
+                                                <td style={{
+                                                    ...TD_BASE,
+                                                    position: 'sticky', left: 110, zIndex: 10,
+                                                    background: rowBg, textAlign: 'center',
+                                                }}>
+                                                    <span style={{
+                                                        display: 'inline-block',
+                                                        background: '#eff6ff', color: '#1d4ed8',
+                                                        border: '1px solid #bfdbfe',
+                                                        borderRadius: 4, padding: '2px 7px',
+                                                        fontSize: 10, fontWeight: 700, fontFamily: 'monospace',
+                                                    }}>
+                                                        {mat.partida_origen || '—'}
+                                                    </span>
+                                                </td>
+        
+                                                {/* DESCRIPCIÓN */}
+                                                <td style={{
+                                                    ...TD_BASE,
+                                                    position: 'sticky', left: 206, zIndex: 10,
+                                                    background: rowBg, ...STICKY_SHADOW,
+                                                    maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis',
+                                                    fontWeight: isExpanded ? 700 : 400,
+                                                    color: '#1e293b',
+                                                }}
+                                                    title={mat.descripcion}
+                                                >
+                                                    {isExpanded && (
+                                                        <span style={{
+                                                            display: 'inline-block', marginRight: 6,
+                                                            color: meta.headerBg, fontSize: 10,
+                                                        }}>▼</span>
+                                                    )}
+                                                    {mat.descripcion}
+                                                </td>
+        
+                                                {/* UNIDAD */}
+                                                <td style={{ ...TD_BASE, textAlign: 'center', fontWeight: 700, color: '#475569', textTransform: 'uppercase', background: rowBg }}>
+                                                    {mat.unidad}
+                                                </td>
+        
+                                                {/* PRECIO */}
+                                                <td style={{ ...TD_BASE, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#0f766e', background: rowBg }}>
+                                                    {fmtSoles(mat.precio)}
+                                                </td>
+        
+                                                {/* DATOS POR PERÍODO */}
+                                                {periodos.map(p => {
+                                                    const cant  = getCantidad(mat, p.key);
+                                                    const monto = getMonto(mat, p.key);
+                                                    const iCant  = maxCantPeriodo[p.key]  > 0 ? cant  / maxCantPeriodo[p.key]  : 0;
+                                                    const iMonto = maxMontoPeriodo[p.key] > 0 ? monto / maxMontoPeriodo[p.key] : 0;
+        
+                                                    return (
+                                                        <React.Fragment key={`${mat.descripcion}-${p.key}`}>
+                                                            <td style={{ ...TD_BASE, textAlign: 'right', fontFamily: 'monospace', ...intensityStyle(iCant) }}>
+                                                                {cant > 0
+                                                                    ? fmtNum(cant, 2)
+                                                                    : <span style={{ color: '#cbd5e1' }}>—</span>
+                                                                }
+                                                            </td>
+                                                            <td style={{ ...TD_BASE, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, ...intensityStyle(iMonto) }}>
+                                                                {monto > 0
+                                                                    ? fmtSoles(monto)
+                                                                    : <span style={{ color: '#cbd5e1' }}>—</span>
+                                                                }
+                                                            </td>
+                                                        </React.Fragment>
+                                                    );
+                                                })}
+        
+                                                {/* TOTALES */}
+                                                <td style={{ ...TD_BASE, textAlign: 'right', fontWeight: 700, color: '#1e293b', background: rowBg, fontFamily: 'monospace' }}>
+                                                    {fmtNum(mat.cantidad_total, 2)}
+                                                </td>
+                                                <td style={{ ...TD_BASE, textAlign: 'right', fontWeight: 700, color: '#059669', background: rowBg, fontFamily: 'monospace' }}>
+                                                    {fmtSoles(mat.costo_total)}
+                                                </td>
+                                            </tr>
+        
+                                            {/* ── FILA EXPANDIDA ── */}
                                             {isExpanded && (
-                                                <span style={{
-                                                    display: 'inline-block', marginRight: 6,
-                                                    color: meta.headerBg, fontSize: 10,
-                                                }}>▼</span>
-                                            )}
-                                            {mat.descripcion}
-                                        </td>
-
-                                        {/* UNIDAD */}
-                                        <td style={{ ...TD_BASE, textAlign: 'center', fontWeight: 700, color: '#475569', textTransform: 'uppercase', background: rowBg }}>
-                                            {mat.unidad}
-                                        </td>
-
-                                        {/* PRECIO */}
-                                        <td style={{ ...TD_BASE, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#0f766e', background: rowBg }}>
-                                            {fmtSoles(mat.precio)}
-                                        </td>
-
-                                        {/* DATOS POR PERÍODO */}
-                                        {periodos.map(p => {
-                                            const cant  = getCantidad(mat, p.key);
-                                            const monto = getMonto(mat, p.key);
-                                            const iCant  = maxCantPeriodo[p.key]  > 0 ? cant  / maxCantPeriodo[p.key]  : 0;
-                                            const iMonto = maxMontoPeriodo[p.key] > 0 ? monto / maxMontoPeriodo[p.key] : 0;
-
-                                            return (
-                                                <React.Fragment key={`${mat.descripcion}-${p.key}`}>
-                                                    <td style={{ ...TD_BASE, textAlign: 'right', fontFamily: 'monospace', ...intensityStyle(iCant) }}>
-                                                        {cant > 0
-                                                            ? fmtNum(cant, 2)
-                                                            : <span style={{ color: '#cbd5e1' }}>—</span>
-                                                        }
+                                                <tr>
+                                                    <td
+                                                        colSpan={5 + periodos.length * 2 + 2}
+                                                        style={{ padding: 0, borderBottom: `2px solid ${meta.headerBg}` }}
+                                                    >
+                                                        <DetalleInsumo
+                                                            material={mat}
+                                                            periodos={periodos}
+                                                            mesPicoKey={mesPicoKey}
+                                                            onClose={() => setExpanded(null)}
+                                                        />
                                                     </td>
-                                                    <td style={{ ...TD_BASE, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, ...intensityStyle(iMonto) }}>
-                                                        {monto > 0
-                                                            ? fmtSoles(monto)
-                                                            : <span style={{ color: '#cbd5e1' }}>—</span>
-                                                        }
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                    globalIdx++;
+                                });
+                                
+                                // ── SUBTOTAL ROW ──
+                                rows.push(
+                                    <tr key={`subtotal-${tipo}`} style={{ background: meta.bg, borderTop: `2px solid ${meta.border}`, borderBottom: `2px solid ${meta.border}` }}>
+                                        <td colSpan={5} style={{
+                                            ...TD_BASE, textAlign: 'right', fontWeight: 800, color: meta.text,
+                                            position: 'sticky', left: 0, zIndex: 11, ...STICKY_SHADOW
+                                        }}>
+                                            Total {meta.label}
+                                        </td>
+                                        {periodos.map(p => {
+                                            const totalCant = items.reduce((s, m) => s + getCantidad(m, p.key), 0);
+                                            const totalMonto = items.reduce((s, m) => s + getMonto(m, p.key), 0);
+                                            return (
+                                                <React.Fragment key={`subtot-${tipo}-${p.key}`}>
+                                                    <td style={{ ...TD_BASE, textAlign: 'right', fontWeight: 700, color: meta.text, fontFamily: 'monospace', background: p.key === mesPicoKey ? '#fef3c7' : meta.bg }}>
+                                                        {totalCant > 0 ? fmtNum(totalCant, 2) : <span style={{ opacity: 0.5 }}>—</span>}
+                                                    </td>
+                                                    <td style={{ ...TD_BASE, textAlign: 'right', fontWeight: 700, color: meta.text, fontFamily: 'monospace', background: p.key === mesPicoKey ? '#fef3c7' : meta.bg }}>
+                                                        {totalMonto > 0 ? fmtSoles(totalMonto) : <span style={{ opacity: 0.5 }}>—</span>}
                                                     </td>
                                                 </React.Fragment>
                                             );
                                         })}
-
-                                        {/* TOTALES */}
-                                        <td style={{ ...TD_BASE, textAlign: 'right', fontWeight: 700, color: '#1e293b', background: rowBg, fontFamily: 'monospace' }}>
-                                            {fmtNum(mat.cantidad_total, 2)}
+                                        <td style={{ ...TD_BASE, textAlign: 'right', fontWeight: 800, color: meta.text, fontFamily: 'monospace' }}>
+                                            {fmtNum(items.reduce((s, m) => s + m.cantidad_total, 0), 2)}
                                         </td>
-                                        <td style={{ ...TD_BASE, textAlign: 'right', fontWeight: 700, color: '#059669', background: rowBg, fontFamily: 'monospace' }}>
-                                            {fmtSoles(mat.costo_total)}
+                                        <td style={{ ...TD_BASE, textAlign: 'right', fontWeight: 800, color: meta.text, fontFamily: 'monospace' }}>
+                                            {fmtSoles(items.reduce((s, m) => s + m.costo_total, 0))}
                                         </td>
                                     </tr>
-
-                                    {/* ── FILA EXPANDIDA ── */}
-                                    {isExpanded && (
-                                        <tr>
-                                            <td
-                                                colSpan={5 + periodos.length * 2 + 2}
-                                                style={{ padding: 0, borderBottom: `2px solid ${meta.headerBg}` }}
-                                            >
-                                                <DetalleInsumo
-                                                    material={mat}
-                                                    periodos={periodos}
-                                                    mesPicoKey={mesPicoKey}
-                                                    onClose={() => setExpanded(null)}
-                                                />
-                                            </td>
-                                        </tr>
-                                    )}
-                                </React.Fragment>
-                            );
-                        })}
+                                );
+                            });
+                            
+                            return rows;
+                        })()}
                     </tbody>
 
                     {/* ══ TOTALES GENERALES ══ */}

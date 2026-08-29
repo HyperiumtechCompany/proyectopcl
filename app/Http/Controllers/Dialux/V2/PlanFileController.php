@@ -23,6 +23,24 @@ class PlanFileController extends Controller
     use AuthorizesDialuxModule;
     use DetectsDwgCompatibility;
 
+    public function index(DialuxProject $dialuxProject, DialuxModule $dialuxModule): JsonResponse
+    {
+        $this->authorizeModule($dialuxProject, $dialuxModule);
+
+        $bindings = $dialuxModule->planFiles()
+            ->with('plan:id,original_name,size_bytes')
+            ->get()
+            ->map(fn (DialuxPlanFile $binding): array => [
+                'scene_id' => $binding->scene_id,
+                'plan_id' => $binding->dialux_plan_id,
+                'original_name' => $binding->plan?->original_name,
+                'size_bytes' => $binding->plan?->size_bytes,
+            ])
+            ->values();
+
+        return response()->json(['bindings' => $bindings]);
+    }
+
     public function store(
         StoreDialuxPlanFileRequest $request,
         DialuxProject $dialuxProject,

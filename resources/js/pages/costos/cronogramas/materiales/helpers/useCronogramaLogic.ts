@@ -53,7 +53,20 @@ export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo
         }
 
         // Ordenar
+        const TIPOS_ORDEN = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'subpartidas', 'otros'];
+        
         lista.sort((a, b) => {
+            // 1. Ordenar por tipo primero (orden canónico)
+            const tipoA = TIPOS_ORDEN.indexOf(safeString(a.tipo).toLowerCase());
+            const tipoB = TIPOS_ORDEN.indexOf(safeString(b.tipo).toLowerCase());
+            const indexA = tipoA >= 0 ? tipoA : 999;
+            const indexB = tipoB >= 0 ? tipoB : 999;
+            
+            if (indexA !== indexB) {
+                return indexA - indexB;
+            }
+
+            // 2. Orden secundario según el sortField
             let va: any;
             let vb: any;
             
