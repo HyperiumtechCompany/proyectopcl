@@ -99,8 +99,8 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
 
     //  EXPORTAR 
     const handleExportExcel = useCallback(() => {
-        exportarMaterialesExcel(todosMateriales, periodos, projectName || project, viewMode, filtro.tipoFiltro, projectData);
-    }, [todosMateriales, periodos, project, projectName, viewMode, filtro.tipoFiltro, projectData]);
+        exportarMaterialesExcel(materialesFiltrados, periodos, projectName || project, viewMode, filtro.tipoFiltro, projectData);
+    }, [materialesFiltrados, periodos, project, projectName, viewMode, filtro.tipoFiltro, projectData]);
 
     //  BREADCRUMBS 
     const displayName = useMemo(() => {

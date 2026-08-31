@@ -637,11 +637,20 @@ fn parse_hatches_raw(
 // los campos que no hacen falta para dibujar el plano.
 //
 // Alcance: LINE, LWPOLYLINE, POLYLINE clásica (+VERTEX/SEQEND), CIRCLE,
-// ARC, TEXT/MTEXT, POINT -- los tipos más comunes en un plano arquitectónico
-// de base. INSERT/DIMENSION/MLINE/SPLINE/ELLIPSE no se resuelven aquí
-// (INSERT necesitaría resolver BLOCKS a mano; los demás son poco frecuentes
-// en un plano base) y se cuentan como saltados, igual que cualquier tipo
-// desconocido.
+// ARC, TEXT/MTEXT, POINT, ATTRIB/ATTDEF -- los tipos más comunes en un plano
+// arquitectónico de base. INSERT/DIMENSION/MLINE/SPLINE/ELLIPSE no se
+// resuelven aquí (INSERT necesitaría resolver BLOCKS a mano; los demás son
+// poco frecuentes en un plano base) y se cuentan como saltados, igual que
+// cualquier tipo desconocido.
+//
+// ATTRIB (texto de atributo de bloque, ej. etiquetas de equipos/ambientes)
+// comparte los mismos códigos de grupo relevantes que TEXT (10/20 posición,
+// 1 valor, 40 altura, 50 rotación, 8 capa) -- confirmado con un plano DWG
+// real donde un solo campo ajeno a la geometría hacía abortar el parser
+// estricto y el fallback crudo, al no reconocer ATTRIB, descartaba 494
+// entidades de texto reales (la inmensa mayoría de lo "perdido" en ese
+// archivo). ATTDEF (definición, normalmente solo dentro de un BLOCK) se
+// acepta con el mismo mapeo por si aparece suelta a nivel raíz.
 
 fn raw_value<'a>(pairs: &[RawPair<'a>], code: i32) -> Option<&'a str> {
     pairs.iter().find(|p| p.code == code).map(|p| p.value)
@@ -771,6 +780,10 @@ fn parse_entities_raw_fallback(
             "TEXT" | "MTEXT" => match parse_raw_text(block, id_counter, bounds) {
                 Some(e) => { layer_set.insert(raw_layer(block)); out.push(e); }
                 None => bump_skip(skipped, "TEXT (fallback crudo, estructura inesperada)".to_string()),
+            },
+            "ATTRIB" | "ATTDEF" => match parse_raw_text(block, id_counter, bounds) {
+                Some(e) => { layer_set.insert(raw_layer(block)); out.push(e); }
+                None => bump_skip(skipped, "ATTRIB (fallback crudo, estructura inesperada)".to_string()),
             },
             "LWPOLYLINE" => {
                 let layer = raw_layer(block);
@@ -1056,6 +1069,31 @@ fn parse_entities<'a, I>(
                 } else {
                     *skipped.entry("INSERT (bloque no encontrado)".to_string()).or_insert(0) += 1;
                 }
+
+                // Atributos reales tecleados en ESTA instancia del bloque
+                // (ej. una etiqueta de ambiente/equipo) -- viven como
+                // entidades ATTRIB propias que siguen al INSERT en el
+                // stream, no dentro de la definición del bloque (`block.
+                // entities` arriba solo trae la geometría fija + los
+                // ATTDEF-plantilla, nunca el texto real escrito). Su
+                // posición ya está en el mismo espacio que el propio
+                // INSERT, por eso usan `transform` (el actual), no
+                // `child_t` (el de adentro del bloque).
+                for attr in insert.attributes() {
+                    let (x, y) = transform.apply(attr.location.x, attr.location.y);
+                    let height = attr.text_height * transform.scale_y.abs();
+                    let rotation = attr.rotation + transform.rotation_deg;
+                    bounds.update(x, y);
+                    *id_counter += 1;
+                    out.push(DxfEntity::Text {
+                        id: format!("dxf_{}", id_counter),
+                        x, y,
+                        text: attr.value.clone(),
+                        height,
+                        rotation,
+                        layer: layer.clone(),
+                    });
+                }
             }
 
             _ => {
@@ -1318,6 +1356,70 @@ mod dimension_and_skip_tracking_tests {
         let result = parse_dxf_logic(&drawing_to_text(&mut drawing)).expect("should parse");
 
         assert_eq!(result.skipped_entity_types.get("Leader"), Some(&1));
+    }
+}
+
+#[cfg(test)]
+mod insert_attribute_tests {
+    use super::*;
+    use dxf::{Block, Point};
+
+    /// Ver comentario junto a la copia homónima en
+    /// `dimension_and_skip_tracking_tests` -- cada módulo de test mantiene
+    /// la suya (mismo patrón que `mline_tests`), no hay una compartida.
+    fn drawing_to_text(drawing: &mut Drawing) -> String {
+        drawing.header.version = dxf::enums::AcadVersion::R2010;
+        let mut buf: Vec<u8> = Vec::new();
+        drawing.save(&mut buf).expect("drawing should save");
+        String::from_utf8(buf).expect("dxf output should be utf8")
+    }
+
+    /// Confirmado con un plano DWG real: un INSERT con `attributes_follow`
+    /// (ej. la etiqueta de un tablero eléctrico o de un ambiente, tecleada
+    /// al insertar el bloque) traía cientos de ATTRIB reales que
+    /// `parse_entities` nunca leía -- solo se explotaba `block.entities`
+    /// (la geometría fija + los ATTDEF-plantilla del bloque), nunca el
+    /// texto real tecleado en ESTA instancia. El texto tecleado vive en
+    /// `insert.attributes()`, expuesto aparte por la propia crate `dxf`.
+    #[test]
+    fn insert_attribute_value_is_extracted_as_a_text_entity() {
+        let mut drawing = Drawing::new();
+
+        let mut block = Block::default();
+        block.name = "TABLERO".to_string();
+        drawing.add_block(block);
+
+        let mut insert = Insert {
+            name: "TABLERO".to_string(),
+            location: Point::new(10.0, 20.0, 0.0),
+            ..Default::default()
+        };
+        insert.add_attribute(
+            &mut drawing,
+            Attribute {
+                location: Point::new(10.5, 20.5, 0.0),
+                value: "TD-01".to_string(),
+                text_height: 0.25,
+                rotation: 90.0,
+                ..Default::default()
+            },
+        );
+        drawing.add_entity(Entity::new(EntityType::Insert(insert)));
+
+        let result = parse_dxf_logic(&drawing_to_text(&mut drawing)).expect("should parse");
+
+        let found = result.entities.iter().find_map(|e| match e {
+            DxfEntity::Text { x, y, text, height, rotation, .. } => {
+                Some((*x, *y, text.clone(), *height, *rotation))
+            }
+            _ => None,
+        });
+        let (x, y, text, height, rotation) =
+            found.expect("expected the INSERT's attribute value to be extracted as text");
+        assert_eq!(text, "TD-01");
+        assert!((x - 10.5).abs() < 1e-6 && (y - 20.5).abs() < 1e-6);
+        assert!((height - 0.25).abs() < 1e-6);
+        assert!((rotation - 90.0).abs() < 1e-6);
     }
 }
 
@@ -1756,6 +1858,32 @@ mod raw_fallback_tests {
             _ => None,
         });
         assert_eq!(poly_vertex_count, Some(3), "entities: {:?}", result.entities);
+    }
+
+    /// Mismo archivo real que dio origen a este módulo: cuando el parser
+    /// estricto aborta el documento entero, el fallback crudo previo solo
+    /// reconocía LINE/CIRCLE/ARC/TEXT/POINT/LWPOLYLINE/POLYLINE -- un ATTRIB
+    /// (texto de atributo de INSERT, ej. la etiqueta de un ambiente) caía en
+    /// el catch-all "no soportado en fallback crudo" y desaparecía. En ese
+    /// archivo real esto representaba 494 de las entidades perdidas -- la
+    /// inmensa mayoría de lo reportado como "faltante".
+    #[test]
+    fn raw_fallback_recovers_attrib_as_text() {
+        let text = "0\nSECTION\n2\nENTITIES\n\
+0\nLINE\n8\n0\n420\n4294967295\n10\n0.0\n20\n0.0\n30\n0.0\n11\n1.0\n21\n0.0\n31\n0.0\n\
+0\nATTRIB\n8\nTEXTO\n10\n3.0\n20\n3.0\n30\n0.0\n40\n0.2\n50\n0.0\n1\nTD-01\n\
+0\nENDSEC\n0\nEOF\n".to_string();
+
+        let result = parse_dxf_logic(&text).expect("el fallback crudo debe evitar el error total");
+
+        let found = result.entities.iter().find_map(|e| match e {
+            DxfEntity::Text { x, y, text, layer, .. } => Some((*x, *y, text.clone(), layer.clone())),
+            _ => None,
+        });
+        let (x, y, value, layer) = found.expect("se esperaba un ATTRIB recuperado como texto por el fallback");
+        assert_eq!((x, y), (3.0, 3.0));
+        assert_eq!(value, "TD-01");
+        assert_eq!(layer, "TEXTO");
     }
 }
 

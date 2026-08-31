@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class CronoMaterialesController extends Controller
@@ -209,78 +210,103 @@ class CronoMaterialesController extends Controller
                 $service->normalizePartidaCode($fila->partida) => (float) $fila->metrado,
             ]);
 
-        $tablas = [
-            'mano_de_obra' => ['tabla' => 'acu_mano_de_obra', 'precio' => 'precio_unitario'],
-            'materiales' => ['tabla' => 'acu_materiales', 'precio' => 'precio_unitario'],
-            'equipos' => ['tabla' => 'acu_equipos', 'precio' => 'precio_hora'],
-            'subcontratos' => ['tabla' => 'acu_subcontratos', 'precio' => 'precio_unitario'],
-            'subpartidas' => ['tabla' => 'acu_subpartidas', 'precio' => 'precio_unitario'],
-        ];
+        $tipos = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'subpartidas'];
         $consolidados = [];
+        $acus = DB::connection('costos_tenant')
+            ->table('presupuesto_acus')
+            ->where('presupuesto_id', $presupuestoId)
+            ->get(['partida', ...$tipos]);
 
-        foreach ($tablas as $tipo => $config) {
-            $filas = DB::connection('costos_tenant')
-                ->table($config['tabla'].' as recurso')
-                ->join('presupuesto_acus as acu', 'acu.id', '=', 'recurso.acu_id')
-                ->where('acu.presupuesto_id', $presupuestoId)
-                ->select([
-                    'acu.partida',
-                    'recurso.descripcion',
-                    'recurso.unidad',
-                    'recurso.cantidad',
-                    DB::raw('recurso.'.$config['precio'].' as precio'),
-                    DB::raw($tipo === 'materiales' ? 'recurso.factor_desperdicio' : '1 as factor_desperdicio'),
-                ])
-                ->get();
+        foreach ($acus as $acu) {
+            $codigo = $service->normalizePartidaCode($acu->partida);
+            if (! $codigosNormalizados->has($codigo)) {
+                continue;
+            }
 
-            foreach ($filas as $fila) {
-                $codigo = $service->normalizePartidaCode($fila->partida);
-                if (! $codigosNormalizados->has($codigo)) {
-                    continue;
-                }
+            foreach ($tipos as $tipo) {
+                $recursos = json_decode($acu->{$tipo} ?? '[]', true) ?: [];
 
-                $precio = (float) $fila->precio;
-                $cantidad = (float) $fila->cantidad * (float) ($fila->factor_desperdicio ?? 1) * ($metrados[$codigo] ?? 0);
-                if ($cantidad <= 0 || $precio < 0) {
-                    continue;
-                }
+                foreach ($recursos as $recurso) {
+                    $descripcion = trim((string) ($recurso['descripcion'] ?? ''));
+                    $unidad = strtolower(trim((string) ($recurso['unidad'] ?? '')));
+                    $cantidadAcu = (float) ($recurso['cantidad'] ?? 0);
+                    $precio = (float) ($tipo === 'equipos'
+                        ? ($recurso['precio_hora'] ?? $recurso['precio_unitario'] ?? 0)
+                        : ($recurso['precio_unitario'] ?? $recurso['precio_hora'] ?? 0));
+                    $metrado = $metrados[$codigo] ?? 0;
+                    $esPorcentaje = str_starts_with($unidad, '%');
+                    $factor = $tipo === 'materiales'
+                        ? max(1, (float) ($recurso['factor_desperdicio'] ?? 1))
+                        : 1;
 
-                $clave = implode('|', [$tipo, trim($fila->descripcion), trim($fila->unidad), (string) $precio]);
-                if (! isset($consolidados[$clave])) {
-                    $consolidados[$clave] = [
-                        'partida_origen' => trim($fila->partida),
-                        'descripcion_partida' => '',
-                        'descripcion' => trim($fila->descripcion),
-                        'unidad' => trim($fila->unidad),
-                        'tipo' => $tipo,
-                        'precio' => $precio,
-                        'cantidad_total' => 0.0,
-                        'costo_total' => 0.0,
-                        'distribucion' => array_fill_keys($clavesPeriodos, ['cantidad' => 0.0, 'monto' => 0.0]),
-                    ];
-                }
+                    if ($descripcion === '' || $cantidadAcu == 0 || $precio == 0 || $metrado <= 0) {
+                        continue;
+                    }
 
-                $costo = $cantidad * $precio;
-                $consolidados[$clave]['cantidad_total'] += $cantidad;
-                $consolidados[$clave]['costo_total'] += $costo;
-                $meses = $this->activeMonths($tareasNormalizadas->get($codigo), $clavesPeriodos);
-                $meses = empty($meses) ? [$clavesPeriodos[0]] : $meses;
+                    $cantidad = $cantidadAcu * $metrado;
+                    $costo = $esPorcentaje
+                        ? ($cantidadAcu / 100) * $precio * $metrado
+                        : $cantidad * $precio * $factor;
+                    // El consolidado de insumos representa los porcentajes como monto:
+                    // cantidad = monto y precio de referencia = 0.
+                    $cantidadMostrada = $esPorcentaje ? $costo : $cantidad;
+                    $descripcionNormalizada = Str::lower(Str::ascii(Str::squish($descripcion)));
+                    $clave = implode('|', [$tipo, $descripcionNormalizada, $unidad]);
+                    if (! isset($consolidados[$clave])) {
+                        $consolidados[$clave] = [
+                            'partida_origen' => trim($acu->partida),
+                            'descripcion_partida' => '',
+                            'descripcion' => $descripcion,
+                            'unidad' => $unidad,
+                            'tipo' => $tipo,
+                            'precio' => 0.0,
+                            'cantidad_total' => 0.0,
+                            'costo_total' => 0.0,
+                            'es_porcentaje' => $esPorcentaje,
+                            'distribucion' => array_fill_keys($clavesPeriodos, ['cantidad' => 0.0, 'monto' => 0.0]),
+                        ];
+                    }
 
-                foreach ($meses as $mes) {
-                    $consolidados[$clave]['distribucion'][$mes]['cantidad'] += $cantidad / count($meses);
-                    $consolidados[$clave]['distribucion'][$mes]['monto'] += $costo / count($meses);
+                    $consolidados[$clave]['cantidad_total'] += $cantidadMostrada;
+                    $consolidados[$clave]['costo_total'] += $costo;
+                    $meses = $this->activeMonths($tareasNormalizadas->get($codigo), $clavesPeriodos);
+                    $meses = empty($meses) ? [$clavesPeriodos[0]] : $meses;
+
+                    foreach ($meses as $mes) {
+                        $consolidados[$clave]['distribucion'][$mes]['cantidad'] += $cantidadMostrada / count($meses);
+                        $consolidados[$clave]['distribucion'][$mes]['monto'] += $costo / count($meses);
+                    }
                 }
             }
         }
 
         return collect($consolidados)
             ->map(function (array $recurso) {
+                if (! $recurso['es_porcentaje'] && $recurso['cantidad_total'] != 0) {
+                    $recurso['precio'] = $recurso['costo_total'] / $recurso['cantidad_total'];
+                }
+                unset($recurso['es_porcentaje']);
+
+                $recurso['precio'] = round($recurso['precio'], 10);
                 $recurso['cantidad_total'] = round($recurso['cantidad_total'], 4);
                 $recurso['costo_total'] = round($recurso['costo_total'], 2);
                 $recurso['distribucion'] = array_map(fn (array $valor) => [
                     'cantidad' => round($valor['cantidad'], 4),
                     'monto' => round($valor['monto'], 2),
                 ], $recurso['distribucion']);
+                $ultimaClave = array_key_last($recurso['distribucion']);
+                if ($ultimaClave !== null) {
+                    $sumaCantidad = array_sum(array_column($recurso['distribucion'], 'cantidad'));
+                    $sumaMonto = array_sum(array_column($recurso['distribucion'], 'monto'));
+                    $recurso['distribucion'][$ultimaClave]['cantidad'] = round(
+                        $recurso['distribucion'][$ultimaClave]['cantidad'] + $recurso['cantidad_total'] - $sumaCantidad,
+                        4,
+                    );
+                    $recurso['distribucion'][$ultimaClave]['monto'] = round(
+                        $recurso['distribucion'][$ultimaClave]['monto'] + $recurso['costo_total'] - $sumaMonto,
+                        2,
+                    );
+                }
 
                 return $recurso;
             })

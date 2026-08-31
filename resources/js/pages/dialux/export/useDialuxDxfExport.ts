@@ -29,7 +29,7 @@ export interface UseDialuxDxfExportResult {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** "DIMENSION (bloque no encontrado)×5, Leader×1" -- para el mensaje del warning. */
-function formatSkippedEntityTypes(skipped: Record<string, number>): string {
+export function formatSkippedEntityTypes(skipped: Record<string, number>): string {
     return Object.entries(skipped)
         .map(([type, count]) => `${type}×${count}`)
         .join(', ');

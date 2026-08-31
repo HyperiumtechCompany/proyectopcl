@@ -1174,6 +1174,23 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     return;
                 }
 
+                // Defensa adicional: un modal (SweetAlert2 o Radix Dialog,
+                // ej. la advertencia de importación DWG o el diálogo de
+                // escala) puede estar abierto sin que `e.target` quede dentro
+                // de él en ESTE keydown puntual (foco aún moviéndose, o el
+                // modal se abrió a destiempo respecto de otro ya visible).
+                // Basarse solo en el foco dejaba que Escape cancelara un trazo
+                // o la calibración en curso mientras el usuario en realidad
+                // quería cerrar el modal — se verifica la presencia del modal
+                // en el DOM, no dónde cayó el foco.
+                if (
+                    document.querySelector(
+                        '.swal2-container, [role="dialog"][data-state="open"], [role="alertdialog"]',
+                    )
+                ) {
+                    return;
+                }
+
                 // Enter: cierra el polígono en curso (recinto, área de
                 // proyección…) sin tener que clavar el primer vértice.
                 if (e.key === 'Enter') {
@@ -2482,6 +2499,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     onFitToView={() => engine.fitToView()}
                     isCalibrated={scaleConfig.isCalibrated}
                     calibrationFactor={scaleConfig.calibrationFactor}
+                    skippedEntityTypes={store.dxfSkippedEntityTypes}
+                    entityCount={store.dxfEntities?.length ?? 0}
                 />
             </div>
         );

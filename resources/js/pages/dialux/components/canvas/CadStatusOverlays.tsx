@@ -5,6 +5,8 @@
  * mismo JSX, mismas clases, mismas condiciones de visibilidad.
  */
 
+import { formatSkippedEntityTypes } from '@/pages/dialux/export/useDialuxDxfExport';
+
 export interface CadStatusOverlaysProps {
     isLoading: boolean;
     loadProgress: number;
@@ -15,6 +17,16 @@ export interface CadStatusOverlaysProps {
     onFitToView: () => void;
     isCalibrated: boolean;
     calibrationFactor: number;
+    /**
+     * Tipos de entidad DXF/DWG que el parser (Rust/WASM) reportó como no
+     * soportados al leer el plano base — antes solo se veía este dato al
+     * exportar DXF. Mostrarlo aquí permite confirmar si un objeto "que
+     * desaparece" es un hueco real de compatibilidad del parser, en vez de
+     * asumirlo sin evidencia.
+     */
+    skippedEntityTypes: Record<string, number> | null;
+    /** Cantidad total de entidades extraídas del plano base (0 si aún no se cargó). */
+    entityCount: number;
 }
 
 export function CadStatusOverlays({
@@ -26,6 +38,8 @@ export function CadStatusOverlays({
     onFitToView,
     isCalibrated,
     calibrationFactor,
+    skippedEntityTypes,
+    entityCount,
 }: CadStatusOverlaysProps) {
     return (
         <>
@@ -84,6 +98,19 @@ export function CadStatusOverlays({
                     </div>
                     <span className="font-mono text-amber-300 font-semibold" title="Los objetos arquitectónicos están escalados con este factor.">
                         Calibrado ×{calibrationFactor.toFixed(4)}
+                    </span>
+                </div>
+            )}
+
+            {/* ── Badge de entidades no soportadas por el parser DXF/DWG ── */}
+            {skippedEntityTypes && !isLoading && (
+                <div
+                    className="absolute top-24 right-3 z-30 flex items-center gap-2 rounded-lg border border-orange-900/60 bg-slate-200 dark:bg-slate-900/85 px-3 py-1.5 text-xs shadow-xl backdrop-blur"
+                    title={`No soportadas: ${formatSkippedEntityTypes(skippedEntityTypes)}\nEntidades extraídas del plano: ${entityCount}`}
+                >
+                    <span className="text-orange-400">⚠</span>
+                    <span className="font-mono text-orange-300">
+                        {Object.keys(skippedEntityTypes).length} tipo(s) no soportado(s)
                     </span>
                 </div>
             )}

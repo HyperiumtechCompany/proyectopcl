@@ -674,99 +674,119 @@ class CronoValorizadoController extends Controller
             fn ($c, $partida) => [$this->dbService->normalizePartidaCode($partida) => $c]
         );
 
-        $tablasPorTipo = [
-            'mano_de_obra' => 'acu_mano_de_obra',
-            'materiales' => 'acu_materiales',
-            'equipos' => 'acu_equipos',
-            'subcontratos' => 'acu_subcontratos',
-            'subpartidas' => 'acu_subpartidas',
-        ];
-
+        $tipos = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'subpartidas'];
         $consolidados = [];
         $acumuladoMensual = array_fill_keys($clavesPeriodos, 0.0);
         $presupuestoTotal = 0.0;
+        $acus = DB::connection('costos_tenant')
+            ->table('presupuesto_acus')
+            ->where('presupuesto_id', $presupuestoId)
+            ->get(['partida', ...$tipos]);
 
-        foreach ($tablasPorTipo as $tipo => $tabla) {
-            $rows = DB::connection('costos_tenant')
-                ->table($tabla.' as r')
-                ->join('presupuesto_acus as pa', 'pa.id', '=', 'r.acu_id')
-                ->where('pa.presupuesto_id', $presupuestoId)
-                ->select('r.*', 'pa.partida as partida')
-                ->get();
+        foreach ($acus as $acu) {
+            $codigoNormalizado = $this->dbService->normalizePartidaCode(trim($acu->partida ?? ''));
+            $presupuestoItem = $presupuestoPorCodigoNormalizado->get($codigoNormalizado);
+            $metrado = $presupuestoItem ? (float) ($presupuestoItem->metrado ?? 0) : 0.0;
+            if ($metrado <= 0) {
+                continue;
+            }
 
-            foreach ($rows as $item) {
-                $codigoNormalizado = $this->dbService->normalizePartidaCode(trim($item->partida ?? ''));
-                $presupuestoItem = $presupuestoPorCodigoNormalizado->get($codigoNormalizado);
-                $metrado = $presupuestoItem ? (float) ($presupuestoItem->metrado ?? 0) : 0.0;
-                if ($metrado <= 0) {
-                    continue;
-                }
+            foreach ($tipos as $tipo) {
+                $recursos = json_decode($acu->{$tipo} ?? '[]', true) ?: [];
 
-                $unidad = $item->unidad ?? '';
-                $cantidad = (float) ($item->cantidad ?? 0);
-                $precio = (float) ($item->precio_unitario ?? $item->precio_hora ?? 0);
-                $factor = (float) ($item->factor_desperdicio ?? 1);
-                $descripcion = $item->descripcion ?? 'Sin descripción';
+                foreach ($recursos as $item) {
+                    $unidad = strtolower(trim((string) ($item['unidad'] ?? '')));
+                    $cantidadAcu = (float) ($item['cantidad'] ?? 0);
+                    $precio = (float) ($tipo === 'equipos'
+                        ? ($item['precio_hora'] ?? $item['precio_unitario'] ?? 0)
+                        : ($item['precio_unitario'] ?? $item['precio_hora'] ?? 0));
+                    $factor = $tipo === 'materiales'
+                        ? max(1, (float) ($item['factor_desperdicio'] ?? 1))
+                        : 1;
+                    $descripcion = trim((string) ($item['descripcion'] ?? ''));
+                    $esPorcentaje = str_starts_with($unidad, '%');
 
-                if ($cantidad <= 0 || $precio <= 0) {
-                    continue;
-                }
+                    if ($descripcion === '' || $cantidadAcu == 0 || $precio == 0) {
+                        continue;
+                    }
 
-                $cantidadTotal = $cantidad * $factor * $metrado;
-                $costoTotal = $cantidadTotal * $precio;
-                if ($cantidadTotal <= 0) {
-                    continue;
-                }
+                    $cantidadBase = $cantidadAcu * $metrado;
+                    $costoTotal = $esPorcentaje
+                        ? ($cantidadAcu / 100) * $precio * $metrado
+                        : $cantidadBase * $precio * $factor;
+                    $cantidadTotal = $esPorcentaje ? $costoTotal : $cantidadBase;
+                    $crono = $cronoPorCodigoNormalizado->get($codigoNormalizado);
+                    $distribucionMonto = ($crono && $crono->fecha_inicio && $crono->fecha_fin)
+                        ? $this->distribuir($costoTotal, $crono->fecha_inicio, $crono->fecha_fin, $clavesPeriodos, $periodos, $modo)
+                        : null;
+                    $descripcionNormalizada = Str::lower(Str::ascii(Str::squish($descripcion)));
+                    $clave = implode('|', [$tipo, $descripcionNormalizada, $unidad]);
 
-                $crono = $cronoPorCodigoNormalizado->get($codigoNormalizado);
-                $distribucionMonto = ($crono && $crono->fecha_inicio && $crono->fecha_fin)
-                    ? $this->distribuir($costoTotal, $crono->fecha_inicio, $crono->fecha_fin, $clavesPeriodos, $periodos, $modo)
-                    : null;
+                    if (! isset($consolidados[$clave])) {
+                        $distInicial = [];
+                        foreach ($periodos as $periodo) {
+                            $distInicial[$periodo['key']] = ['cantidad' => 0.0, 'monto' => 0.0];
+                        }
+                        $consolidados[$clave] = [
+                            'partida_origen' => trim($acu->partida ?? ''),
+                            'descripcion_partida' => '',
+                            'descripcion' => $descripcion,
+                            'unidad' => $unidad,
+                            'tipo' => $tipo,
+                            'precio' => 0.0,
+                            'cantidad_total' => 0.0,
+                            'costo_total' => 0.0,
+                            'es_porcentaje' => $esPorcentaje,
+                            'distribucion' => $distInicial,
+                        ];
+                    }
 
-                $clave = $tipo.'|'.$descripcion.'|'.$unidad;
-                if (! isset($consolidados[$clave])) {
-                    $distInicial = [];
+                    $consolidados[$clave]['cantidad_total'] += $cantidadTotal;
+                    $consolidados[$clave]['costo_total'] += $costoTotal;
+
                     foreach ($periodos as $periodo) {
-                        $distInicial[$periodo['key']] = ['cantidad' => 0.0, 'monto' => 0.0];
+                        $key = $periodo['key'];
+                        $montoMes = $distribucionMonto !== null
+                            ? ($distribucionMonto[$key]['monto'] ?? 0.0)
+                            : (count($periodos) > 0 ? $costoTotal / count($periodos) : 0.0);
+                        $cantidadMes = $costoTotal != 0 ? $cantidadTotal * ($montoMes / $costoTotal) : 0.0;
+
+                        $consolidados[$clave]['distribucion'][$key]['cantidad'] += $cantidadMes;
+                        $consolidados[$clave]['distribucion'][$key]['monto'] += $montoMes;
+                        $acumuladoMensual[$key] += $montoMes;
                     }
-                    $consolidados[$clave] = [
-                        'partida_origen' => trim($item->partida ?? ''),
-                        'descripcion_partida' => '',
-                        'descripcion' => $descripcion,
-                        'unidad' => $unidad,
-                        'tipo' => $tipo,
-                        'precio' => round($precio, 2),
-                        'cantidad_total' => 0.0,
-                        'costo_total' => 0.0,
-                        'distribucion' => $distInicial,
-                    ];
+
+                    $presupuestoTotal += $costoTotal;
                 }
-
-                $consolidados[$clave]['cantidad_total'] += $cantidadTotal;
-                $consolidados[$clave]['costo_total'] += $costoTotal;
-
-                foreach ($periodos as $periodo) {
-                    $key = $periodo['key'];
-                    if ($distribucionMonto !== null) {
-                        $montoMes = $distribucionMonto[$key]['monto'] ?? 0.0;
-                    } else {
-                        $montoMes = count($periodos) > 0 ? $costoTotal / count($periodos) : 0.0;
-                    }
-                    $cantidadMes = $costoTotal > 0 ? $cantidadTotal * ($montoMes / $costoTotal) : 0.0;
-
-                    $consolidados[$clave]['distribucion'][$key]['cantidad'] += round($cantidadMes, 4);
-                    $consolidados[$clave]['distribucion'][$key]['monto'] += round($montoMes, 2);
-                    $acumuladoMensual[$key] += $montoMes;
-                }
-
-                $presupuestoTotal += $costoTotal;
             }
         }
 
         $materialesFormateados = collect(array_values($consolidados))
             ->map(function ($m) {
+                if (! $m['es_porcentaje'] && $m['cantidad_total'] != 0) {
+                    $m['precio'] = $m['costo_total'] / $m['cantidad_total'];
+                }
+                unset($m['es_porcentaje']);
+                $m['precio'] = round($m['precio'], 10);
                 $m['cantidad_total'] = round($m['cantidad_total'], 4);
                 $m['costo_total'] = round($m['costo_total'], 2);
+                $m['distribucion'] = array_map(fn ($valor) => [
+                    'cantidad' => round($valor['cantidad'], 4),
+                    'monto' => round($valor['monto'], 2),
+                ], $m['distribucion']);
+                $ultimaClave = array_key_last($m['distribucion']);
+                if ($ultimaClave !== null) {
+                    $sumaCantidad = array_sum(array_column($m['distribucion'], 'cantidad'));
+                    $sumaMonto = array_sum(array_column($m['distribucion'], 'monto'));
+                    $m['distribucion'][$ultimaClave]['cantidad'] = round(
+                        $m['distribucion'][$ultimaClave]['cantidad'] + $m['cantidad_total'] - $sumaCantidad,
+                        4,
+                    );
+                    $m['distribucion'][$ultimaClave]['monto'] = round(
+                        $m['distribucion'][$ultimaClave]['monto'] + $m['costo_total'] - $sumaMonto,
+                        2,
+                    );
+                }
 
                 return $m;
             });

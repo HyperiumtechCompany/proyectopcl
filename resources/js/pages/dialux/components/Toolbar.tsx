@@ -364,8 +364,14 @@ export const Toolbar: React.FC = () => {
                         // documenta que puede omitir en silencio objetos
                         // avanzados de esas versiones (muros, hatch, texto),
                         // aunque el archivo abra "bien" y sin error visible.
+                        // Se espera a que el usuario cierre esta advertencia
+                        // ANTES de continuar: si no, el modal de escala se abre
+                        // 500ms después (más abajo) mientras esta advertencia
+                        // sigue en pantalla, y ambos compiten por el foco y la
+                        // tecla Escape (uno se cierra o cancela sin que el
+                        // usuario lo haya pedido).
                         if (warning) {
-                            Swal.fire({
+                            await Swal.fire({
                                 icon: 'warning',
                                 title: 'Plano importado con advertencia',
                                 text: warning,

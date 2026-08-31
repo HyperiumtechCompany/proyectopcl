@@ -73,8 +73,8 @@ it('registers valorizado and materiales persistence routes used by the frontend'
         ->and(Route::has('proyectos.cronograma.valorizado.destroy'))->toBeTrue();
 });
 
-it('uses the normalized ACU resource type and totals in materiales data', function () {
-    [$user, $project, $dbName] = createCronoValorizadoTenant(1);
+it('reconciles ACU resource totals across materiales and valorizado', function () {
+    [$user, $project, $dbName] = createCronoValorizadoTenant(3);
 
     try {
         app(CostoDatabaseService::class)->setTenantConnection($dbName);
@@ -93,36 +93,36 @@ it('uses the normalized ACU resource type and totals in materiales data', functi
             'created_at' => $now,
             'updated_at' => $now,
         ]);
-        $acuId = $connection->table('presupuesto_acus')->insertGetId([
+        $connection->table('presupuesto_acus')->insert([
             'presupuesto_id' => $presupuestoId,
             'partida' => '1.1',
             'descripcion' => 'Partida con recursos',
             'unidad' => 'und',
             'rendimiento' => 1,
-            'item_order' => 1,
-            'created_at' => $now,
-            'updated_at' => $now,
-        ]);
-        $connection->table('acu_materiales')->insert([
-            'acu_id' => $acuId,
-            'descripcion' => 'CEMENTO PORTLAND',
-            'unidad' => 'bol',
-            'cantidad' => 2,
-            'precio_unitario' => 5,
-            'factor_desperdicio' => 1.1,
-            'parcial' => 11,
-            'item_order' => 1,
-            'created_at' => $now,
-            'updated_at' => $now,
-        ]);
-        $connection->table('acu_equipos')->insert([
-            'acu_id' => $acuId,
-            'descripcion' => 'CAMION VOLQUETE',
-            'unidad' => 'hm',
-            'cantidad' => 1,
-            'recursos' => 1,
-            'precio_hora' => 20,
-            'parcial' => 20,
+            'materiales' => json_encode([[
+                'descripcion' => 'CEMENTO PORTLAND',
+                'unidad' => 'bol',
+                'cantidad' => 2,
+                'precio_unitario' => 5,
+                'factor_desperdicio' => 1.1,
+                'parcial' => 11,
+            ]]),
+            'equipos' => json_encode([
+                [
+                    'descripcion' => 'CAMION VOLQUETE',
+                    'unidad' => 'hm',
+                    'cantidad' => 1,
+                    'precio_hora' => 20,
+                    'parcial' => 20,
+                ],
+                [
+                    'descripcion' => 'HERRAMIENTAS MANUALES',
+                    'unidad' => '%mo',
+                    'cantidad' => 3,
+                    'precio_hora' => 50,
+                    'parcial' => 1.5,
+                ],
+            ]),
             'item_order' => 1,
             'created_at' => $now,
             'updated_at' => $now,
@@ -138,7 +138,23 @@ it('uses the normalized ACU resource type and totals in materiales data', functi
             ->and($materials['CAMION VOLQUETE']['costo_total'])->toBe(200)
             ->and($materials['CEMENTO PORTLAND']['tipo'])->toBe('materiales')
             ->and($materials['CEMENTO PORTLAND']['costo_total'])->toBe(110)
-            ->and($response->json('resumen.presupuesto_total'))->toBe(310);
+            ->and($materials['HERRAMIENTAS MANUALES']['cantidad_total'])->toBe(15)
+            ->and($materials['HERRAMIENTAS MANUALES']['precio'])->toBe(0)
+            ->and($materials['HERRAMIENTAS MANUALES']['costo_total'])->toBe(15)
+            ->and(array_sum(array_column($materials['CEMENTO PORTLAND']['distribucion'], 'monto')))->toBe(110.0)
+            ->and(array_sum(array_column($materials['CAMION VOLQUETE']['distribucion'], 'monto')))->toBe(200.0)
+            ->and($response->json('resumen.presupuesto_total'))->toBe(325);
+
+        $this->actingAs($user)
+            ->get("/module/crono_valorizado?project={$project->id}")
+            ->assertSuccessful()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('costos/cronogramas/valorizado/CronogramaValorizado')
+                ->where('materiales.0.costo_total', 110)
+                ->where('materiales.1.costo_total', 200)
+                ->where('materiales.2.costo_total', 15)
+                ->where('materialesResumen.presupuesto_total', 325)
+            );
     } finally {
         dropCronoValorizadoTenant($dbName);
     }
