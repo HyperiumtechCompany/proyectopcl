@@ -769,10 +769,10 @@ class CronoValorizadoController extends Controller
                 unset($m['es_porcentaje']);
                 $m['precio'] = round($m['precio'], 10);
                 $m['cantidad_total'] = round($m['cantidad_total'], 4);
-                $m['costo_total'] = round($m['costo_total'], 2);
+                $m['costo_total'] = round($m['costo_total'], 10);
                 $m['distribucion'] = array_map(fn ($valor) => [
                     'cantidad' => round($valor['cantidad'], 4),
-                    'monto' => round($valor['monto'], 2),
+                    'monto' => round($valor['monto'], 10),
                 ], $m['distribucion']);
                 $ultimaClave = array_key_last($m['distribucion']);
                 if ($ultimaClave !== null) {
@@ -784,7 +784,7 @@ class CronoValorizadoController extends Controller
                     );
                     $m['distribucion'][$ultimaClave]['monto'] = round(
                         $m['distribucion'][$ultimaClave]['monto'] + $m['costo_total'] - $sumaMonto,
-                        2,
+                        10,
                     );
                 }
 

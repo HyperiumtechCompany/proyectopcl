@@ -99,14 +99,30 @@ it('reconciles ACU resource totals across materiales and valorizado', function (
             'descripcion' => 'Partida con recursos',
             'unidad' => 'und',
             'rendimiento' => 1,
-            'materiales' => json_encode([[
-                'descripcion' => 'CEMENTO PORTLAND',
-                'unidad' => 'bol',
-                'cantidad' => 2,
-                'precio_unitario' => 5,
-                'factor_desperdicio' => 1.1,
-                'parcial' => 11,
-            ]]),
+            'materiales' => json_encode([
+                [
+                    'descripcion' => 'CEMENTO PORTLAND',
+                    'unidad' => 'bol',
+                    'cantidad' => 2,
+                    'precio_unitario' => 5,
+                    'factor_desperdicio' => 1.1,
+                    'parcial' => 11,
+                ],
+                [
+                    'descripcion' => 'PRECISION A',
+                    'unidad' => 'und',
+                    'cantidad' => 1,
+                    'precio_unitario' => 0.0005,
+                    'parcial' => 0.0005,
+                ],
+                [
+                    'descripcion' => 'PRECISION B',
+                    'unidad' => 'und',
+                    'cantidad' => 1,
+                    'precio_unitario' => 0.0005,
+                    'parcial' => 0.0005,
+                ],
+            ]),
             'equipos' => json_encode([
                 [
                     'descripcion' => 'CAMION VOLQUETE',
@@ -171,20 +187,18 @@ it('reconciles ACU resource totals across materiales and valorizado', function (
             ->and($materials['HERRAMIENTAS MANUALES']['costo_total'])->toBe(15)
             ->and($materials['CLAVOS']['costo_total'])->toBe(24)
             ->and($materials['CLAVOS']['distribucion']['2026-01']['monto'])->toBe(24)
+            ->and($materials['PRECISION A']['costo_total'])->toBe(0.005)
+            ->and($materials['PRECISION B']['costo_total'])->toBe(0.005)
             ->and(array_sum(array_column($materials['CEMENTO PORTLAND']['distribucion'], 'monto')))->toBe(110.0)
             ->and(array_sum(array_column($materials['CAMION VOLQUETE']['distribucion'], 'monto')))->toBe(200.0)
-            ->and($response->json('resumen.presupuesto_total'))->toBe(349);
+            ->and($response->json('resumen.presupuesto_total'))->toBe(349.01);
 
         $this->actingAs($user)
             ->get("/module/crono_valorizado?project={$project->id}")
             ->assertSuccessful()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('costos/cronogramas/valorizado/CronogramaValorizado')
-                ->where('materiales.0.costo_total', 110)
-                ->where('materiales.1.costo_total', 24)
-                ->where('materiales.2.costo_total', 200)
-                ->where('materiales.3.costo_total', 15)
-                ->where('materialesResumen.presupuesto_total', 349)
+                ->where('materialesResumen.presupuesto_total', 349.01)
             );
     } finally {
         dropCronoValorizadoTenant($dbName);

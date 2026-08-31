@@ -280,10 +280,10 @@ class CronoMaterialesController extends Controller
 
                 $recurso['precio'] = round($recurso['precio'], 10);
                 $recurso['cantidad_total'] = round($recurso['cantidad_total'], 4);
-                $recurso['costo_total'] = round($recurso['costo_total'], 2);
+                $recurso['costo_total'] = round($recurso['costo_total'], 10);
                 $recurso['distribucion'] = array_map(fn (array $valor) => [
                     'cantidad' => round($valor['cantidad'], 4),
-                    'monto' => round($valor['monto'], 2),
+                    'monto' => round($valor['monto'], 10),
                 ], $recurso['distribucion']);
                 $ultimaClave = array_key_last($recurso['distribucion']);
                 if ($ultimaClave !== null) {
@@ -295,7 +295,7 @@ class CronoMaterialesController extends Controller
                     );
                     $recurso['distribucion'][$ultimaClave]['monto'] = round(
                         $recurso['distribucion'][$ultimaClave]['monto'] + $recurso['costo_total'] - $sumaMonto,
-                        2,
+                        10,
                     );
                 }
 

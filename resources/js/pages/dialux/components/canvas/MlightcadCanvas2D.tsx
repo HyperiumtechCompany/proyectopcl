@@ -247,6 +247,22 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
 
         const [size, setSize] = useState({ w: 800, h: 600 });
         const initAttemptedRef = useRef(false);
+        /**
+         * Compuerta de un solo `onMouseMove` procesado por frame (rAF). Un
+         * gesto de arrastre (pan, dibujo de recinto/muro, mover una
+         * luminaria…) dispara mousemove nativo mucho más rápido de lo que el
+         * navegador pinta -- cada evento pasa por `onMouseMove` de
+         * `useCanvasInteraction`, que termina escribiendo en el store global
+         * (`store.setPan`, `store.updateFixture`, …) y forzando un
+         * re-render de TODO el árbol de overlays SVG. En un plano grande eso
+         * se sentía como el retraso reportado al acercar/alejar o dibujar
+         * encima del plano. Se procesa el PRIMER evento de cada frame de
+         * forma síncrona (para no romper `e.currentTarget`, que React anula
+         * de forma asíncrona) y se descartan los demás hasta el siguiente
+         * frame -- a 60fps la diferencia entre "primero" y "último" evento
+         * del mismo frame es un puñado de píxeles, imperceptible.
+         */
+        const mouseMoveThrottleRef = useRef(false);
         const [roomVertices, setRoomVertices] = useState<CanvasPoint[]>([]);
         const [roomPreviewPt, setRoomPreviewPt] = useState<CanvasPoint | null>(
             null,
@@ -1740,6 +1756,14 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         }, [engine, size]);
 
         // ── Wheel (zoom overlay) ───────────────────────────────────────────────────
+        // Un gesto de scroll (mouse o trackpad) puede disparar decenas de eventos
+        // 'wheel' por segundo, más rápido de lo que el navegador realmente pinta.
+        // `engine.zoomAt` mueve la cámara nativa de mlightcad (su propio canvas,
+        // no cuesta re-render de React) pero `setViewTick` sí fuerza a React a
+        // recalcular `transforms` y re-renderizar TODO el árbol de overlays SVG —
+        // llamarlo una vez por evento 'wheel' en vez de una vez por frame es lo
+        // que se sentía como el retraso al acercar/alejar en planos grandes.
+        const wheelRafRef = useRef<number | null>(null);
         useEffect(() => {
             const el = wrapperRef.current;
             if (!el) return;
@@ -1757,7 +1781,12 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     } else {
                         engine.zoomAt(screenPoint, 1.2);
                     }
-                    setViewTick((tick) => tick + 1);
+                    if (wheelRafRef.current === null) {
+                        wheelRafRef.current = requestAnimationFrame(() => {
+                            wheelRafRef.current = null;
+                            setViewTick((tick) => tick + 1);
+                        });
+                    }
                     return;
                 }
 
@@ -1765,7 +1794,13 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 store.setZoom(Math.min(4, Math.max(0.1, zoom + delta)));
             };
             el.addEventListener('wheel', onWheel, { passive: false });
-            return () => el.removeEventListener('wheel', onWheel);
+            return () => {
+                el.removeEventListener('wheel', onWheel);
+                if (wheelRafRef.current !== null) {
+                    cancelAnimationFrame(wheelRafRef.current);
+                    wheelRafRef.current = null;
+                }
+            };
         }, [engine, hasCadView, zoom, store]);
 
         // El motor CAD instala sus propios listeners sobre el canvas nativo y
@@ -1919,22 +1954,27 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         }
                     }}
                     onMouseMove={(e) => {
-                        if (isInteractiveMode)
-                            onMouseMove(
-                                e,
-                                (pt) => {
-                                    if (ui.activeTool === 'measure-area')
-                                        setMeasureAreaPreviewPt(pt);
-                                    else setRoomPreviewPt(pt);
-                                },
-                                setWallPreview,
-                                setCanopyPreview,
-                                setCalibrationLine,
-                                setCalibrationSnapPoint,
-                                setTempElectricalDevice,
-                                setAlignmentGuide,
-                                setWireReconnectPreview,
-                            );
+                        if (!isInteractiveMode) return;
+                        if (mouseMoveThrottleRef.current) return;
+                        mouseMoveThrottleRef.current = true;
+                        requestAnimationFrame(() => {
+                            mouseMoveThrottleRef.current = false;
+                        });
+                        onMouseMove(
+                            e,
+                            (pt) => {
+                                if (ui.activeTool === 'measure-area')
+                                    setMeasureAreaPreviewPt(pt);
+                                else setRoomPreviewPt(pt);
+                            },
+                            setWallPreview,
+                            setCanopyPreview,
+                            setCalibrationLine,
+                            setCalibrationSnapPoint,
+                            setTempElectricalDevice,
+                            setAlignmentGuide,
+                            setWireReconnectPreview,
+                        );
                     }}
                     onMouseUp={(e) => {
                         if (isInteractiveMode)
