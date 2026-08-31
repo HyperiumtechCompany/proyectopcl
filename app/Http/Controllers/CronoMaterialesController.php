@@ -50,12 +50,9 @@ class CronoMaterialesController extends Controller
 
         $periodos = $this->buildPeriodos($inicio, $fin);
         $clavesPeriodos = collect($periodos)->pluck('key')->toArray();
-        $codigosPartidas = collect($leafTasks)->pluck('item')->unique()->filter()->map(fn ($item) => trim($item))->toArray();
-
         $tareasPorPartida = collect($leafTasks)->keyBy(fn ($task) => trim($task['item']));
         $materialesFinales = $this->buildAcuResources(
             $presupuestoId,
-            $codigosPartidas,
             $tareasPorPartida,
             $clavesPeriodos,
         );
@@ -191,20 +188,17 @@ class CronoMaterialesController extends Controller
 
     private function buildAcuResources(
         int $presupuestoId,
-        array $codigosPartidas,
         Collection $tareasPorPartida,
         array $clavesPeriodos,
     ): Collection {
         $service = app(CostoDatabaseService::class);
-        $codigosNormalizados = collect($codigosPartidas)
-            ->map(fn ($codigo) => $service->normalizePartidaCode($codigo))
-            ->flip();
         $tareasNormalizadas = $tareasPorPartida->mapWithKeys(
             fn ($tarea, $codigo) => [$service->normalizePartidaCode($codigo) => $tarea]
         );
         $metrados = DB::connection('costos_tenant')
             ->table('presupuesto_general')
             ->where('presupuesto_id', $presupuestoId)
+            ->whereNull('deleted_at')
             ->get(['partida', 'metrado'])
             ->mapWithKeys(fn ($fila) => [
                 $service->normalizePartidaCode($fila->partida) => (float) $fila->metrado,
@@ -219,9 +213,6 @@ class CronoMaterialesController extends Controller
 
         foreach ($acus as $acu) {
             $codigo = $service->normalizePartidaCode($acu->partida);
-            if (! $codigosNormalizados->has($codigo)) {
-                continue;
-            }
 
             foreach ($tipos as $tipo) {
                 $recursos = json_decode($acu->{$tipo} ?? '[]', true) ?: [];
@@ -468,12 +459,9 @@ class CronoMaterialesController extends Controller
 
         $periodos = $this->buildPeriodos($inicio, $fin);
         $clavesPeriodos = collect($periodos)->pluck('key')->toArray();
-        $codigosPartidas = collect($leafTasks)->pluck('item')->unique()->filter()->map(fn ($item) => trim($item))->toArray();
-
         $tareasPorPartida = collect($leafTasks)->keyBy(fn ($task) => trim($task['item']));
         $materialesFinales = $this->buildAcuResources(
             $presupuestoId,
-            $codigosPartidas,
             $tareasPorPartida,
             $clavesPeriodos,
         );

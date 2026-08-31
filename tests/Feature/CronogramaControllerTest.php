@@ -127,6 +127,34 @@ it('reconciles ACU resource totals across materiales and valorizado', function (
             'created_at' => $now,
             'updated_at' => $now,
         ]);
+        $connection->table('presupuesto_general')->insert([
+            'presupuesto_id' => $presupuestoId,
+            'partida' => '02.01',
+            'descripcion' => 'Partida aún no programada',
+            'unidad' => 'und',
+            'metrado' => 2,
+            'precio_unitario' => 12,
+            'item_order' => 2,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $connection->table('presupuesto_acus')->insert([
+            'presupuesto_id' => $presupuestoId,
+            'partida' => '02.01',
+            'descripcion' => 'Partida aún no programada',
+            'unidad' => 'und',
+            'rendimiento' => 1,
+            'materiales' => json_encode([[
+                'descripcion' => 'CLAVOS',
+                'unidad' => 'kg',
+                'cantidad' => 3,
+                'precio_unitario' => 4,
+                'parcial' => 12,
+            ]]),
+            'item_order' => 2,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
 
         $response = $this->actingAs($user)
             ->getJson("/module/crono_materiales/data?project={$project->id}")
@@ -141,9 +169,11 @@ it('reconciles ACU resource totals across materiales and valorizado', function (
             ->and($materials['HERRAMIENTAS MANUALES']['cantidad_total'])->toBe(15)
             ->and($materials['HERRAMIENTAS MANUALES']['precio'])->toBe(0)
             ->and($materials['HERRAMIENTAS MANUALES']['costo_total'])->toBe(15)
+            ->and($materials['CLAVOS']['costo_total'])->toBe(24)
+            ->and($materials['CLAVOS']['distribucion']['2026-01']['monto'])->toBe(24)
             ->and(array_sum(array_column($materials['CEMENTO PORTLAND']['distribucion'], 'monto')))->toBe(110.0)
             ->and(array_sum(array_column($materials['CAMION VOLQUETE']['distribucion'], 'monto')))->toBe(200.0)
-            ->and($response->json('resumen.presupuesto_total'))->toBe(325);
+            ->and($response->json('resumen.presupuesto_total'))->toBe(349);
 
         $this->actingAs($user)
             ->get("/module/crono_valorizado?project={$project->id}")
@@ -151,9 +181,10 @@ it('reconciles ACU resource totals across materiales and valorizado', function (
             ->assertInertia(fn (Assert $page) => $page
                 ->component('costos/cronogramas/valorizado/CronogramaValorizado')
                 ->where('materiales.0.costo_total', 110)
-                ->where('materiales.1.costo_total', 200)
-                ->where('materiales.2.costo_total', 15)
-                ->where('materialesResumen.presupuesto_total', 325)
+                ->where('materiales.1.costo_total', 24)
+                ->where('materiales.2.costo_total', 200)
+                ->where('materiales.3.costo_total', 15)
+                ->where('materialesResumen.presupuesto_total', 349)
             );
     } finally {
         dropCronoValorizadoTenant($dbName);
