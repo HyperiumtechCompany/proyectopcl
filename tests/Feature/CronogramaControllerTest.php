@@ -73,6 +73,77 @@ it('registers valorizado and materiales persistence routes used by the frontend'
         ->and(Route::has('proyectos.cronograma.valorizado.destroy'))->toBeTrue();
 });
 
+it('uses the normalized ACU resource type and totals in materiales data', function () {
+    [$user, $project, $dbName] = createCronoValorizadoTenant(1);
+
+    try {
+        app(CostoDatabaseService::class)->setTenantConnection($dbName);
+        $connection = DB::connection('costos_tenant');
+        $presupuestoId = (int) $connection->table('presupuestos')->value('id');
+        $now = now();
+
+        $connection->table('presupuesto_general')->insert([
+            'presupuesto_id' => $presupuestoId,
+            'partida' => '01.01',
+            'descripcion' => 'Partida con recursos',
+            'unidad' => 'und',
+            'metrado' => 10,
+            'precio_unitario' => 31,
+            'item_order' => 1,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $acuId = $connection->table('presupuesto_acus')->insertGetId([
+            'presupuesto_id' => $presupuestoId,
+            'partida' => '1.1',
+            'descripcion' => 'Partida con recursos',
+            'unidad' => 'und',
+            'rendimiento' => 1,
+            'item_order' => 1,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $connection->table('acu_materiales')->insert([
+            'acu_id' => $acuId,
+            'descripcion' => 'CEMENTO PORTLAND',
+            'unidad' => 'bol',
+            'cantidad' => 2,
+            'precio_unitario' => 5,
+            'factor_desperdicio' => 1.1,
+            'parcial' => 11,
+            'item_order' => 1,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $connection->table('acu_equipos')->insert([
+            'acu_id' => $acuId,
+            'descripcion' => 'CAMION VOLQUETE',
+            'unidad' => 'hm',
+            'cantidad' => 1,
+            'recursos' => 1,
+            'precio_hora' => 20,
+            'parcial' => 20,
+            'item_order' => 1,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->getJson("/module/crono_materiales/data?project={$project->id}")
+            ->assertSuccessful();
+
+        $materials = collect($response->json('materiales'))->keyBy('descripcion');
+
+        expect($materials['CAMION VOLQUETE']['tipo'])->toBe('equipos')
+            ->and($materials['CAMION VOLQUETE']['costo_total'])->toBe(200)
+            ->and($materials['CEMENTO PORTLAND']['tipo'])->toBe('materiales')
+            ->and($materials['CEMENTO PORTLAND']['costo_total'])->toBe(110)
+            ->and($response->json('resumen.presupuesto_total'))->toBe(310);
+    } finally {
+        dropCronoValorizadoTenant($dbName);
+    }
+});
+
 it('stores valorizado distributions for 3 dynamic months', function () {
     [$user, $project, $dbName] = createCronoValorizadoTenant(3);
 
