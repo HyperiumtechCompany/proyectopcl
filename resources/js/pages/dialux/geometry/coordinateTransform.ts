@@ -16,6 +16,7 @@
  */
 
 import type { ScaleConfig } from '@/pages/dialux/hooks/types';
+import { invert as invertAffine, sampleAffine } from './affine2d';
 import type { WorldPoint } from './polygonGeometry';
 
 export interface ScreenPoint {
@@ -87,6 +88,51 @@ export function createCanvasTransforms(
 ): CanvasTransforms {
     const hasView = Boolean(cadView?.worldToScreen && cadView?.screenToWorld);
     const effective = getEffectiveScale(scaleConfig);
+
+    // ── Ruta rápida: cámara del motor CAD muestreada UNA sola vez ────────────
+    // `cadView.worldToScreen` / `screenToWorld` son llamadas al motor CAD. El
+    // snap (`useSnap`) las invoca ~1000-2000 veces por `mousemove` (una por
+    // cada punto/segmento del plano); en un DWG grande cada llamada es lenta y
+    // el trazo se "congela" (mousemove de 20 s). La cámara del motor en vista
+    // 2D es ortográfica → afín pura → 3 muestras la reconstruyen EXACTA
+    // (`geometry/affine2d.ts`); de ahí en más todo es aritmética de matriz.
+    if (hasView && cadView?.worldToScreen && cadView?.screenToWorld) {
+        const rawSceneToScreen = (p: WorldPoint): ScreenPoint => {
+            const s = cadView.worldToScreen!({
+                x: safeNum(p.x) / effective,
+                y: safeNum(p.y) / effective,
+            });
+            return { x: safeNum(s?.x), y: safeNum(s?.y) };
+        };
+        const m = sampleAffine(rawSceneToScreen);
+        const inv = m ? invertAffine(m) : null;
+        if (m && inv) {
+            const s2s = (p: WorldPoint): ScreenPoint => ({
+                x: m.a * safeNum(p.x) + m.c * safeNum(p.y) + m.e,
+                y: m.b * safeNum(p.x) + m.d * safeNum(p.y) + m.f,
+            });
+            return {
+                sceneToScreen: s2s,
+                screenToScene: (p: ScreenPoint): WorldPoint => ({
+                    x: inv.a * safeNum(p.x) + inv.c * safeNum(p.y) + inv.e,
+                    y: inv.b * safeNum(p.x) + inv.d * safeNum(p.y) + inv.f,
+                }),
+                screenDistance: (
+                    dx: number,
+                    dy: number,
+                    origin: WorldPoint = { x: 0, y: 0 },
+                ): number => {
+                    const a = s2s(origin);
+                    const b = s2s({
+                        x: origin.x + safeNum(dx),
+                        y: origin.y + safeNum(dy),
+                    });
+                    return Math.hypot(b.x - a.x, b.y - a.y);
+                },
+            };
+        }
+        // Muestreo/inversión falló (cámara degenerada) → ruta directa abajo.
+    }
 
     const sceneToScreen = (p: WorldPoint): ScreenPoint => {
         if (hasView && cadView?.worldToScreen) {
