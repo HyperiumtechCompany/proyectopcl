@@ -835,7 +835,20 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
                     // hatch con boundary_paths nulas ("Failed to convert hatch boundaries")
                 ];
 
+                /**
+                 * Presupuesto de tiempo: `view.pick` puede devolver cientos de
+                 * hits en una zona densa y `subGetOsnapPoints` es código de
+                 * terceros cuyo costo por entidad no controlamos. El osnap es
+                 * "mejor esfuerzo": si se agota, se usa el mejor candidato
+                 * encontrado hasta ahí en vez de bloquear el hilo principal.
+                 */
+                const OSNAP_TIME_BUDGET_MS = 12;
+                const osnapStart = performance.now();
+
                 for (const item of results) {
+                    if (performance.now() - osnapStart > OSNAP_TIME_BUDGET_MS) {
+                        break;
+                    }
                     try {
                         const entity = modelSpace.getIdAt(item.id);
                         const subGetOsnapPoints = entity?.subGetOsnapPoints;
@@ -870,6 +883,17 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
                             for (const child of item.children) {
                                 try { injectPoints(child.id); } catch { /* skip bad child */ }
                             }
+                        } else if (isBlockReference(entity)) {
+                            // INSERT sin sub-entidad identificada: llamar
+                            // `subGetOsnapPoints` sin `gsMark` hace que la
+                            // librería recorra el bloque COMPLETO y transforme
+                            // cada punto. En este plano el modelo es un solo
+                            // INSERT maestro con ~6000 entidades adentro -> una
+                            // sola llamada tardaba minutos y el presupuesto de
+                            // arriba no puede interrumpirla (es una llamada
+                            // atómica). Se salta: los INSERT con sub-entidad
+                            // resuelta ya entran por la rama de `children`.
+                            continue;
                         } else {
                             injectPoints();
                         }
@@ -966,6 +990,17 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
         dispose,
         docManager: _docManager,
     };
+}
+
+/**
+ * `true` si la entidad es una referencia de bloque (INSERT). Se detecta por
+ * `dxfTypeName` (API pública de `AcDbEntity`) con respaldo en la presencia de
+ * `blockTableRecord`, propia de `AcDbBlockReference`.
+ */
+function isBlockReference(entity: unknown): boolean {
+    if (!entity || typeof entity !== 'object') return false;
+    const e = entity as { dxfTypeName?: unknown; blockTableRecord?: unknown };
+    return e.dxfTypeName === 'INSERT' || 'blockTableRecord' in e;
 }
 
 function osnapPriority(mode?: AcDbOsnapMode): number {
