@@ -1740,21 +1740,21 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 !isFixtureGridRoomMode &&
                 !e.altKey;
 
-            const cadOsnapPoint = shouldSnap
-                ? resolveCadOsnap?.(canvasToScene(rawX, rawY), prevPointM)
-                : null;
+            // El OSNAP CAD (`view.pick` de mlightcad) NO se llama en cada
+            // `mousemove`: en un DWG grande cuesta segundos por evento y el
+            // trazo se "congela". El preview en vivo usa solo `resolveSnap`
+            // (rápido); el OSNAP CAD preciso se aplica al confirmar el vértice
+            // en `onMouseDown`.
             let cx = rawX;
             let cy = rawY;
 
             if (shouldSnap) {
-                const snapped = cadOsnapPoint
-                    ? sceneToCanvas(cadOsnapPoint.x, cadOsnapPoint.y)
-                    : resolveSnap(
-                          rawX,
-                          rawY,
-                          activeVerticesCanvas,
-                          disableDxfSnap,
-                      );
+                const snapped = resolveSnap(
+                    rawX,
+                    rawY,
+                    activeVerticesCanvas,
+                    disableDxfSnap,
+                );
                 const referenceAngles = getReferenceAngles(
                     activeTool,
                     s,
@@ -2194,7 +2194,6 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             activeTool,
             angleSnapMode,
             sceneToCanvas,
-            resolveCadOsnap,
             resolveSnap,
             getReferenceAngles,
             applyAngleSnap,
