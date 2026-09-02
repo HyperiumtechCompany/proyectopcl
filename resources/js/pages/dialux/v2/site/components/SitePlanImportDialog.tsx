@@ -18,14 +18,13 @@ export function SitePlanImportDialog({
     onImported,
     onClose,
 }: Props) {
-    const { containerRef, importFile, status, error, loadProgress } =
-        useSitePlanImport(projectId, generalModuleId);
+    const { importFile, status, error } = useSitePlanImport();
     const [fileName, setFileName] = useState<string | null>(null);
     const processing = status === 'processing';
 
     const handleFile = async (file: File) => {
         setFileName(file.name);
-        const result = await importFile(file);
+        const result = await importFile(projectId, generalModuleId, file);
         if (result) onImported(result);
     };
 
@@ -35,7 +34,7 @@ export function SitePlanImportDialog({
             onClick={() => !processing && onClose()}
         >
             <div
-                className="w-full max-w-xl rounded-xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-slate-900"
+                className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-slate-900"
                 onClick={(event) => event.stopPropagation()}
             >
                 <div className="mb-3 flex items-center justify-between">
@@ -53,10 +52,9 @@ export function SitePlanImportDialog({
                     </button>
                 </div>
                 <p className="mb-3 text-[11px] leading-relaxed text-slate-500">
-                    Se convierte a una imagen fija (como un fondo de calco) —
-                    no queda editable como CAD. El tamaño inicial es una
-                    estimación; podrás calibrarlo con una distancia real
-                    después de importar.
+                    El plano se abre como CAD vectorial en el emplazamiento —
+                    para dibujar exteriores y trazar la red encima. Luego usa
+                    &quot;Calibrar plano&quot; para fijar la escala real.
                 </p>
                 {!processing && (
                     <label className="mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 p-6 text-xs text-slate-500 hover:border-cyan-400 dark:border-white/15 dark:text-slate-400">
@@ -75,23 +73,15 @@ export function SitePlanImportDialog({
                 )}
                 {processing && (
                     <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                        Procesando {fileName}…{' '}
-                        {loadProgress > 0 && loadProgress < 100
-                            ? `${Math.round(loadProgress)}%`
-                            : 'puede tardar varios segundos con planos pesados'}
+                        Guardando {fileName}…
                     </p>
                 )}
                 {error && (
-                    <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-2 text-[11px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+                    <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-2 text-[11px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
                         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                         {error}
                     </div>
                 )}
-                {/* Contenedor real del motor CAD — visible como preview mientras procesa. */}
-                <div
-                    ref={containerRef}
-                    className="relative h-64 w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-950 dark:border-white/10"
-                />
             </div>
         </div>
     );

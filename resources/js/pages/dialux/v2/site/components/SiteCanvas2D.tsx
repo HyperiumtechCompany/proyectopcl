@@ -1,6 +1,13 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import {
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useState,
+    type RefObject,
+} from 'react';
 import { deriveFeederStatus, feederStatusColor } from '../domain/feederSync';
 import { computeSatelliteTiles } from '../domain/geoTiles';
+import { useSiteCadPlan } from '../hooks/useSiteCadPlan';
 import type {
     ImportedSitePlan,
     Point2D,
@@ -40,6 +47,13 @@ function isLayerVisible(site: SiteData, element: SiteElement): boolean {
 
 export function SiteCanvas2D({ editor }: Props) {
     const { siteData } = editor;
+    const cadPlan = useSiteCadPlan(
+        editor.projectId,
+        editor.generalModuleId,
+        editor.importedPlan?.updatedAt,
+    );
+    /** Con el plano CAD vectorial vivo debajo, la imagen PNG sobra (y lo taparía). */
+    const cadPlanActive = cadPlan.status === 'ready';
     const baseWidth = siteData?.canvasWidth ?? 2000;
     const baseHeight = siteData?.canvasHeight ?? 1200;
     const minViewWidth = baseWidth / MAX_SCALE;
@@ -75,8 +89,7 @@ export function SiteCanvas2D({ editor }: Props) {
         | undefined
     >(undefined);
     const planDragRef = useRef<
-        | { pointerId: number; start: Point2D; origin: Point2D }
-        | undefined
+        { pointerId: number; start: Point2D; origin: Point2D } | undefined
     >(undefined);
 
     const toSvgPoint = (clientX: number, clientY: number): Point2D => {
@@ -86,7 +99,9 @@ export function SiteCanvas2D({ editor }: Props) {
         point.x = clientX;
         point.y = clientY;
         const matrix = svg.getScreenCTM();
-        const transformed = matrix ? point.matrixTransform(matrix.inverse()) : point;
+        const transformed = matrix
+            ? point.matrixTransform(matrix.inverse())
+            : point;
         // `transformed` es un DOMPoint/SVGPoint nativo — sus x/y son
         // accessors heredados del prototipo, no propiedades propias
         // enumerables, así que `JSON.stringify` (el autoguardado) lo
@@ -130,6 +145,17 @@ export function SiteCanvas2D({ editor }: Props) {
         return () => svg.removeEventListener('wheel', handleWheel);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Mantiene la cámara del motor CAD alineada con el viewBox del SVG.
+    // `useLayoutEffect` para que el plano se reubique en el MISMO commit en que
+    // el SVG se repinta — con `useEffect` (post-paint) quedaba un frame atrás y
+    // se veía "nadar" respecto de la grilla.
+    const syncCadCamera = cadPlan.syncCamera;
+    useLayoutEffect(() => {
+        if (!cadPlanActive) return;
+        const width = svgRef.current?.clientWidth ?? 0;
+        if (width > 0) syncCadCamera(viewBox, width);
+    }, [cadPlanActive, viewBox, syncCadCamera]);
 
     const satelliteTiles =
         siteData?.location && editor.showSatellite
@@ -176,295 +202,337 @@ export function SiteCanvas2D({ editor }: Props) {
     };
 
     return (
-        <div className="relative h-full min-h-105 w-full">
-        <svg
-            ref={svgRef}
-            viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
-            className="h-full min-h-[420px] w-full touch-none bg-[radial-gradient(circle,#94a3b833_1px,transparent_1px)] bg-size-[20px_20px] select-none dark:bg-[radial-gradient(circle,#47556955_1px,transparent_1px)]"
-            onPointerDown={(event) => {
-                if (event.target !== event.currentTarget) return;
-                if (isDrawTool || isPointTool || isCalibrateTool) {
-                    handleCanvasClick(
-                        toSvgPoint(event.clientX, event.clientY),
+        <div className="relative h-full min-h-105 w-full bg-[radial-gradient(circle,#94a3b833_1px,transparent_1px)] bg-size-[20px_20px] dark:bg-[radial-gradient(circle,#47556955_1px,transparent_1px)]">
+            {/* Motor CAD: dibuja el plano vectorial DEBAJO del overlay SVG. Su
+                cámara la alinea `syncCamera` con el viewBox, así que el SVG
+                sigue mandando el pan/zoom. `pointer-events-none`: todos los
+                gestos los maneja el SVG de arriba. */}
+            <div
+                ref={cadPlan.containerRef}
+                className="pointer-events-none absolute inset-0"
+                style={{ visibility: cadPlanActive ? 'visible' : 'hidden' }}
+            />
+            <svg
+                ref={svgRef}
+                viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
+                className="relative h-full min-h-105 w-full touch-none select-none"
+                onPointerDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (isDrawTool || isPointTool || isCalibrateTool) {
+                        handleCanvasClick(
+                            toSvgPoint(event.clientX, event.clientY),
+                        );
+                        return;
+                    }
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    panRef.current = {
+                        pointerId: event.pointerId,
+                        lastClientX: event.clientX,
+                        lastClientY: event.clientY,
+                        moved: false,
+                    };
+                }}
+                onDoubleClick={() => {
+                    if (isDrawTool) editor.finishDrawing();
+                }}
+                onPointerMove={(event) => {
+                    if (
+                        vertexDragRef.current &&
+                        vertexDragRef.current.pointerId === event.pointerId
+                    ) {
+                        const point = toSvgPoint(event.clientX, event.clientY);
+                        editor.moveSiteVertex(
+                            vertexDragRef.current.elementId,
+                            vertexDragRef.current.vertexIndex,
+                            point,
+                        );
+                        return;
+                    }
+                    const drag = dragRef.current;
+                    if (drag && drag.pointerId === event.pointerId) {
+                        const current = toSvgPoint(
+                            event.clientX,
+                            event.clientY,
+                        );
+                        const dx = current.x - drag.start.x;
+                        const dy = current.y - drag.start.y;
+                        editor.updateSiteElement(drag.elementId, {
+                            vertices: drag.originVertices.map((vertex) => ({
+                                x: vertex.x + dx,
+                                y: vertex.y + dy,
+                            })),
+                        });
+                        return;
+                    }
+                    const planDrag = planDragRef.current;
+                    if (planDrag && planDrag.pointerId === event.pointerId) {
+                        const current = toSvgPoint(
+                            event.clientX,
+                            event.clientY,
+                        );
+                        editor.updateImportedPlan({
+                            x:
+                                planDrag.origin.x +
+                                (current.x - planDrag.start.x),
+                            y:
+                                planDrag.origin.y +
+                                (current.y - planDrag.start.y),
+                        });
+                        return;
+                    }
+                    const pan = panRef.current;
+                    if (!pan || pan.pointerId !== event.pointerId) return;
+                    const dxClient = event.clientX - pan.lastClientX;
+                    const dyClient = event.clientY - pan.lastClientY;
+                    if (!pan.moved && Math.hypot(dxClient, dyClient) < 4)
+                        return;
+                    pan.moved = true;
+                    const previous = toSvgPoint(
+                        pan.lastClientX,
+                        pan.lastClientY,
                     );
-                    return;
-                }
-                event.currentTarget.setPointerCapture(event.pointerId);
-                panRef.current = {
-                    pointerId: event.pointerId,
-                    lastClientX: event.clientX,
-                    lastClientY: event.clientY,
-                    moved: false,
-                };
-            }}
-            onDoubleClick={() => {
-                if (isDrawTool) editor.finishDrawing();
-            }}
-            onPointerMove={(event) => {
-                if (
-                    vertexDragRef.current &&
-                    vertexDragRef.current.pointerId === event.pointerId
-                ) {
-                    const point = toSvgPoint(event.clientX, event.clientY);
-                    editor.moveSiteVertex(
-                        vertexDragRef.current.elementId,
-                        vertexDragRef.current.vertexIndex,
-                        point,
-                    );
-                    return;
-                }
-                const drag = dragRef.current;
-                if (drag && drag.pointerId === event.pointerId) {
                     const current = toSvgPoint(event.clientX, event.clientY);
-                    const dx = current.x - drag.start.x;
-                    const dy = current.y - drag.start.y;
-                    editor.updateSiteElement(drag.elementId, {
-                        vertices: drag.originVertices.map((vertex) => ({
-                            x: vertex.x + dx,
-                            y: vertex.y + dy,
-                        })),
-                    });
-                    return;
-                }
-                const planDrag = planDragRef.current;
-                if (planDrag && planDrag.pointerId === event.pointerId) {
-                    const current = toSvgPoint(event.clientX, event.clientY);
-                    editor.updateImportedPlan({
-                        x: planDrag.origin.x + (current.x - planDrag.start.x),
-                        y: planDrag.origin.y + (current.y - planDrag.start.y),
-                    });
-                    return;
-                }
-                const pan = panRef.current;
-                if (!pan || pan.pointerId !== event.pointerId) return;
-                const dxClient = event.clientX - pan.lastClientX;
-                const dyClient = event.clientY - pan.lastClientY;
-                if (!pan.moved && Math.hypot(dxClient, dyClient) < 4) return;
-                pan.moved = true;
-                const previous = toSvgPoint(pan.lastClientX, pan.lastClientY);
-                const current = toSvgPoint(event.clientX, event.clientY);
-                pan.lastClientX = event.clientX;
-                pan.lastClientY = event.clientY;
-                setViewBox((currentViewBox) => ({
-                    ...currentViewBox,
-                    x: currentViewBox.x + previous.x - current.x,
-                    y: currentViewBox.y + previous.y - current.y,
-                }));
-            }}
-            onPointerUp={(event) => {
-                if (vertexDragRef.current?.pointerId === event.pointerId) {
-                    vertexDragRef.current = undefined;
-                    return;
-                }
-                if (dragRef.current?.pointerId === event.pointerId) {
+                    pan.lastClientX = event.clientX;
+                    pan.lastClientY = event.clientY;
+                    setViewBox((currentViewBox) => ({
+                        ...currentViewBox,
+                        x: currentViewBox.x + previous.x - current.x,
+                        y: currentViewBox.y + previous.y - current.y,
+                    }));
+                }}
+                onPointerUp={(event) => {
+                    if (vertexDragRef.current?.pointerId === event.pointerId) {
+                        vertexDragRef.current = undefined;
+                        return;
+                    }
+                    if (dragRef.current?.pointerId === event.pointerId) {
+                        dragRef.current = undefined;
+                        return;
+                    }
+                    if (planDragRef.current?.pointerId === event.pointerId) {
+                        planDragRef.current = undefined;
+                        return;
+                    }
+                    const pan = panRef.current;
+                    if (!pan || pan.pointerId !== event.pointerId) return;
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                    if (!pan.moved) editor.selectElement(null);
+                    panRef.current = undefined;
+                }}
+                onPointerCancel={() => {
                     dragRef.current = undefined;
-                    return;
-                }
-                if (planDragRef.current?.pointerId === event.pointerId) {
+                    vertexDragRef.current = undefined;
                     planDragRef.current = undefined;
-                    return;
-                }
-                const pan = panRef.current;
-                if (!pan || pan.pointerId !== event.pointerId) return;
-                event.currentTarget.releasePointerCapture(event.pointerId);
-                if (!pan.moved) editor.selectElement(null);
-                panRef.current = undefined;
-            }}
-            onPointerCancel={() => {
-                dragRef.current = undefined;
-                vertexDragRef.current = undefined;
-                planDragRef.current = undefined;
-                panRef.current = undefined;
-            }}
-        >
-            {satelliteTiles.map((tile) => (
-                <image
-                    key={tile.key}
-                    href={tile.url}
-                    x={tile.x}
-                    y={tile.y}
-                    width={tile.size}
-                    height={tile.size}
-                    preserveAspectRatio="none"
-                    className="pointer-events-none"
-                />
-            ))}
-            {siteData.importedPlan?.visible && (
-                <ImportedPlanImage
-                    plan={siteData.importedPlan}
-                    imageUrl={editor.importedPlanUrl}
-                    canSelect={editor.activeTool === 'select'}
-                    toSvgPoint={toSvgPoint}
-                    planDragRef={planDragRef}
-                />
-            )}
-            {siteData.elements
-                .filter(
-                    (element) =>
-                        element.visible !== false &&
-                        isLayerVisible(siteData, element),
-                )
-                .map((element) => {
-                    const selected = editor.selectedElementId === element.id;
-                    return (
-                        <g key={element.id}>
-                            <polygon
-                                points={polygonPoints(element.vertices)}
-                                fill={element.style.fillColor}
-                                fillOpacity={element.style.opacity ?? 1}
-                                stroke={
-                                    selected
-                                        ? '#f59e0b'
-                                        : element.style.strokeColor
-                                }
-                                strokeWidth={
-                                    selected
-                                        ? 3
-                                        : (element.style.strokeWidth ?? 1.5)
-                                }
-                                className={
-                                    editor.activeTool === 'select'
-                                        ? 'cursor-move'
-                                        : ''
-                                }
-                                onPointerDown={(event) => {
-                                    if (editor.activeTool !== 'select') return;
-                                    if (element.locked) return;
-                                    event.stopPropagation();
-                                    editor.selectElement(element.id);
-                                    event.currentTarget.ownerSVGElement?.setPointerCapture(
-                                        event.pointerId,
-                                    );
-                                    dragRef.current = {
-                                        elementId: element.id,
-                                        pointerId: event.pointerId,
-                                        start: toSvgPoint(
-                                            event.clientX,
-                                            event.clientY,
-                                        ),
-                                        originVertices: element.vertices,
-                                    };
-                                }}
-                            />
-                            <text
-                                x={
-                                    element.vertices.reduce(
-                                        (sum, v) => sum + v.x,
-                                        0,
-                                    ) / element.vertices.length
-                                }
-                                y={
-                                    element.vertices.reduce(
-                                        (sum, v) => sum + v.y,
-                                        0,
-                                    ) / element.vertices.length
-                                }
-                                textAnchor="middle"
-                                className="pointer-events-none fill-slate-800 text-[11px] font-semibold dark:fill-white"
-                            >
-                                {element.label}
-                            </text>
-                            {selected &&
-                                editor.activeTool === 'select' &&
-                                !element.locked &&
-                                element.vertices.map((vertex, index) => (
-                                    <circle
-                                        key={index}
-                                        cx={vertex.x}
-                                        cy={vertex.y}
-                                        r={6}
-                                        className="cursor-crosshair fill-amber-500 stroke-white stroke-2 dark:stroke-slate-900"
-                                        onPointerDown={(event) => {
-                                            event.stopPropagation();
-                                            event.currentTarget.ownerSVGElement?.setPointerCapture(
-                                                event.pointerId,
-                                            );
-                                            vertexDragRef.current = {
-                                                elementId: element.id,
-                                                vertexIndex: index,
-                                                pointerId: event.pointerId,
-                                            };
-                                        }}
-                                    />
-                                ))}
-                        </g>
-                    );
-                })}
-            {siteData.feederPaths.map((path) => {
-                const status = deriveFeederStatus(
-                    path.networkEdgeId,
-                    editor.networkCalculations,
-                );
-                return (
-                    <polyline
-                        key={path.id}
-                        points={polygonPoints(path.waypoints)}
-                        fill="none"
-                        stroke={path.style?.color ?? feederStatusColor(status)}
-                        strokeWidth={3}
-                        strokeDasharray={path.style?.dashArray}
-                        strokeLinecap="round"
+                    panRef.current = undefined;
+                }}
+            >
+                {satelliteTiles.map((tile) => (
+                    <image
+                        key={tile.key}
+                        href={tile.url}
+                        x={tile.x}
+                        y={tile.y}
+                        width={tile.size}
+                        height={tile.size}
+                        preserveAspectRatio="none"
+                        className="pointer-events-none"
                     />
-                );
-            })}
-            {editor.calibrationPoints.length > 0 && (
-                <>
-                    {editor.calibrationPoints.length === 2 && (
-                        <line
-                            x1={editor.calibrationPoints[0].x}
-                            y1={editor.calibrationPoints[0].y}
-                            x2={editor.calibrationPoints[1].x}
-                            y2={editor.calibrationPoints[1].y}
-                            className="stroke-fuchsia-500"
-                            strokeWidth={2}
-                            strokeDasharray="4 3"
+                ))}
+                {/* Imagen PNG: solo para proyectos importados antes del render CAD
+                en vivo (no tienen archivo fuente guardado). Los nuevos usan el
+                motor y `cadPlanActive` la oculta. */}
+                {siteData.importedPlan?.visible &&
+                    !cadPlanActive &&
+                    cadPlan.status !== 'loading' && (
+                        <ImportedPlanImage
+                            plan={siteData.importedPlan}
+                            imageUrl={editor.importedPlanUrl}
+                            canSelect={editor.activeTool === 'select'}
+                            toSvgPoint={toSvgPoint}
+                            planDragRef={planDragRef}
                         />
                     )}
-                    {editor.calibrationPoints.map((vertex, index) => (
-                        <circle
-                            key={index}
-                            cx={vertex.x}
-                            cy={vertex.y}
-                            r={6}
-                            className="fill-fuchsia-500 stroke-white stroke-2 dark:stroke-slate-900"
+                {siteData.elements
+                    .filter(
+                        (element) =>
+                            element.visible !== false &&
+                            isLayerVisible(siteData, element),
+                    )
+                    .map((element) => {
+                        const selected =
+                            editor.selectedElementId === element.id;
+                        return (
+                            <g key={element.id}>
+                                <polygon
+                                    points={polygonPoints(element.vertices)}
+                                    fill={element.style.fillColor}
+                                    fillOpacity={element.style.opacity ?? 1}
+                                    stroke={
+                                        selected
+                                            ? '#f59e0b'
+                                            : element.style.strokeColor
+                                    }
+                                    strokeWidth={
+                                        selected
+                                            ? 3
+                                            : (element.style.strokeWidth ?? 1.5)
+                                    }
+                                    className={
+                                        editor.activeTool === 'select'
+                                            ? 'cursor-move'
+                                            : ''
+                                    }
+                                    onPointerDown={(event) => {
+                                        if (editor.activeTool !== 'select')
+                                            return;
+                                        if (element.locked) return;
+                                        event.stopPropagation();
+                                        editor.selectElement(element.id);
+                                        event.currentTarget.ownerSVGElement?.setPointerCapture(
+                                            event.pointerId,
+                                        );
+                                        dragRef.current = {
+                                            elementId: element.id,
+                                            pointerId: event.pointerId,
+                                            start: toSvgPoint(
+                                                event.clientX,
+                                                event.clientY,
+                                            ),
+                                            originVertices: element.vertices,
+                                        };
+                                    }}
+                                />
+                                <text
+                                    x={
+                                        element.vertices.reduce(
+                                            (sum, v) => sum + v.x,
+                                            0,
+                                        ) / element.vertices.length
+                                    }
+                                    y={
+                                        element.vertices.reduce(
+                                            (sum, v) => sum + v.y,
+                                            0,
+                                        ) / element.vertices.length
+                                    }
+                                    textAnchor="middle"
+                                    className="pointer-events-none fill-slate-800 text-[11px] font-semibold dark:fill-white"
+                                >
+                                    {element.label}
+                                </text>
+                                {selected &&
+                                    editor.activeTool === 'select' &&
+                                    !element.locked &&
+                                    element.vertices.map((vertex, index) => (
+                                        <circle
+                                            key={index}
+                                            cx={vertex.x}
+                                            cy={vertex.y}
+                                            r={6}
+                                            className="cursor-crosshair fill-amber-500 stroke-white stroke-2 dark:stroke-slate-900"
+                                            onPointerDown={(event) => {
+                                                event.stopPropagation();
+                                                event.currentTarget.ownerSVGElement?.setPointerCapture(
+                                                    event.pointerId,
+                                                );
+                                                vertexDragRef.current = {
+                                                    elementId: element.id,
+                                                    vertexIndex: index,
+                                                    pointerId: event.pointerId,
+                                                };
+                                            }}
+                                        />
+                                    ))}
+                            </g>
+                        );
+                    })}
+                {siteData.feederPaths.map((path) => {
+                    const status = deriveFeederStatus(
+                        path.networkEdgeId,
+                        editor.networkCalculations,
+                    );
+                    return (
+                        <polyline
+                            key={path.id}
+                            points={polygonPoints(path.waypoints)}
+                            fill="none"
+                            stroke={
+                                path.style?.color ?? feederStatusColor(status)
+                            }
+                            strokeWidth={3}
+                            strokeDasharray={path.style?.dashArray}
+                            strokeLinecap="round"
                         />
-                    ))}
-                </>
-            )}
-            {editor.pendingVertices.length > 0 && (
-                <>
-                    <polyline
-                        points={polygonPoints(editor.pendingVertices)}
-                        fill="none"
-                        className={
-                            editor.activeTool === 'draw_feeder'
-                                ? 'stroke-cyan-500'
-                                : 'stroke-amber-500'
-                        }
-                        strokeWidth={2}
-                        strokeDasharray="6 4"
-                    />
-                    {editor.pendingVertices.map((vertex, index) => (
-                        <circle
-                            key={index}
-                            cx={vertex.x}
-                            cy={vertex.y}
-                            r={5}
+                    );
+                })}
+                {editor.calibrationPoints.length > 0 && (
+                    <>
+                        {editor.calibrationPoints.length === 2 && (
+                            <line
+                                x1={editor.calibrationPoints[0].x}
+                                y1={editor.calibrationPoints[0].y}
+                                x2={editor.calibrationPoints[1].x}
+                                y2={editor.calibrationPoints[1].y}
+                                className="stroke-fuchsia-500"
+                                strokeWidth={2}
+                                strokeDasharray="4 3"
+                            />
+                        )}
+                        {editor.calibrationPoints.map((vertex, index) => (
+                            <circle
+                                key={index}
+                                cx={vertex.x}
+                                cy={vertex.y}
+                                r={6}
+                                className="fill-fuchsia-500 stroke-white stroke-2 dark:stroke-slate-900"
+                            />
+                        ))}
+                    </>
+                )}
+                {editor.pendingVertices.length > 0 && (
+                    <>
+                        <polyline
+                            points={polygonPoints(editor.pendingVertices)}
+                            fill="none"
                             className={
                                 editor.activeTool === 'draw_feeder'
-                                    ? 'fill-cyan-500'
-                                    : 'fill-amber-500'
+                                    ? 'stroke-cyan-500'
+                                    : 'stroke-amber-500'
                             }
+                            strokeWidth={2}
+                            strokeDasharray="6 4"
                         />
-                    ))}
-                </>
+                        {editor.pendingVertices.map((vertex, index) => (
+                            <circle
+                                key={index}
+                                cx={vertex.x}
+                                cy={vertex.y}
+                                r={5}
+                                className={
+                                    editor.activeTool === 'draw_feeder'
+                                        ? 'fill-cyan-500'
+                                        : 'fill-amber-500'
+                                }
+                            />
+                        ))}
+                    </>
+                )}
+            </svg>
+            {satelliteTiles.length > 0 && (
+                <div className="pointer-events-none absolute right-1.5 bottom-1 rounded bg-black/40 px-1.5 py-0.5 text-[9px] text-white/80">
+                    Imágenes: Esri World Imagery
+                </div>
             )}
-        </svg>
-        {satelliteTiles.length > 0 && (
-            <div className="pointer-events-none absolute right-1.5 bottom-1 rounded bg-black/40 px-1.5 py-0.5 text-[9px] text-white/80">
-                Imágenes: Esri World Imagery
-            </div>
-        )}
+            {cadPlan.status === 'loading' && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-slate-400">
+                    Abriendo plano CAD…
+                </div>
+            )}
+            {cadPlan.status === 'error' && (
+                <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded bg-red-950/80 px-2 py-1 text-[10px] text-red-200">
+                    No se pudo abrir el plano CAD — reimporta el DXF/DWG.
+                </div>
+            )}
         </div>
     );
 }
