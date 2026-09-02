@@ -284,6 +284,10 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
     }, [siteData !== undefined]);
 
     return {
+        // Identificadores del contexto: los consume `SiteCanvas2D` para abrir
+        // el plano CAD del emplazamiento sin cambiar la firma del componente.
+        projectId,
+        generalModuleId,
         siteData,
         activeTool,
         startTool,

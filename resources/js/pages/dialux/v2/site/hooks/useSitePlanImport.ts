@@ -1,5 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
-import { uploadDialuxPlanFile } from '@/pages/dialux/hooks/dialuxPlanStorage';
+import {
+    saveDialuxPlanFile,
+    uploadDialuxPlanFile,
+} from '@/pages/dialux/hooks/dialuxPlanStorage';
 import { detectScaleFromExtents } from '@/pages/dialux/hooks/storeHelpers';
 import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
 import {
@@ -132,12 +135,9 @@ export function useSitePlanImport(projectId: number, generalModuleId: number) {
                     );
                 }
 
-                const canvas =
-                    containerRef.current.querySelector('canvas');
+                const canvas = containerRef.current.querySelector('canvas');
                 if (!canvas) {
-                    throw new Error(
-                        'No se pudo capturar la imagen del plano.',
-                    );
+                    throw new Error('No se pudo capturar la imagen del plano.');
                 }
 
                 engine.setViewOrigin();
@@ -166,9 +166,7 @@ export function useSitePlanImport(projectId: number, generalModuleId: number) {
                     canvas.toBlob(resolve, 'image/png'),
                 );
                 if (!blob) {
-                    throw new Error(
-                        'No se pudo generar la imagen del plano.',
-                    );
+                    throw new Error('No se pudo generar la imagen del plano.');
                 }
 
                 let widthUnits: number;
@@ -185,8 +183,7 @@ export function useSitePlanImport(projectId: number, generalModuleId: number) {
                         max_y: extents.maxY,
                     });
                     widthUnits = (extents.maxX - extents.minX) * scale.factor;
-                    heightUnits =
-                        (extents.maxY - extents.minY) * scale.factor;
+                    heightUnits = (extents.maxY - extents.minY) * scale.factor;
                 } else {
                     // Sin extents disponibles (algunos DWG no las exponen):
                     // tamaño provisional que conserva la proporción real del
@@ -207,12 +204,29 @@ export function useSitePlanImport(projectId: number, generalModuleId: number) {
                     String(generalModuleId),
                 );
 
-                // Además del PNG, se guarda el ARCHIVO CAD ORIGINAL: es el
-                // único que conserva los vectores y la escala real, y sin él
-                // el plano no se puede reabrir en el motor para medir
-                // distancias (base de la caída de tensión del módulo). Si esta
-                // subida falla NO se aborta la importación: el PNG ya quedó
-                // guardado y el emplazamiento sigue siendo utilizable.
+                // Además del PNG, se conserva el ARCHIVO CAD ORIGINAL: es el
+                // único que tiene los vectores y la escala real, y sin él el
+                // plano no se puede reabrir en el motor para medir distancias
+                // (base de la caída de tensión del módulo).
+                //
+                // Se guarda PRIMERO en IndexedDB —igual que hace el editor de
+                // interiores— porque es local, inmediato y sin límite de
+                // subida; el servidor va después como respaldo (para abrirlo
+                // desde otra máquina). Un DWG grande puede exceder el límite
+                // del backend, así que si la subida falla NO se aborta nada:
+                // la copia local ya alcanza para trabajar.
+                try {
+                    await saveDialuxPlanFile(
+                        String(projectId),
+                        SITE_PLAN_SOURCE_SCENE_ID,
+                        file,
+                    );
+                } catch (localError) {
+                    console.warn(
+                        '[site-plan] No se pudo guardar el CAD original en IndexedDB.',
+                        localError,
+                    );
+                }
                 try {
                     await uploadDialuxPlanFile(
                         String(projectId),
@@ -222,7 +236,7 @@ export function useSitePlanImport(projectId: number, generalModuleId: number) {
                     );
                 } catch (sourceError) {
                     console.warn(
-                        '[site-plan] No se pudo guardar el archivo CAD original; queda solo el PNG.',
+                        '[site-plan] No se pudo subir el CAD original al servidor; queda la copia local.',
                         sourceError,
                     );
                 }
