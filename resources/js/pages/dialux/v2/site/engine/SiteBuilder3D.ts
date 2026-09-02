@@ -201,7 +201,7 @@ export class SiteBuilder3D {
                 this.buildPole(element, scaleM);
                 return;
             case 'gate':
-                this.buildExtrudedMass(element, scaleM, element.heightM ?? 2);
+                this.buildGate(element, scaleM);
                 return;
         }
     }
@@ -427,6 +427,66 @@ export class SiteBuilder3D {
         lid.position.y = 1.75;
         lid.material = this.matFor(element.style.fillColor, 1, 0.3);
         lid.parent = node;
+    }
+
+    /** Portón de acceso: dos jambas + travesaño superior + hoja (panel delgado). */
+    private buildGate(element: SiteElement, scaleM: number) {
+        const { node } = this.anchorNode(element, scaleM);
+        const bounds = boundingBox(element.vertices);
+        const spanX = Math.max(1.2, (bounds.maxX - bounds.minX) * scaleM);
+        const spanZ = Math.max(1.2, (bounds.maxY - bounds.minY) * scaleM);
+        // El vano corre a lo largo del lado más largo del footprint.
+        const horizontal = spanX >= spanZ;
+        const span = horizontal ? spanX : spanZ;
+        const height = element.heightM ?? 2.2;
+        const post = 0.18;
+        const metal = this.matFor('#6b7280', 1, 0.3);
+        const leafMat = this.matFor(element.style.fillColor, 1, 0.2);
+
+        const mkPost = (offset: number) => {
+            const p = MeshBuilder.CreateBox(
+                `site_gate_post_${element.id}_${offset}`,
+                { width: post, height, depth: post },
+                this.scene,
+            );
+            p.position.set(
+                horizontal ? offset : 0,
+                height / 2,
+                horizontal ? 0 : offset,
+            );
+            p.material = metal;
+            p.parent = node;
+            this.shadowGen?.addShadowCaster(p);
+        };
+        mkPost(-span / 2);
+        mkPost(span / 2);
+
+        const beam = MeshBuilder.CreateBox(
+            `site_gate_beam_${element.id}`,
+            {
+                width: horizontal ? span : post,
+                height: post,
+                depth: horizontal ? post : span,
+            },
+            this.scene,
+        );
+        beam.position.y = height - post / 2;
+        beam.material = metal;
+        beam.parent = node;
+
+        const leaf = MeshBuilder.CreateBox(
+            `site_gate_leaf_${element.id}`,
+            {
+                width: horizontal ? span * 0.92 : 0.06,
+                height: height * 0.78,
+                depth: horizontal ? 0.06 : span * 0.92,
+            },
+            this.scene,
+        );
+        leaf.position.y = (height * 0.78) / 2 + 0.05;
+        leaf.material = leafMat;
+        leaf.parent = node;
+        this.shadowGen?.addShadowCaster(leaf);
     }
 
     /** Poste de alumbrado exterior: fuste delgado + cabeza esférica. */

@@ -10,6 +10,7 @@ import { snapToGrid } from '../domain/geometry';
 import type { Point2D, SiteData, SiteElement } from '../domain/types';
 import { useSiteCadPlan } from '../hooks/useSiteCadPlan';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
+import { POINT_ELEMENT_TYPES, SiteElementSymbol } from './SiteElementSymbol';
 
 interface Props {
     editor: UseSiteEditorReturn;
@@ -512,6 +513,53 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                             { x: 0, y: 0 },
                         );
                         const labelPos = toScreen(centroid);
+                        const canDrag =
+                            editor.activeTool === 'select' && !element.locked;
+                        const startElementDrag = (
+                            event: ReactPointerEvent<SVGElement>,
+                        ) => {
+                            if (!canDrag) return;
+                            event.stopPropagation();
+                            editor.selectElement(element.id);
+                            event.currentTarget.ownerSVGElement?.setPointerCapture(
+                                event.pointerId,
+                            );
+                            dragRef.current = {
+                                elementId: element.id,
+                                pointerId: event.pointerId,
+                                startWorld: toWorld(
+                                    event.clientX,
+                                    event.clientY,
+                                ),
+                                originVertices: element.vertices,
+                            };
+                        };
+
+                        if (POINT_ELEMENT_TYPES.has(element.type)) {
+                            return (
+                                <g key={element.id}>
+                                    <SiteElementSymbol
+                                        type={element.type}
+                                        cx={labelPos.x}
+                                        cy={labelPos.y}
+                                        color={element.style.strokeColor}
+                                        selected={selected}
+                                        interactive={canDrag}
+                                        onPointerDown={startElementDrag}
+                                    />
+                                    <text
+                                        x={labelPos.x}
+                                        y={labelPos.y + 26}
+                                        textAnchor="middle"
+                                        fontSize={LABEL_PX - 1}
+                                        className="pointer-events-none fill-slate-800 font-semibold dark:fill-white"
+                                    >
+                                        {element.label}
+                                    </text>
+                                </g>
+                            );
+                        }
+
                         return (
                             <g key={element.id}>
                                 <polygon
@@ -529,36 +577,16 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                             : (element.style.strokeWidth ?? 1.5)
                                     }
                                     style={{
-                                        pointerEvents:
-                                            editor.activeTool === 'select' &&
-                                            !element.locked
-                                                ? 'visiblePainted'
-                                                : 'none',
+                                        pointerEvents: canDrag
+                                            ? 'visiblePainted'
+                                            : 'none',
                                     }}
                                     className={
                                         editor.activeTool === 'select'
                                             ? 'cursor-move'
                                             : ''
                                     }
-                                    onPointerDown={(event) => {
-                                        if (editor.activeTool !== 'select')
-                                            return;
-                                        if (element.locked) return;
-                                        event.stopPropagation();
-                                        editor.selectElement(element.id);
-                                        event.currentTarget.ownerSVGElement?.setPointerCapture(
-                                            event.pointerId,
-                                        );
-                                        dragRef.current = {
-                                            elementId: element.id,
-                                            pointerId: event.pointerId,
-                                            startWorld: toWorld(
-                                                event.clientX,
-                                                event.clientY,
-                                            ),
-                                            originVertices: element.vertices,
-                                        };
-                                    }}
+                                    onPointerDown={startElementDrag}
                                 />
                                 <text
                                     x={labelPos.x}
