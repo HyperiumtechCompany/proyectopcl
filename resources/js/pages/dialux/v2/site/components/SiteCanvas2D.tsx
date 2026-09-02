@@ -27,8 +27,12 @@ interface ViewBox {
     height: number;
 }
 
-const MIN_SCALE = 0.2;
-const MAX_SCALE = 5;
+// Rango de zoom: `refWidth / MAX_SCALE` (más cerca) .. `refWidth / MIN_SCALE`
+// (más lejos). `refWidth` es el ancho de referencia — el lienzo base para un
+// emplazamiento a mano, o el ancho del plano CAD encuadrado cuando hay uno,
+// para poder acercarse a dibujar detalle dentro de un plano grande.
+const MIN_SCALE = 0.1;
+const MAX_SCALE = 60;
 
 function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -56,8 +60,11 @@ export function SiteCanvas2D({ editor }: Props) {
     const cadPlanActive = cadPlan.status === 'ready';
     const baseWidth = siteData?.canvasWidth ?? 2000;
     const baseHeight = siteData?.canvasHeight ?? 1200;
-    const minViewWidth = baseWidth / MAX_SCALE;
-    const maxViewWidth = baseWidth / MIN_SCALE;
+    /** Ancho de referencia para el rango de zoom: el del plano CAD si hay uno. */
+    const [planRefWidth, setPlanRefWidth] = useState<number | null>(null);
+    const refWidth = planRefWidth ?? baseWidth;
+    const minViewWidth = refWidth / MAX_SCALE;
+    const maxViewWidth = refWidth / MIN_SCALE;
 
     const [viewBox, setViewBox] = useState<ViewBox>({
         x: 0,
@@ -145,6 +152,24 @@ export function SiteCanvas2D({ editor }: Props) {
         return () => svg.removeEventListener('wheel', handleWheel);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Cuando el plano CAD queda listo: encuadrar el viewBox al plano completo
+    // (arrancaba en el lienzo por defecto de 2000×1200, dejando el plano
+    // diminuto y sin poder acercarse) y fijar el ancho de referencia del zoom.
+    const framePlanViewBox = cadPlan.framePlanViewBox;
+    useEffect(() => {
+        if (cadPlan.status !== 'ready') {
+            if (!editor.importedPlan) setPlanRefWidth(null);
+            return;
+        }
+        const el = svgRef.current;
+        if (!el) return;
+        const framed = framePlanViewBox(el.clientWidth, el.clientHeight);
+        if (framed && framed.width > 0) {
+            setPlanRefWidth(framed.width);
+            setViewBox(framed);
+        }
+    }, [cadPlan.status, framePlanViewBox, editor.importedPlan]);
 
     // Mantiene la cámara del motor CAD alineada con el viewBox del SVG.
     // `useLayoutEffect` para que el plano se reubique en el MISMO commit en que

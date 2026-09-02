@@ -50,6 +50,7 @@ interface CadViewLike {
     internalCamera?: { zoom?: number };
     flyTo?: (point: { x: number; y: number }, scale?: number) => void;
     worldToScreen?: (p: { x: number; y: number }) => { x: number; y: number };
+    screenToWorld?: (p: { x: number; y: number }) => { x: number; y: number };
 }
 
 export function useSiteCadPlan(
@@ -216,5 +217,61 @@ export function useSiteCadPlan(
         [status],
     );
 
-    return { containerRef, status, syncCamera };
+    /**
+     * `viewBox` (en unidades del emplazamiento) que encuadra el plano completo,
+     * para que el canvas arranque mostrandolo entero en vez de un punto
+     * diminuto en el centro. Se calcula pidiendole al motor que haga
+     * `fitToView` (que si conoce la extension del dibujo, aunque
+     * `getDocumentExtents` devuelva null) y leyendo que zona quedo visible.
+     * `null` si el plano no esta listo o el motor no expone la vista.
+     */
+    const framePlanViewBox = useCallback(
+        (pixelWidth: number, pixelHeight: number): ViewBoxLike | null => {
+            if (status !== 'ready' || pixelWidth <= 0 || pixelHeight <= 0) {
+                return null;
+            }
+            const view = engine.docManager?.curView as unknown as
+                CadViewLike | undefined;
+            if (!view?.worldToScreen || !view.screenToWorld) return null;
+
+            try {
+                engine.fitToView?.();
+                const origin = view.worldToScreen({ x: 0, y: 0 });
+                const unit = view.worldToScreen({ x: 1, y: 0 });
+                const pxPerUnit = Math.hypot(
+                    unit.x - origin.x,
+                    unit.y - origin.y,
+                );
+                if (!Number.isFinite(pxPerUnit) || pxPerUnit <= 0) return null;
+
+                const center = view.screenToWorld({
+                    x: pixelWidth / 2,
+                    y: pixelHeight / 2,
+                });
+                const visW = pixelWidth / pxPerUnit;
+                const visH = pixelHeight / pxPerUnit;
+                // Un margen del 8% para que el plano no toque los bordes.
+                const pad = 1.08;
+                const width = visW * pad;
+                const height = visH * pad;
+                return {
+                    x: center.x - width / 2,
+                    // El SVG dibuja Y hacia abajo: siteY = -cadY.
+                    y: -center.y - height / 2,
+                    width,
+                    height,
+                };
+            } catch (error) {
+                console.warn(
+                    '[site-plan] No se pudo encuadrar el plano.',
+                    error,
+                );
+                return null;
+            }
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [status],
+    );
+
+    return { containerRef, status, syncCamera, framePlanViewBox };
 }
