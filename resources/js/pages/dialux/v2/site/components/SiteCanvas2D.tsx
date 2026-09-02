@@ -1,20 +1,14 @@
 import {
     useEffect,
-    useLayoutEffect,
     useRef,
     useState,
-    type RefObject,
+    type PointerEvent as ReactPointerEvent,
 } from 'react';
+import { createCanvasTransforms } from '@/pages/dialux/geometry/coordinateTransform';
 import { deriveFeederStatus, feederStatusColor } from '../domain/feederSync';
 import { snapToGrid } from '../domain/geometry';
-import { computeSatelliteTiles } from '../domain/geoTiles';
+import type { Point2D, SiteData, SiteElement } from '../domain/types';
 import { useSiteCadPlan } from '../hooks/useSiteCadPlan';
-import type {
-    ImportedSitePlan,
-    Point2D,
-    SiteData,
-    SiteElement,
-} from '../domain/types';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 
 interface Props {
@@ -23,28 +17,20 @@ interface Props {
     isActive?: boolean;
 }
 
-interface ViewBox {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-}
+// Tamaños de marcadores/handles en píxeles de pantalla (el SVG ya no tiene
+// viewBox: 1 unidad SVG = 1 px).
+const HANDLE_R = 6;
+const DOT_R = 5;
+const LABEL_PX = 12;
+/** Tolerancia del snap magnético a la cuadrícula, en px de pantalla. */
+const SNAP_MAGNET_PX = 14;
 
-// Rango de zoom: `refWidth / MAX_SCALE` (más cerca) .. `refWidth / MIN_SCALE`
-// (más lejos). `refWidth` es el ancho de referencia — el lienzo base para un
-// emplazamiento a mano, o el ancho del plano CAD encuadrado cuando hay uno.
-// Con `MAX_SCALE` alto se puede acercar hasta ~30 cm de ancho de vista sobre
-// un plano de ~250 m, que es lo que hace falta para dibujar detalle fino
-// (esquinas de ambientes, trazado de cableado) dentro de la planta general.
-const MIN_SCALE = 0.05;
-const MAX_SCALE = 800;
+const DUMMY_FALLBACK = { zoom: 1, panX: 0, panY: 0, pxPerMeter: 1 };
 
-function clamp(value: number, min: number, max: number): number {
-    return Math.min(max, Math.max(min, value));
-}
-
-function polygonPoints(vertices: Point2D[]): string {
-    return vertices.map((vertex) => `${vertex.x},${vertex.y}`).join(' ');
+interface FallbackView {
+    scale: number;
+    tx: number;
+    ty: number;
 }
 
 function isLayerVisible(site: SiteData, element: SiteElement): boolean {
@@ -54,50 +40,56 @@ function isLayerVisible(site: SiteData, element: SiteElement): boolean {
     return layer ? layer.visible : true;
 }
 
+/**
+ * SiteCanvas2D — modelo de coordenadas del editor v1: el MOTOR CAD es el dueño
+ * del pan/zoom y el overlay SVG lo sigue leyendo `worldToScreen`/`screenToWorld`
+ * cada frame (`createCanvasTransforms`). Plano y geometría comparten UNA sola
+ * transformación, así que un punto colocado sobre el plano se queda exactamente
+ * ahí a cualquier zoom (antes el SVG mandaba un `viewBox` y el motor lo
+ * perseguía con `flyTo` → las dos vistas derivaban y el punto no se quedaba).
+ *
+ * Las coordenadas del emplazamiento se guardan Y hacia ABAJO (como el SVG y
+ * como los datos ya existentes); la conversión al mundo CAD (Y arriba) se hace
+ * SOLO en la frontera (`toScreen`/`toWorld` niegan la Y).
+ */
 export function SiteCanvas2D({ editor, isActive = true }: Props) {
     const { siteData } = editor;
-    const cadPlan = useSiteCadPlan(
+    const {
+        containerRef: cadContainerRef,
+        status: cadStatus,
+        getView,
+        getViewState,
+        zoomAtScreen,
+        panByScreen,
+        refit,
+    } = useSiteCadPlan(
         editor.projectId,
         editor.generalModuleId,
         editor.importedPlan?.updatedAt,
     );
-    /** Con el plano CAD vectorial vivo debajo, la imagen PNG sobra (y lo taparía). */
-    const cadPlanActive = cadPlan.status === 'ready';
+    const cadPlanActive = cadStatus === 'ready';
     const baseWidth = siteData?.canvasWidth ?? 2000;
     const baseHeight = siteData?.canvasHeight ?? 1200;
-    /** Ancho de referencia para el rango de zoom: el del plano CAD si hay uno. */
-    const [planRefWidth, setPlanRefWidth] = useState<number | null>(null);
-    const refWidth = planRefWidth ?? baseWidth;
-    const minViewWidth = refWidth / MAX_SCALE;
-    const maxViewWidth = refWidth / MIN_SCALE;
 
-    const [viewBox, setViewBox] = useState<ViewBox>({
-        x: 0,
-        y: 0,
-        width: baseWidth,
-        height: baseHeight,
-    });
-    /** Ancho del SVG en píxeles de pantalla — para dimensionar marcadores/handles
-     *  en px constantes aunque el viewBox esté en unidades del plano (que pueden
-     *  ser metros: un handle de "6" sería 6 m = un globo gigante). */
-    const [viewportPx, setViewportPx] = useState(1200);
-    /** Posición del cursor mientras se dibuja — para la línea guía elástica. */
-    const [drawCursor, setDrawCursor] = useState<Point2D | null>(null);
+    const wrapRef = useRef<HTMLDivElement>(null);
     const svgRef = useRef<SVGSVGElement>(null);
+
+    const [size, setSize] = useState({ w: 0, h: 0 });
+    /** Sube cada vez que el motor mueve la cámara → fuerza recomputar la transformación. */
+    const [camTick, setCamTick] = useState(0);
+    const [fallbackView, setFallbackView] = useState<FallbackView | null>(null);
+    /** Cursor mientras se dibuja (coords del emplazamiento) — línea guía elástica. */
+    const [drawCursor, setDrawCursor] = useState<Point2D | null>(null);
+
     const panRef = useRef<
-        | {
-              pointerId: number;
-              lastClientX: number;
-              lastClientY: number;
-              moved: boolean;
-          }
+        | { pointerId: number; lastX: number; lastY: number; moved: boolean }
         | undefined
     >(undefined);
     const dragRef = useRef<
         | {
               elementId: string;
               pointerId: number;
-              start: Point2D;
+              startWorld: Point2D;
               originVertices: Point2D[];
           }
         | undefined
@@ -107,141 +99,152 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
         | undefined
     >(undefined);
     const planDragRef = useRef<
-        { pointerId: number; start: Point2D; origin: Point2D } | undefined
+        { pointerId: number; startWorld: Point2D; origin: Point2D } | undefined
     >(undefined);
+    const refitStampRef = useRef<number | null>(null);
 
-    const toSvgPoint = (clientX: number, clientY: number): Point2D => {
-        const svg = svgRef.current;
-        if (!svg) return { x: clientX, y: clientY };
-        const point = svg.createSVGPoint();
-        point.x = clientX;
-        point.y = clientY;
-        const matrix = svg.getScreenCTM();
-        const transformed = matrix
-            ? point.matrixTransform(matrix.inverse())
-            : point;
-        // `transformed` es un DOMPoint/SVGPoint nativo — sus x/y son
-        // accessors heredados del prototipo, no propiedades propias
-        // enumerables, así que `JSON.stringify` (el autoguardado) lo
-        // serializa como `{}` y se pierden en silencio. Se reconstruye
-        // como objeto plano ANTES de que llegue a cualquier estado que
-        // se vaya a guardar — bug real confirmado en producción (vértices
-        // de terreno/calle/área verde guardados como `{}`).
-        return { x: transformed.x, y: transformed.y };
-    };
-
-    const zoomAt = (clientX: number, clientY: number, factor: number) => {
-        const point = toSvgPoint(clientX, clientY);
-        setViewBox((current) => {
-            const newWidth = clamp(
-                current.width / factor,
-                minViewWidth,
-                maxViewWidth,
-            );
-            const ratio = newWidth / current.width;
-            return {
-                x: point.x - (point.x - current.x) * ratio,
-                y: point.y - (point.y - current.y) * ratio,
-                width: newWidth,
-                height: current.height * ratio,
-            };
-        });
-    };
-
+    // ── Tamaño del contenedor (y avisar al motor para que ajuste su canvas) ──
     useEffect(() => {
-        const svg = svgRef.current;
-        if (!svg) return;
-        const handleWheel = (event: WheelEvent) => {
-            event.preventDefault();
-            zoomAt(
-                event.clientX,
-                event.clientY,
-                event.deltaY < 0 ? 1.15 : 1 / 1.15,
-            );
-        };
-        svg.addEventListener('wheel', handleWheel, { passive: false });
-        return () => svg.removeEventListener('wheel', handleWheel);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    useEffect(() => {
-        const svg = svgRef.current;
-        if (!svg || typeof ResizeObserver === 'undefined') return;
+        const el = wrapRef.current;
+        if (!el || typeof ResizeObserver === 'undefined') return;
         const update = () => {
-            if (svg.clientWidth > 0) setViewportPx(svg.clientWidth);
+            if (el.clientWidth > 0) {
+                setSize({ w: el.clientWidth, h: el.clientHeight });
+                window.dispatchEvent(new Event('resize'));
+            }
         };
         update();
         const observer = new ResizeObserver(update);
-        observer.observe(svg);
+        observer.observe(el);
         return () => observer.disconnect();
     }, []);
 
-    // Encuadra el viewBox al plano completo UNA vez, cuando el motor CAD queda
-    // listo (arrancaba en el lienzo por defecto de 2000×1200, dejando el plano
-    // diminuto). No se reencuadra al volver de la pestaña 3D: se respeta el
-    // pan/zoom donde estaba el usuario.
-    const framePlanViewBox = cadPlan.framePlanViewBox;
-    const framedForRef = useRef<number | null>(null);
+    // ── Loop rAF: detecta cuando el motor mueve la cámara y re-renderiza ────
     useEffect(() => {
-        if (cadPlan.status !== 'ready') {
-            if (!editor.importedPlan) {
-                setPlanRefWidth(null);
-                framedForRef.current = null;
+        if (!cadPlanActive || !isActive) return;
+        let raf = 0;
+        let last = '';
+        const tick = () => {
+            const st = getViewState();
+            if (st) {
+                const key = `${st.zoom},${st.panX},${st.panY}`;
+                if (key !== last) {
+                    last = key;
+                    setCamTick((t) => t + 1);
+                }
             }
-            return;
-        }
-        if (!isActive) return;
-        const stamp = editor.importedPlan?.updatedAt ?? 0;
-        if (framedForRef.current === stamp) return;
-        const id = window.setTimeout(() => {
-            const el = svgRef.current;
-            if (!el || el.clientWidth <= 0) return;
-            const framed = framePlanViewBox(el.clientWidth, el.clientHeight);
-            if (framed && framed.width > 0) {
-                framedForRef.current = stamp;
-                setPlanRefWidth(framed.width);
-                setViewBox(framed);
-            }
-        }, 60);
-        return () => window.clearTimeout(id);
-    }, [cadPlan.status, framePlanViewBox, editor.importedPlan, isActive]);
+            raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+    }, [cadPlanActive, isActive, getViewState]);
 
-    // Al volver de la pestaña 3D el contenedor del canvas estuvo con tamaño 0:
-    // forzar que el motor CAD recalcule su tamaño y resincronizar la cámara al
-    // viewBox actual (sin tocar el pan/zoom del usuario).
-    const syncOnReactivate = cadPlan.syncCamera;
+    // ── Encuadre inicial del plano + al volver de la pestaña 3D ─────────────
+
     useEffect(() => {
-        if (!isActive || cadPlan.status !== 'ready') return;
+        if (!cadPlanActive || !isActive) return;
         window.dispatchEvent(new Event('resize'));
+        const stamp = editor.importedPlan?.updatedAt ?? 0;
+        if (refitStampRef.current === stamp) return;
         const id = window.setTimeout(() => {
-            const width = svgRef.current?.clientWidth ?? 0;
-            if (width > 0) syncOnReactivate(viewBox, width);
-        }, 60);
+            refitStampRef.current = stamp;
+            refit();
+        }, 80);
         return () => window.clearTimeout(id);
-        // Solo al reactivar la pestaña: `viewBox` se resincroniza en su propio
-        // useLayoutEffect mientras la pestaña está activa.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isActive, cadPlan.status]);
+    }, [cadPlanActive, isActive, editor.importedPlan, refit]);
 
-    // Mantiene la cámara del motor CAD alineada con el viewBox del SVG.
-    // `useLayoutEffect` para que el plano se reubique en el MISMO commit en que
-    // el SVG se repinta — con `useEffect` (post-paint) quedaba un frame atrás y
-    // se veía "nadar" respecto de la grilla.
-    const syncCadCamera = cadPlan.syncCamera;
-    useLayoutEffect(() => {
-        if (!cadPlanActive) return;
-        const width = svgRef.current?.clientWidth ?? 0;
-        if (width > 0) syncCadCamera(viewBox, width);
-    }, [cadPlanActive, viewBox, syncCadCamera]);
+    // ── Transformación emplazamiento (Y abajo) ↔ pantalla (px) ─────────────
+    // `camTick` sube en cada frame en que el motor mueve la cámara → este cuerpo
+    // se re-ejecuta y `createCanvasTransforms` vuelve a muestrear la cámara viva.
+    const cadView = cadPlanActive ? getView() : null;
+    const baseT = cadView
+        ? createCanvasTransforms(cadView, null, DUMMY_FALLBACK, size.h)
+        : null;
+    // Sin plano CAD: transformación afín propia. El `fallbackView` (estado) solo
+    // acumula el pan/zoom del usuario; el encuadre inicial se deriva del tamaño.
+    const fb: FallbackView =
+        fallbackView ??
+        (size.w > 0
+            ? (() => {
+                  const s =
+                      Math.min(size.w / baseWidth, size.h / baseHeight, 1) *
+                          0.9 || 0.5;
+                  return {
+                      scale: s,
+                      tx: (size.w - baseWidth * s) / 2,
+                      ty: (size.h - baseHeight * s) / 2,
+                  };
+              })()
+            : { scale: 0.5, tx: 0, ty: 0 });
 
-    const satelliteTiles =
-        siteData?.location && editor.showSatellite
-            ? computeSatelliteTiles(
-                  siteData.location,
-                  siteData.terrainScaleM || 1,
-                  editor.satelliteZoom,
-              )
-            : [];
+    const toScreen = (v: Point2D): Point2D => {
+        if (baseT) {
+            const s = baseT.sceneToScreen({ x: v.x, y: -v.y });
+            return { x: s.x, y: s.y };
+        }
+        return { x: v.x * fb.scale + fb.tx, y: v.y * fb.scale + fb.ty };
+    };
+    const toWorld = (clientX: number, clientY: number): Point2D => {
+        const r = wrapRef.current?.getBoundingClientRect();
+        const lx = clientX - (r?.left ?? 0);
+        const ly = clientY - (r?.top ?? 0);
+        if (baseT) {
+            const w = baseT.screenToScene({ x: lx, y: ly });
+            return { x: w.x, y: -w.y };
+        }
+        return { x: (lx - fb.tx) / fb.scale, y: (ly - fb.ty) / fb.scale };
+    };
+
+    // Ref con el `fb` vigente — el handler nativo de la rueda (en un efecto) lo
+    // necesita fresco. Se sincroniza en un efecto (1 frame de retraso, imperceptible).
+    const fbRef = useRef(fb);
+    useEffect(() => {
+        fbRef.current = fb;
+    });
+
+    // ── Snap magnético: imanta a la cuadrícula solo si el clic cae a menos de
+    // SNAP_MAGNET_PX px del cruce; acercado para calcar el plano, el punto
+    // queda exactamente donde se hace clic.
+    const snapWorld = (world: Point2D): Point2D => {
+        if (!editor.snapEnabled) return world;
+        const step = editor.gridSizeM / editor.terrainScaleM;
+        if (!(step > 0)) return world;
+        const snapped = snapToGrid(world, step);
+        const a = toScreen(world);
+        const b = toScreen(snapped);
+        return Math.hypot(a.x - b.x, a.y - b.y) <= SNAP_MAGNET_PX
+            ? snapped
+            : world;
+    };
+
+    // ── Zoom con la rueda ─────────────────────────────────────────────────
+
+    useEffect(() => {
+        const el = wrapRef.current;
+        if (!el) return;
+        const onWheel = (event: WheelEvent) => {
+            event.preventDefault();
+            const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
+            const r = el.getBoundingClientRect();
+            const lx = event.clientX - r.left;
+            const ly = event.clientY - r.top;
+            if (cadPlanActive) {
+                zoomAtScreen(lx, ly, factor);
+                return;
+            }
+            const base = fbRef.current;
+            const next = base.scale * factor;
+            const wx = (lx - base.tx) / base.scale;
+            const wy = (ly - base.ty) / base.scale;
+            setFallbackView({
+                scale: next,
+                tx: lx - wx * next,
+                ty: ly - wy * next,
+            });
+        };
+        el.addEventListener('wheel', onWheel, { passive: false });
+        return () => el.removeEventListener('wheel', onWheel);
+    }, [cadPlanActive, zoomAtScreen]);
 
     if (!siteData) {
         return (
@@ -251,164 +254,172 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
         );
     }
 
-    // Unidades del plano por píxel de pantalla: convierte tamaños en px a
-    // unidades del viewBox para que handles y marcadores se vean constantes
-    // sin importar el zoom ni la unidad del plano.
-    const uPerPx = viewBox.width / Math.max(viewportPx, 1);
-    const handleR = 6 * uPerPx;
-    const dotR = 5 * uPerPx;
-    const labelFontSize = 12 * uPerPx;
-
-    // Snap "magnético": ajusta a la cuadrícula SOLO si el clic cae a menos de
-    // ~14 px del cruce de rejilla. Así, al alejar la vista la rejilla imanta
-    // como siempre, pero al acercarse a calcar el plano CAD los puntos quedan
-    // exactamente donde se hace clic (antes un clic podía saltar varios metros).
-    const snapWorld = (point: Point2D): Point2D => {
-        if (!editor.snapEnabled) return point;
-        const step = editor.gridSizeM / editor.terrainScaleM;
-        if (!(step > 0)) return point;
-        const snapped = snapToGrid(point, step);
-        const pulled = Math.hypot(snapped.x - point.x, snapped.y - point.y);
-        return pulled <= 14 * uPerPx ? snapped : point;
-    };
-
     const isDrawTool =
         editor.activeTool === 'draw_polygon' ||
         editor.activeTool === 'draw_feeder';
-    // `place_tg` se usa como la herramienta genérica de "colocar equipo
-    // puntual con un clic" — qué tipo exacto crea lo decide `pendingType`
-    // (TG, transformador, poste, portón). `place_block` queda reservado
-    // para vincular un módulo existente, que se hace desde el panel de
-    // propiedades después de dibujar el bloque (no con un clic aislado).
+    // `place_tg` es la herramienta genérica de "colocar equipo puntual con un
+    // clic" — el tipo exacto lo decide `pendingType`.
     const isPointTool = editor.activeTool === 'place_tg';
     const isCalibrateTool = editor.activeTool === 'calibrate_plan';
     const drawingFeeder = editor.activeTool === 'draw_feeder';
+    const toolPlaces = isDrawTool || isPointTool || isCalibrateTool;
 
-    // Línea guía elástica: del último punto colocado al cursor (ya con snap
-    // aplicado, para que se vea exactamente dónde caerá el siguiente punto).
     const lastPending =
         editor.pendingVertices[editor.pendingVertices.length - 1];
     const rubberTarget =
         isDrawTool && drawCursor && lastPending ? snapWorld(drawCursor) : null;
 
-    const handleCanvasClick = (point: Point2D) => {
+    const handleWorldClick = (world: Point2D) => {
         if (isDrawTool) {
-            editor.addVertex(snapWorld(point));
+            editor.addVertex(snapWorld(world));
             return;
         }
         if (isPointTool) {
-            editor.placePoint(snapWorld(point), editor.pendingType);
+            editor.placePoint(snapWorld(world), editor.pendingType);
             return;
         }
         if (isCalibrateTool) {
-            // Calibración: sin snap — el punto exacto donde se hace clic.
-            editor.addCalibrationPoint(point);
-            return;
+            editor.addCalibrationPoint(world); // exacto, sin snap
         }
-        editor.selectElement(null);
     };
 
+    const startPan = (event: ReactPointerEvent<SVGSVGElement>) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        panRef.current = {
+            pointerId: event.pointerId,
+            lastX: event.clientX,
+            lastY: event.clientY,
+            moved: false,
+        };
+    };
+
+    const points = (verts: Point2D[]): string =>
+        verts
+            .map((v) => {
+                const s = toScreen(v);
+                return `${s.x},${s.y}`;
+            })
+            .join(' ');
+
+    const legacyPlan =
+        !cadPlanActive &&
+        cadStatus !== 'loading' &&
+        siteData.importedPlan?.visible
+            ? siteData.importedPlan
+            : null;
+    let planImageRect: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    } | null = null;
+    if (legacyPlan) {
+        const a = toScreen({ x: legacyPlan.x, y: legacyPlan.y });
+        const b = toScreen({
+            x: legacyPlan.x + legacyPlan.widthUnits,
+            y: legacyPlan.y + legacyPlan.heightUnits,
+        });
+        planImageRect = {
+            x: Math.min(a.x, b.x),
+            y: Math.min(a.y, b.y),
+            width: Math.abs(b.x - a.x),
+            height: Math.abs(b.y - a.y),
+        };
+    }
+
+    const calibScreen = editor.calibrationPoints.map(toScreen);
+    const rubberFrom =
+        rubberTarget && lastPending ? toScreen(lastPending) : null;
+    const rubberTo = rubberTarget ? toScreen(rubberTarget) : null;
+
     return (
-        <div className="relative h-full min-h-105 w-full bg-[radial-gradient(circle,#94a3b833_1px,transparent_1px)] bg-size-[20px_20px] dark:bg-[radial-gradient(circle,#47556955_1px,transparent_1px)]">
-            {/* Motor CAD: dibuja el plano vectorial DEBAJO del overlay SVG. Su
-                cámara la alinea `syncCamera` con el viewBox, así que el SVG
-                sigue mandando el pan/zoom. `pointer-events-none`: todos los
-                gestos los maneja el SVG de arriba. */}
+        <div
+            ref={wrapRef}
+            className="relative h-full min-h-105 w-full touch-none overflow-hidden bg-[radial-gradient(circle,#94a3b833_1px,transparent_1px)] bg-size-[20px_20px] select-none dark:bg-[radial-gradient(circle,#47556955_1px,transparent_1px)]"
+        >
+            {/* Motor CAD: dibuja el plano vectorial DEBAJO del overlay. El motor
+                es el dueño del pan/zoom; el overlay lo sigue. `pointer-events`
+                los maneja el SVG de arriba y se reenvían al motor. */}
             <div
-                ref={cadPlan.containerRef}
+                ref={cadContainerRef}
                 className="pointer-events-none absolute inset-0"
                 style={{ visibility: cadPlanActive ? 'visible' : 'hidden' }}
             />
             <svg
                 ref={svgRef}
-                viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
-                className="relative h-full min-h-105 w-full touch-none select-none"
+                data-cam-tick={camTick}
+                className="absolute inset-0 h-full w-full"
+                style={{ cursor: toolPlaces ? 'crosshair' : 'grab' }}
+                onContextMenu={(event) => event.preventDefault()}
                 onPointerDown={(event) => {
                     if (event.target !== event.currentTarget) return;
-                    if (isDrawTool || isPointTool || isCalibrateTool) {
-                        handleCanvasClick(
-                            toSvgPoint(event.clientX, event.clientY),
-                        );
+                    const panButton = event.button === 1 || event.button === 2;
+                    if (event.button === 0 && toolPlaces) {
+                        handleWorldClick(toWorld(event.clientX, event.clientY));
                         return;
                     }
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    panRef.current = {
-                        pointerId: event.pointerId,
-                        lastClientX: event.clientX,
-                        lastClientY: event.clientY,
-                        moved: false,
-                    };
+                    if (event.button === 0 || panButton) startPan(event);
                 }}
                 onDoubleClick={() => {
                     if (isDrawTool) editor.finishDrawing();
                 }}
                 onPointerMove={(event) => {
                     if (isDrawTool && editor.pendingVertices.length > 0) {
-                        setDrawCursor(toSvgPoint(event.clientX, event.clientY));
+                        setDrawCursor(toWorld(event.clientX, event.clientY));
                     }
-                    if (
-                        vertexDragRef.current &&
-                        vertexDragRef.current.pointerId === event.pointerId
-                    ) {
-                        const point = toSvgPoint(event.clientX, event.clientY);
+
+                    const vDrag = vertexDragRef.current;
+                    if (vDrag && vDrag.pointerId === event.pointerId) {
                         editor.moveSiteVertex(
-                            vertexDragRef.current.elementId,
-                            vertexDragRef.current.vertexIndex,
-                            point,
+                            vDrag.elementId,
+                            vDrag.vertexIndex,
+                            snapWorld(toWorld(event.clientX, event.clientY)),
                         );
                         return;
                     }
-                    const drag = dragRef.current;
-                    if (drag && drag.pointerId === event.pointerId) {
-                        const current = toSvgPoint(
-                            event.clientX,
-                            event.clientY,
-                        );
-                        const dx = current.x - drag.start.x;
-                        const dy = current.y - drag.start.y;
-                        editor.updateSiteElement(drag.elementId, {
-                            vertices: drag.originVertices.map((vertex) => ({
+
+                    const eDrag = dragRef.current;
+                    if (eDrag && eDrag.pointerId === event.pointerId) {
+                        const now = toWorld(event.clientX, event.clientY);
+                        const dx = now.x - eDrag.startWorld.x;
+                        const dy = now.y - eDrag.startWorld.y;
+                        editor.updateSiteElement(eDrag.elementId, {
+                            vertices: eDrag.originVertices.map((vertex) => ({
                                 x: vertex.x + dx,
                                 y: vertex.y + dy,
                             })),
                         });
                         return;
                     }
-                    const planDrag = planDragRef.current;
-                    if (planDrag && planDrag.pointerId === event.pointerId) {
-                        const current = toSvgPoint(
-                            event.clientX,
-                            event.clientY,
-                        );
+
+                    const pDrag = planDragRef.current;
+                    if (pDrag && pDrag.pointerId === event.pointerId) {
+                        const now = toWorld(event.clientX, event.clientY);
                         editor.updateImportedPlan({
-                            x:
-                                planDrag.origin.x +
-                                (current.x - planDrag.start.x),
-                            y:
-                                planDrag.origin.y +
-                                (current.y - planDrag.start.y),
+                            x: pDrag.origin.x + (now.x - pDrag.startWorld.x),
+                            y: pDrag.origin.y + (now.y - pDrag.startWorld.y),
                         });
                         return;
                     }
+
                     const pan = panRef.current;
                     if (!pan || pan.pointerId !== event.pointerId) return;
-                    const dxClient = event.clientX - pan.lastClientX;
-                    const dyClient = event.clientY - pan.lastClientY;
-                    if (!pan.moved && Math.hypot(dxClient, dyClient) < 4)
-                        return;
+                    const dx = event.clientX - pan.lastX;
+                    const dy = event.clientY - pan.lastY;
+                    if (!pan.moved && Math.hypot(dx, dy) < 4) return;
                     pan.moved = true;
-                    const previous = toSvgPoint(
-                        pan.lastClientX,
-                        pan.lastClientY,
-                    );
-                    const current = toSvgPoint(event.clientX, event.clientY);
-                    pan.lastClientX = event.clientX;
-                    pan.lastClientY = event.clientY;
-                    setViewBox((currentViewBox) => ({
-                        ...currentViewBox,
-                        x: currentViewBox.x + previous.x - current.x,
-                        y: currentViewBox.y + previous.y - current.y,
-                    }));
+                    pan.lastX = event.clientX;
+                    pan.lastY = event.clientY;
+                    if (cadPlanActive) {
+                        panByScreen(dx, dy);
+                    } else {
+                        const base = fbRef.current;
+                        setFallbackView({
+                            ...base,
+                            tx: base.tx + dx,
+                            ty: base.ty + dy,
+                        });
+                    }
                 }}
                 onPointerUp={(event) => {
                     if (vertexDragRef.current?.pointerId === event.pointerId) {
@@ -425,8 +436,14 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                     }
                     const pan = panRef.current;
                     if (!pan || pan.pointerId !== event.pointerId) return;
-                    event.currentTarget.releasePointerCapture(event.pointerId);
-                    if (!pan.moved) editor.selectElement(null);
+                    try {
+                        event.currentTarget.releasePointerCapture(
+                            event.pointerId,
+                        );
+                    } catch {
+                        /* noop */
+                    }
+                    if (!pan.moved && !toolPlaces) editor.selectElement(null);
                     panRef.current = undefined;
                 }}
                 onPointerCancel={() => {
@@ -437,32 +454,47 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                 }}
                 onPointerLeave={() => setDrawCursor(null)}
             >
-                {satelliteTiles.map((tile) => (
+                {/* Imagen PNG: solo proyectos importados antes del render CAD en
+                    vivo (sin archivo fuente guardado). */}
+                {planImageRect && legacyPlan && (
                     <image
-                        key={tile.key}
-                        href={tile.url}
-                        x={tile.x}
-                        y={tile.y}
-                        width={tile.size}
-                        height={tile.size}
+                        href={editor.importedPlanUrl}
+                        x={planImageRect.x}
+                        y={planImageRect.y}
+                        width={planImageRect.width}
+                        height={planImageRect.height}
+                        opacity={legacyPlan.opacity}
                         preserveAspectRatio="none"
-                        className="pointer-events-none"
+                        style={{
+                            pointerEvents:
+                                editor.activeTool === 'select'
+                                    ? 'visiblePainted'
+                                    : 'none',
+                        }}
+                        className={
+                            editor.activeTool === 'select' ? 'cursor-move' : ''
+                        }
+                        onPointerDown={(event) => {
+                            if (editor.activeTool !== 'select') return;
+                            event.stopPropagation();
+                            event.currentTarget.ownerSVGElement?.setPointerCapture(
+                                event.pointerId,
+                            );
+                            planDragRef.current = {
+                                pointerId: event.pointerId,
+                                startWorld: toWorld(
+                                    event.clientX,
+                                    event.clientY,
+                                ),
+                                origin: {
+                                    x: legacyPlan.x,
+                                    y: legacyPlan.y,
+                                },
+                            };
+                        }}
                     />
-                ))}
-                {/* Imagen PNG: solo para proyectos importados antes del render CAD
-                en vivo (no tienen archivo fuente guardado). Los nuevos usan el
-                motor y `cadPlanActive` la oculta. */}
-                {siteData.importedPlan?.visible &&
-                    !cadPlanActive &&
-                    cadPlan.status !== 'loading' && (
-                        <ImportedPlanImage
-                            plan={siteData.importedPlan}
-                            imageUrl={editor.importedPlanUrl}
-                            canSelect={editor.activeTool === 'select'}
-                            toSvgPoint={toSvgPoint}
-                            planDragRef={planDragRef}
-                        />
-                    )}
+                )}
+
                 {siteData.elements
                     .filter(
                         (element) =>
@@ -472,10 +504,18 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                     .map((element) => {
                         const selected =
                             editor.selectedElementId === element.id;
+                        const centroid = element.vertices.reduce(
+                            (acc, v) => ({
+                                x: acc.x + v.x / element.vertices.length,
+                                y: acc.y + v.y / element.vertices.length,
+                            }),
+                            { x: 0, y: 0 },
+                        );
+                        const labelPos = toScreen(centroid);
                         return (
                             <g key={element.id}>
                                 <polygon
-                                    points={polygonPoints(element.vertices)}
+                                    points={points(element.vertices)}
                                     fill={element.style.fillColor}
                                     fillOpacity={element.style.opacity ?? 1}
                                     stroke={
@@ -488,7 +528,13 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                             ? 3
                                             : (element.style.strokeWidth ?? 1.5)
                                     }
-                                    vectorEffect="non-scaling-stroke"
+                                    style={{
+                                        pointerEvents:
+                                            editor.activeTool === 'select' &&
+                                            !element.locked
+                                                ? 'visiblePainted'
+                                                : 'none',
+                                    }}
                                     className={
                                         editor.activeTool === 'select'
                                             ? 'cursor-move'
@@ -506,7 +552,7 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                         dragRef.current = {
                                             elementId: element.id,
                                             pointerId: event.pointerId,
-                                            start: toSvgPoint(
+                                            startWorld: toWorld(
                                                 event.clientX,
                                                 event.clientY,
                                             ),
@@ -515,20 +561,10 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                     }}
                                 />
                                 <text
-                                    x={
-                                        element.vertices.reduce(
-                                            (sum, v) => sum + v.x,
-                                            0,
-                                        ) / element.vertices.length
-                                    }
-                                    y={
-                                        element.vertices.reduce(
-                                            (sum, v) => sum + v.y,
-                                            0,
-                                        ) / element.vertices.length
-                                    }
+                                    x={labelPos.x}
+                                    y={labelPos.y}
                                     textAnchor="middle"
-                                    fontSize={labelFontSize}
+                                    fontSize={LABEL_PX}
                                     className="pointer-events-none fill-slate-800 font-semibold dark:fill-white"
                                 >
                                     {element.label}
@@ -536,30 +572,34 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                 {selected &&
                                     editor.activeTool === 'select' &&
                                     !element.locked &&
-                                    element.vertices.map((vertex, index) => (
-                                        <circle
-                                            key={index}
-                                            cx={vertex.x}
-                                            cy={vertex.y}
-                                            r={handleR}
-                                            vectorEffect="non-scaling-stroke"
-                                            className="cursor-crosshair fill-amber-500 stroke-white stroke-2 dark:stroke-slate-900"
-                                            onPointerDown={(event) => {
-                                                event.stopPropagation();
-                                                event.currentTarget.ownerSVGElement?.setPointerCapture(
-                                                    event.pointerId,
-                                                );
-                                                vertexDragRef.current = {
-                                                    elementId: element.id,
-                                                    vertexIndex: index,
-                                                    pointerId: event.pointerId,
-                                                };
-                                            }}
-                                        />
-                                    ))}
+                                    element.vertices.map((vertex, index) => {
+                                        const s = toScreen(vertex);
+                                        return (
+                                            <circle
+                                                key={index}
+                                                cx={s.x}
+                                                cy={s.y}
+                                                r={HANDLE_R}
+                                                className="cursor-crosshair fill-amber-500 stroke-white stroke-2 dark:stroke-slate-900"
+                                                onPointerDown={(event) => {
+                                                    event.stopPropagation();
+                                                    event.currentTarget.ownerSVGElement?.setPointerCapture(
+                                                        event.pointerId,
+                                                    );
+                                                    vertexDragRef.current = {
+                                                        elementId: element.id,
+                                                        vertexIndex: index,
+                                                        pointerId:
+                                                            event.pointerId,
+                                                    };
+                                                }}
+                                            />
+                                        );
+                                    })}
                             </g>
                         );
                     })}
+
                 {siteData.feederPaths.map((path) => {
                     const status = deriveFeederStatus(
                         path.networkEdgeId,
@@ -568,7 +608,7 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                     return (
                         <polyline
                             key={path.id}
-                            points={polygonPoints(path.waypoints)}
+                            points={points(path.waypoints)}
                             fill="none"
                             stroke={
                                 path.style?.color ?? feederStatusColor(status)
@@ -576,72 +616,73 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                             strokeWidth={3}
                             strokeDasharray={path.style?.dashArray}
                             strokeLinecap="round"
-                            vectorEffect="non-scaling-stroke"
+                            style={{ pointerEvents: 'none' }}
                         />
                     );
                 })}
-                {editor.calibrationPoints.length > 0 && (
-                    <>
-                        {editor.calibrationPoints.length === 2 && (
-                            <line
-                                x1={editor.calibrationPoints[0].x}
-                                y1={editor.calibrationPoints[0].y}
-                                x2={editor.calibrationPoints[1].x}
-                                y2={editor.calibrationPoints[1].y}
-                                className="stroke-fuchsia-500"
-                                strokeWidth={2}
-                                strokeDasharray="4 3"
-                                vectorEffect="non-scaling-stroke"
-                            />
-                        )}
-                        {editor.calibrationPoints.map((vertex, index) => (
-                            <circle
-                                key={index}
-                                cx={vertex.x}
-                                cy={vertex.y}
-                                r={handleR}
-                                vectorEffect="non-scaling-stroke"
-                                className="fill-fuchsia-500 stroke-white stroke-2 dark:stroke-slate-900"
-                            />
-                        ))}
-                    </>
-                )}
+
+                <g style={{ pointerEvents: 'none' }}>
+                    {calibScreen.length === 2 && (
+                        <line
+                            x1={calibScreen[0].x}
+                            y1={calibScreen[0].y}
+                            x2={calibScreen[1].x}
+                            y2={calibScreen[1].y}
+                            className="stroke-fuchsia-500"
+                            strokeWidth={2}
+                            strokeDasharray="4 3"
+                        />
+                    )}
+                    {calibScreen.map((s, index) => (
+                        <circle
+                            key={index}
+                            cx={s.x}
+                            cy={s.y}
+                            r={HANDLE_R}
+                            className="fill-fuchsia-500 stroke-white stroke-2 dark:stroke-slate-900"
+                        />
+                    ))}
+                </g>
+
                 {editor.pendingVertices.length > 0 && (
-                    <>
+                    <g style={{ pointerEvents: 'none' }}>
                         <polyline
-                            points={polygonPoints(editor.pendingVertices)}
+                            points={points(editor.pendingVertices)}
                             fill="none"
                             className={
-                                editor.activeTool === 'draw_feeder'
+                                drawingFeeder
                                     ? 'stroke-cyan-500'
                                     : 'stroke-amber-500'
                             }
                             strokeWidth={2}
                             strokeDasharray="6 4"
-                            vectorEffect="non-scaling-stroke"
                         />
-                        {editor.pendingVertices.map((vertex, index) => (
-                            <circle
-                                key={index}
-                                cx={vertex.x}
-                                cy={vertex.y}
-                                r={dotR}
-                                className={
-                                    editor.activeTool === 'draw_feeder'
-                                        ? 'fill-cyan-500'
-                                        : 'fill-amber-500'
-                                }
-                            />
-                        ))}
-                    </>
+                        {editor.pendingVertices.map((vertex, index) => {
+                            const s = toScreen(vertex);
+                            return (
+                                <circle
+                                    key={index}
+                                    cx={s.x}
+                                    cy={s.y}
+                                    r={DOT_R}
+                                    className={
+                                        drawingFeeder
+                                            ? 'fill-cyan-500'
+                                            : 'fill-amber-500'
+                                    }
+                                />
+                            );
+                        })}
+                    </g>
                 )}
-                {rubberTarget && lastPending && (
-                    <>
+
+                {rubberFrom && rubberTo && (
+                    <g style={{ pointerEvents: 'none' }}>
                         <line
-                            x1={lastPending.x}
-                            y1={lastPending.y}
-                            x2={rubberTarget.x}
-                            y2={rubberTarget.y}
+                            x1={rubberFrom.x}
+                            y1={rubberFrom.y}
+                            x2={rubberTo.x}
+                            y2={rubberTo.y}
                             className={
                                 drawingFeeder
                                     ? 'stroke-cyan-400/70'
@@ -649,12 +690,11 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                             }
                             strokeWidth={1.5}
                             strokeDasharray="5 4"
-                            vectorEffect="non-scaling-stroke"
                         />
                         <circle
-                            cx={rubberTarget.x}
-                            cy={rubberTarget.y}
-                            r={dotR}
+                            cx={rubberTo.x}
+                            cy={rubberTo.y}
+                            r={DOT_R}
                             fill="none"
                             className={
                                 drawingFeeder
@@ -662,74 +702,21 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                     : 'stroke-amber-400'
                             }
                             strokeWidth={1.5}
-                            vectorEffect="non-scaling-stroke"
                         />
-                    </>
+                    </g>
                 )}
             </svg>
-            {satelliteTiles.length > 0 && (
-                <div className="pointer-events-none absolute right-1.5 bottom-1 rounded bg-black/40 px-1.5 py-0.5 text-[9px] text-white/80">
-                    Imágenes: Esri World Imagery
-                </div>
-            )}
-            {cadPlan.status === 'loading' && (
+
+            {cadStatus === 'loading' && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-slate-400">
                     Abriendo plano CAD…
                 </div>
             )}
-            {cadPlan.status === 'error' && (
+            {cadStatus === 'error' && (
                 <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded bg-red-950/80 px-2 py-1 text-[10px] text-red-200">
                     No se pudo abrir el plano CAD — reimporta el DXF/DWG.
                 </div>
             )}
         </div>
-    );
-}
-
-/**
- * Extraído como componente propio (no un IIFE inline) — el compilador de
- * React no logra analizar correctamente los refs (`planDragRef`) leídos
- * dentro de un `onPointerDown` cuando el JSX que lo contiene se arma con un
- * IIFE en vez de un componente real (error de build
- * `react-hooks/refs`, confirmado al intentarlo).
- */
-function ImportedPlanImage({
-    plan,
-    imageUrl,
-    canSelect,
-    toSvgPoint,
-    planDragRef,
-}: {
-    plan: ImportedSitePlan;
-    imageUrl: string | undefined;
-    canSelect: boolean;
-    toSvgPoint: (clientX: number, clientY: number) => Point2D;
-    planDragRef: RefObject<
-        { pointerId: number; start: Point2D; origin: Point2D } | undefined
-    >;
-}) {
-    return (
-        <image
-            href={imageUrl}
-            x={plan.x}
-            y={plan.y}
-            width={plan.widthUnits}
-            height={plan.heightUnits}
-            opacity={plan.opacity}
-            preserveAspectRatio="none"
-            className={canSelect ? 'cursor-move' : ''}
-            onPointerDown={(event) => {
-                if (!canSelect) return;
-                event.stopPropagation();
-                event.currentTarget.ownerSVGElement?.setPointerCapture(
-                    event.pointerId,
-                );
-                planDragRef.current = {
-                    pointerId: event.pointerId,
-                    start: toSvgPoint(event.clientX, event.clientY),
-                    origin: { x: plan.x, y: plan.y },
-                };
-            }}
-        />
     );
 }

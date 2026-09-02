@@ -38,19 +38,19 @@ import { SITE_PLAN_SOURCE_SCENE_ID } from '../lib/planImport';
 export type SiteCadPlanStatus =
     'idle' | 'loading' | 'ready' | 'missing' | 'error';
 
-interface ViewBoxLike {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-}
-
 interface CadViewLike {
     zoom?: number;
+    center?: { x: number; y: number };
     internalCamera?: { zoom?: number };
     flyTo?: (point: { x: number; y: number }, scale?: number) => void;
     worldToScreen?: (p: { x: number; y: number }) => { x: number; y: number };
     screenToWorld?: (p: { x: number; y: number }) => { x: number; y: number };
+}
+
+/** Sub-conjunto de la cámara del motor que consume `createCanvasTransforms`. */
+export interface SiteCadView {
+    worldToScreen?: (p: { x: number; y: number }) => { x?: number; y?: number };
+    screenToWorld?: (p: { x: number; y: number }) => { x?: number; y?: number };
 }
 
 export function useSiteCadPlan(
@@ -151,127 +151,94 @@ export function useSiteCadPlan(
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    /**
-     * Alinea la camara del motor con el `viewBox` del SVG. `pixelWidth` es el
-     * ancho real del canvas en px, necesario para saber cuantos px equivalen a
-     * una unidad del emplazamiento.
-     *
-     * La escala se ajusta RELATIVA (se mide la actual con `worldToScreen` y se
-     * corrige por el cociente) porque la unidad de `view.zoom` del motor no es
-     * px/unidad y no esta documentada.
-     */
-    const syncCamera = useCallback(
-        (viewBox: ViewBoxLike, pixelWidth: number) => {
+    // ── API de cámara: el MOTOR es el dueño del pan/zoom (modelo del editor v1).
+    // El overlay SVG lo sigue leyendo `worldToScreen`/`screenToWorld` cada frame
+    // (`createCanvasTransforms`), así que plano y geometría comparten UNA sola
+    // transformación y no pueden desalinearse.
+
+    // `useMlightcadEngine()` devuelve un objeto NUEVO cada render (sus métodos
+    // leen el `_docManager` a nivel módulo), así que se accede por closure y
+    // NUNCA va en las dependencias — igual que en `MlightcadCanvas2D` de v1.
+
+    /** La cámara viva del motor, para `createCanvasTransforms`. */
+    const getView = useCallback((): SiteCadView | null => {
+        if (status !== 'ready') return null;
+        const view = engine.docManager?.curView as unknown as
+            SiteCadView | undefined;
+        return view?.worldToScreen && view.screenToWorld ? view : null;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [status]);
+
+    /** `{ zoom, panX, panY }` para detectar cambios de cámara en un loop rAF. */
+    const getViewState = useCallback(
+        () => engine.getViewState?.() ?? null,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [],
+    );
+
+    /** Zoom centrado en un punto del canvas (px locales). */
+    const zoomAtScreen = useCallback(
+        (localX: number, localY: number, factor: number) => {
+            if (status !== 'ready') return;
+            engine.zoomAt?.({ x: localX, y: localY }, factor);
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [status],
+    );
+
+    /** Desplaza la cámara `dxPx, dyPx` píxeles de pantalla. */
+    const panByScreen = useCallback(
+        (dxPx: number, dyPx: number) => {
             if (status !== 'ready') return;
             const view = engine.docManager?.curView as unknown as
                 CadViewLike | undefined;
-            if (!view?.flyTo || !view.worldToScreen) return;
-            if (viewBox.width <= 0 || pixelWidth <= 0) return;
-
+            if (
+                !view?.flyTo ||
+                !view.screenToWorld ||
+                !view.center ||
+                (dxPx === 0 && dyPx === 0)
+            ) {
+                return;
+            }
+            const zoom =
+                typeof view.zoom === 'number' && Number.isFinite(view.zoom)
+                    ? view.zoom
+                    : typeof view.internalCamera?.zoom === 'number'
+                      ? view.internalCamera.zoom
+                      : undefined;
             try {
-                const origin = view.worldToScreen({ x: 0, y: 0 });
-                const unit = view.worldToScreen({ x: 1, y: 0 });
-                const currentPxPerUnit = Math.hypot(
-                    unit.x - origin.x,
-                    unit.y - origin.y,
-                );
-                if (
-                    !Number.isFinite(currentPxPerUnit) ||
-                    currentPxPerUnit <= 0
-                ) {
-                    return;
-                }
-
-                const currentZoom =
-                    typeof view.zoom === 'number' && Number.isFinite(view.zoom)
-                        ? view.zoom
-                        : typeof view.internalCamera?.zoom === 'number'
-                          ? view.internalCamera.zoom
-                          : null;
-                if (currentZoom === null) return;
-
-                const desiredPxPerUnit = pixelWidth / viewBox.width;
-                const nextZoom = Math.min(
-                    1e6,
-                    Math.max(
-                        1e-6,
-                        currentZoom * (desiredPxPerUnit / currentPxPerUnit),
-                    ),
-                );
-
+                const a = view.screenToWorld({ x: 0, y: 0 });
+                const b = view.screenToWorld({ x: dxPx, y: dyPx });
                 view.flyTo(
                     {
-                        x: viewBox.x + viewBox.width / 2,
-                        y: -(viewBox.y + viewBox.height / 2),
+                        x: view.center.x - (b.x - a.x),
+                        y: view.center.y - (b.y - a.y),
                     },
-                    nextZoom,
+                    zoom,
                 );
             } catch (error) {
-                console.warn(
-                    '[site-plan] No se pudo sincronizar la camara CAD.',
-                    error,
-                );
+                console.warn('[site-plan] pan falló.', error);
             }
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [status],
     );
 
-    /**
-     * `viewBox` (en unidades del emplazamiento) que encuadra el plano completo,
-     * para que el canvas arranque mostrandolo entero en vez de un punto
-     * diminuto en el centro. Se calcula pidiendole al motor que haga
-     * `fitToView` (que si conoce la extension del dibujo, aunque
-     * `getDocumentExtents` devuelva null) y leyendo que zona quedo visible.
-     * `null` si el plano no esta listo o el motor no expone la vista.
-     */
-    const framePlanViewBox = useCallback(
-        (pixelWidth: number, pixelHeight: number): ViewBoxLike | null => {
-            if (status !== 'ready' || pixelWidth <= 0 || pixelHeight <= 0) {
-                return null;
-            }
-            const view = engine.docManager?.curView as unknown as
-                CadViewLike | undefined;
-            if (!view?.worldToScreen || !view.screenToWorld) return null;
-
-            try {
-                engine.fitToView?.();
-                const origin = view.worldToScreen({ x: 0, y: 0 });
-                const unit = view.worldToScreen({ x: 1, y: 0 });
-                const pxPerUnit = Math.hypot(
-                    unit.x - origin.x,
-                    unit.y - origin.y,
-                );
-                if (!Number.isFinite(pxPerUnit) || pxPerUnit <= 0) return null;
-
-                const center = view.screenToWorld({
-                    x: pixelWidth / 2,
-                    y: pixelHeight / 2,
-                });
-                const visW = pixelWidth / pxPerUnit;
-                const visH = pixelHeight / pxPerUnit;
-                // Un margen del 8% para que el plano no toque los bordes.
-                const pad = 1.08;
-                const width = visW * pad;
-                const height = visH * pad;
-                return {
-                    x: center.x - width / 2,
-                    // El SVG dibuja Y hacia abajo: siteY = -cadY.
-                    y: -center.y - height / 2,
-                    width,
-                    height,
-                };
-            } catch (error) {
-                console.warn(
-                    '[site-plan] No se pudo encuadrar el plano.',
-                    error,
-                );
-                return null;
-            }
-        },
+    /** Reencuadra el plano completo (carga inicial). */
+    const refit = useCallback(() => {
+        if (status !== 'ready') return;
+        engine.setViewOrigin?.();
+        engine.fitToView?.();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [status],
-    );
+    }, [status]);
 
-    return { containerRef, status, syncCamera, framePlanViewBox };
+    return {
+        containerRef,
+        status,
+        getView,
+        getViewState,
+        zoomAtScreen,
+        panByScreen,
+        refit,
+    };
 }
