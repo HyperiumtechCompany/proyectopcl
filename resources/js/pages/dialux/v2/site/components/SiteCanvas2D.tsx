@@ -81,6 +81,8 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
      *  en px constantes aunque el viewBox esté en unidades del plano (que pueden
      *  ser metros: un handle de "6" sería 6 m = un globo gigante). */
     const [viewportPx, setViewportPx] = useState(1200);
+    /** Posición del cursor mientras se dibuja — para la línea guía elástica. */
+    const [drawCursor, setDrawCursor] = useState<Point2D | null>(null);
     const svgRef = useRef<SVGSVGElement>(null);
     const panRef = useRef<
         | {
@@ -280,6 +282,14 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
     // propiedades después de dibujar el bloque (no con un clic aislado).
     const isPointTool = editor.activeTool === 'place_tg';
     const isCalibrateTool = editor.activeTool === 'calibrate_plan';
+    const drawingFeeder = editor.activeTool === 'draw_feeder';
+
+    // Línea guía elástica: del último punto colocado al cursor (ya con snap
+    // aplicado, para que se vea exactamente dónde caerá el siguiente punto).
+    const lastPending =
+        editor.pendingVertices[editor.pendingVertices.length - 1];
+    const rubberTarget =
+        isDrawTool && drawCursor && lastPending ? snapWorld(drawCursor) : null;
 
     const handleCanvasClick = (point: Point2D) => {
         if (isDrawTool) {
@@ -333,6 +343,9 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                     if (isDrawTool) editor.finishDrawing();
                 }}
                 onPointerMove={(event) => {
+                    if (isDrawTool && editor.pendingVertices.length > 0) {
+                        setDrawCursor(toSvgPoint(event.clientX, event.clientY));
+                    }
                     if (
                         vertexDragRef.current &&
                         vertexDragRef.current.pointerId === event.pointerId
@@ -422,6 +435,7 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                     planDragRef.current = undefined;
                     panRef.current = undefined;
                 }}
+                onPointerLeave={() => setDrawCursor(null)}
             >
                 {satelliteTiles.map((tile) => (
                     <image
@@ -619,6 +633,37 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                 }
                             />
                         ))}
+                    </>
+                )}
+                {rubberTarget && lastPending && (
+                    <>
+                        <line
+                            x1={lastPending.x}
+                            y1={lastPending.y}
+                            x2={rubberTarget.x}
+                            y2={rubberTarget.y}
+                            className={
+                                drawingFeeder
+                                    ? 'stroke-cyan-400/70'
+                                    : 'stroke-amber-400/70'
+                            }
+                            strokeWidth={1.5}
+                            strokeDasharray="5 4"
+                            vectorEffect="non-scaling-stroke"
+                        />
+                        <circle
+                            cx={rubberTarget.x}
+                            cy={rubberTarget.y}
+                            r={dotR}
+                            fill="none"
+                            className={
+                                drawingFeeder
+                                    ? 'stroke-cyan-400'
+                                    : 'stroke-amber-400'
+                            }
+                            strokeWidth={1.5}
+                            vectorEffect="non-scaling-stroke"
+                        />
                     </>
                 )}
             </svg>
