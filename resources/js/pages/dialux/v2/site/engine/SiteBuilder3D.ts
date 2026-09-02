@@ -217,7 +217,18 @@ export class SiteBuilder3D {
     } {
         const center = centroid(element.vertices);
         const node = new TransformNode(`site_${element.id}`, this.scene);
-        node.position.set(center.x * scaleM, 0, -center.y * scaleM);
+        // `baseElevationM` es en metros reales (no unidades de plano) — el
+        // terreno no es plano: aulas +7, estacionamiento −1, etc.
+        node.position.set(
+            center.x * scaleM,
+            element.baseElevationM ?? 0,
+            -center.y * scaleM,
+        );
+        // `rotation` en grados horarios sobre pantalla. Como el plano se
+        // mapea con Z invertida (`z = -y`), el giro equivalente en el mundo 3D
+        // es el negado para que se lea igual desde la vista en planta.
+        const rotRad = (-(element.rotation ?? 0) * Math.PI) / 180;
+        node.rotation.y = rotRad;
         this.elementNodes.set(element.id, node);
         const localVertices = element.vertices.map(
             (v) =>

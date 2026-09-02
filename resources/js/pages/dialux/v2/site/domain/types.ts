@@ -43,7 +43,8 @@ export interface SiteElement {
     label: string;
     vertices: Point2D[]; // Polígono o polilínea
     heightM?: number; // Altura (cercos, edificios para 3D)
-    rotation?: number; // Grados
+    rotation?: number; // Grados (giro del objeto alrededor de su centroide)
+    baseElevationM?: number; // Cota base sobre el terreno (0 = a nivel). Metros reales.
     moduleId?: number; // → DialuxModule.id si es building_block
     moduleName?: string; // Nombre del módulo referenciado
     locked?: boolean; // No editable (para bloques importados)

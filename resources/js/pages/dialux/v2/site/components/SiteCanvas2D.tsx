@@ -102,6 +102,10 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
     const planDragRef = useRef<
         { pointerId: number; startWorld: Point2D; origin: Point2D } | undefined
     >(undefined);
+    const rotateDragRef = useRef<
+        | { elementId: string; pointerId: number; centerScreen: Point2D }
+        | undefined
+    >(undefined);
     const refitStampRef = useRef<number | null>(null);
 
     // ── Tamaño del contenedor (y avisar al motor para que ajuste su canvas) ──
@@ -369,6 +373,26 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                         setDrawCursor(toWorld(event.clientX, event.clientY));
                     }
 
+                    const rDrag = rotateDragRef.current;
+                    if (rDrag && rDrag.pointerId === event.pointerId) {
+                        const r = wrapRef.current?.getBoundingClientRect();
+                        const lx = event.clientX - (r?.left ?? 0);
+                        const ly = event.clientY - (r?.top ?? 0);
+                        // 0° = hacia arriba en pantalla, horario positivo.
+                        let deg =
+                            (Math.atan2(
+                                lx - rDrag.centerScreen.x,
+                                rDrag.centerScreen.y - ly,
+                            ) *
+                                180) /
+                            Math.PI;
+                        if (editor.snapEnabled) deg = Math.round(deg / 15) * 15;
+                        editor.updateSiteElement(rDrag.elementId, {
+                            rotation: Math.round(deg),
+                        });
+                        return;
+                    }
+
                     const vDrag = vertexDragRef.current;
                     if (vDrag && vDrag.pointerId === event.pointerId) {
                         editor.moveSiteVertex(
@@ -423,6 +447,10 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                     }
                 }}
                 onPointerUp={(event) => {
+                    if (rotateDragRef.current?.pointerId === event.pointerId) {
+                        rotateDragRef.current = undefined;
+                        return;
+                    }
                     if (vertexDragRef.current?.pointerId === event.pointerId) {
                         vertexDragRef.current = undefined;
                         return;
@@ -451,6 +479,7 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                     dragRef.current = undefined;
                     vertexDragRef.current = undefined;
                     planDragRef.current = undefined;
+                    rotateDragRef.current = undefined;
                     panRef.current = undefined;
                 }}
                 onPointerLeave={() => setDrawCursor(null)}
@@ -536,17 +565,81 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                         };
 
                         if (POINT_ELEMENT_TYPES.has(element.type)) {
+                            const rot = element.rotation ?? 0;
+                            const showRotate = selected && canDrag;
                             return (
                                 <g key={element.id}>
                                     <SiteElementSymbol
                                         type={element.type}
                                         cx={labelPos.x}
                                         cy={labelPos.y}
+                                        rotationDeg={rot}
                                         color={element.style.strokeColor}
                                         selected={selected}
                                         interactive={canDrag}
                                         onPointerDown={startElementDrag}
                                     />
+                                    {showRotate && (
+                                        <>
+                                            <line
+                                                x1={labelPos.x}
+                                                y1={labelPos.y}
+                                                x2={
+                                                    labelPos.x +
+                                                    30 *
+                                                        Math.sin(
+                                                            (rot * Math.PI) /
+                                                                180,
+                                                        )
+                                                }
+                                                y2={
+                                                    labelPos.y -
+                                                    30 *
+                                                        Math.cos(
+                                                            (rot * Math.PI) /
+                                                                180,
+                                                        )
+                                                }
+                                                className="stroke-amber-500"
+                                                strokeWidth={1}
+                                                style={{
+                                                    pointerEvents: 'none',
+                                                }}
+                                            />
+                                            <circle
+                                                cx={
+                                                    labelPos.x +
+                                                    30 *
+                                                        Math.sin(
+                                                            (rot * Math.PI) /
+                                                                180,
+                                                        )
+                                                }
+                                                cy={
+                                                    labelPos.y -
+                                                    30 *
+                                                        Math.cos(
+                                                            (rot * Math.PI) /
+                                                                180,
+                                                        )
+                                                }
+                                                r={HANDLE_R}
+                                                className="cursor-grab fill-amber-500 stroke-white stroke-2 dark:stroke-slate-900"
+                                                onPointerDown={(event) => {
+                                                    event.stopPropagation();
+                                                    event.currentTarget.ownerSVGElement?.setPointerCapture(
+                                                        event.pointerId,
+                                                    );
+                                                    rotateDragRef.current = {
+                                                        elementId: element.id,
+                                                        pointerId:
+                                                            event.pointerId,
+                                                        centerScreen: labelPos,
+                                                    };
+                                                }}
+                                            />
+                                        </>
+                                    )}
                                     <text
                                         x={labelPos.x}
                                         y={labelPos.y + 26}
@@ -555,6 +648,9 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                         className="pointer-events-none fill-slate-800 font-semibold dark:fill-white"
                                     >
                                         {element.label}
+                                        {element.baseElevationM
+                                            ? `  ▲ ${element.baseElevationM > 0 ? '+' : ''}${element.baseElevationM.toFixed(1)}`
+                                            : ''}
                                     </text>
                                 </g>
                             );

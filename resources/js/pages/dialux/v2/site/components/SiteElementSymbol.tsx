@@ -18,6 +18,8 @@ interface Props {
     type: SiteElementType;
     cx: number;
     cy: number;
+    /** Grados horarios — orienta el símbolo igual que el objeto 3D. */
+    rotationDeg?: number;
     color: string;
     selected: boolean;
     interactive: boolean;
@@ -29,6 +31,7 @@ export function SiteElementSymbol({
     type,
     cx,
     cy,
+    rotationDeg = 0,
     color,
     selected,
     interactive,
@@ -46,7 +49,7 @@ export function SiteElementSymbol({
             }}
             onPointerDown={onPointerDown}
         >
-            {/* Zona de clic invisible, generosa. */}
+            {/* Zona de clic invisible, generosa (no rota). */}
             <circle r={R + 4} fill="transparent" />
             {selected && (
                 <circle
@@ -57,7 +60,9 @@ export function SiteElementSymbol({
                     strokeDasharray="3 2"
                 />
             )}
-            <Glyph type={type} stroke={stroke} sw={sw} />
+            <g transform={`rotate(${rotationDeg})`}>
+                <Glyph type={type} stroke={stroke} sw={sw} />
+            </g>
         </g>
     );
 }

@@ -2,6 +2,7 @@ import { Copy, Eye, EyeOff, Lock, Trash2, Unlock } from 'lucide-react';
 import { useState } from 'react';
 import { polygonArea, polygonPerimeter } from '../domain/geometry';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
+import { POINT_ELEMENT_TYPES } from './SiteElementSymbol';
 
 interface ModuleOption {
     id: number;
@@ -157,6 +158,39 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                                 onChange={(event) =>
                                     editor.updateSiteElement(element.id, {
                                         heightM: Number(event.target.value),
+                                    })
+                                }
+                            />
+                        </label>
+                    )}
+
+                    <label className="text-[11px] text-slate-500">
+                        Cota base (m sobre el terreno)
+                        <input
+                            type="number"
+                            step="0.1"
+                            className={inputClass}
+                            value={element.baseElevationM ?? 0}
+                            onChange={(event) =>
+                                editor.updateSiteElement(element.id, {
+                                    baseElevationM: Number(event.target.value),
+                                })
+                            }
+                        />
+                    </label>
+
+                    {POINT_ELEMENT_TYPES.has(element.type) && (
+                        <label className="text-[11px] text-slate-500">
+                            Rotación (°)
+                            <input
+                                type="number"
+                                step="15"
+                                className={inputClass}
+                                value={element.rotation ?? 0}
+                                onChange={(event) =>
+                                    editor.updateSiteElement(element.id, {
+                                        rotation:
+                                            Number(event.target.value) % 360,
                                     })
                                 }
                             />
