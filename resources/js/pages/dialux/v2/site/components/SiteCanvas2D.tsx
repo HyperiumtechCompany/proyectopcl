@@ -31,12 +31,10 @@ interface ViewBox {
 
 // Rango de zoom: `refWidth / MAX_SCALE` (más cerca) .. `refWidth / MIN_SCALE`
 // (más lejos). `refWidth` es el ancho de referencia — el lienzo base para un
-// emplazamiento a mano, o el ancho del plano CAD encuadrado cuando hay uno.
-// Con `MAX_SCALE` alto se puede acercar hasta ~30 cm de ancho de vista sobre
-// un plano de ~250 m, que es lo que hace falta para dibujar detalle fino
-// (esquinas de ambientes, trazado de cableado) dentro de la planta general.
-const MIN_SCALE = 0.05;
-const MAX_SCALE = 800;
+// emplazamiento a mano, o el ancho del plano CAD encuadrado cuando hay uno,
+// para poder acercarse a dibujar detalle dentro de un plano grande.
+const MIN_SCALE = 0.1;
+const MAX_SCALE = 60;
 
 function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
