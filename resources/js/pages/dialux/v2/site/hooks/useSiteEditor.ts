@@ -195,12 +195,27 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
 
     /** Coloca el plano recién importado centrado en el origen del canvas (mismo punto que ancla la capa satelital) y arranca la calibración. */
     const handlePlanImported = (result: SitePlanImportResult) => {
+        let { widthUnits, heightUnits } = result;
+        if (result.sizeIsGuess) {
+            // Cuando el DWG no expone extents (`getDocumentExtents()` devuelve
+            // null — pasa con planos reales, confirmado), `useSitePlanImport`
+            // solo puede devolver un tamaño provisional `canvas/20`: ~75×45
+            // unidades sobre un lienzo de 2000×1200, o sea un bloque diminuto
+            // que ni siquiera se puede calibrar a mano (que es justo lo que el
+            // flujo pide a continuación). Se reescala para que ocupe una
+            // fracción útil del lienzo CONSERVANDO la proporción capturada; la
+            // calibración posterior fija la escala real.
+            const targetWidth = (siteData?.canvasWidth ?? 2000) * 0.7;
+            const factor = targetWidth / Math.max(1, widthUnits);
+            widthUnits *= factor;
+            heightUnits *= factor;
+        }
         setImportedPlan({
             originalName: result.originalName,
-            x: -result.widthUnits / 2,
-            y: -result.heightUnits / 2,
-            widthUnits: result.widthUnits,
-            heightUnits: result.heightUnits,
+            x: -widthUnits / 2,
+            y: -heightUnits / 2,
+            widthUnits,
+            heightUnits,
             opacity: 0.85,
             visible: true,
             updatedAt: Date.now(),
