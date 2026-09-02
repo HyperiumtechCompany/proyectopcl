@@ -41,6 +41,7 @@ import {
     getPostLandingCursorOffset,
     getStairLaneLayout,
 } from '@/pages/dialux/hooks/stairGeometry';
+import { findStairAtPoint, resolveStairUndersidePoint } from '@/pages/dialux/hooks/stairMountingGeometry';
 import type {
     Room,
     Wall,
@@ -427,13 +428,16 @@ export class House3DBuilder {
                 }
             }
         });
-        (editorScene.fixtures || []).forEach((f) =>
+        (editorScene.fixtures || []).forEach((fixture) => {
+            const stair = rooms.find((room) => room.roomType === 'stair' && room.id === fixture.roomId)
+                ?? findStairAtPoint(rooms, fixture);
+            const mount = stair ? resolveStairUndersidePoint(stair, fixture) : null;
             this.buildFixtureLight(
-                f,
-                this.resolveFixtureRoomHeight(f, rooms, roomHeights),
+                mount ? { ...fixture, x: mount.x, y: mount.y, z: mount.height } : fixture,
+                mount ? undefined : this.resolveFixtureRoomHeight(fixture, rooms, roomHeights),
                 floorNode,
-            ),
-        );
+            );
+        });
         (editorScene.lightSwitches || []).forEach((ls) =>
             this.buildLightSwitch(ls, floorNode, editorScene.walls || [], editorScene.rooms || []),
         );
@@ -3251,14 +3255,21 @@ export class House3DBuilder {
             structuralRouteHeightAt(x, z)
                 ?? rooms.find((room) => pointInPolygon({ x, y: z }, room.vertices))?.height
                 ?? floorHeight;
+        const stairMountAt = (x: number, z: number) => {
+            const stair = findStairAtPoint(rooms, { x, y: z });
+            return stair ? resolveStairUndersidePoint(stair, { x, y: z }) : null;
+        };
 
         const resolveNode = (id: string): { x: number; y: number; z: number } | null => {
             const fx = fixtures.find((f) => f.id === id);
-            if (fx) return {
-                x: fx.x,
-                y: resolveFixtureRenderHeight(fx, ceilingHeightAt(fx.x, fx.y)),
-                z: fx.y,
-            };
+            if (fx) {
+                const mount = stairMountAt(fx.x, fx.y);
+                return mount ? { x: mount.x, y: mount.height, z: mount.y } : {
+                    x: fx.x,
+                    y: resolveFixtureRenderHeight(fx, ceilingHeightAt(fx.x, fx.y)),
+                    z: fx.y,
+                };
+            }
             const sw = lightSwitches.find((s) => s.id === id);
             if (sw) return { x: sw.x, y: sw.mountingHeight ?? 1.2, z: sw.y };
             const dev = electricalDevices.find((d) => d.id === id);
@@ -3271,6 +3282,23 @@ export class House3DBuilder {
             routeType: 'floor' | 'wall_ceiling',
             routeHeightM?: number,
         ): Vector3[] => {
+            if (routeType === 'wall_ceiling' && nodes.some((node) => stairMountAt(node.x, node.z))) {
+                const routed = [new Vector3(nodes[0].x, nodes[0].y, nodes[0].z)];
+                for (let index = 0; index < nodes.length - 1; index++) {
+                    const from = nodes[index]; const to = nodes[index + 1];
+                    for (let sample = 0; sample <= 12; sample++) {
+                        const ratio = sample / 12;
+                        const x = from.x + (to.x - from.x) * ratio;
+                        const z = from.z + (to.z - from.z) * ratio;
+                        const mount = stairMountAt(x, z);
+                        if (mount) routed.push(new Vector3(mount.x, mount.height, mount.y));
+                        else if (sample === 12) routed.push(new Vector3(to.x, to.y, to.z));
+                    }
+                }
+                return routed.filter((point, index) =>
+                    index === 0 || !point.equalsWithEpsilon(routed[index - 1], 0.001),
+                );
+            }
             const autoCeiling = Math.max(
                 ...nodes.map((point) =>
                     ceilingHeightAt(point.x, point.z),

@@ -74,6 +74,7 @@ import {
     applyLegacyLinkUpdate,
     computeLegacyLinkUpdate,
 } from '@/pages/dialux/hooks/wireLegacySync';
+import { resolveStairUndersidePoint } from '@/pages/dialux/hooks/stairMountingGeometry';
 
 import { createCanvasTransforms } from '@/pages/dialux/geometry/coordinateTransform';
 import {
@@ -984,12 +985,15 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
 
                 const t = ui.fixtureTemplate;
                 const fixtureType = t.fixtureType ?? 'surface';
+                const stairMount = ambient?.sourceRoom.roomType === 'stair'
+                    ? resolveStairUndersidePoint(ambient.sourceRoom, { x: xM, y: yM })
+                    : null;
                 const ceilingHeight = ambient
                     ? resolveRoomCeilingHeight(ambient.room, scene.walls)
                     : undefined;
                 const fixtureHeight = resolveFixtureRenderHeight(
                     {
-                        z: t.z ?? (ceilingHeight ? ceilingHeight - 0.08 : 2.4),
+                        z: stairMount?.height ?? t.z ?? (ceilingHeight ? ceilingHeight - 0.08 : 2.4),
                         fixtureType,
                         emergencyType: t.emergencyType,
                     },
@@ -1001,8 +1005,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     // colocar la luminaria, dejándola sin su identidad de catálogo.
                     ...t,
                     name: t.name ?? `Luminaria ${ambient?.name ?? 'exterior'}`,
-                    x: xM,
-                    y: yM,
+                    x: stairMount?.x ?? xM,
+                    y: stairMount?.y ?? yM,
                     z: fixtureHeight,
                     lumens: t.lumens ?? 4000,
                     power: t.power,
