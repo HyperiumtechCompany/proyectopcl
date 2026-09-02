@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { computeLinearScaleFactor } from '@/pages/dialux/geometry/calibration';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
-import { snapToGrid } from '../domain/geometry';
 import {
     DEFAULT_SATELLITE_ZOOM,
     MAX_SATELLITE_ZOOM,
@@ -113,13 +112,8 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         setActiveToolState('calibrate_plan');
     };
 
-    // La cuadrícula está en METROS reales, pero los vértices se guardan en
-    // unidades del plano CAD — el paso de snap en unidades es `gridSizeM / escala`.
-    const snap = (point: Point2D): Point2D =>
-        snapEnabled ? snapToGrid(point, gridSizeM / terrainScaleM) : point;
-
     const addVertex = (point: Point2D) => {
-        setPendingVertices((current) => [...current, snap(point)]);
+        setPendingVertices((current) => [...current, point]);
     };
 
     const cancelDrawing = () => {
@@ -166,7 +160,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
 
     /** Coloca un equipo puntual (TG, transformador, poste, portón) con un solo clic. */
     const placePoint = (point: Point2D, elementType: SiteElementType) => {
-        const center = snap(point);
+        const center = point;
         const half = POINT_SIZE_M / 2;
         const defaults = SITE_ELEMENT_DEFAULTS[elementType];
         const id = addSiteElement({

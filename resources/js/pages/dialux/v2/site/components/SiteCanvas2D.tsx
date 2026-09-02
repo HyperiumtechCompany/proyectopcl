@@ -6,6 +6,7 @@ import {
     type RefObject,
 } from 'react';
 import { deriveFeederStatus, feederStatusColor } from '../domain/feederSync';
+import { snapToGrid } from '../domain/geometry';
 import { computeSatelliteTiles } from '../domain/geoTiles';
 import { useSiteCadPlan } from '../hooks/useSiteCadPlan';
 import type {
@@ -256,6 +257,19 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
     const dotR = 5 * uPerPx;
     const labelFontSize = 12 * uPerPx;
 
+    // Snap "magnético": ajusta a la cuadrícula SOLO si el clic cae a menos de
+    // ~14 px del cruce de rejilla. Así, al alejar la vista la rejilla imanta
+    // como siempre, pero al acercarse a calcar el plano CAD los puntos quedan
+    // exactamente donde se hace clic (antes un clic podía saltar varios metros).
+    const snapWorld = (point: Point2D): Point2D => {
+        if (!editor.snapEnabled) return point;
+        const step = editor.gridSizeM / editor.terrainScaleM;
+        if (!(step > 0)) return point;
+        const snapped = snapToGrid(point, step);
+        const pulled = Math.hypot(snapped.x - point.x, snapped.y - point.y);
+        return pulled <= 14 * uPerPx ? snapped : point;
+    };
+
     const isDrawTool =
         editor.activeTool === 'draw_polygon' ||
         editor.activeTool === 'draw_feeder';
@@ -269,14 +283,15 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
 
     const handleCanvasClick = (point: Point2D) => {
         if (isDrawTool) {
-            editor.addVertex(point);
+            editor.addVertex(snapWorld(point));
             return;
         }
         if (isPointTool) {
-            editor.placePoint(point, editor.pendingType);
+            editor.placePoint(snapWorld(point), editor.pendingType);
             return;
         }
         if (isCalibrateTool) {
+            // Calibración: sin snap — el punto exacto donde se hace clic.
             editor.addCalibrationPoint(point);
             return;
         }
