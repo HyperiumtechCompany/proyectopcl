@@ -74,6 +74,10 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
         width: baseWidth,
         height: baseHeight,
     });
+    /** Ancho del SVG en píxeles de pantalla — para dimensionar marcadores/handles
+     *  en px constantes aunque el viewBox esté en unidades del plano (que pueden
+     *  ser metros: un handle de "6" sería 6 m = un globo gigante). */
+    const [viewportPx, setViewportPx] = useState(1200);
     const svgRef = useRef<SVGSVGElement>(null);
     const panRef = useRef<
         | {
@@ -155,6 +159,18 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    useEffect(() => {
+        const svg = svgRef.current;
+        if (!svg || typeof ResizeObserver === 'undefined') return;
+        const update = () => {
+            if (svg.clientWidth > 0) setViewportPx(svg.clientWidth);
+        };
+        update();
+        const observer = new ResizeObserver(update);
+        observer.observe(svg);
+        return () => observer.disconnect();
+    }, []);
+
     // Encuadra el viewBox al plano completo UNA vez, cuando el motor CAD queda
     // listo (arrancaba en el lienzo por defecto de 2000×1200, dejando el plano
     // diminuto). No se reencuadra al volver de la pestaña 3D: se respeta el
@@ -229,6 +245,14 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
             </div>
         );
     }
+
+    // Unidades del plano por píxel de pantalla: convierte tamaños en px a
+    // unidades del viewBox para que handles y marcadores se vean constantes
+    // sin importar el zoom ni la unidad del plano.
+    const uPerPx = viewBox.width / Math.max(viewportPx, 1);
+    const handleR = 6 * uPerPx;
+    const dotR = 5 * uPerPx;
+    const labelFontSize = 12 * uPerPx;
 
     const isDrawTool =
         editor.activeTool === 'draw_polygon' ||
@@ -433,6 +457,7 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                             ? 3
                                             : (element.style.strokeWidth ?? 1.5)
                                     }
+                                    vectorEffect="non-scaling-stroke"
                                     className={
                                         editor.activeTool === 'select'
                                             ? 'cursor-move'
@@ -472,7 +497,8 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                         ) / element.vertices.length
                                     }
                                     textAnchor="middle"
-                                    className="pointer-events-none fill-slate-800 text-[11px] font-semibold dark:fill-white"
+                                    fontSize={labelFontSize}
+                                    className="pointer-events-none fill-slate-800 font-semibold dark:fill-white"
                                 >
                                     {element.label}
                                 </text>
@@ -484,7 +510,8 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                             key={index}
                                             cx={vertex.x}
                                             cy={vertex.y}
-                                            r={6}
+                                            r={handleR}
+                                            vectorEffect="non-scaling-stroke"
                                             className="cursor-crosshair fill-amber-500 stroke-white stroke-2 dark:stroke-slate-900"
                                             onPointerDown={(event) => {
                                                 event.stopPropagation();
@@ -518,6 +545,7 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                             strokeWidth={3}
                             strokeDasharray={path.style?.dashArray}
                             strokeLinecap="round"
+                            vectorEffect="non-scaling-stroke"
                         />
                     );
                 })}
@@ -532,6 +560,7 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                 className="stroke-fuchsia-500"
                                 strokeWidth={2}
                                 strokeDasharray="4 3"
+                                vectorEffect="non-scaling-stroke"
                             />
                         )}
                         {editor.calibrationPoints.map((vertex, index) => (
@@ -539,7 +568,8 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                 key={index}
                                 cx={vertex.x}
                                 cy={vertex.y}
-                                r={6}
+                                r={handleR}
+                                vectorEffect="non-scaling-stroke"
                                 className="fill-fuchsia-500 stroke-white stroke-2 dark:stroke-slate-900"
                             />
                         ))}
@@ -557,13 +587,14 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                             }
                             strokeWidth={2}
                             strokeDasharray="6 4"
+                            vectorEffect="non-scaling-stroke"
                         />
                         {editor.pendingVertices.map((vertex, index) => (
                             <circle
                                 key={index}
                                 cx={vertex.x}
                                 cy={vertex.y}
-                                r={5}
+                                r={dotR}
                                 className={
                                     editor.activeTool === 'draw_feeder'
                                         ? 'fill-cyan-500'
