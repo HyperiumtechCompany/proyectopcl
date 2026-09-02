@@ -2,7 +2,10 @@ import { useCallback, useRef, useState } from 'react';
 import { uploadDialuxPlanFile } from '@/pages/dialux/hooks/dialuxPlanStorage';
 import { detectScaleFromExtents } from '@/pages/dialux/hooks/storeHelpers';
 import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
-import { SITE_PLAN_SCENE_ID } from '../lib/planImport';
+import {
+    SITE_PLAN_SCENE_ID,
+    SITE_PLAN_SOURCE_SCENE_ID,
+} from '../lib/planImport';
 
 export interface SitePlanImportResult {
     originalName: string;
@@ -203,6 +206,26 @@ export function useSitePlanImport(projectId: number, generalModuleId: number) {
                     pngFile,
                     String(generalModuleId),
                 );
+
+                // Además del PNG, se guarda el ARCHIVO CAD ORIGINAL: es el
+                // único que conserva los vectores y la escala real, y sin él
+                // el plano no se puede reabrir en el motor para medir
+                // distancias (base de la caída de tensión del módulo). Si esta
+                // subida falla NO se aborta la importación: el PNG ya quedó
+                // guardado y el emplazamiento sigue siendo utilizable.
+                try {
+                    await uploadDialuxPlanFile(
+                        String(projectId),
+                        SITE_PLAN_SOURCE_SCENE_ID,
+                        file,
+                        String(generalModuleId),
+                    );
+                } catch (sourceError) {
+                    console.warn(
+                        '[site-plan] No se pudo guardar el archivo CAD original; queda solo el PNG.',
+                        sourceError,
+                    );
+                }
 
                 setState({ status: 'idle', error: null });
                 return {

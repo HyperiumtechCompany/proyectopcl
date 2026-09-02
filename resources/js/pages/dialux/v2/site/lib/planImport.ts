@@ -30,3 +30,15 @@ export function sitePlanImageUrl(
         { query: { v: updatedAt } },
     );
 }
+
+/**
+ * `sceneId` reservado para el ARCHIVO CAD ORIGINAL (dxf/dwg) del
+ * emplazamiento, aparte del PNG de `SITE_PLAN_SCENE_ID`.
+ *
+ * El flujo original solo guardaba el PNG rasterizado, así que el plano no se
+ * podía volver a abrir en el motor CAD: sin el archivo original no hay
+ * vectores, y sin vectores no hay zoom nítido ni distancias reales — que es
+ * de donde sale la caída de tensión del Módulo General. Se guarda el original
+ * en paralelo, reusando el mismo backend de planos.
+ */
+export const SITE_PLAN_SOURCE_SCENE_ID = 'site-plan-source';
