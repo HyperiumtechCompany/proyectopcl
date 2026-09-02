@@ -57,6 +57,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
     const removeImportedPlan = useEditorStore(
         (state) => state.removeImportedPlan,
     );
+    const setTerrainScale = useEditorStore((state) => state.setTerrainScale);
 
     useEffect(() => {
         if (project && !project.site) ensureSiteData();
@@ -87,6 +88,8 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
             Math.min(MAX_SATELLITE_ZOOM, Math.max(MIN_SATELLITE_ZOOM, zoom)),
         );
     const gridSizeM = siteData?.gridSizeM ?? 5;
+    /** Metros por unidad de coordenada (1 = sin calibrar). Lo fija "Calibrar plano". */
+    const terrainScaleM = siteData?.terrainScaleM || 1;
 
     /** Cambia de herramienta y, si es una de dibujo, fija qué tipo va a crear. */
     const startTool = (tool: SiteTool, elementType?: SiteElementType) => {
@@ -110,8 +113,10 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         setActiveToolState('calibrate_plan');
     };
 
+    // La cuadrícula está en METROS reales, pero los vértices se guardan en
+    // unidades del plano CAD — el paso de snap en unidades es `gridSizeM / escala`.
     const snap = (point: Point2D): Point2D =>
-        snapEnabled ? snapToGrid(point, gridSizeM) : point;
+        snapEnabled ? snapToGrid(point, gridSizeM / terrainScaleM) : point;
 
     const addVertex = (point: Point2D) => {
         setPendingVertices((current) => [...current, snap(point)]);
@@ -226,17 +231,20 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         setActiveToolState('select');
     };
 
-    /** Reescala el plano importado para que la distancia medida (2 clics) equivalga a `realDistanceM`. */
+    /**
+     * Fija la escala real del emplazamiento a partir de la distancia medida
+     * (2 clics sobre el plano CAD, en unidades nativas) y su valor real en
+     * metros. El resultado — `metros por unidad` — lo usa TODO el sistema
+     * (áreas, perímetros, longitudes de alimentador, 3D). Es absoluto: medir
+     * de nuevo sobrescribe la escala anterior, no la acumula.
+     */
     const applyPlanCalibration = (realDistanceM: number) => {
-        if (calibrationPoints.length !== 2 || !siteData?.importedPlan) return;
+        if (calibrationPoints.length !== 2) return;
         const [p1, p2] = calibrationPoints;
         const measured = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-        const factor = computeLinearScaleFactor(measured, realDistanceM);
-        if (factor === null) return;
-        updateImportedPlan({
-            widthUnits: siteData.importedPlan.widthUnits * factor,
-            heightUnits: siteData.importedPlan.heightUnits * factor,
-        });
+        const metersPerUnit = computeLinearScaleFactor(measured, realDistanceM);
+        if (metersPerUnit === null) return;
+        setTerrainScale(metersPerUnit);
         setCalibrationPoints([]);
         setActiveToolState('select');
     };
@@ -280,6 +288,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         generalModuleId,
         importedPlan: siteData?.importedPlan,
         siteData,
+        terrainScaleM,
         activeTool,
         startTool,
         startFeederTool,

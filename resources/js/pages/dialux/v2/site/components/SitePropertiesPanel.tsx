@@ -91,7 +91,8 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                         </label>
                     </div>
                     <label className="text-[11px] text-slate-500">
-                        Opacidad ({Math.round((element.style.opacity ?? 1) * 100)}%)
+                        Opacidad (
+                        {Math.round((element.style.opacity ?? 1) * 100)}%)
                         <input
                             type="range"
                             min={0.1}
@@ -115,7 +116,11 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                             <div className="flex items-center justify-between">
                                 <span className="text-slate-500">Área</span>
                                 <strong>
-                                    {polygonArea(element.vertices).toFixed(1)}{' '}
+                                    {(
+                                        polygonArea(element.vertices) *
+                                        editor.terrainScaleM *
+                                        editor.terrainScaleM
+                                    ).toFixed(1)}{' '}
                                     m²
                                 </strong>
                             </div>
@@ -124,12 +129,18 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                                     Perímetro
                                 </span>
                                 <strong>
-                                    {polygonPerimeter(
-                                        element.vertices,
+                                    {(
+                                        polygonPerimeter(element.vertices) *
+                                        editor.terrainScaleM
                                     ).toFixed(1)}{' '}
                                     m
                                 </strong>
                             </div>
+                            {editor.terrainScaleM === 1 && (
+                                <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
+                                    Plano sin calibrar — usa “Calibrar plano”.
+                                </p>
+                            )}
                         </div>
                     )}
 
@@ -292,8 +303,20 @@ function ImportedPlanPanel({ editor }: { editor: UseSiteEditorReturn }) {
             <p className="mb-2 text-[10px] font-bold tracking-wide text-slate-400 uppercase">
                 Plano importado
             </p>
-            <p className="mb-2 truncate text-[11px] text-slate-600 dark:text-slate-300">
+            <p className="mb-1 truncate text-[11px] text-slate-600 dark:text-slate-300">
                 {plan.originalName}
+            </p>
+            <p className="mb-2 text-[10px] text-slate-500">
+                {editor.terrainScaleM === 1 ? (
+                    <span className="text-amber-600 dark:text-amber-400">
+                        Sin calibrar — 1 unidad del plano = 1 m
+                    </span>
+                ) : (
+                    <>
+                        Escala: 1 unidad = {editor.terrainScaleM.toPrecision(4)}{' '}
+                        m
+                    </>
+                )}
             </p>
             <label className="text-[11px] text-slate-500">
                 Opacidad ({Math.round(plan.opacity * 100)}%)
@@ -347,11 +370,15 @@ function ImportedPlanPanel({ editor }: { editor: UseSiteEditorReturn }) {
     );
 }
 
-/** Panel de calibración — aparece con los 2 clics ya hechos, pide la distancia real y aplica el factor de escala. */
+/** Panel de calibración — aparece con los 2 clics ya hechos, pide la distancia real y fija la escala del emplazamiento. */
 function CalibrationPanel({ editor }: { editor: UseSiteEditorReturn }) {
     const [distance, setDistance] = useState('');
     const [p1, p2] = editor.calibrationPoints;
     const measured = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    const preview =
+        Number(distance) > 0 && measured > 0
+            ? Number(distance) / measured
+            : null;
 
     return (
         <div className="border-b border-fuchsia-200 bg-fuchsia-50 p-4 dark:border-fuchsia-900/50 dark:bg-fuchsia-950/20">
@@ -360,9 +387,14 @@ function CalibrationPanel({ editor }: { editor: UseSiteEditorReturn }) {
             </p>
             <p className="mb-2 text-[11px] text-slate-600 dark:text-slate-300">
                 Distancia medida en el plano:{' '}
-                <strong>{measured.toFixed(2)} u</strong>. ¿Cuánto mide esa
-                misma distancia en la realidad?
+                <strong>{measured.toFixed(2)} u</strong>. ¿Cuánto mide esa misma
+                distancia en la realidad?
             </p>
+            {preview !== null && (
+                <p className="mb-2 text-[10px] text-fuchsia-700 dark:text-fuchsia-300">
+                    Escala resultante: 1 u = {preview.toPrecision(4)} m
+                </p>
+            )}
             <div className="flex items-center gap-2">
                 <input
                     type="number"

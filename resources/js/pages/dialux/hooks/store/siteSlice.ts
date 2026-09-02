@@ -35,6 +35,8 @@ export interface SiteSlice {
     setImportedPlan: (plan: ImportedSitePlan) => void;
     updateImportedPlan: (patch: Partial<ImportedSitePlan>) => void;
     removeImportedPlan: () => void;
+    /** Fija la escala real del emplazamiento: metros por unidad de coordenada. */
+    setTerrainScale: (metersPerUnit: number) => void;
 }
 
 function defaultSiteData(): SiteData {
@@ -158,7 +160,10 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
                         elements: state.project.site.elements.map((item) => {
                             if (item.id !== elementId) return item;
                             const vertices = [...item.vertices];
-                            if (vertexIndex < 0 || vertexIndex >= vertices.length) {
+                            if (
+                                vertexIndex < 0 ||
+                                vertexIndex >= vertices.length
+                            ) {
                                 return item;
                             }
                             vertices[vertexIndex] = position;
@@ -306,6 +311,22 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
             delete site.importedPlan;
             return {
                 project: { ...state.project, site },
+            };
+        }),
+    setTerrainScale: (metersPerUnit) =>
+        set((state) => {
+            if (!state.project?.site) return state;
+            if (!Number.isFinite(metersPerUnit) || metersPerUnit <= 0) {
+                return state;
+            }
+            return {
+                project: {
+                    ...state.project,
+                    site: {
+                        ...state.project.site,
+                        terrainScaleM: metersPerUnit,
+                    },
+                },
             };
         }),
 });
