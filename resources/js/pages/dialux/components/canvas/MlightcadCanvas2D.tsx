@@ -57,6 +57,10 @@ import {
 } from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
 import { extractDxfEntitiesFromEngineDocument } from '@/pages/dialux/hooks/engineDxfExtraction';
 import {
+    drawPerfEnabled,
+    reportMove,
+} from '@/pages/dialux/lib/drawPerfProbe';
+import {
     clampOpeningOffsetToWallSegment,
     wallLength,
 } from '@/pages/dialux/hooks/useInteractionHelpers';
@@ -1960,6 +1964,9 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         requestAnimationFrame(() => {
                             mouseMoveThrottleRef.current = false;
                         });
+                        const __t0 = drawPerfEnabled()
+                            ? performance.now()
+                            : 0;
                         onMouseMove(
                             e,
                             (pt) => {
@@ -1975,6 +1982,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                             setAlignmentGuide,
                             setWireReconnectPreview,
                         );
+                        if (__t0) reportMove(performance.now() - __t0);
                     }}
                     onMouseUp={(e) => {
                         if (isInteractiveMode)

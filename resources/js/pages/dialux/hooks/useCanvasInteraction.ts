@@ -15,6 +15,11 @@ import {
     movePolygonVertex,
 } from '@/pages/dialux/geometry/editablePolyline';
 import { resolveVertexAlignmentSnap } from '@/pages/dialux/geometry/vertexAlignmentSnap';
+import {
+    drawPerfEnabled,
+    markRect,
+    markSnap,
+} from '@/pages/dialux/lib/drawPerfProbe';
 import type {
     AngleSnapMode,
     DrawTool,
@@ -1689,9 +1694,12 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             ) => void,
         ) => {
             const s = stateRef.current;
+            const __probe = drawPerfEnabled();
+            const __tRect = __probe ? performance.now() : 0;
             const rect = (
                 e.currentTarget as SVGSVGElement
             ).getBoundingClientRect();
+            if (__probe) markRect(performance.now() - __tRect);
             if (isNaN(rect.left) || isNaN(rect.top)) return;
             const rawX = e.clientX - rect.left;
             const rawY = e.clientY - rect.top;
@@ -1749,6 +1757,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             let cy = rawY;
 
             if (shouldSnap) {
+                const __tSnap = __probe ? performance.now() : 0;
                 const snapped = resolveSnap(
                     rawX,
                     rawY,
@@ -1772,6 +1781,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 );
                 cx = finalPointCanvas.x;
                 cy = finalPointCanvas.y;
+                if (__probe) markSnap(performance.now() - __tSnap);
             }
 
             if (
