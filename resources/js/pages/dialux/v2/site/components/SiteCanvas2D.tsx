@@ -18,6 +18,8 @@ import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 
 interface Props {
     editor: UseSiteEditorReturn;
+    /** `false` cuando la pestaña 3D está al frente (el 2D sigue montado, oculto). */
+    isActive?: boolean;
 }
 
 interface ViewBox {
@@ -49,7 +51,7 @@ function isLayerVisible(site: SiteData, element: SiteElement): boolean {
     return layer ? layer.visible : true;
 }
 
-export function SiteCanvas2D({ editor }: Props) {
+export function SiteCanvas2D({ editor, isActive = true }: Props) {
     const { siteData } = editor;
     const cadPlan = useSiteCadPlan(
         editor.projectId,
@@ -153,23 +155,52 @@ export function SiteCanvas2D({ editor }: Props) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Cuando el plano CAD queda listo: encuadrar el viewBox al plano completo
-    // (arrancaba en el lienzo por defecto de 2000×1200, dejando el plano
-    // diminuto y sin poder acercarse) y fijar el ancho de referencia del zoom.
+    // Encuadra el viewBox al plano completo UNA vez, cuando el motor CAD queda
+    // listo (arrancaba en el lienzo por defecto de 2000×1200, dejando el plano
+    // diminuto). No se reencuadra al volver de la pestaña 3D: se respeta el
+    // pan/zoom donde estaba el usuario.
     const framePlanViewBox = cadPlan.framePlanViewBox;
+    const framedForRef = useRef<number | null>(null);
     useEffect(() => {
         if (cadPlan.status !== 'ready') {
-            if (!editor.importedPlan) setPlanRefWidth(null);
+            if (!editor.importedPlan) {
+                setPlanRefWidth(null);
+                framedForRef.current = null;
+            }
             return;
         }
-        const el = svgRef.current;
-        if (!el) return;
-        const framed = framePlanViewBox(el.clientWidth, el.clientHeight);
-        if (framed && framed.width > 0) {
-            setPlanRefWidth(framed.width);
-            setViewBox(framed);
-        }
-    }, [cadPlan.status, framePlanViewBox, editor.importedPlan]);
+        if (!isActive) return;
+        const stamp = editor.importedPlan?.updatedAt ?? 0;
+        if (framedForRef.current === stamp) return;
+        const id = window.setTimeout(() => {
+            const el = svgRef.current;
+            if (!el || el.clientWidth <= 0) return;
+            const framed = framePlanViewBox(el.clientWidth, el.clientHeight);
+            if (framed && framed.width > 0) {
+                framedForRef.current = stamp;
+                setPlanRefWidth(framed.width);
+                setViewBox(framed);
+            }
+        }, 60);
+        return () => window.clearTimeout(id);
+    }, [cadPlan.status, framePlanViewBox, editor.importedPlan, isActive]);
+
+    // Al volver de la pestaña 3D el contenedor del canvas estuvo con tamaño 0:
+    // forzar que el motor CAD recalcule su tamaño y resincronizar la cámara al
+    // viewBox actual (sin tocar el pan/zoom del usuario).
+    const syncOnReactivate = cadPlan.syncCamera;
+    useEffect(() => {
+        if (!isActive || cadPlan.status !== 'ready') return;
+        window.dispatchEvent(new Event('resize'));
+        const id = window.setTimeout(() => {
+            const width = svgRef.current?.clientWidth ?? 0;
+            if (width > 0) syncOnReactivate(viewBox, width);
+        }, 60);
+        return () => window.clearTimeout(id);
+        // Solo al reactivar la pestaña: `viewBox` se resincroniza en su propio
+        // useLayoutEffect mientras la pestaña está activa.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isActive, cadPlan.status]);
 
     // Mantiene la cámara del motor CAD alineada con el viewBox del SVG.
     // `useLayoutEffect` para que el plano se reubique en el MISMO commit en que

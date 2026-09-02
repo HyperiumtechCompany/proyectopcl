@@ -4,6 +4,8 @@ import { SiteViewer3D } from './SiteViewer3D';
 
 interface Props {
     projectId: number;
+    /** `false` cuando la pestaña 2D está al frente (el 3D sigue montado, oculto). */
+    isActive?: boolean;
 }
 
 /**
@@ -13,7 +15,7 @@ interface Props {
  * `moduleScenes`/`feederCalculations` del mismo endpoint de solo lectura
  * que ya usa el editor 2D para vincular alimentadores — sin fetch propio.
  */
-export function SiteViewer3DPage({ projectId }: Props) {
+export function SiteViewer3DPage({ projectId, isActive = true }: Props) {
     const siteData = useEditorStore((state) => state.project?.site);
     const { moduleScenes, calculations } = useNetworkSnapshotForSite(projectId);
 
@@ -30,6 +32,7 @@ export function SiteViewer3DPage({ projectId }: Props) {
             siteData={siteData}
             moduleScenes={moduleScenes}
             feederCalculations={calculations}
+            isActive={isActive}
         />
     );
 }

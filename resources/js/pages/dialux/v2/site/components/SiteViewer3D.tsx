@@ -16,6 +16,8 @@ interface Props {
     moduleScenes?: SiteModuleScene[];
     feederCalculations?: EdgeCalculation[];
     onReady?: () => void;
+    /** `false` cuando la pestaña 2D está al frente: se pausa el render loop. */
+    isActive?: boolean;
 }
 
 const VIEWS = {
@@ -25,23 +27,25 @@ const VIEWS = {
 } as const;
 
 /**
- * Vista 3D read-only del emplazamiento completo (Fase 4.1). A diferencia de
- * `Editor3DCanvas` (que persiste montado y solo alterna visibilidad al
- * cambiar entre 2D/3D dentro del MISMO módulo), esta vista se monta y
- * desmonta de verdad — el toggle 2D/3D del Módulo General navega a una URL
- * distinta (`?view=3d`), así que aquí sí conviene liberar el motor Babylon
- * al desmontar en vez de mantenerlo vivo.
+ * Vista 3D read-only del emplazamiento completo (Fase 4.1). Al igual que
+ * `Editor3DCanvas`, esta vista persiste montada mientras el usuario está en
+ * el Módulo General: el toggle 2D/3D es estado local (no navega), así que
+ * el motor Babylon se mantiene vivo y solo se pausa el render loop cuando
+ * la pestaña 2D está al frente (`isActive === false`). Solo se libera al
+ * salir del módulo.
  */
 export function SiteViewer3D({
     siteData,
     moduleScenes = [],
     feederCalculations = [],
     onReady,
+    isActive = true,
 }: Props) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<Engine | null>(null);
     const cameraRef = useRef<ArcRotateCamera | null>(null);
     const builderRef = useRef<SiteBuilder3D | null>(null);
+    const isActiveRef = useRef(isActive);
     const [showInteriors, setShowInteriors] = useState(false);
 
     useEffect(() => {
@@ -78,7 +82,9 @@ export function SiteViewer3D({
         builder.setupLights();
         builderRef.current = builder;
 
-        engine.runRenderLoop(() => scene.render());
+        engine.runRenderLoop(() => {
+            if (isActiveRef.current) scene.render();
+        });
         const onResize = () => engine.resize();
         globalThis.addEventListener('resize', onResize);
 
@@ -95,6 +101,15 @@ export function SiteViewer3D({
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    useEffect(() => {
+        isActiveRef.current = isActive;
+        if (isActive && engineRef.current) {
+            // El canvas estuvo con display:none: recalcular tamaño y pintar un frame.
+            engineRef.current.resize();
+            engineRef.current.scenes[0]?.render();
+        }
+    }, [isActive]);
 
     useEffect(() => {
         builderRef.current?.sync(

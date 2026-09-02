@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import { Box, Map, Network } from 'lucide-react';
 
 export type GeneralWorkspaceView = '2d' | '3d' | 'network';
@@ -7,6 +7,12 @@ interface Props {
     projectId: number;
     moduleId: number;
     active: GeneralWorkspaceView;
+    /**
+     * Cambia entre 2D/3D SIN navegar (mantiene montados el editor 2D y su
+     * motor CAD + la escena 3D). `network` sigue siendo un link real porque es
+     * otra ruta.
+     */
+    onSelectLocal?: (view: '2d' | '3d') => void;
 }
 
 const views = [
@@ -15,8 +21,19 @@ const views = [
     { key: 'network', label: 'Red y CT', icon: Network },
 ] as const;
 
-export function GeneralWorkspaceTabs({ projectId, moduleId, active }: Props) {
+export function GeneralWorkspaceTabs({
+    projectId,
+    moduleId,
+    active,
+    onSelectLocal,
+}: Props) {
     const editorUrl = `/dialux-v2/projects/${projectId}/modules/${moduleId}`;
+    const cls = (selected: boolean) =>
+        `inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+            selected
+                ? 'bg-white text-amber-700 shadow-sm dark:bg-slate-800 dark:text-amber-400'
+                : 'text-slate-500 hover:bg-white/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white'
+        }`;
 
     return (
         <nav
@@ -24,26 +41,37 @@ export function GeneralWorkspaceTabs({ projectId, moduleId, active }: Props) {
             className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-white/10 dark:bg-black/20"
         >
             {views.map(({ key, label, icon: Icon }) => {
-                const href =
-                    key === 'network'
-                        ? `/dialux-v2/projects/${projectId}/electrical-network`
-                        : `${editorUrl}?view=${key}`;
                 const selected = active === key;
 
+                if (key === 'network') {
+                    return (
+                        <Link
+                            key={key}
+                            href={`/dialux-v2/projects/${projectId}/electrical-network`}
+                            aria-current={selected ? 'page' : undefined}
+                            className={cls(selected)}
+                        >
+                            <Icon className="h-4 w-4" />
+                            {label}
+                        </Link>
+                    );
+                }
+
                 return (
-                    <Link
+                    <button
                         key={key}
-                        href={href}
+                        type="button"
                         aria-current={selected ? 'page' : undefined}
-                        className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                            selected
-                                ? 'bg-white text-amber-700 shadow-sm dark:bg-slate-800 dark:text-amber-400'
-                                : 'text-slate-500 hover:bg-white/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white'
-                        }`}
+                        className={cls(selected)}
+                        onClick={() =>
+                            onSelectLocal
+                                ? onSelectLocal(key)
+                                : router.get(`${editorUrl}?view=${key}`)
+                        }
                     >
                         <Icon className="h-4 w-4" />
                         {label}
-                    </Link>
+                    </button>
                 );
             })}
         </nav>

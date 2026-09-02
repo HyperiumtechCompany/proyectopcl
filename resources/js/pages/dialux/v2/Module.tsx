@@ -3,7 +3,10 @@ import { useEffect, useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import { EditorLayout } from '@/pages/dialux/components/EditorLayout';
 import { ensureStandardDataLoaded } from '@/pages/dialux/hooks/normativeRemoteData';
-import {useEditorStore, type Project as EditorProject} from '@/pages/dialux/hooks/useEditorStore';
+import {
+    useEditorStore,
+    type Project as EditorProject,
+} from '@/pages/dialux/hooks/useEditorStore';
 import type { BreadcrumbItem } from '@/types';
 import { GeneralWorkspaceTabs } from './components/GeneralWorkspaceTabs';
 import { ModuleSidebar } from './components/ModuleSidebar';
@@ -12,7 +15,11 @@ import { useModuleActions } from './hooks/useModuleActions';
 import { createBlankModuleProject } from './lib/createBlankModuleProject';
 import { SiteEditor2D } from './site/components/SiteEditor2D';
 import { SiteViewer3DPage } from './site/components/SiteViewer3DPage';
-import type {DialuxV2EditorModule,DialuxV2Module,DialuxV2Project} from './types';
+import type {
+    DialuxV2EditorModule,
+    DialuxV2Module,
+    DialuxV2Project,
+} from './types';
 
 interface Props {
     project: Pick<DialuxV2Project, 'id' | 'name'>;
@@ -72,6 +79,21 @@ export default function DialuxV2Module({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [module.id, initialView]);
 
+    // Vista del Módulo General (2D/3D) como estado LOCAL: cambiar de pestaña no
+    // navega, así el editor 2D y su motor CAD (que reparsear el DWG de fondo
+    // tarda segundos) y la escena 3D quedan montados. Solo se oculta el
+    // inactivo, igual que hace el editor de interiores (EditorLayout).
+    const [generalView, setGeneralView] = useState<'2d' | '3d'>(
+        initialView === '3d' ? '3d' : '2d',
+    );
+    useEffect(() => {
+        if (module.kind !== 'general' || typeof window === 'undefined') return;
+        set3DView(generalView === '3d');
+        const url = `/dialux-v2/projects/${project.id}/modules/${module.id}?view=${generalView}`;
+        window.history.replaceState(window.history.state, '', url);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [generalView, module.kind, module.id, project.id]);
+
     useDialuxModuleSync(project.id, module.id, ready);
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -102,26 +124,53 @@ export default function DialuxV2Module({
                                 <GeneralWorkspaceTabs
                                     projectId={project.id}
                                     moduleId={module.id}
-                                    active={initialView}
+                                    active={generalView}
+                                    onSelectLocal={setGeneralView}
                                 />
                             </div>
                         )}
-                        <div className="min-h-0 flex-1 overflow-hidden">
-                            {module.kind === 'general' &&
-                            initialView === '2d' ? (
-                                <SiteEditor2D
-                                    projectId={project.id}
-                                    generalModuleId={module.id}
-                                    modules={modules
-                                        .filter((item) => item.kind !== 'general')
-                                        .map((item) => ({
-                                            id: item.id,
-                                            name: item.name,
-                                        }))}
-                                />
-                            ) : module.kind === 'general' &&
-                              initialView === '3d' ? (
-                                <SiteViewer3DPage projectId={project.id} />
+                        <div className="relative min-h-0 flex-1 overflow-hidden">
+                            {module.kind === 'general' ? (
+                                <>
+                                    <div
+                                        className="absolute inset-0"
+                                        style={{
+                                            display:
+                                                generalView === '2d'
+                                                    ? 'block'
+                                                    : 'none',
+                                        }}
+                                    >
+                                        <SiteEditor2D
+                                            projectId={project.id}
+                                            generalModuleId={module.id}
+                                            isActive={generalView === '2d'}
+                                            modules={modules
+                                                .filter(
+                                                    (item) =>
+                                                        item.kind !== 'general',
+                                                )
+                                                .map((item) => ({
+                                                    id: item.id,
+                                                    name: item.name,
+                                                }))}
+                                        />
+                                    </div>
+                                    <div
+                                        className="absolute inset-0"
+                                        style={{
+                                            display:
+                                                generalView === '3d'
+                                                    ? 'block'
+                                                    : 'none',
+                                        }}
+                                    >
+                                        <SiteViewer3DPage
+                                            projectId={project.id}
+                                            isActive={generalView === '3d'}
+                                        />
+                                    </div>
+                                </>
                             ) : (
                                 <EditorLayout />
                             )}
