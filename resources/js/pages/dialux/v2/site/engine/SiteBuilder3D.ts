@@ -43,13 +43,12 @@ function centroid(vertices: Point2D[]): Point2D {
 
 /**
  * Motor 3D del emplazamiento (Fase 4.1). Construye un mesh por elemento del
- * plano, siguiendo la MISMA convención de ejes que `House3DBuilder` (el
- * motor de interiores ya existente): X/Y del plano 2D → X/Z del mundo 3D,
- * sin invertir ningún signo — a diferencia del exportador DXF, que sí
- * necesita invertir Y porque CAD usa una convención de mundo distinta a la
- * del canvas (ver memoria `dialux-dxf-conductors-must-be-arcs`). Aquí ambos
- * lados (canvas 2D del emplazamiento y esta vista 3D) son del mismo editor,
- * así que no aplica esa corrección.
+ * plano. El canvas 2D del emplazamiento dibuja con Y hacia ABAJO (convención
+ * de pantalla); el mundo 3D usa Z hacia el fondo. Para que la vista 3D en
+ * planta se lea IGUAL que el canvas 2D hay que invertir la Y del plano al
+ * mapearla a Z: `z = -y·escala` (mismo motivo que el exportador DXF, ver
+ * memoria `dialux-dxf-conductors-must-be-arcs`). Antes no se invertía y el
+ * emplazamiento salía espejado en 3D respecto del 2D.
  *
  * Cada elemento se ancla en su propio `TransformNode` centrado en su
  * centroide — la geometría del mesh se construye en espacio LOCAL a ese
@@ -208,21 +207,24 @@ export class SiteBuilder3D {
     }
 
     /** TransformNode anclado al centroide del elemento — punto de referencia común para todas las variantes de construcción. */
-    private anchorNode(element: SiteElement, scaleM: number): {
+    private anchorNode(
+        element: SiteElement,
+        scaleM: number,
+    ): {
         node: TransformNode;
         localVertices: Vector3[];
         center: Point2D;
     } {
         const center = centroid(element.vertices);
         const node = new TransformNode(`site_${element.id}`, this.scene);
-        node.position.set(center.x * scaleM, 0, center.y * scaleM);
+        node.position.set(center.x * scaleM, 0, -center.y * scaleM);
         this.elementNodes.set(element.id, node);
         const localVertices = element.vertices.map(
             (v) =>
                 new Vector3(
                     (v.x - center.x) * scaleM,
                     0,
-                    (v.y - center.y) * scaleM,
+                    -(v.y - center.y) * scaleM,
                 ),
         );
         return { node, localVertices, center };
@@ -298,7 +300,11 @@ export class SiteBuilder3D {
 
         const water = MeshBuilder.CreatePolygon(
             `site_pool_water_${element.id}`,
-            { shape: localVertices, depth: 0.05, sideOrientation: Mesh.DOUBLESIDE },
+            {
+                shape: localVertices,
+                depth: 0.05,
+                sideOrientation: Mesh.DOUBLESIDE,
+            },
             this.scene,
         );
         water.position.y = -0.15;
@@ -313,7 +319,11 @@ export class SiteBuilder3D {
         moduleScenes: SiteModuleScene[],
         showInteriors: boolean,
     ) {
-        const node = this.buildExtrudedMass(element, scaleM, element.heightM ?? 9);
+        const node = this.buildExtrudedMass(
+            element,
+            scaleM,
+            element.heightM ?? 9,
+        );
         if (!showInteriors || element.moduleId === undefined) return;
         const moduleData = moduleScenes.find(
             (candidate) => candidate.moduleId === element.moduleId,
@@ -323,7 +333,15 @@ export class SiteBuilder3D {
 
         try {
             const childBuilder = new House3DBuilder(this.scene);
-            childBuilder.syncAllFloors(scenes, [], false, 'functional', false, null, true);
+            childBuilder.syncAllFloors(
+                scenes,
+                [],
+                false,
+                'functional',
+                false,
+                null,
+                true,
+            );
 
             // El módulo hijo trae su propio sistema de coordenadas (arbitrario,
             // propio de SU editor) — se centra su huella (bounding box del
@@ -442,7 +460,7 @@ export class SiteBuilder3D {
     ) {
         if (path.waypoints.length < 2) return;
         const points = path.waypoints.map(
-            (point) => new Vector3(point.x * scaleM, 0.06, point.y * scaleM),
+            (point) => new Vector3(point.x * scaleM, 0.06, -point.y * scaleM),
         );
         const tube = MeshBuilder.CreateTube(
             `site_feeder_${path.id}`,
@@ -468,7 +486,7 @@ export class SiteBuilder3D {
         const center = new Vector3(
             ((bounds.minX + bounds.maxX) / 2) * scaleM,
             0,
-            ((bounds.minY + bounds.maxY) / 2) * scaleM,
+            -((bounds.minY + bounds.maxY) / 2) * scaleM,
         );
         const size = Math.max(
             (bounds.maxX - bounds.minX) * scaleM,
