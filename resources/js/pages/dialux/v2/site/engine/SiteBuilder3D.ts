@@ -107,6 +107,14 @@ export class SiteBuilder3D {
      * mínimo, la escena vuelve al entorno del origen.
      */
     private elevationDatum = 0;
+    /**
+     * Origen X/Z (en metros de mundo) que se resta a toda posición horizontal.
+     * Los planos georreferenciados están en UTM (~9.000.000) — a esa magnitud
+     * la precisión float32 de WebGL colapsa y la escena no renderiza. Igual
+     * que el recentrado de `House3DBuilder` para el editor de interiores.
+     */
+    private originX = 0;
+    private originZ = 0;
 
     constructor(scene: Scene, camera?: ArcRotateCamera) {
         this.scene = scene;
@@ -184,6 +192,17 @@ export class SiteBuilder3D {
                 minZ = e.baseElevationM;
         }
         this.elevationDatum = Number.isFinite(minZ) ? minZ : 0;
+
+        // Origen X/Z = centro de la caja de toda la geometría (en metros).
+        const allV = siteData.elements.flatMap((e) => e.vertices);
+        if (allV.length > 0) {
+            const b = boundingBox(allV);
+            this.originX = ((b.minX + b.maxX) / 2) * scaleM;
+            this.originZ = -((b.minY + b.maxY) / 2) * scaleM;
+        } else {
+            this.originX = 0;
+            this.originZ = 0;
+        }
 
         for (const element of siteData.elements) {
             if (element.visible === false) continue;
@@ -291,6 +310,15 @@ export class SiteBuilder3D {
         return elevationM - this.elevationDatum;
     }
 
+    /** X de plano → X de mundo 3D (recentrado). */
+    private wx(planX: number, scaleM: number): number {
+        return planX * scaleM - this.originX;
+    }
+    /** Y de plano (hacia abajo) → Z de mundo 3D (recentrado, eje invertido). */
+    private wz(planY: number, scaleM: number): number {
+        return -planY * scaleM - this.originZ;
+    }
+
     /** TransformNode anclado al centroide del elemento — punto de referencia común para todas las variantes de construcción. */
     private anchorNode(
         element: SiteElement,
@@ -306,9 +334,9 @@ export class SiteBuilder3D {
         // (offset en metros reales: 0 = apoyado en el suelo; +7 = plataforma
         // de aulas; −1 = estacionamiento hundido).
         node.position.set(
-            center.x * scaleM,
+            this.wx(center.x, scaleM),
             this.groundAt(center) + (element.baseElevationM ?? 0),
-            -center.y * scaleM,
+            this.wz(center.y, scaleM),
         );
         // `rotation` en grados horarios sobre pantalla. Como el plano se
         // mapea con Z invertida (`z = -y`), el giro equivalente en el mundo 3D
@@ -389,11 +417,13 @@ export class SiteBuilder3D {
             const wy = b.minY + ((b.maxY - b.minY) * iy) / N;
             const row: Vector3[] = [];
             for (let ix = 0; ix <= N; ix++) {
-                const wx = b.minX + ((b.maxX - b.minX) * ix) / N;
+                const px = b.minX + ((b.maxX - b.minX) * ix) / N;
                 const z =
-                    sampleGroundElevation(this.terrainPoints, wx, wy) -
+                    sampleGroundElevation(this.terrainPoints, px, wy) -
                     this.elevationDatum;
-                row.push(new Vector3(wx * scaleM, z, -wy * scaleM));
+                row.push(
+                    new Vector3(this.wx(px, scaleM), z, this.wz(wy, scaleM)),
+                );
             }
             paths.push(row);
         }
@@ -416,7 +446,12 @@ export class SiteBuilder3D {
         this.elementNodes.set(element.id, node);
         const z = this.rel(element.baseElevationM ?? 0);
         const pts = element.vertices.map(
-            (v) => new Vector3(v.x * scaleM, z + 0.05, -v.y * scaleM),
+            (v) =>
+                new Vector3(
+                    this.wx(v.x, scaleM),
+                    z + 0.05,
+                    this.wz(v.y, scaleM),
+                ),
         );
         if (pts.length < 2) return;
         const line = MeshBuilder.CreateTube(
@@ -432,7 +467,7 @@ export class SiteBuilder3D {
     private buildSpotMarker(element: SiteElement, scaleM: number) {
         const c = centroid(element.vertices);
         const node = new TransformNode(`site_${element.id}`, this.scene);
-        node.position.set(c.x * scaleM, 0, -c.y * scaleM);
+        node.position.set(this.wx(c.x, scaleM), 0, this.wz(c.y, scaleM));
         this.elementNodes.set(element.id, node);
         const z = this.rel(element.baseElevationM ?? 0);
         const rod = MeshBuilder.CreateCylinder(
@@ -903,7 +938,12 @@ export class SiteBuilder3D {
     ) {
         if (path.waypoints.length < 2) return;
         const points = path.waypoints.map(
-            (point) => new Vector3(point.x * scaleM, 0.06, -point.y * scaleM),
+            (point) =>
+                new Vector3(
+                    this.wx(point.x, scaleM),
+                    0.06,
+                    this.wz(point.y, scaleM),
+                ),
         );
         const tube = MeshBuilder.CreateTube(
             `site_feeder_${path.id}`,
@@ -939,11 +979,8 @@ export class SiteBuilder3D {
             }
         }
         const midY = Number.isFinite(loZ) ? (loZ + hiZ) / 2 : 0;
-        const center = new Vector3(
-            ((bounds.minX + bounds.maxX) / 2) * scaleM,
-            midY,
-            -((bounds.minY + bounds.maxY) / 2) * scaleM,
-        );
+        // Todo se dibuja recentrado en (originX, originZ) → el centro es (0, ·, 0).
+        const center = new Vector3(0, midY, 0);
         const size = Math.max(
             (bounds.maxX - bounds.minX) * scaleM,
             (bounds.maxY - bounds.minY) * scaleM,
