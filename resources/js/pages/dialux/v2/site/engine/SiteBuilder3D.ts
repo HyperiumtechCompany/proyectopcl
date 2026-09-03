@@ -21,8 +21,10 @@ import type {
     GateConfig,
     PoleConfig,
     Point2D,
+    RampConfig,
     SiteData,
     SiteElement,
+    StairConfig,
     TgConfig,
     TransformerConfig,
 } from '../domain/types';
@@ -38,6 +40,12 @@ function tgCfg(el: SiteElement): TgConfig | undefined {
 }
 function transformerCfg(el: SiteElement): TransformerConfig | undefined {
     return el.config?.kind === 'transformer' ? el.config : undefined;
+}
+function rampCfg(el: SiteElement): RampConfig | undefined {
+    return el.config?.kind === 'ramp' ? el.config : undefined;
+}
+function stairCfg(el: SiteElement): StairConfig | undefined {
+    return el.config?.kind === 'stair' ? el.config : undefined;
 }
 
 export interface SiteModuleScene {
@@ -140,15 +148,17 @@ export class SiteBuilder3D {
     ) {
         this.disposeContent();
         const scaleM = siteData.terrainScaleM || 1;
-        const visibleTypes = new Set(
+        // Un tipo se oculta solo si una capa que lo contiene está oculta; un
+        // tipo sin capa (proyectos previos a añadirlo) se muestra igual.
+        const hiddenTypes = new Set(
             siteData.layers
-                .filter((layer) => layer.visible)
+                .filter((layer) => !layer.visible)
                 .flatMap((layer) => layer.types),
         );
 
         for (const element of siteData.elements) {
             if (element.visible === false) continue;
-            if (!visibleTypes.has(element.type)) continue;
+            if (hiddenTypes.has(element.type)) continue;
             if (element.vertices.length < 3) continue;
             try {
                 this.buildElement(element, scaleM, moduleScenes, showInteriors);
@@ -188,8 +198,13 @@ export class SiteBuilder3D {
             case 'green_area':
             case 'parking':
             case 'court':
-            case 'ramp':
                 this.buildFlatSlab(element, scaleM, 0.06, 0.02);
+                return;
+            case 'ramp':
+                this.buildRamp(element, scaleM);
+                return;
+            case 'stair':
+                this.buildStair(element, scaleM);
                 return;
             case 'custom_zone':
                 this.buildFlatSlab(element, scaleM, 0.04, 0.03, 0.5);
@@ -307,6 +322,86 @@ export class SiteBuilder3D {
         this.shadowGen?.addShadowCaster(mass);
         mass.parent = node;
         return node;
+    }
+
+    /** Eje largo de la huella y su longitud en metros — para rampas/escaleras. */
+    private longAxis(element: SiteElement, scaleM: number) {
+        const b = boundingBox(element.vertices);
+        const w = (b.maxX - b.minX) * scaleM;
+        const d = (b.maxY - b.minY) * scaleM;
+        const alongX = w >= d;
+        return {
+            alongX,
+            run: (alongX ? w : d) || 1,
+            crossM: (alongX ? d : w) || 1,
+        };
+    }
+
+    /** Rampa: losa inclinada de `fromElevationM` a `toElevationM` (cotas absolutas). */
+    private buildRamp(element: SiteElement, scaleM: number) {
+        const { node, localVertices } = this.anchorNode(element, scaleM);
+        const c = rampCfg(element);
+        const from = c?.fromElevationM ?? 0;
+        const to = c?.toElevationM ?? 1;
+        const { alongX, run } = this.longAxis(element, scaleM);
+        const angle = Math.atan2(to - from, run);
+        const slab = MeshBuilder.CreatePolygon(
+            `site_ramp_${element.id}`,
+            {
+                shape: localVertices,
+                depth: 0.15,
+                sideOrientation: Mesh.DOUBLESIDE,
+            },
+            this.scene,
+        );
+        slab.position.y = (from + to) / 2 + 0.08;
+        slab.rotation[alongX ? 'z' : 'x'] = alongX ? -angle : angle;
+        slab.material = this.matFor(
+            element.style.fillColor,
+            element.style.opacity ?? 1,
+        );
+        slab.receiveShadows = true;
+        slab.parent = node;
+    }
+
+    /** Escalera exterior: peldaños entre `fromElevationM` y `toElevationM`. */
+    private buildStair(element: SiteElement, scaleM: number) {
+        const { node } = this.anchorNode(element, scaleM);
+        const c = stairCfg(element);
+        const from = c?.fromElevationM ?? 0;
+        const to = c?.toElevationM ?? 1;
+        const width = c?.widthM ?? this.longAxis(element, scaleM).crossM;
+        const { alongX, run } = this.longAxis(element, scaleM);
+        const rise = Math.abs(to - from);
+        const steps = Math.max(1, Math.round(rise / 0.18));
+        const stepRise = (to - from) / steps;
+        const stepRun = run / steps;
+        const mat = this.matFor(
+            element.style.fillColor,
+            element.style.opacity ?? 1,
+        );
+        for (let i = 0; i < steps; i++) {
+            const h = from + stepRise * (i + 1);
+            const box = MeshBuilder.CreateBox(
+                `site_stair_${element.id}_${i}`,
+                {
+                    width: alongX ? stepRun : width,
+                    height: Math.max(0.02, Math.abs(h - from)),
+                    depth: alongX ? width : stepRun,
+                },
+                this.scene,
+            );
+            const along = -run / 2 + stepRun * (i + 0.5);
+            box.position.set(
+                alongX ? along : 0,
+                (from + h) / 2,
+                alongX ? 0 : along,
+            );
+            box.material = mat;
+            box.receiveShadows = true;
+            this.shadowGen?.addShadowCaster(box);
+            box.parent = node;
+        }
     }
 
     /** Piscina: caja hundida con un plano de agua translúcido al ras del terreno. */

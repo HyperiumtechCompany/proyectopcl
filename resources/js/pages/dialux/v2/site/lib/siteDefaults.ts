@@ -51,6 +51,14 @@ export function defaultConfigFor(
                 toElevationM: 1,
                 widthM: 1.5,
             };
+        case 'stair':
+            return {
+                kind: 'stair',
+                fromElevationM: 0,
+                toElevationM: 1,
+                widthM: 1.2,
+                run: 'straight',
+            };
         default:
             return undefined;
     }
@@ -121,6 +129,10 @@ export const SITE_ELEMENT_DEFAULTS: Record<
         label: 'Rampa',
         style: { fillColor: '#a8a29e', strokeColor: '#78716c' },
     },
+    stair: {
+        label: 'Escalera',
+        style: { fillColor: '#cbd5e1', strokeColor: '#94a3b8' },
+    },
     court: {
         label: 'Cancha',
         style: { fillColor: '#84cc16', strokeColor: '#65a30d' },
@@ -183,7 +195,14 @@ export function createDefaultSiteLayers(): SiteLayer[] {
         {
             id: 'layer-surfaces',
             label: 'Calles y áreas verdes',
-            types: ['street', 'green_area', 'parking', 'court', 'ramp'],
+            types: [
+                'street',
+                'green_area',
+                'parking',
+                'court',
+                'ramp',
+                'stair',
+            ],
             visible: true,
             locked: false,
         },

@@ -15,7 +15,8 @@ export type SiteElementType =
     | 'green_area' // Grass, jardín, parque
     | 'fence' // Cerco perimetral, muro
     | 'pool' // Piscina
-    | 'ramp' // Rampa con inclinación
+    | 'ramp' // Rampa con inclinación (cota origen → destino)
+    | 'stair' // Escalera exterior (cota origen → destino)
     | 'court' // Cancha deportiva
     | 'parking' // Estacionamiento
     | 'tg_location' // Tablero General (posicionado por el cliente)

@@ -6,6 +6,7 @@ import type {
     RampConfig,
     SiteElement,
     SiteElementConfig,
+    StairConfig,
     TgConfig,
     TransformerConfig,
 } from '../domain/types';
@@ -344,6 +345,57 @@ export function SiteElementConfigFields({
                     >
                         {slopePct.toFixed(1)}%
                     </strong>
+                </div>
+            </div>
+        );
+    }
+
+    if (cfg.kind === 'stair') {
+        const s = cfg as StairConfig;
+        const rise = Math.abs(s.toElevationM - s.fromElevationM);
+        const steps = Math.max(1, Math.round(rise / 0.18));
+        return (
+            <div className="grid gap-2 rounded-lg border border-slate-200 p-2 dark:border-white/10">
+                <div className="grid grid-cols-2 gap-1">
+                    <Num
+                        label="Cota origen (m)"
+                        value={s.fromElevationM}
+                        onChange={(fromElevationM) =>
+                            set({ ...s, fromElevationM })
+                        }
+                    />
+                    <Num
+                        label="Cota destino (m)"
+                        value={s.toElevationM}
+                        onChange={(toElevationM) => set({ ...s, toElevationM })}
+                    />
+                </div>
+                <Num
+                    label="Ancho (m)"
+                    value={s.widthM}
+                    min={0}
+                    onChange={(widthM) => set({ ...s, widthM })}
+                />
+                <label className={field}>
+                    Recorrido
+                    <select
+                        className={input}
+                        value={s.run}
+                        onChange={(e) =>
+                            set({
+                                ...s,
+                                run: e.target.value as StairConfig['run'],
+                            })
+                        }
+                    >
+                        <option value="straight">Recto</option>
+                        <option value="L">En L</option>
+                        <option value="U">En U</option>
+                    </select>
+                </label>
+                <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500">Peldaños (≈18 cm)</span>
+                    <strong>{steps}</strong>
                 </div>
             </div>
         );

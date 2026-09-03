@@ -1,18 +1,22 @@
 import {
     Building2,
+    ChevronDown,
     DoorOpen,
     Fence,
     Fingerprint,
+    Footprints,
     Hexagon,
     MapPin,
     MousePointer2,
     ParkingSquare,
     Ruler,
+    TrendingUp,
     Trees,
     Upload,
     Waves,
     Zap,
 } from 'lucide-react';
+import { useState, type ComponentType, type ReactNode } from 'react';
 import type { SiteElementType } from '../domain/types';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 
@@ -20,13 +24,15 @@ interface Props {
     editor: UseSiteEditorReturn;
 }
 
+type IconType = ComponentType<{ className?: string }>;
+
 function PaletteButton({
     icon: Icon,
     label,
     active,
     onClick,
 }: {
-    icon: React.ComponentType<{ className?: string }>;
+    icon: IconType;
     label: string;
     active: boolean;
     onClick: () => void;
@@ -47,6 +53,54 @@ function PaletteButton({
     );
 }
 
+/** Grupo colapsable del panel. Recuerda su estado en `localStorage`. */
+function PaletteGroup({
+    id,
+    title,
+    children,
+}: {
+    id: string;
+    title: string;
+    children: ReactNode;
+}) {
+    const [open, setOpen] = useState(() => {
+        try {
+            return localStorage.getItem(`dialux:palette:${id}`) !== 'closed';
+        } catch {
+            return true;
+        }
+    });
+    const toggle = () => {
+        setOpen((prev) => {
+            const next = !prev;
+            try {
+                localStorage.setItem(
+                    `dialux:palette:${id}`,
+                    next ? 'open' : 'closed',
+                );
+            } catch {
+                /* almacenamiento no disponible */
+            }
+            return next;
+        });
+    };
+    return (
+        <div>
+            <button
+                type="button"
+                onClick={toggle}
+                className="mb-1 flex w-full items-center justify-between px-1 text-[10px] font-bold tracking-wide text-slate-400 uppercase hover:text-slate-600 dark:hover:text-slate-200"
+            >
+                {title}
+                <ChevronDown
+                    className={`h-3 w-3 transition-transform ${open ? '' : '-rotate-90'}`}
+                />
+            </button>
+            {open && <div>{children}</div>}
+        </div>
+    );
+}
+
 function PolygonTool({
     editor,
     type,
@@ -55,7 +109,7 @@ function PolygonTool({
 }: {
     editor: UseSiteEditorReturn;
     type: SiteElementType;
-    icon: React.ComponentType<{ className?: string }>;
+    icon: IconType;
     label: string;
 }) {
     const active =
@@ -78,7 +132,7 @@ function PointTool({
 }: {
     editor: UseSiteEditorReturn;
     type: SiteElementType;
-    icon: React.ComponentType<{ className?: string }>;
+    icon: IconType;
     label: string;
 }) {
     const active =
@@ -95,23 +149,32 @@ function PointTool({
 
 export function SitePalette({ editor }: Props) {
     return (
-        <aside className="w-full space-y-4 overflow-y-auto border-b border-slate-200 bg-white p-3 lg:w-56 lg:border-r lg:border-b-0 dark:border-white/10 dark:bg-[#101218]">
-            <div>
-                <p className="mb-1 px-1 text-[10px] font-bold tracking-wide text-slate-400 uppercase">
-                    Herramientas
-                </p>
-                <PaletteButton
-                    icon={MousePointer2}
-                    label="Seleccionar"
-                    active={editor.activeTool === 'select'}
-                    onClick={() => editor.startTool('select')}
-                />
-            </div>
+        <aside className="w-full space-y-3 overflow-y-auto border-b border-slate-200 bg-white p-3 lg:w-56 lg:border-r lg:border-b-0 dark:border-white/10 dark:bg-[#101218]">
+            <PaletteButton
+                icon={MousePointer2}
+                label="Seleccionar"
+                active={editor.activeTool === 'select'}
+                onClick={() => editor.startTool('select')}
+            />
 
-            <div>
-                <p className="mb-1 px-1 text-[10px] font-bold tracking-wide text-slate-400 uppercase">
-                    Terreno
-                </p>
+            <PaletteGroup id="plan" title="Plano importado">
+                <PaletteButton
+                    icon={Upload}
+                    label="Importar DXF / DWG"
+                    active={editor.planImportOpen}
+                    onClick={editor.openPlanImport}
+                />
+                {editor.siteData?.importedPlan && (
+                    <PaletteButton
+                        icon={Ruler}
+                        label="Calibrar plano"
+                        active={editor.activeTool === 'calibrate_plan'}
+                        onClick={editor.startCalibratePlan}
+                    />
+                )}
+            </PaletteGroup>
+
+            <PaletteGroup id="terrain" title="Terreno">
                 <PolygonTool
                     editor={editor}
                     type="terrain"
@@ -130,32 +193,9 @@ export function SitePalette({ editor }: Props) {
                     icon={Trees}
                     label="Área verde"
                 />
-            </div>
+            </PaletteGroup>
 
-            <div>
-                <p className="mb-1 px-1 text-[10px] font-bold tracking-wide text-slate-400 uppercase">
-                    Plano importado
-                </p>
-                <PaletteButton
-                    icon={Upload}
-                    label="Importar DXF / DWG"
-                    active={editor.planImportOpen}
-                    onClick={editor.openPlanImport}
-                />
-                {editor.siteData?.importedPlan && (
-                    <PaletteButton
-                        icon={Ruler}
-                        label="Calibrar plano"
-                        active={editor.activeTool === 'calibrate_plan'}
-                        onClick={editor.startCalibratePlan}
-                    />
-                )}
-            </div>
-
-            <div>
-                <p className="mb-1 px-1 text-[10px] font-bold tracking-wide text-slate-400 uppercase">
-                    Edificaciones
-                </p>
+            <PaletteGroup id="building" title="Edificación">
                 <PolygonTool
                     editor={editor}
                     type="building_block"
@@ -174,12 +214,21 @@ export function SitePalette({ editor }: Props) {
                     icon={DoorOpen}
                     label="Portón / Acceso"
                 />
-            </div>
+                <PolygonTool
+                    editor={editor}
+                    type="stair"
+                    icon={Footprints}
+                    label="Escalera"
+                />
+                <PolygonTool
+                    editor={editor}
+                    type="ramp"
+                    icon={TrendingUp}
+                    label="Rampa"
+                />
+            </PaletteGroup>
 
-            <div>
-                <p className="mb-1 px-1 text-[10px] font-bold tracking-wide text-slate-400 uppercase">
-                    Instalaciones
-                </p>
+            <PaletteGroup id="installations" title="Instalaciones">
                 <PolygonTool
                     editor={editor}
                     type="pool"
@@ -198,12 +247,9 @@ export function SitePalette({ editor }: Props) {
                     icon={ParkingSquare}
                     label="Estacionamiento"
                 />
-            </div>
+            </PaletteGroup>
 
-            <div>
-                <p className="mb-1 px-1 text-[10px] font-bold tracking-wide text-slate-400 uppercase">
-                    Red eléctrica
-                </p>
+            <PaletteGroup id="electrical" title="Red eléctrica">
                 <PointTool
                     editor={editor}
                     type="tg_location"
@@ -223,7 +269,7 @@ export function SitePalette({ editor }: Props) {
                     label="Poste exterior"
                 />
                 <FeederTool editor={editor} />
-            </div>
+            </PaletteGroup>
         </aside>
     );
 }

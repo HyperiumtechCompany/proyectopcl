@@ -20,6 +20,7 @@ const POLYGON_TYPES = new Set<SiteElementType>([
     'fence',
     'pool',
     'ramp',
+    'stair',
     'court',
     'parking',
     'building_block',
