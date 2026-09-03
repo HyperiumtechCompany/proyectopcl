@@ -82,6 +82,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
     const [calibrationPoints, setCalibrationPoints] = useState<Point2D[]>([]);
     const [planImportOpen, setPlanImportOpen] = useState(false);
     const [contourImportOpen, setContourImportOpen] = useState(false);
+    const [surveyImportOpen, setSurveyImportOpen] = useState(false);
     const [snapEnabled, setSnapEnabled] = useState(true);
     const [showSatellite, setShowSatellite] = useState(true);
     const [satelliteZoom, setSatelliteZoomState] = useState(
@@ -246,6 +247,41 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         setContourImportOpen(false);
     };
 
+    // ── Puntos de un levantamiento topográfico (CSV Este/Norte/Cota) ─────
+    const openSurveyImport = () => setSurveyImportOpen(true);
+    const closeSurveyImport = () => setSurveyImportOpen(false);
+
+    /**
+     * Crea un `spot_elevation` por cada punto del levantamiento. El sitio
+     * guarda Y hacia abajo → `y = -norte`. La cota va a `baseElevationM`.
+     */
+    const importSurveyPoints = (
+        points: { este: number; norte: number; cota: number; desc: string }[],
+    ) => {
+        const defaults = SITE_ELEMENT_DEFAULTS.spot_elevation;
+        const half = POINT_SIZE_M / 2;
+        let lastId: string | null = null;
+        for (const p of points) {
+            const cx = p.este;
+            const cy = -p.norte;
+            lastId = addSiteElement({
+                type: 'spot_elevation',
+                label: p.desc || 'Cota',
+                vertices: [
+                    { x: cx - half, y: cy - half },
+                    { x: cx + half, y: cy - half },
+                    { x: cx + half, y: cy + half },
+                    { x: cx - half, y: cy + half },
+                ],
+                style: defaults.style,
+                baseElevationM: p.cota,
+                visible: true,
+            });
+        }
+        if (lastId) setSelectedElementId(lastId);
+        setSurveyImportOpen(false);
+    };
+
     // ── Plano importado (DXF/DWG) ────────────────────────────────────────
     const importedPlanUrl = siteData?.importedPlan
         ? sitePlanImageUrl(
@@ -395,6 +431,10 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         openContourImport,
         closeContourImport,
         importCadContours,
+        surveyImportOpen,
+        openSurveyImport,
+        closeSurveyImport,
+        importSurveyPoints,
         handlePlanImported,
         updateImportedPlan,
         removeImportedPlan,

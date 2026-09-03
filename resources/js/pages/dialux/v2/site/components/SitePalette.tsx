@@ -3,6 +3,7 @@ import {
     ChevronDown,
     DoorOpen,
     Fence,
+    FileSpreadsheet,
     Fingerprint,
     Footprints,
     Hexagon,
@@ -223,6 +224,12 @@ export function SitePalette({ editor }: Props) {
                         onClick={editor.openContourImport}
                     />
                 )}
+                <PaletteButton
+                    icon={FileSpreadsheet}
+                    label="Importar levantamiento"
+                    active={editor.surveyImportOpen}
+                    onClick={editor.openSurveyImport}
+                />
             </PaletteGroup>
 
             <PaletteGroup id="building" title="Edificación">

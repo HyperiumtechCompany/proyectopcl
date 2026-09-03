@@ -4,6 +4,7 @@ import { SiteContourImportDialog } from './SiteContourImportDialog';
 import { SitePalette } from './SitePalette';
 import { SitePlanImportDialog } from './SitePlanImportDialog';
 import { SitePropertiesPanel } from './SitePropertiesPanel';
+import { SiteSurveyImportDialog } from './SiteSurveyImportDialog';
 import { SiteToolbar } from './SiteToolbar';
 
 interface Props {
@@ -49,6 +50,25 @@ export function SiteEditor2D({
                 <SiteContourImportDialog
                     onImport={editor.importCadContours}
                     onClose={editor.closeContourImport}
+                />
+            )}
+            {editor.surveyImportOpen && (
+                <SiteSurveyImportDialog
+                    siteCentroid={(() => {
+                        const els = editor.siteData?.elements ?? [];
+                        const verts = els.flatMap((e) => e.vertices);
+                        if (verts.length === 0) return null;
+                        return {
+                            x:
+                                verts.reduce((s, v) => s + v.x, 0) /
+                                verts.length,
+                            y:
+                                verts.reduce((s, v) => s + v.y, 0) /
+                                verts.length,
+                        };
+                    })()}
+                    onImport={editor.importSurveyPoints}
+                    onClose={editor.closeSurveyImport}
                 />
             )}
         </div>
