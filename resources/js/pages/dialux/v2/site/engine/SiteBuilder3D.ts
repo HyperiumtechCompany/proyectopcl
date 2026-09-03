@@ -18,10 +18,27 @@ import { deriveFeederStatus, feederStatusColor } from '../domain/feederSync';
 import { boundingBox } from '../domain/geometry';
 import type {
     FeederPath,
+    GateConfig,
+    PoleConfig,
     Point2D,
     SiteData,
     SiteElement,
+    TgConfig,
+    TransformerConfig,
 } from '../domain/types';
+
+function gateCfg(el: SiteElement): GateConfig | undefined {
+    return el.config?.kind === 'gate' ? el.config : undefined;
+}
+function poleCfg(el: SiteElement): PoleConfig | undefined {
+    return el.config?.kind === 'pole' ? el.config : undefined;
+}
+function tgCfg(el: SiteElement): TgConfig | undefined {
+    return el.config?.kind === 'tg' ? el.config : undefined;
+}
+function transformerCfg(el: SiteElement): TransformerConfig | undefined {
+    return el.config?.kind === 'transformer' ? el.config : undefined;
+}
 
 export interface SiteModuleScene {
     moduleId: number;
@@ -397,36 +414,67 @@ export class SiteBuilder3D {
     /** Tablero General: gabinete simple (caja) en su footprint real. */
     private buildCabinet(element: SiteElement, scaleM: number) {
         const { node } = this.anchorNode(element, scaleM);
+        const cfg = tgCfg(element);
         const bounds = boundingBox(element.vertices);
-        const width = Math.max(0.4, (bounds.maxX - bounds.minX) * scaleM);
-        const depth = Math.max(0.3, (bounds.maxY - bounds.minY) * scaleM);
+        const width =
+            cfg?.widthM ?? Math.max(0.4, (bounds.maxX - bounds.minX) * scaleM);
+        const depth =
+            cfg?.depthM ?? Math.max(0.3, (bounds.maxY - bounds.minY) * scaleM);
+        const height = cfg?.heightM ?? 2;
+        const pedestal = cfg?.mount === 'pedestal' ? 0.4 : 0;
+        if (pedestal > 0) {
+            const base = MeshBuilder.CreateBox(
+                `site_tg_base_${element.id}`,
+                { width: width * 1.2, height: pedestal, depth: depth * 1.2 },
+                this.scene,
+            );
+            base.position.y = pedestal / 2;
+            base.material = this.matFor('#6b7280', 1, 0.2);
+            base.parent = node;
+        }
         const cabinet = MeshBuilder.CreateBox(
             `site_tg_${element.id}`,
-            { width, height: 2, depth },
+            { width, height, depth },
             this.scene,
         );
-        cabinet.position.y = 1;
+        cabinet.position.y = pedestal + height / 2;
         cabinet.material = this.matFor(element.style.fillColor, 1, 0.3);
         cabinet.parent = node;
+        this.shadowGen?.addShadowCaster(cabinet);
     }
 
     /** Transformador: cilindro (cuba) + caja (radiadores/tapa). */
     private buildTransformer(element: SiteElement, scaleM: number) {
         const { node } = this.anchorNode(element, scaleM);
+        const cfg = transformerCfg(element);
         const bounds = boundingBox(element.vertices);
-        const diameter = Math.max(
+        const fpDiameter = Math.max(
             0.6,
             Math.min(
                 (bounds.maxX - bounds.minX) * scaleM,
                 (bounds.maxY - bounds.minY) * scaleM,
             ),
         );
+        const diameter = cfg ? Math.min(cfg.widthM, cfg.depthM) : fpDiameter;
+        const tankH = cfg ? Math.max(0.6, cfg.heightM - 0.4) : 1.6;
+        const poleMount = cfg?.mount === 'pole';
+        const baseY = poleMount ? 6 : 0;
+        if (poleMount) {
+            const mast = MeshBuilder.CreateCylinder(
+                `site_transformer_mast_${element.id}`,
+                { diameter: 0.2, height: 6 },
+                this.scene,
+            );
+            mast.position.y = 3;
+            mast.material = this.matFor('#6b7280', 1, 0.2);
+            mast.parent = node;
+        }
         const tank = MeshBuilder.CreateCylinder(
             `site_transformer_tank_${element.id}`,
-            { diameter, height: 1.6 },
+            { diameter, height: tankH },
             this.scene,
         );
-        tank.position.y = 0.8;
+        tank.position.y = baseY + tankH / 2;
         tank.material = this.matFor('#6b7280', 1, 0.25);
         tank.parent = node;
 
@@ -435,43 +483,81 @@ export class SiteBuilder3D {
             { width: diameter * 0.7, height: 0.3, depth: diameter * 0.7 },
             this.scene,
         );
-        lid.position.y = 1.75;
+        lid.position.y = baseY + tankH + 0.1;
         lid.material = this.matFor(element.style.fillColor, 1, 0.3);
         lid.parent = node;
+        this.shadowGen?.addShadowCaster(tank);
     }
 
-    /** Portón de acceso: dos jambas + travesaño superior + hoja (panel delgado). */
+    /** Portón de acceso: jambas + travesaño + hoja, según variante y estado. */
     private buildGate(element: SiteElement, scaleM: number) {
         const { node } = this.anchorNode(element, scaleM);
+        const cfg = gateCfg(element);
         const bounds = boundingBox(element.vertices);
         const spanX = Math.max(1.2, (bounds.maxX - bounds.minX) * scaleM);
         const spanZ = Math.max(1.2, (bounds.maxY - bounds.minY) * scaleM);
-        // El vano corre a lo largo del lado más largo del footprint.
         const horizontal = spanX >= spanZ;
-        const span = horizontal ? spanX : spanZ;
-        const height = element.heightM ?? 2.2;
+        const span = cfg?.widthM ?? (horizontal ? spanX : spanZ);
+        const variant = cfg?.variant ?? 'swing';
+        const openDeg =
+            cfg?.state === 'open'
+                ? cfg?.openAngleDeg || 90
+                : cfg?.state === 'ajar'
+                  ? cfg?.openAngleDeg || 35
+                  : (cfg?.openAngleDeg ?? 0);
+        const height = element.heightM ?? (variant === 'barrier' ? 1 : 2.2);
         const post = 0.18;
         const metal = this.matFor('#6b7280', 1, 0.3);
         const leafMat = this.matFor(element.style.fillColor, 1, 0.2);
+        // Eje local: +X a lo largo del vano si horizontal, +Z si no.
+        const along = (d: number): [number, number] =>
+            horizontal ? [d, 0] : [0, d];
 
-        const mkPost = (offset: number) => {
+        const mkPost = (d: number) => {
+            const [x, z] = along(d);
             const p = MeshBuilder.CreateBox(
-                `site_gate_post_${element.id}_${offset}`,
+                `site_gate_post_${element.id}_${d}`,
                 { width: post, height, depth: post },
                 this.scene,
             );
-            p.position.set(
-                horizontal ? offset : 0,
-                height / 2,
-                horizontal ? 0 : offset,
-            );
+            p.position.set(x, height / 2, z);
             p.material = metal;
             p.parent = node;
             this.shadowGen?.addShadowCaster(p);
         };
+
+        if (variant === 'barrier') {
+            // Una columna + pluma horizontal que sube openDeg sobre el eje
+            // perpendicular al vano.
+            mkPost(-span / 2);
+            const hinge = new TransformNode(
+                `site_gate_hinge_${element.id}`,
+                this.scene,
+            );
+            const [hx, hz] = along(-span / 2);
+            hinge.position.set(hx, height, hz);
+            hinge.rotation[horizontal ? 'z' : 'x'] =
+                ((horizontal ? 1 : -1) * openDeg * Math.PI) / 180;
+            hinge.parent = node;
+            const boom = MeshBuilder.CreateBox(
+                `site_gate_boom_${element.id}`,
+                {
+                    width: horizontal ? span : 0.1,
+                    height: 0.1,
+                    depth: horizontal ? 0.1 : span,
+                },
+                this.scene,
+            );
+            const [bx, bz] = along(span / 2);
+            boom.position.set(bx, 0, bz);
+            boom.material = leafMat;
+            boom.parent = hinge;
+            this.shadowGen?.addShadowCaster(boom);
+            return;
+        }
+
         mkPost(-span / 2);
         mkPost(span / 2);
-
         const beam = MeshBuilder.CreateBox(
             `site_gate_beam_${element.id}`,
             {
@@ -485,25 +571,63 @@ export class SiteBuilder3D {
         beam.material = metal;
         beam.parent = node;
 
-        const leaf = MeshBuilder.CreateBox(
-            `site_gate_leaf_${element.id}`,
-            {
-                width: horizontal ? span * 0.92 : 0.06,
-                height: height * 0.78,
-                depth: horizontal ? 0.06 : span * 0.92,
-            },
-            this.scene,
-        );
-        leaf.position.y = (height * 0.78) / 2 + 0.05;
-        leaf.material = leafMat;
-        leaf.parent = node;
-        this.shadowGen?.addShadowCaster(leaf);
+        const leafH = height * 0.78;
+        const mkLeaf = (
+            leafSpan: number,
+            hingeD: number,
+            sign: number,
+            tag: string,
+        ) => {
+            const hinge = new TransformNode(
+                `site_gate_hinge_${element.id}_${tag}`,
+                this.scene,
+            );
+            const [hx, hz] = along(hingeD);
+            hinge.position.set(hx, leafH / 2 + 0.05, hz);
+            if (variant === 'sliding') {
+                // Corre a un lado: 0° cerrado, 90° = corrido todo el vano.
+                const slide = (openDeg / 90) * leafSpan;
+                const [sx, sz] = along(sign * slide);
+                hinge.position.x += sx;
+                hinge.position.z += sz;
+            } else {
+                hinge.rotation.y = (sign * openDeg * Math.PI) / 180;
+            }
+            hinge.parent = node;
+            const leaf = MeshBuilder.CreateBox(
+                `site_gate_leaf_${element.id}_${tag}`,
+                {
+                    width: horizontal ? leafSpan : 0.06,
+                    height: leafH,
+                    depth: horizontal ? 0.06 : leafSpan,
+                },
+                this.scene,
+            );
+            const [lx, lz] = along(leafSpan / 2);
+            leaf.position.set(lx, 0, lz);
+            leaf.material = leafMat;
+            leaf.parent = hinge;
+            this.shadowGen?.addShadowCaster(leaf);
+        };
+
+        if (variant === 'double-swing') {
+            mkLeaf(span / 2 - 0.02, -span / 2, 1, 'l');
+            mkLeaf(span / 2 - 0.02, span / 2, -1, 'r');
+        } else if (variant === 'pedestrian') {
+            mkLeaf(Math.min(1, span - 0.1), -span / 2, 1, 'p');
+        } else {
+            mkLeaf(span - 0.04, -span / 2, 1, 's');
+        }
     }
 
-    /** Poste de alumbrado exterior: fuste delgado + cabeza esférica. */
+    /** Poste de alumbrado exterior: fuste + brazo(s) + cabeza(s). */
     private buildPole(element: SiteElement, scaleM: number) {
         const { node } = this.anchorNode(element, scaleM);
-        const shaftHeight = element.heightM ?? 6;
+        const cfg = poleCfg(element);
+        const shaftHeight = cfg?.heightM ?? element.heightM ?? 6;
+        const armLen = cfg?.armLengthM ?? 0;
+        const armDir = ((cfg?.armDirectionDeg ?? 0) * Math.PI) / 180;
+        const fixtures = Math.max(1, cfg?.fixtures ?? 1);
         const shaft = MeshBuilder.CreateCylinder(
             `site_pole_shaft_${element.id}`,
             { diameter: 0.15, height: shaftHeight },
@@ -513,14 +637,32 @@ export class SiteBuilder3D {
         shaft.material = this.matFor('#6b7280', 1, 0.2);
         shaft.parent = node;
 
-        const head = MeshBuilder.CreateSphere(
-            `site_pole_head_${element.id}`,
-            { diameter: 0.4 },
-            this.scene,
-        );
-        head.position.y = shaftHeight;
-        head.material = this.matFor(element.style.fillColor, 1, 0.1);
-        head.parent = node;
+        for (let i = 0; i < fixtures; i++) {
+            // Reparte las luminarias alrededor del eje (una sola → según armDir).
+            const ang =
+                fixtures === 1 ? armDir : armDir + (i * 2 * Math.PI) / fixtures;
+            const hx = Math.sin(ang) * armLen;
+            const hz = -Math.cos(ang) * armLen;
+            if (armLen > 0) {
+                const arm = MeshBuilder.CreateBox(
+                    `site_pole_arm_${element.id}_${i}`,
+                    { width: 0.06, height: 0.06, depth: armLen },
+                    this.scene,
+                );
+                arm.position.set(hx / 2, shaftHeight - 0.1, hz / 2);
+                arm.lookAt(new Vector3(hx, shaftHeight - 0.1, hz));
+                arm.material = this.matFor('#6b7280', 1, 0.2);
+                arm.parent = node;
+            }
+            const head = MeshBuilder.CreateSphere(
+                `site_pole_head_${element.id}_${i}`,
+                { diameter: 0.35 },
+                this.scene,
+            );
+            head.position.set(hx, shaftHeight - (armLen > 0 ? 0.1 : 0), hz);
+            head.material = this.matFor(element.style.fillColor, 1, 0.1);
+            head.parent = node;
+        }
     }
 
     /** Tubo que sigue el trazado real del alimentador, coloreado por su estado de caída de tensión. */

@@ -1,8 +1,60 @@
 import type {
+    SiteElementConfig,
     SiteElementStyle,
     SiteElementType,
     SiteLayer,
 } from '../domain/types';
+
+/** Config por defecto para un objeto recién colocado (los que la tienen). */
+export function defaultConfigFor(
+    type: SiteElementType,
+): SiteElementConfig | undefined {
+    switch (type) {
+        case 'gate':
+            return {
+                kind: 'gate',
+                variant: 'swing',
+                state: 'closed',
+                openAngleDeg: 0,
+                widthM: 4,
+            };
+        case 'pole':
+            return {
+                kind: 'pole',
+                heightM: 8,
+                armLengthM: 1.5,
+                armDirectionDeg: 0,
+                fixtures: 1,
+            };
+        case 'transformer':
+            return {
+                kind: 'transformer',
+                mount: 'pad',
+                widthM: 2,
+                depthM: 2,
+                heightM: 2.2,
+            };
+        case 'tg_location':
+            return {
+                kind: 'tg',
+                mount: 'floor',
+                widthM: 1.2,
+                depthM: 0.4,
+                heightM: 2,
+            };
+        case 'fence':
+            return { kind: 'fence', slope: 'flat', endElevationM: 0 };
+        case 'ramp':
+            return {
+                kind: 'ramp',
+                fromElevationM: 0,
+                toElevationM: 1,
+                widthM: 1.5,
+            };
+        default:
+            return undefined;
+    }
+}
 
 export const SITE_ELEMENT_DEFAULTS: Record<
     SiteElementType,

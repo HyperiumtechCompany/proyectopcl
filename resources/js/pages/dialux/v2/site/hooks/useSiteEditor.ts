@@ -8,7 +8,7 @@ import {
 } from '../domain/geoTiles';
 import type { Point2D, SiteElementType, SiteTool } from '../domain/types';
 import { sitePlanImageUrl } from '../lib/planImport';
-import { SITE_ELEMENT_DEFAULTS } from '../lib/siteDefaults';
+import { defaultConfigFor, SITE_ELEMENT_DEFAULTS } from '../lib/siteDefaults';
 import { useNetworkSnapshotForSite } from './useNetworkSnapshotForSite';
 import type { SitePlanImportResult } from './useSitePlanImport';
 
@@ -151,6 +151,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
             vertices: pendingVertices,
             style: defaults.style,
             heightM: defaults.heightM,
+            config: defaultConfigFor(pendingType),
             visible: true,
         });
         setPendingVertices([]);
@@ -174,6 +175,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
             ],
             style: defaults.style,
             heightM: defaults.heightM,
+            config: defaultConfigFor(elementType),
             visible: true,
         });
         setSelectedElementId(id);

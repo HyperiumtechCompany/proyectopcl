@@ -37,6 +37,82 @@ export interface SiteElementStyle {
     pattern?: 'solid' | 'hatch' | 'dots' | 'grass' | 'water';
 }
 
+// ── Configuración por tipo de objeto ─────────────
+// Unión discriminada por `kind`. Todos los campos numéricos en METROS reales
+// (misma unidad que `baseElevationM`). El `kind` debe coincidir con el `type`
+// del elemento; si falta `config`, el 2D/3D usan valores por defecto.
+
+export type GateVariant =
+    | 'swing' // batiente de una hoja
+    | 'double-swing' // batiente de dos hojas
+    | 'sliding' // corrediza
+    | 'barrier' // pluma / barrera vehicular
+    | 'pedestrian'; // puerta peatonal
+export type GateState = 'closed' | 'ajar' | 'open';
+
+export interface GateConfig {
+    kind: 'gate';
+    variant: GateVariant;
+    state: GateState;
+    openAngleDeg: number; // 0 = cerrado, 90 = abierto (batientes/barrera)
+    widthM: number;
+}
+
+export interface PoleConfig {
+    kind: 'pole';
+    heightM: number;
+    armLengthM: number; // 0 = sin brazo (proyector sobre el fuste)
+    armDirectionDeg: number; // hacia dónde apunta el brazo
+    fixtures: number; // nº de luminarias en la cabeza
+}
+
+export interface TransformerConfig {
+    kind: 'transformer';
+    mount: 'pad' | 'pole'; // pad-mounted (piso) o sobre poste
+    kva?: number;
+    widthM: number;
+    depthM: number;
+    heightM: number;
+}
+
+export interface TgConfig {
+    kind: 'tg';
+    mount: 'floor' | 'pedestal' | 'wall';
+    widthM: number;
+    depthM: number;
+    heightM: number;
+}
+
+export interface FenceConfig {
+    kind: 'fence';
+    slope: 'flat' | 'ramp'; // 'ramp' = sube linealmente del inicio al fin (ladera)
+    endElevationM: number; // cota del extremo final si slope === 'ramp'
+}
+
+export interface StairConfig {
+    kind: 'stair';
+    fromElevationM: number;
+    toElevationM: number;
+    widthM: number;
+    run: 'straight' | 'L' | 'U';
+}
+
+export interface RampConfig {
+    kind: 'ramp';
+    fromElevationM: number;
+    toElevationM: number;
+    widthM: number;
+}
+
+export type SiteElementConfig =
+    | GateConfig
+    | PoleConfig
+    | TransformerConfig
+    | TgConfig
+    | FenceConfig
+    | StairConfig
+    | RampConfig;
+
 export interface SiteElement {
     id: string;
     type: SiteElementType;
@@ -45,6 +121,7 @@ export interface SiteElement {
     heightM?: number; // Altura (cercos, edificios para 3D)
     rotation?: number; // Grados (giro del objeto alrededor de su centroide)
     baseElevationM?: number; // Cota base sobre el terreno (0 = a nivel). Metros reales.
+    config?: SiteElementConfig; // Propiedades configurables según el tipo
     moduleId?: number; // → DialuxModule.id si es building_block
     moduleName?: string; // Nombre del módulo referenciado
     locked?: boolean; // No editable (para bloques importados)

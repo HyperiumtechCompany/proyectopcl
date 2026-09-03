@@ -574,6 +574,7 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                         cx={labelPos.x}
                                         cy={labelPos.y}
                                         rotationDeg={rot}
+                                        config={element.config}
                                         color={element.style.strokeColor}
                                         selected={selected}
                                         interactive={canDrag}

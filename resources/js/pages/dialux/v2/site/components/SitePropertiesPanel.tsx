@@ -2,6 +2,7 @@ import { Copy, Eye, EyeOff, Lock, Trash2, Unlock } from 'lucide-react';
 import { useState } from 'react';
 import { polygonArea, polygonPerimeter } from '../domain/geometry';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
+import { SiteElementConfigFields } from './SiteElementConfigFields';
 import { POINT_ELEMENT_TYPES } from './SiteElementSymbol';
 
 interface ModuleOption {
@@ -196,6 +197,11 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                             />
                         </label>
                     )}
+
+                    <SiteElementConfigFields
+                        element={element}
+                        editor={editor}
+                    />
 
                     {element.type === 'building_block' && (
                         <label className="text-[11px] text-slate-500">
