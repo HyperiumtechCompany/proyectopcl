@@ -5,14 +5,30 @@ export interface SurveyPoint {
     desc: string;
 }
 
+export interface ColumnMap {
+    este: number;
+    norte: number;
+    cota: number;
+    desc: number;
+}
+
 export interface SurveyParseResult {
     points: SurveyPoint[];
     headers: string[];
+    /** Todas las celdas de datos (para dejar re-mapear columnas a mano). */
+    rows: string[][];
     /** Índices detectados: [este, norte, cota, desc]. -1 si no se detectó. */
-    columnGuess: { este: number; norte: number; cota: number; desc: number };
+    columnGuess: ColumnMap;
+    /** Filas con cota inválida/centinela (−99999, etc.). */
+    invalidCota: number;
     skipped: number;
+    /** Filas donde se corrigió Este↔Norte porque venían invertidas (UTM). */
+    swapped: number;
     error?: string;
 }
+
+/** Cotas fuera de este rango se consideran "sin dato" (centinelas de campo). */
+const COTA_LIMIT = 9000;
 
 function norm(s: string): string {
     return s.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -32,15 +48,23 @@ function pickColumn(headers: string[], keys: string[]): number {
 
 /**
  * Parsea un CSV de levantamiento topográfico. Autodetecta el separador
- * (`,` `;` tab) y mapea las columnas por encabezado (Este/Norte/Cota/Desc);
- * si no hay encabezado usable, asume el orden Nº, Norte, Este, Cota, Desc.
+ * (`,` `;` tab), mapea columnas por encabezado (o por posición), descarta
+ * cotas centinela (±99999), y corrige filas con Este↔Norte invertidos
+ * (frecuente en exportaciones mixtas: en UTM peruano el Norte es ~8-9 M y
+ * el Este ~0,1-0,8 M). `override` fuerza el mapeo de columnas.
  */
-export function parseSurveyCsv(text: string): SurveyParseResult {
+export function parseSurveyCsv(
+    text: string,
+    override?: Partial<ColumnMap>,
+): SurveyParseResult {
     const empty: SurveyParseResult = {
         points: [],
         headers: [],
+        rows: [],
         columnGuess: { este: -1, norte: -1, cota: -1, desc: -1 },
+        invalidCota: 0,
         skipped: 0,
+        swapped: 0,
     };
     const lines = text
         .split(/\r\n|\r|\n/)
@@ -62,50 +86,59 @@ export function parseSurveyCsv(text: string): SurveyParseResult {
     const headers = firstIsHeader
         ? first
         : ['n', 'norte', 'este', 'cota', 'descripcion'];
-    const dataLines = firstIsHeader ? lines.slice(1) : lines;
+    const rows = (firstIsHeader ? lines.slice(1) : lines).map(cells);
 
-    let guess = {
+    let guess: ColumnMap = {
         este: pickColumn(headers, ESTE_KEYS),
         norte: pickColumn(headers, NORTE_KEYS),
         cota: pickColumn(headers, COTA_KEYS),
         desc: pickColumn(headers, DESC_KEYS),
     };
-    // Fallback posicional (Nº, Norte, Este, Cota, Desc).
     if (guess.este < 0 && guess.norte < 0 && guess.cota < 0) {
         guess = { norte: 1, este: 2, cota: 3, desc: 4 };
     }
+    const map: ColumnMap = { ...guess, ...override };
 
     const points: SurveyPoint[] = [];
     let skipped = 0;
-    for (const line of dataLines) {
-        const c = cells(line);
-        const este = Number(c[guess.este]);
-        const norte = Number(c[guess.norte]);
-        const cota = Number(c[guess.cota]);
-        if (
-            !Number.isFinite(este) ||
-            !Number.isFinite(norte) ||
-            !Number.isFinite(cota)
-        ) {
+    let invalidCota = 0;
+    let swapped = 0;
+    for (const c of rows) {
+        let este = Number(c[map.este]);
+        let norte = Number(c[map.norte]);
+        const cota = Number(c[map.cota]);
+        if (!Number.isFinite(este) || !Number.isFinite(norte)) {
             skipped++;
+            continue;
+        }
+        // Este↔Norte invertidos: en UTM el Norte es siempre mucho mayor.
+        if (norte < este && este > 1_000_000) {
+            [este, norte] = [norte, este];
+            swapped++;
+        }
+        if (!Number.isFinite(cota) || Math.abs(cota) > COTA_LIMIT) {
+            invalidCota++;
             continue;
         }
         points.push({
             este,
             norte,
             cota,
-            desc: guess.desc >= 0 ? (c[guess.desc] ?? '') : '',
+            desc: map.desc >= 0 ? (c[map.desc] ?? '') : '',
         });
     }
 
     return {
         points,
         headers,
-        columnGuess: guess,
+        rows,
+        columnGuess: map,
+        invalidCota,
         skipped,
+        swapped,
         error:
             points.length === 0
-                ? 'Ninguna fila tenía Este/Norte/Cota numéricos.'
+                ? 'Ninguna fila tenía Este/Norte/Cota válidos. Revisa el mapeo de columnas.'
                 : undefined,
     };
 }

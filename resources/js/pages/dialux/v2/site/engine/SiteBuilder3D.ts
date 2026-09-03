@@ -185,11 +185,20 @@ export class SiteBuilder3D {
         // Datum = cota mínima de los datos (o de las cotas base de objetos si
         // no hay superficie). Todo lo demás se dibuja relativo a ella. Reduce
         // (no `Math.min(...)`): un levantamiento puede traer miles de puntos.
+        // (ignora centinelas de campo tipo −99999 que se hayan colado)
+        const sane = (z: number) => Number.isFinite(z) && Math.abs(z) < 9000;
         let minZ = Infinity;
-        for (const p of this.terrainPoints) if (p.z < minZ) minZ = p.z;
+        for (const p of this.terrainPoints) {
+            if (sane(p.z) && p.z < minZ) minZ = p.z;
+        }
         for (const e of siteData.elements) {
-            if (typeof e.baseElevationM === 'number' && e.baseElevationM < minZ)
+            if (
+                typeof e.baseElevationM === 'number' &&
+                sane(e.baseElevationM) &&
+                e.baseElevationM < minZ
+            ) {
                 minZ = e.baseElevationM;
+            }
         }
         this.elevationDatum = Number.isFinite(minZ) ? minZ : 0;
 
@@ -251,7 +260,11 @@ export class SiteBuilder3D {
                 this.buildContourLine(element, scaleM);
                 return;
             case 'spot_elevation':
-                this.buildSpotMarker(element, scaleM);
+                // Con un levantamiento grande no se dibuja un mástil por punto
+                // (cientos de meshes) — los puntos ya definen la superficie.
+                if (this.terrainPoints.length <= 150) {
+                    this.buildSpotMarker(element, scaleM);
+                }
                 return;
             case 'street':
             case 'green_area':

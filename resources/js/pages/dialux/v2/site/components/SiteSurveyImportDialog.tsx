@@ -1,6 +1,10 @@
 import { AlertTriangle, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { parseSurveyCsv, type SurveyPoint } from '../domain/surveyImport';
+import {
+    parseSurveyCsv,
+    type ColumnMap,
+    type SurveyPoint,
+} from '../domain/surveyImport';
 
 interface Props {
     /** Centroide (x, y en coords del sitio) de la geometría actual, para avisar si el levantamiento no coincide. */
@@ -18,10 +22,11 @@ export function SiteSurveyImportDialog({
     onClose,
 }: Props) {
     const [text, setText] = useState('');
+    const [override, setOverride] = useState<Partial<ColumnMap>>({});
 
     const parsed = useMemo(
-        () => (text.trim() ? parseSurveyCsv(text) : null),
-        [text],
+        () => (text.trim() ? parseSurveyCsv(text, override) : null),
+        [text, override],
     );
 
     const mismatch = useMemo(() => {
@@ -32,6 +37,17 @@ export function SiteSurveyImportDialog({
         const cy = parsed.points.reduce((s, p) => s + -p.norte, 0) / n;
         return Math.hypot(cx - siteCentroid.x, cy - siteCentroid.y) > 2000;
     }, [parsed, siteCentroid]);
+
+    const cotaRange = useMemo<[number, number]>(() => {
+        if (!parsed || parsed.points.length === 0) return [0, 0];
+        let lo = Infinity;
+        let hi = -Infinity;
+        for (const p of parsed.points) {
+            if (p.cota < lo) lo = p.cota;
+            if (p.cota > hi) hi = p.cota;
+        }
+        return [lo, hi];
+    }, [parsed]);
 
     const handleFile = (file: File) => {
         const reader = new FileReader();
@@ -104,6 +120,35 @@ export function SiteSurveyImportDialog({
                     </div>
                 )}
 
+                {parsed && parsed.headers.length > 0 && (
+                    <div className="mb-2 grid grid-cols-3 gap-1">
+                        {(['este', 'norte', 'cota'] as const).map((key) => (
+                            <label
+                                key={key}
+                                className="text-[10px] text-slate-500 capitalize"
+                            >
+                                {key}
+                                <select
+                                    className="mt-0.5 h-7 w-full rounded-md border border-slate-200 bg-white px-1 text-[11px] dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                                    value={parsed.columnGuess[key]}
+                                    onChange={(e) =>
+                                        setOverride((o) => ({
+                                            ...o,
+                                            [key]: Number(e.target.value),
+                                        }))
+                                    }
+                                >
+                                    {parsed.headers.map((h, i) => (
+                                        <option key={i} value={i}>
+                                            {h || `col ${i + 1}`}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        ))}
+                    </div>
+                )}
+
                 {parsed && parsed.points.length > 0 && (
                     <>
                         <div className="mb-2 rounded-lg border border-slate-200 p-2 text-[11px] dark:border-white/10">
@@ -113,34 +158,27 @@ export function SiteSurveyImportDialog({
                                 </span>
                                 <strong>{parsed.points.length}</strong>
                             </div>
+                            {parsed.invalidCota > 0 && (
+                                <div className="flex justify-between text-slate-400">
+                                    <span>Cota inválida (±99999…)</span>
+                                    <span>{parsed.invalidCota}</span>
+                                </div>
+                            )}
+                            {parsed.swapped > 0 && (
+                                <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                                    <span>Este↔Norte corregidos</span>
+                                    <span>{parsed.swapped}</span>
+                                </div>
+                            )}
                             {parsed.skipped > 0 && (
                                 <div className="flex justify-between text-slate-400">
-                                    <span>Filas descartadas</span>
+                                    <span>Filas sin coordenadas</span>
                                     <span>{parsed.skipped}</span>
                                 </div>
                             )}
                             <div className="mt-1 text-[10px] text-slate-400">
-                                Columnas: Este = «
-                                {parsed.headers[parsed.columnGuess.este] ??
-                                    parsed.columnGuess.este}
-                                », Norte = «
-                                {parsed.headers[parsed.columnGuess.norte] ??
-                                    parsed.columnGuess.norte}
-                                », Cota = «
-                                {parsed.headers[parsed.columnGuess.cota] ??
-                                    parsed.columnGuess.cota}
-                                »
-                            </div>
-                            <div className="mt-1 text-[10px] text-slate-400">
-                                Cotas{' '}
-                                {Math.min(
-                                    ...parsed.points.map((p) => p.cota),
-                                ).toFixed(2)}{' '}
-                                –{' '}
-                                {Math.max(
-                                    ...parsed.points.map((p) => p.cota),
-                                ).toFixed(2)}{' '}
-                                m
+                                Cotas {cotaRange[0].toFixed(2)} –{' '}
+                                {cotaRange[1].toFixed(2)} m
                             </div>
                         </div>
 

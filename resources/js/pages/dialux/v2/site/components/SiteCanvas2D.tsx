@@ -207,6 +207,14 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
         fbRef.current = fb;
     });
 
+    // ¿El punto de pantalla está dentro del viewport (con margen)? Para no
+    // renderizar los cientos de puntos acotados de un levantamiento fuera de vista.
+    const inView = (s: Point2D): boolean => {
+        const w = size.w || 1200;
+        const h = size.h || 800;
+        return s.x > -80 && s.x < w + 80 && s.y > -80 && s.y < h + 80;
+    };
+
     // ── Snap magnético: imanta a la cuadrícula solo si el clic cae a menos de
     // SNAP_MAGNET_PX px del cruce; acercado para calcar el plano, el punto
     // queda exactamente donde se hace clic.
@@ -307,6 +315,14 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                 return `${s.x},${s.y}`;
             })
             .join(' ');
+
+    // Con un levantamiento grande, ocultar las etiquetas de cota de los puntos
+    // (se ven al seleccionar) para no repintar cientos de <text> por frame.
+    const manySpots =
+        siteData.elements.reduce(
+            (n, e) => (e.type === 'spot_elevation' ? n + 1 : n),
+            0,
+        ) > 120;
 
     const legacyPlan =
         !cadPlanActive &&
@@ -568,6 +584,10 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
 
                         if (element.type === 'contour') {
                             const z = element.baseElevationM ?? 0;
+                            const anyIn = element.vertices.some((v) =>
+                                inView(toScreen(v)),
+                            );
+                            if (!anyIn) return null;
                             return (
                                 <g key={element.id}>
                                     <polyline
@@ -601,51 +621,35 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                         }
 
                         if (element.type === 'spot_elevation') {
+                            if (!inView(labelPos)) return null;
                             const z = element.baseElevationM ?? 0;
+                            const showLabel = selected || !manySpots;
                             return (
                                 <g key={element.id}>
-                                    <g
-                                        transform={`translate(${labelPos.x} ${labelPos.y})`}
+                                    <path
+                                        d={`M ${labelPos.x - 5} ${labelPos.y} h 10 M ${labelPos.x} ${labelPos.y - 5} v 10`}
+                                        className="stroke-orange-600"
+                                        strokeWidth={selected ? 2.2 : 1.3}
                                         style={{
                                             pointerEvents: canDrag
-                                                ? 'visiblePainted'
+                                                ? 'stroke'
                                                 : 'none',
                                             cursor: canDrag
                                                 ? 'move'
                                                 : undefined,
                                         }}
                                         onPointerDown={startElementDrag}
-                                    >
-                                        <circle r={8} fill="transparent" />
-                                        <line
-                                            x1={-5}
-                                            y1={0}
-                                            x2={5}
-                                            y2={0}
-                                            className="stroke-orange-600"
-                                            strokeWidth={selected ? 2 : 1.4}
-                                        />
-                                        <line
-                                            x1={0}
-                                            y1={-5}
-                                            x2={0}
-                                            y2={5}
-                                            className="stroke-orange-600"
-                                            strokeWidth={selected ? 2 : 1.4}
-                                        />
-                                        <circle
-                                            r={2}
-                                            className="fill-orange-600"
-                                        />
-                                    </g>
-                                    <text
-                                        x={labelPos.x + 8}
-                                        y={labelPos.y - 6}
-                                        fontSize={LABEL_PX - 2}
-                                        className="pointer-events-none fill-orange-700 font-semibold dark:fill-orange-400"
-                                    >
-                                        {z.toFixed(2)}
-                                    </text>
+                                    />
+                                    {showLabel && (
+                                        <text
+                                            x={labelPos.x + 7}
+                                            y={labelPos.y - 5}
+                                            fontSize={LABEL_PX - 3}
+                                            className="pointer-events-none fill-orange-700 font-semibold dark:fill-orange-400"
+                                        >
+                                            {z.toFixed(2)}
+                                        </text>
+                                    )}
                                 </g>
                             );
                         }
