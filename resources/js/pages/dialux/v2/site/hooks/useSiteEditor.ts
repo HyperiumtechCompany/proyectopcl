@@ -81,6 +81,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
     const [pendingVertices, setPendingVertices] = useState<Point2D[]>([]);
     const [calibrationPoints, setCalibrationPoints] = useState<Point2D[]>([]);
     const [planImportOpen, setPlanImportOpen] = useState(false);
+    const [contourImportOpen, setContourImportOpen] = useState(false);
     const [snapEnabled, setSnapEnabled] = useState(true);
     const [showSatellite, setShowSatellite] = useState(true);
     const [satelliteZoom, setSatelliteZoomState] = useState(
@@ -211,6 +212,38 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         });
         setSelectedElementId(id);
         setActiveToolState('select');
+    };
+
+    // ── Curvas de nivel extraídas del plano CAD ──────────────────────────
+    const openContourImport = () => setContourImportOpen(true);
+    const closeContourImport = () => setContourImportOpen(false);
+
+    /**
+     * Crea un elemento `contour` por cada polilínea extraída de una capa del
+     * DWG. El DXF 2D no trae la cota → se asigna `startElevationM` a la
+     * primera y se suma `intervalM` en el orden en que vienen (útil si la
+     * capa las tiene ordenadas; si no, el usuario ajusta cada cota).
+     */
+    const importCadContours = (
+        polylines: Point2D[][],
+        startElevationM: number,
+        intervalM: number,
+    ) => {
+        const defaults = SITE_ELEMENT_DEFAULTS.contour;
+        let lastId: string | null = null;
+        polylines.forEach((waypoints, index) => {
+            if (waypoints.length < 2) return;
+            lastId = addSiteElement({
+                type: 'contour',
+                label: defaults.label,
+                vertices: waypoints,
+                style: defaults.style,
+                baseElevationM: startElevationM + index * intervalM,
+                visible: true,
+            });
+        });
+        if (lastId) setSelectedElementId(lastId);
+        setContourImportOpen(false);
     };
 
     // ── Plano importado (DXF/DWG) ────────────────────────────────────────
@@ -358,6 +391,10 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         planImportOpen,
         openPlanImport,
         closePlanImport,
+        contourImportOpen,
+        openContourImport,
+        closeContourImport,
+        importCadContours,
         handlePlanImported,
         updateImportedPlan,
         removeImportedPlan,

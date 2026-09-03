@@ -215,6 +215,14 @@ export function SitePalette({ editor }: Props) {
                         editor.startTool('place_spot', 'spot_elevation')
                     }
                 />
+                {editor.siteData?.importedPlan && (
+                    <PaletteButton
+                        icon={Upload}
+                        label="Extraer del plano CAD"
+                        active={editor.contourImportOpen}
+                        onClick={editor.openContourImport}
+                    />
+                )}
             </PaletteGroup>
 
             <PaletteGroup id="building" title="Edificación">

@@ -1,5 +1,6 @@
 import { useSiteEditor } from '../hooks/useSiteEditor';
 import { SiteCanvas2D } from './SiteCanvas2D';
+import { SiteContourImportDialog } from './SiteContourImportDialog';
 import { SitePalette } from './SitePalette';
 import { SitePlanImportDialog } from './SitePlanImportDialog';
 import { SitePropertiesPanel } from './SitePropertiesPanel';
@@ -42,6 +43,12 @@ export function SiteEditor2D({
                     generalModuleId={generalModuleId}
                     onImported={editor.handlePlanImported}
                     onClose={editor.closePlanImport}
+                />
+            )}
+            {editor.contourImportOpen && (
+                <SiteContourImportDialog
+                    onImport={editor.importCadContours}
+                    onClose={editor.closeContourImport}
                 />
             )}
         </div>
