@@ -100,6 +100,13 @@ export class SiteBuilder3D {
     private matCache: Map<string, StandardMaterial> = new Map();
     private terrainPoints: ElevationPoint[] = [];
     private terrainModeled = false;
+    /**
+     * Cota de referencia (m) que se resta a TODA la Y del mundo 3D. Con cotas
+     * reales de proyecto (2518 m s.n.m. en Vinchos) sin restar nada, la escena
+     * queda 2500 m sobre donde apunta la cámara → 3D en blanco. Restando el
+     * mínimo, la escena vuelve al entorno del origen.
+     */
+    private elevationDatum = 0;
 
     constructor(scene: Scene, camera?: ArcRotateCamera) {
         this.scene = scene;
@@ -167,6 +174,16 @@ export class SiteBuilder3D {
         // hay ≥3, el terreno se modela como superficie en vez de losa plana.
         this.terrainPoints = terrainElevationPoints(siteData.elements);
         this.terrainModeled = hasTerrainData(siteData.elements);
+        // Datum = cota mínima de los datos (o de las cotas base de objetos si
+        // no hay superficie). Todo lo demás se dibuja relativo a ella. Reduce
+        // (no `Math.min(...)`): un levantamiento puede traer miles de puntos.
+        let minZ = Infinity;
+        for (const p of this.terrainPoints) if (p.z < minZ) minZ = p.z;
+        for (const e of siteData.elements) {
+            if (typeof e.baseElevationM === 'number' && e.baseElevationM < minZ)
+                minZ = e.baseElevationM;
+        }
+        this.elevationDatum = Number.isFinite(minZ) ? minZ : 0;
 
         for (const element of siteData.elements) {
             if (element.visible === false) continue;
@@ -261,11 +278,17 @@ export class SiteBuilder3D {
         }
     }
 
-    /** Cota del terreno natural en un punto (0 si no hay superficie modelada). */
+    /** Altura del terreno natural en un punto, RELATIVA al datum (0 si no hay superficie). */
     private groundAt(center: Point2D): number {
         return this.terrainModeled
-            ? sampleGroundElevation(this.terrainPoints, center.x, center.y)
+            ? sampleGroundElevation(this.terrainPoints, center.x, center.y) -
+                  this.elevationDatum
             : 0;
+    }
+
+    /** Cota absoluta (m) → altura relativa al datum del mundo 3D. */
+    private rel(elevationM: number): number {
+        return elevationM - this.elevationDatum;
     }
 
     /** TransformNode anclado al centroide del elemento — punto de referencia común para todas las variantes de construcción. */
@@ -367,7 +390,9 @@ export class SiteBuilder3D {
             const row: Vector3[] = [];
             for (let ix = 0; ix <= N; ix++) {
                 const wx = b.minX + ((b.maxX - b.minX) * ix) / N;
-                const z = sampleGroundElevation(this.terrainPoints, wx, wy);
+                const z =
+                    sampleGroundElevation(this.terrainPoints, wx, wy) -
+                    this.elevationDatum;
                 row.push(new Vector3(wx * scaleM, z, -wy * scaleM));
             }
             paths.push(row);
@@ -389,7 +414,7 @@ export class SiteBuilder3D {
     private buildContourLine(element: SiteElement, scaleM: number) {
         const node = new TransformNode(`site_${element.id}`, this.scene);
         this.elementNodes.set(element.id, node);
-        const z = element.baseElevationM ?? 0;
+        const z = this.rel(element.baseElevationM ?? 0);
         const pts = element.vertices.map(
             (v) => new Vector3(v.x * scaleM, z + 0.05, -v.y * scaleM),
         );
@@ -409,7 +434,7 @@ export class SiteBuilder3D {
         const node = new TransformNode(`site_${element.id}`, this.scene);
         node.position.set(c.x * scaleM, 0, -c.y * scaleM);
         this.elementNodes.set(element.id, node);
-        const z = element.baseElevationM ?? 0;
+        const z = this.rel(element.baseElevationM ?? 0);
         const rod = MeshBuilder.CreateCylinder(
             `site_spot_${element.id}`,
             { diameter: 0.12, height: Math.max(0.3, Math.abs(z) + 0.3) },
@@ -446,9 +471,10 @@ export class SiteBuilder3D {
         const { node, localVertices } = this.anchorNode(element, scaleM);
         node.position.y = 0; // rampa/escalera usan cotas absolutas en su config
         const c = rampCfg(element);
-        const from =
-            c?.fromElevationM ?? this.groundAt(centroid(element.vertices));
-        const to = c?.toElevationM ?? from + 1;
+        const from = c
+            ? this.rel(c.fromElevationM)
+            : this.groundAt(centroid(element.vertices));
+        const to = c ? this.rel(c.toElevationM) : from + 1;
         const { alongX, run } = this.longAxis(element, scaleM);
         const angle = Math.atan2(to - from, run);
         const slab = MeshBuilder.CreatePolygon(
@@ -475,9 +501,10 @@ export class SiteBuilder3D {
         const { node } = this.anchorNode(element, scaleM);
         node.position.y = 0; // cotas absolutas en su config
         const c = stairCfg(element);
-        const from =
-            c?.fromElevationM ?? this.groundAt(centroid(element.vertices));
-        const to = c?.toElevationM ?? from + 1;
+        const from = c
+            ? this.rel(c.fromElevationM)
+            : this.groundAt(centroid(element.vertices));
+        const to = c ? this.rel(c.toElevationM) : from + 1;
         const width = c?.widthM ?? this.longAxis(element, scaleM).crossM;
         const { alongX, run } = this.longAxis(element, scaleM);
         const rise = Math.abs(to - from);
@@ -899,9 +926,22 @@ export class SiteBuilder3D {
         );
         if (allVertices.length === 0) return;
         const bounds = boundingBox(allVertices);
+        // Rango vertical del contenido (relativo al datum).
+        let loZ = 0;
+        let hiZ = 0;
+        if (this.terrainModeled) {
+            loZ = Infinity;
+            hiZ = -Infinity;
+            for (const p of this.terrainPoints) {
+                const z = p.z - this.elevationDatum;
+                if (z < loZ) loZ = z;
+                if (z > hiZ) hiZ = z;
+            }
+        }
+        const midY = Number.isFinite(loZ) ? (loZ + hiZ) / 2 : 0;
         const center = new Vector3(
             ((bounds.minX + bounds.maxX) / 2) * scaleM,
-            0,
+            midY,
             -((bounds.minY + bounds.maxY) / 2) * scaleM,
         );
         const size = Math.max(
@@ -909,6 +949,8 @@ export class SiteBuilder3D {
             (bounds.maxY - bounds.minY) * scaleM,
         );
         this.camera.setTarget(center);
+        this.camera.upperRadiusLimit = Math.max(500, size * 4);
+        this.camera.maxZ = Math.max(2000, size * 12);
         this.camera.radius = Math.max(20, size * 1.3);
     }
 

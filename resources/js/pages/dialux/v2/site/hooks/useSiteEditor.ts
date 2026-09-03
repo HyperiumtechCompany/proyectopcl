@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { computeLinearScaleFactor } from '@/pages/dialux/geometry/calibration';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import {
@@ -97,8 +97,13 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
     /** Metros por unidad de coordenada (1 = sin calibrar). Lo fija "Calibrar plano". */
     const terrainScaleM = siteData?.terrainScaleM || 1;
 
-    // Superficie de terreno (curvas de nivel + puntos acotados).
-    const terrainPoints = terrainElevationPoints(siteData?.elements ?? []);
+    // Superficie de terreno (curvas de nivel + puntos acotados). Memoizado:
+    // con un levantamiento de cientos de puntos, recalcularlo en cada render
+    // (y el `pointermove` re-renderiza) costaba >1 s.
+    const terrainPoints = useMemo(
+        () => terrainElevationPoints(siteData?.elements ?? []),
+        [siteData?.elements],
+    );
     const terrainModeled = terrainPoints.length >= 3;
     /** Cota del terreno natural en `(x, y)` (0 si no hay superficie modelada). */
     const groundElevationAt = (x: number, y: number): number =>
