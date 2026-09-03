@@ -123,6 +123,25 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
     };
 
     const finishDrawing = () => {
+        if (activeTool === 'draw_contour') {
+            if (pendingVertices.length < 2) {
+                cancelDrawing();
+                return;
+            }
+            const defaults = SITE_ELEMENT_DEFAULTS.contour;
+            const id = addSiteElement({
+                type: 'contour',
+                label: defaults.label,
+                vertices: pendingVertices,
+                style: defaults.style,
+                baseElevationM: 0,
+                visible: true,
+            });
+            setPendingVertices([]);
+            setSelectedElementId(id);
+            setActiveToolState('select');
+            return;
+        }
         if (activeTool === 'draw_feeder') {
             if (pendingVertices.length < 2 || !pendingNetworkEdgeId) {
                 cancelDrawing();

@@ -16,6 +16,12 @@ import type { Scene as EditorScene } from '@/pages/dialux/hooks/useEditorStore';
 import type { EdgeCalculation } from '../../electrical-network/domain/calculations';
 import { deriveFeederStatus, feederStatusColor } from '../domain/feederSync';
 import { boundingBox } from '../domain/geometry';
+import {
+    hasTerrainData,
+    sampleGroundElevation,
+    terrainElevationPoints,
+    type ElevationPoint,
+} from '../domain/terrainSurface';
 import type {
     FeederPath,
     GateConfig,
@@ -92,6 +98,8 @@ export class SiteBuilder3D {
     /** Un `House3DBuilder` propio por bloque de edificio con interior cargado — se dispone junto con el nodo del elemento. */
     childBuilders: Map<string, House3DBuilder> = new Map();
     private matCache: Map<string, StandardMaterial> = new Map();
+    private terrainPoints: ElevationPoint[] = [];
+    private terrainModeled = false;
 
     constructor(scene: Scene, camera?: ArcRotateCamera) {
         this.scene = scene;
@@ -155,11 +163,16 @@ export class SiteBuilder3D {
                 .filter((layer) => !layer.visible)
                 .flatMap((layer) => layer.types),
         );
+        // Puntos de cota del terreno (curvas de nivel + puntos acotados) → si
+        // hay ≥3, el terreno se modela como superficie en vez de losa plana.
+        this.terrainPoints = terrainElevationPoints(siteData.elements);
+        this.terrainModeled = hasTerrainData(siteData.elements);
 
         for (const element of siteData.elements) {
             if (element.visible === false) continue;
             if (hiddenTypes.has(element.type)) continue;
-            if (element.vertices.length < 3) continue;
+            const minVerts = element.type === 'contour' ? 2 : 3;
+            if (element.vertices.length < minVerts) continue;
             try {
                 this.buildElement(element, scaleM, moduleScenes, showInteriors);
             } catch (error) {
@@ -192,7 +205,17 @@ export class SiteBuilder3D {
     ) {
         switch (element.type) {
             case 'terrain':
-                this.buildFlatSlab(element, scaleM, 0.3, 0);
+                if (this.terrainModeled) {
+                    this.buildTerrainSurface(element, scaleM);
+                } else {
+                    this.buildFlatSlab(element, scaleM, 0.3, 0);
+                }
+                return;
+            case 'contour':
+                this.buildContourLine(element, scaleM);
+                return;
+            case 'spot_elevation':
+                this.buildSpotMarker(element, scaleM);
                 return;
             case 'street':
             case 'green_area':
@@ -322,6 +345,79 @@ export class SiteBuilder3D {
         this.shadowGen?.addShadowCaster(mass);
         mass.parent = node;
         return node;
+    }
+
+    /** Terreno como SUPERFICIE: grilla sobre la caja del lote, cota por IDW. */
+    private buildTerrainSurface(element: SiteElement, scaleM: number) {
+        const node = new TransformNode(`site_${element.id}`, this.scene);
+        this.elementNodes.set(element.id, node);
+        const b = boundingBox(element.vertices);
+        const N = 36;
+        const paths: Vector3[][] = [];
+        for (let iy = 0; iy <= N; iy++) {
+            const wy = b.minY + ((b.maxY - b.minY) * iy) / N;
+            const row: Vector3[] = [];
+            for (let ix = 0; ix <= N; ix++) {
+                const wx = b.minX + ((b.maxX - b.minX) * ix) / N;
+                const z = sampleGroundElevation(this.terrainPoints, wx, wy);
+                row.push(new Vector3(wx * scaleM, z, -wy * scaleM));
+            }
+            paths.push(row);
+        }
+        const surface = MeshBuilder.CreateRibbon(
+            `site_terrain_${element.id}`,
+            { pathArray: paths, sideOrientation: Mesh.DOUBLESIDE },
+            this.scene,
+        );
+        surface.material = this.matFor(
+            element.style.fillColor,
+            element.style.opacity ?? 1,
+        );
+        surface.receiveShadows = true;
+        surface.parent = node;
+    }
+
+    /** Curva de nivel: polilínea a su cota real. */
+    private buildContourLine(element: SiteElement, scaleM: number) {
+        const node = new TransformNode(`site_${element.id}`, this.scene);
+        this.elementNodes.set(element.id, node);
+        const z = element.baseElevationM ?? 0;
+        const pts = element.vertices.map(
+            (v) => new Vector3(v.x * scaleM, z + 0.05, -v.y * scaleM),
+        );
+        if (pts.length < 2) return;
+        const line = MeshBuilder.CreateTube(
+            `site_contour_${element.id}`,
+            { path: pts, radius: 0.1, sideOrientation: Mesh.DOUBLESIDE },
+            this.scene,
+        );
+        line.material = this.matFor(element.style.strokeColor, 1, 0.1);
+        line.parent = node;
+    }
+
+    /** Punto acotado: varilla vertical hasta su cota (desde el 0 de referencia). */
+    private buildSpotMarker(element: SiteElement, scaleM: number) {
+        const c = centroid(element.vertices);
+        const node = new TransformNode(`site_${element.id}`, this.scene);
+        node.position.set(c.x * scaleM, 0, -c.y * scaleM);
+        this.elementNodes.set(element.id, node);
+        const z = element.baseElevationM ?? 0;
+        const rod = MeshBuilder.CreateCylinder(
+            `site_spot_${element.id}`,
+            { diameter: 0.12, height: Math.max(0.3, Math.abs(z) + 0.3) },
+            this.scene,
+        );
+        rod.position.y = z / 2;
+        rod.material = this.matFor(element.style.strokeColor, 1, 0.2);
+        rod.parent = node;
+        const knob = MeshBuilder.CreateSphere(
+            `site_spot_knob_${element.id}`,
+            { diameter: 0.28 },
+            this.scene,
+        );
+        knob.position.y = z;
+        knob.material = this.matFor(element.style.fillColor, 1, 0.1);
+        knob.parent = node;
     }
 
     /** Eje largo de la huella y su longitud en metros — para rampas/escaleras. */

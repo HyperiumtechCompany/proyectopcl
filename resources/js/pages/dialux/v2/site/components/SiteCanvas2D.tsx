@@ -261,10 +261,12 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
 
     const isDrawTool =
         editor.activeTool === 'draw_polygon' ||
-        editor.activeTool === 'draw_feeder';
+        editor.activeTool === 'draw_feeder' ||
+        editor.activeTool === 'draw_contour';
     // `place_tg` es la herramienta genérica de "colocar equipo puntual con un
     // clic" — el tipo exacto lo decide `pendingType`.
-    const isPointTool = editor.activeTool === 'place_tg';
+    const isPointTool =
+        editor.activeTool === 'place_tg' || editor.activeTool === 'place_spot';
     const isCalibrateTool = editor.activeTool === 'calibrate_plan';
     const drawingFeeder = editor.activeTool === 'draw_feeder';
     const toolPlaces = isDrawTool || isPointTool || isCalibrateTool;
@@ -563,6 +565,90 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                 originVertices: element.vertices,
                             };
                         };
+
+                        if (element.type === 'contour') {
+                            const z = element.baseElevationM ?? 0;
+                            return (
+                                <g key={element.id}>
+                                    <polyline
+                                        points={points(element.vertices)}
+                                        fill="none"
+                                        stroke={
+                                            selected
+                                                ? '#f59e0b'
+                                                : element.style.strokeColor
+                                        }
+                                        strokeWidth={selected ? 2 : 1}
+                                        strokeOpacity={0.9}
+                                        style={{
+                                            pointerEvents: canDrag
+                                                ? 'stroke'
+                                                : 'none',
+                                        }}
+                                        onPointerDown={startElementDrag}
+                                    />
+                                    <text
+                                        x={labelPos.x}
+                                        y={labelPos.y}
+                                        textAnchor="middle"
+                                        fontSize={LABEL_PX - 2}
+                                        className="pointer-events-none fill-amber-700 font-semibold dark:fill-amber-500"
+                                    >
+                                        {z.toFixed(2)}
+                                    </text>
+                                </g>
+                            );
+                        }
+
+                        if (element.type === 'spot_elevation') {
+                            const z = element.baseElevationM ?? 0;
+                            return (
+                                <g key={element.id}>
+                                    <g
+                                        transform={`translate(${labelPos.x} ${labelPos.y})`}
+                                        style={{
+                                            pointerEvents: canDrag
+                                                ? 'visiblePainted'
+                                                : 'none',
+                                            cursor: canDrag
+                                                ? 'move'
+                                                : undefined,
+                                        }}
+                                        onPointerDown={startElementDrag}
+                                    >
+                                        <circle r={8} fill="transparent" />
+                                        <line
+                                            x1={-5}
+                                            y1={0}
+                                            x2={5}
+                                            y2={0}
+                                            className="stroke-orange-600"
+                                            strokeWidth={selected ? 2 : 1.4}
+                                        />
+                                        <line
+                                            x1={0}
+                                            y1={-5}
+                                            x2={0}
+                                            y2={5}
+                                            className="stroke-orange-600"
+                                            strokeWidth={selected ? 2 : 1.4}
+                                        />
+                                        <circle
+                                            r={2}
+                                            className="fill-orange-600"
+                                        />
+                                    </g>
+                                    <text
+                                        x={labelPos.x + 8}
+                                        y={labelPos.y - 6}
+                                        fontSize={LABEL_PX - 2}
+                                        className="pointer-events-none fill-orange-700 font-semibold dark:fill-orange-400"
+                                    >
+                                        {z.toFixed(2)}
+                                    </text>
+                                </g>
+                            );
+                        }
 
                         if (POINT_ELEMENT_TYPES.has(element.type)) {
                             const rot = element.rotation ?? 0;

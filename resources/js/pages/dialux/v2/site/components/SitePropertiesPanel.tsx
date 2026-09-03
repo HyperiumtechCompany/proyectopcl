@@ -166,10 +166,18 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                     )}
 
                     <label className="text-[11px] text-slate-500">
-                        Cota base (m sobre el terreno)
+                        {element.type === 'contour' ||
+                        element.type === 'spot_elevation'
+                            ? 'Cota (m)'
+                            : 'Cota base (m sobre el terreno)'}
                         <input
                             type="number"
-                            step="0.1"
+                            step={
+                                element.type === 'contour' ||
+                                element.type === 'spot_elevation'
+                                    ? 0.5
+                                    : 0.1
+                            }
                             className={inputClass}
                             value={element.baseElevationM ?? 0}
                             onChange={(event) =>

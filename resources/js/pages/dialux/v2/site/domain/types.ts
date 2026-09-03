@@ -23,6 +23,8 @@ export type SiteElementType =
     | 'transformer' // Subestación / transformador
     | 'pole' // Poste de alumbrado exterior
     | 'gate' // Puerta / portón de acceso
+    | 'contour' // Curva de nivel (polilínea con cota) — modela el terreno
+    | 'spot_elevation' // Punto acotado (cota puntual de un levantamiento)
     | 'custom_zone'; // Zona personalizada
 
 export interface Point2D {
@@ -200,8 +202,10 @@ export type SiteTool =
     | 'draw_polygon'
     | 'draw_polyline'
     | 'draw_rect'
+    | 'draw_contour'
     | 'place_block'
     | 'place_tg'
+    | 'place_spot'
     | 'draw_feeder'
     | 'calibrate_plan'
     | 'measure';

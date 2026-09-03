@@ -7,9 +7,11 @@ import {
     Footprints,
     Hexagon,
     MapPin,
+    Mountain,
     MousePointer2,
     ParkingSquare,
     Ruler,
+    Spline,
     TrendingUp,
     Trees,
     Upload,
@@ -192,6 +194,26 @@ export function SitePalette({ editor }: Props) {
                     type="green_area"
                     icon={Trees}
                     label="Área verde"
+                />
+            </PaletteGroup>
+
+            <PaletteGroup id="topography" title="Topografía">
+                <PaletteButton
+                    icon={Spline}
+                    label="Curva de nivel"
+                    active={editor.activeTool === 'draw_contour'}
+                    onClick={() => editor.startTool('draw_contour', 'contour')}
+                />
+                <PaletteButton
+                    icon={Mountain}
+                    label="Punto acotado"
+                    active={
+                        editor.activeTool === 'place_spot' &&
+                        editor.pendingType === 'spot_elevation'
+                    }
+                    onClick={() =>
+                        editor.startTool('place_spot', 'spot_elevation')
+                    }
                 />
             </PaletteGroup>
 

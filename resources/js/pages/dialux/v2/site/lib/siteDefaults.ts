@@ -133,6 +133,14 @@ export const SITE_ELEMENT_DEFAULTS: Record<
         label: 'Escalera',
         style: { fillColor: '#cbd5e1', strokeColor: '#94a3b8' },
     },
+    contour: {
+        label: 'Curva',
+        style: { fillColor: 'transparent', strokeColor: '#b45309' },
+    },
+    spot_elevation: {
+        label: 'Cota',
+        style: { fillColor: '#f97316', strokeColor: '#c2410c' },
+    },
     court: {
         label: 'Cancha',
         style: { fillColor: '#84cc16', strokeColor: '#65a30d' },
@@ -224,6 +232,13 @@ export function createDefaultSiteLayers(): SiteLayer[] {
             id: 'layer-electrical',
             label: 'Red eléctrica',
             types: ['tg_location', 'transformer', 'pole'],
+            visible: true,
+            locked: false,
+        },
+        {
+            id: 'layer-topography',
+            label: 'Topografía (curvas de nivel)',
+            types: ['contour', 'spot_elevation'],
             visible: true,
             locked: false,
         },
