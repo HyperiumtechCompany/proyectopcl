@@ -735,9 +735,21 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                         className="pointer-events-none fill-slate-800 font-semibold dark:fill-white"
                                     >
                                         {element.label}
-                                        {element.baseElevationM
-                                            ? `  ▲ ${element.baseElevationM > 0 ? '+' : ''}${element.baseElevationM.toFixed(1)}`
-                                            : ''}
+                                        {(() => {
+                                            const off =
+                                                element.baseElevationM ?? 0;
+                                            if (editor.terrainModeled) {
+                                                const abs =
+                                                    editor.groundElevationAt(
+                                                        centroid.x,
+                                                        centroid.y,
+                                                    ) + off;
+                                                return `  ▲ ${abs.toFixed(1)} m`;
+                                            }
+                                            return off
+                                                ? `  ▲ ${off > 0 ? '+' : ''}${off.toFixed(1)}`
+                                                : '';
+                                        })()}
                                     </text>
                                 </g>
                             );

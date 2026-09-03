@@ -6,6 +6,10 @@ import {
     MAX_SATELLITE_ZOOM,
     MIN_SATELLITE_ZOOM,
 } from '../domain/geoTiles';
+import {
+    sampleGroundElevation,
+    terrainElevationPoints,
+} from '../domain/terrainSurface';
 import type { Point2D, SiteElementType, SiteTool } from '../domain/types';
 import { sitePlanImageUrl } from '../lib/planImport';
 import { defaultConfigFor, SITE_ELEMENT_DEFAULTS } from '../lib/siteDefaults';
@@ -90,6 +94,13 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
     const gridSizeM = siteData?.gridSizeM ?? 5;
     /** Metros por unidad de coordenada (1 = sin calibrar). Lo fija "Calibrar plano". */
     const terrainScaleM = siteData?.terrainScaleM || 1;
+
+    // Superficie de terreno (curvas de nivel + puntos acotados).
+    const terrainPoints = terrainElevationPoints(siteData?.elements ?? []);
+    const terrainModeled = terrainPoints.length >= 3;
+    /** Cota del terreno natural en `(x, y)` (0 si no hay superficie modelada). */
+    const groundElevationAt = (x: number, y: number): number =>
+        terrainModeled ? sampleGroundElevation(terrainPoints, x, y) : 0;
 
     /** Cambia de herramienta y, si es una de dibujo, fija qué tipo va a crear. */
     const startTool = (tool: SiteTool, elementType?: SiteElementType) => {
@@ -305,6 +316,8 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         importedPlan: siteData?.importedPlan,
         siteData,
         terrainScaleM,
+        terrainModeled,
+        groundElevationAt,
         activeTool,
         startTool,
         startFeederTool,

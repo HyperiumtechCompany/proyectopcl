@@ -261,6 +261,13 @@ export class SiteBuilder3D {
         }
     }
 
+    /** Cota del terreno natural en un punto (0 si no hay superficie modelada). */
+    private groundAt(center: Point2D): number {
+        return this.terrainModeled
+            ? sampleGroundElevation(this.terrainPoints, center.x, center.y)
+            : 0;
+    }
+
     /** TransformNode anclado al centroide del elemento — punto de referencia común para todas las variantes de construcción. */
     private anchorNode(
         element: SiteElement,
@@ -272,11 +279,12 @@ export class SiteBuilder3D {
     } {
         const center = centroid(element.vertices);
         const node = new TransformNode(`site_${element.id}`, this.scene);
-        // `baseElevationM` es en metros reales (no unidades de plano) — el
-        // terreno no es plano: aulas +7, estacionamiento −1, etc.
+        // Y = cota del terreno natural bajo el centroide + `baseElevationM`
+        // (offset en metros reales: 0 = apoyado en el suelo; +7 = plataforma
+        // de aulas; −1 = estacionamiento hundido).
         node.position.set(
             center.x * scaleM,
-            element.baseElevationM ?? 0,
+            this.groundAt(center) + (element.baseElevationM ?? 0),
             -center.y * scaleM,
         );
         // `rotation` en grados horarios sobre pantalla. Como el plano se
@@ -436,9 +444,11 @@ export class SiteBuilder3D {
     /** Rampa: losa inclinada de `fromElevationM` a `toElevationM` (cotas absolutas). */
     private buildRamp(element: SiteElement, scaleM: number) {
         const { node, localVertices } = this.anchorNode(element, scaleM);
+        node.position.y = 0; // rampa/escalera usan cotas absolutas en su config
         const c = rampCfg(element);
-        const from = c?.fromElevationM ?? 0;
-        const to = c?.toElevationM ?? 1;
+        const from =
+            c?.fromElevationM ?? this.groundAt(centroid(element.vertices));
+        const to = c?.toElevationM ?? from + 1;
         const { alongX, run } = this.longAxis(element, scaleM);
         const angle = Math.atan2(to - from, run);
         const slab = MeshBuilder.CreatePolygon(
@@ -463,9 +473,11 @@ export class SiteBuilder3D {
     /** Escalera exterior: peldaños entre `fromElevationM` y `toElevationM`. */
     private buildStair(element: SiteElement, scaleM: number) {
         const { node } = this.anchorNode(element, scaleM);
+        node.position.y = 0; // cotas absolutas en su config
         const c = stairCfg(element);
-        const from = c?.fromElevationM ?? 0;
-        const to = c?.toElevationM ?? 1;
+        const from =
+            c?.fromElevationM ?? this.groundAt(centroid(element.vertices));
+        const to = c?.toElevationM ?? from + 1;
         const width = c?.widthM ?? this.longAxis(element, scaleM).crossM;
         const { alongX, run } = this.longAxis(element, scaleM);
         const rise = Math.abs(to - from);

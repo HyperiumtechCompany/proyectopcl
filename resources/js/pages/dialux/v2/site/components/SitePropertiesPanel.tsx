@@ -165,28 +165,53 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                         </label>
                     )}
 
-                    <label className="text-[11px] text-slate-500">
-                        {element.type === 'contour' ||
-                        element.type === 'spot_elevation'
-                            ? 'Cota (m)'
-                            : 'Cota base (m sobre el terreno)'}
-                        <input
-                            type="number"
-                            step={
-                                element.type === 'contour' ||
-                                element.type === 'spot_elevation'
-                                    ? 0.5
-                                    : 0.1
-                            }
-                            className={inputClass}
-                            value={element.baseElevationM ?? 0}
-                            onChange={(event) =>
-                                editor.updateSiteElement(element.id, {
-                                    baseElevationM: Number(event.target.value),
-                                })
-                            }
-                        />
-                    </label>
+                    {(() => {
+                        const isTopo =
+                            element.type === 'contour' ||
+                            element.type === 'spot_elevation';
+                        const isFootprint =
+                            element.type !== 'ramp' &&
+                            element.type !== 'stair' &&
+                            !isTopo;
+                        const c = element.vertices.reduce(
+                            (a, v) => ({
+                                x: a.x + v.x / element.vertices.length,
+                                y: a.y + v.y / element.vertices.length,
+                            }),
+                            { x: 0, y: 0 },
+                        );
+                        const ground = editor.groundElevationAt(c.x, c.y);
+                        const abs = ground + (element.baseElevationM ?? 0);
+                        return (
+                            <label className="text-[11px] text-slate-500">
+                                {isTopo
+                                    ? 'Cota (m)'
+                                    : editor.terrainModeled
+                                      ? 'Cota sobre el terreno (m)'
+                                      : 'Cota base (m)'}
+                                <input
+                                    type="number"
+                                    step={isTopo ? 0.5 : 0.1}
+                                    className={inputClass}
+                                    value={element.baseElevationM ?? 0}
+                                    onChange={(event) =>
+                                        editor.updateSiteElement(element.id, {
+                                            baseElevationM: Number(
+                                                event.target.value,
+                                            ),
+                                        })
+                                    }
+                                />
+                                {editor.terrainModeled && isFootprint && (
+                                    <span className="mt-0.5 block text-[10px] text-slate-400">
+                                        Terreno natural aquí:{' '}
+                                        {ground.toFixed(2)} m · cota absoluta ≈{' '}
+                                        {abs.toFixed(2)} m
+                                    </span>
+                                )}
+                            </label>
+                        );
+                    })()}
 
                     {POINT_ELEMENT_TYPES.has(element.type) && (
                         <label className="text-[11px] text-slate-500">
