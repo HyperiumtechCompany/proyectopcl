@@ -44,6 +44,9 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
     const removeSiteElement = useEditorStore(
         (state) => state.removeSiteElement,
     );
+    const removeSiteElementsByType = useEditorStore(
+        (state) => state.removeSiteElementsByType,
+    );
     const duplicateSiteElement = useEditorStore(
         (state) => state.duplicateSiteElement,
     );
@@ -287,6 +290,17 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         setSurveyImportOpen(false);
     };
 
+    /** Borra TODA la topografía (curvas de nivel + puntos acotados). */
+    const clearTopography = () => {
+        setSelectedElementId(null);
+        removeSiteElementsByType(['contour', 'spot_elevation']);
+    };
+
+    const topographyCount =
+        siteData?.elements.filter(
+            (e) => e.type === 'contour' || e.type === 'spot_elevation',
+        ).length ?? 0;
+
     // ── Plano importado (DXF/DWG) ────────────────────────────────────────
     const importedPlanUrl = siteData?.importedPlan
         ? sitePlanImageUrl(
@@ -440,6 +454,8 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         openSurveyImport,
         closeSurveyImport,
         importSurveyPoints,
+        clearTopography,
+        topographyCount,
         handlePlanImported,
         updateImportedPlan,
         removeImportedPlan,

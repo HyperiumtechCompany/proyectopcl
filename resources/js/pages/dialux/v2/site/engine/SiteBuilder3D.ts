@@ -240,6 +240,20 @@ export class SiteBuilder3D {
         }
 
         this.frameCamera(siteData, scaleM);
+
+        console.log('[site3D] sync', {
+            elements: siteData.elements.length,
+            nodos: this.elementNodes.size,
+            terrainModeled: this.terrainModeled,
+            terrainPoints: this.terrainPoints.length,
+            datum: this.elevationDatum,
+            originX: this.originX,
+            originZ: this.originZ,
+            camTarget: this.camera
+                ? this.camera.target.asArray().map((n) => Math.round(n))
+                : null,
+            camRadius: this.camera ? Math.round(this.camera.radius) : null,
+        });
     }
 
     private buildElement(

@@ -6,6 +6,7 @@ import type {
     Point2D,
     SiteData,
     SiteElement,
+    SiteElementType,
 } from '../../v2/site/domain/types';
 import { createDefaultSiteLayers } from '../../v2/site/lib/siteDefaults';
 import type { EditorSlice } from './sliceTypes';
@@ -16,6 +17,7 @@ export interface SiteSlice {
     addSiteElement: (element: Omit<SiteElement, 'id'>) => string;
     updateSiteElement: (id: string, patch: Partial<SiteElement>) => void;
     removeSiteElement: (id: string) => void;
+    removeSiteElementsByType: (types: SiteElementType[]) => void;
     duplicateSiteElement: (id: string) => string | null;
     moveSiteVertex: (
         elementId: string,
@@ -113,6 +115,22 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
                         ...state.project.site,
                         elements: state.project.site.elements.filter(
                             (item) => item.id !== id,
+                        ),
+                    },
+                },
+            };
+        }),
+    removeSiteElementsByType: (types) =>
+        set((state) => {
+            if (!state.project?.site) return state;
+            const drop = new Set(types);
+            return {
+                project: {
+                    ...state.project,
+                    site: {
+                        ...state.project.site,
+                        elements: state.project.site.elements.filter(
+                            (item) => !drop.has(item.type),
                         ),
                     },
                 },

@@ -49,10 +49,32 @@ export function SiteSurveyImportDialog({
         return [lo, hi];
     }, [parsed]);
 
+    const [align, setAlign] = useState(true);
+
     const handleFile = (file: File) => {
         const reader = new FileReader();
         reader.onload = () => setText(String(reader.result ?? ''));
         reader.readAsText(file);
+    };
+
+    const doImport = () => {
+        if (!parsed) return;
+        let pts = parsed.points;
+        if (align && siteCentroid && pts.length > 0) {
+            // Traslada el levantamiento para que su centro coincida con el del
+            // plano — útil si el DWG no está georreferenciado en la misma zona.
+            const n = pts.length;
+            const cx = pts.reduce((s, p) => s + p.este, 0) / n;
+            const cy = pts.reduce((s, p) => s + -p.norte, 0) / n;
+            const dx = siteCentroid.x - cx;
+            const dy = siteCentroid.y - cy;
+            pts = pts.map((p) => ({
+                ...p,
+                este: p.este + dx,
+                norte: p.norte - dy, // norte = -y del sitio
+            }));
+        }
+        onImport(pts);
     };
 
     return (
@@ -182,18 +204,33 @@ export function SiteSurveyImportDialog({
                             </div>
                         </div>
 
-                        {mismatch && (
+                        {mismatch && !align && (
                             <div className="mb-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
                                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                                Los puntos caen lejos del plano. Si el plano no
-                                está georreferenciado en la misma zona UTM,
-                                tendrás que moverlos después.
+                                Los puntos caen lejos del plano. Actívales
+                                “alinear sobre el plano” para traerlos encima.
                             </div>
+                        )}
+
+                        {siteCentroid && (
+                            <label className="mb-2 flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+                                <input
+                                    type="checkbox"
+                                    checked={align}
+                                    onChange={(e) => setAlign(e.target.checked)}
+                                />
+                                Alinear el levantamiento sobre el plano actual
+                                {mismatch && (
+                                    <span className="text-amber-600 dark:text-amber-400">
+                                        (recomendado)
+                                    </span>
+                                )}
+                            </label>
                         )}
 
                         <button
                             type="button"
-                            onClick={() => onImport(parsed.points)}
+                            onClick={doImport}
                             className="h-8 w-full rounded-md bg-amber-600 text-xs font-semibold text-white"
                         >
                             Importar {parsed.points.length} puntos acotados
