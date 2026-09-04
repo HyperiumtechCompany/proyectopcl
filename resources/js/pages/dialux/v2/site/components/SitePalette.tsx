@@ -2,6 +2,8 @@ import {
     Building2,
     ChevronDown,
     DoorOpen,
+    Eye,
+    EyeOff,
     Fence,
     FileSpreadsheet,
     Fingerprint,
@@ -200,6 +202,7 @@ export function SitePalette({ editor }: Props) {
             </PaletteGroup>
 
             <PaletteGroup id="topography" title="Topografía">
+                <TopographyVisibilityToggle editor={editor} />
                 <PaletteButton
                     icon={Spline}
                     label="Curva de nivel"
@@ -326,6 +329,27 @@ export function SitePalette({ editor }: Props) {
                 <FeederTool editor={editor} />
             </PaletteGroup>
         </aside>
+    );
+}
+
+/**
+ * Mostrar/ocultar de un clic toda la capa "Topografía" (curvas de nivel +
+ * puntos acotados), en 2D y 3D — usa la capa ya existente (`layer-topography`
+ * en `createDefaultSiteLayers`), la misma que respeta "Capas" en la barra
+ * superior, pero visible aquí donde el usuario trabaja con estos puntos.
+ */
+function TopographyVisibilityToggle({ editor }: Props) {
+    const layer = editor.siteData?.layers.find(
+        (candidate) => candidate.id === 'layer-topography',
+    );
+    if (!layer) return null;
+    return (
+        <PaletteButton
+            icon={layer.visible ? Eye : EyeOff}
+            label={layer.visible ? 'Ocultar topografía' : 'Mostrar topografía'}
+            active={!layer.visible}
+            onClick={() => editor.toggleSiteLayer(layer.id)}
+        />
     );
 }
 
