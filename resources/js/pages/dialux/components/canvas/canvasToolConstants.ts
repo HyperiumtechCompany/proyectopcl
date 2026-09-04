@@ -16,6 +16,7 @@ export const CURSOR_MAP: Record<string, string> = {
     corridor: 'crosshair',
     stair: 'crosshair',
     'structural-obstacle': 'crosshair',
+    ramp: 'crosshair',
     fixture: 'cell',
     'fixture-grid': 'cell',
     switch: 'cell',
@@ -53,6 +54,7 @@ export const DRAWING_TOOLS = new Set([
     'corridor',
     'stair',
     'structural-obstacle',
+    'ramp',
     'fixture',
     'fixture-grid',
     'switch',
@@ -95,6 +97,7 @@ export const CAD_OSNAP_TOOLS = new Set([
     'corridor',
     'stair',
     'structural-obstacle',
+    'ramp',
     'canopy',
     'partition',
 ]);

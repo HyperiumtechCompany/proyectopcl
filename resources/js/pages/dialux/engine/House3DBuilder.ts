@@ -42,6 +42,8 @@ import {
     getStairLaneLayout,
 } from '@/pages/dialux/hooks/stairGeometry';
 import { findStairAtPoint, resolveStairUndersidePoint } from '@/pages/dialux/hooks/stairMountingGeometry';
+import { structuralRouteHeightAt } from '@/pages/dialux/hooks/roofGeometry';
+import { buildRampLayout, findRampAtPoint, resolveRampUndersidePoint } from '@/pages/dialux/hooks/rampGeometry';
 import type {
     Room,
     Wall,
@@ -432,9 +434,13 @@ export class House3DBuilder {
             const stair = rooms.find((room) => room.roomType === 'stair' && room.id === fixture.roomId)
                 ?? findStairAtPoint(rooms, fixture);
             const mount = stair ? resolveStairUndersidePoint(stair, fixture) : null;
+            const ramp = findRampAtPoint(editorScene.structuralObstacles ?? [], fixture);
+            const rampMount = ramp ? resolveRampUndersidePoint(ramp, fixture, fixture.z) : null;
             this.buildFixtureLight(
-                mount ? { ...fixture, x: mount.x, y: mount.y, z: mount.height } : fixture,
-                mount ? undefined : this.resolveFixtureRoomHeight(fixture, rooms, roomHeights),
+                mount ? { ...fixture, x: mount.x, y: mount.y, z: mount.height }
+                    : rampMount ? { ...fixture, x: rampMount.x, y: rampMount.y, z: rampMount.height }
+                    : fixture,
+                mount || rampMount ? undefined : this.resolveFixtureRoomHeight(fixture, rooms, roomHeights),
                 floorNode,
             );
         });
@@ -1236,7 +1242,7 @@ export class House3DBuilder {
                     const floor = MeshBuilder.CreatePolygon(
                         `pasadizo_floor_${room.id}`,
                         {
-                            shape: corridorShape,
+                            shape,
                             holes: floorHoles,
                             depth: floorThickness,
                             sideOrientation: Mesh.DOUBLESIDE,
@@ -1248,7 +1254,7 @@ export class House3DBuilder {
                         floor.material = this.matPasadizoSlab;
                     } else {
                         floor.position.y = -floorThickness / 2;
-                        floor.material = this.matFloor;
+                        floor.material = this.matPasadizoSlab;
                     }
                     floor.receiveShadows = true;
                     meshes.push(floor);
@@ -2736,7 +2742,13 @@ export class House3DBuilder {
         const thickness = Math.max(0.02, item.thickness ?? 0.15);
         const meshes: Mesh[] = [];
         const material = new StandardMaterial(`surface_mat_${item.id}`, this.scene);
-        material.diffuseColor = Color3.FromHexString(item.obstacleType === 'ramp' ? '#0f766e' : item.obstacleType === 'ceiling' ? '#94a3b8' : '#2563eb');
+        const rampMaterialColor: Record<string, string> = {
+            concrete: '#78716c', metal: '#64748b', plastic: '#0891b2',
+            wood: '#92400e', composite: '#475569',
+        };
+        material.diffuseColor = Color3.FromHexString(item.obstacleType === 'ramp'
+            ? (rampMaterialColor[item.rampMaterial ?? 'concrete'] ?? '#78716c')
+            : item.obstacleType === 'ceiling' ? '#94a3b8' : '#2563eb');
         const addSlab = (name: string, w: number, d: number, y: number, slope = 0, offset = 0) => {
             const mesh = MeshBuilder.CreateBox(name, { width: w, depth: d, height: thickness }, this.scene);
             mesh.position.set(cx + offset, y, cz); mesh.rotation.z = slope;
@@ -2746,8 +2758,88 @@ export class House3DBuilder {
         };
         if (item.obstacleType === 'ramp') {
             const start = item.startLevel ?? item.elevation ?? 0; const end = item.endLevel ?? start;
-            const run = Math.max(0.1, item.length ?? width); const rise = end - start;
-            addSlab(`ramp_${item.id}`, Math.hypot(run, rise), item.width ?? depth, (start + end) / 2, Math.atan2(rise, run));
+            const rise = end - start;
+            if ((item.rampShape ?? 'straight') === 'spiral') {
+                const turns = Math.max(0.25, item.rampTurns ?? item.rampFloorCount ?? 1);
+                const segments = Math.max(32, Math.ceil(turns * 64));
+                const outerRadius = Math.max(0.5, Math.min(width, depth) / 2);
+                const laneWidth = Math.min(item.width ?? outerRadius * 0.4, outerRadius * 0.8);
+                const innerRadius = Math.max(0.15, outerRadius - laneWidth);
+                const startAngle = ((item.rampStartAngleDeg ?? 0) * Math.PI) / 180;
+                const turnSign = item.rampClockwise === false ? 1 : -1;
+                const makeHelix = (radius: number, railHeight = 0) => Array.from(
+                    { length: segments + 1 },
+                    (_, index) => {
+                        const progress = index / segments;
+                        const angle = startAngle + turnSign * progress * Math.PI * 2 * turns;
+                        return new Vector3(
+                            cx + Math.cos(angle) * radius,
+                            start + rise * progress + railHeight,
+                            cz + Math.sin(angle) * radius,
+                        );
+                    },
+                );
+                const spiral = MeshBuilder.CreateRibbon(
+                    `ramp_spiral_${item.id}`,
+                    { pathArray: [makeHelix(innerRadius), makeHelix(outerRadius)], sideOrientation: Mesh.DOUBLESIDE },
+                    this.scene,
+                );
+                spiral.material = material; spiral.receiveShadows = true; spiral.parent = floorNode ?? null;
+                this.shadowGen?.addShadowCaster(spiral); meshes.push(spiral);
+                if (item.rampHasRailings !== false) {
+                    for (const [index, radius] of [innerRadius, outerRadius].entries()) {
+                        const rail = MeshBuilder.CreateTube(
+                            `ramp_spiral_rail_${item.id}_${index}`,
+                            { path: makeHelix(radius, 1.05), radius: 0.025, tessellation: 8 },
+                            this.scene,
+                        );
+                        rail.material = this.matFrame; rail.parent = floorNode ?? null; meshes.push(rail);
+                    }
+                }
+            } else {
+                buildRampLayout(item).forEach((segment) => {
+                    const dx = segment.end.x - segment.start.x;
+                    const dz = segment.end.y - segment.start.y;
+                    const run = Math.max(0.1, Math.hypot(dx, dz));
+                    const segmentRise = segment.endHeight - segment.startHeight;
+                    const ramp = MeshBuilder.CreateBox(
+                        `ramp_${segment.kind}_${item.id}_${segment.id}`,
+                        {
+                            width: segment.kind === 'landing' ? run : Math.hypot(run, segmentRise),
+                            height: thickness,
+                            depth: segment.width,
+                        },
+                        this.scene,
+                    );
+                    ramp.position.set(
+                        (segment.start.x + segment.end.x) / 2,
+                        (segment.startHeight + segment.endHeight) / 2,
+                        (segment.start.y + segment.end.y) / 2,
+                    );
+                    ramp.rotation.y = -Math.atan2(dz, dx);
+                    ramp.rotation.z = Math.atan2(segmentRise, run);
+                    ramp.material = material; ramp.receiveShadows = true; ramp.parent = floorNode ?? null;
+                    this.shadowGen?.addShadowCaster(ramp); meshes.push(ramp);
+                    if (item.rampHasRailings !== false) {
+                        const normalX = -dz / run; const normalZ = dx / run;
+                        for (const [sideIndex, side] of [-1, 1].entries()) {
+                            const offset = side * segment.width / 2;
+                            const rail = MeshBuilder.CreateTube(
+                                `ramp_rail_${item.id}_${segment.id}_${sideIndex}`,
+                                {
+                                    path: [
+                                        new Vector3(segment.start.x + normalX * offset, segment.startHeight + 1.05, segment.start.y + normalZ * offset),
+                                        new Vector3(segment.end.x + normalX * offset, segment.endHeight + 1.05, segment.end.y + normalZ * offset),
+                                    ],
+                                    radius: 0.025, tessellation: 8,
+                                },
+                                this.scene,
+                            );
+                            rail.material = this.matFrame; rail.parent = floorNode ?? null; meshes.push(rail);
+                        }
+                    }
+                });
+            }
         } else if (item.obstacleType === 'roof' || item.obstacleType === 'ceiling') {
             const eave = item.eaveHeight ?? item.elevation ?? 0;
             const ridge = item.ridgeHeight ?? (eave + width * Math.abs(item.slopePercent ?? 0) / 200);
@@ -3225,46 +3317,26 @@ export class House3DBuilder {
     ) {
         const FLOOR_Y = 0.05;
 
-        const structuralRouteHeightAt = (x: number, z: number): number | undefined => {
-            const surface = structuralSurfaces.find((candidate) =>
-                (candidate.obstacleType === 'roof' || candidate.obstacleType === 'ceiling')
-                && pointInPolygon({ x, y: z }, candidate.vertices),
-            );
-            if (!surface) return undefined;
-            const eave = surface.eaveHeight ?? surface.elevation ?? floorHeight;
-            if (surface.obstacleType === 'ceiling') return eave;
-
-            const xs = surface.vertices.map((vertex) => vertex.x);
-            const minX = Math.min(...xs); const maxX = Math.max(...xs);
-            const width = Math.max(0.01, maxX - minX); const centerX = (minX + maxX) / 2;
-            const ridge = surface.ridgeHeight ?? (eave + width * Math.abs(surface.slopePercent ?? 0) / 200);
-            const rise = ridge - eave;
-            const type = surface.roofType ?? 'flat';
-            if (['gable', 'mansard', 'hip'].includes(type)) {
-                return eave + Math.max(0, 1 - Math.abs(x - centerX) / (width / 2)) * rise;
-            }
-            if (type === 'butterfly') {
-                return eave + Math.min(1, Math.abs(x - centerX) / (width / 2)) * rise;
-            }
-            if (type === 'shed') {
-                return eave + Math.min(1, Math.max(0, (x - minX) / width)) * rise;
-            }
-            return eave;
-        };
         const ceilingHeightAt = (x: number, z: number): number =>
-            structuralRouteHeightAt(x, z)
+            structuralRouteHeightAt(structuralSurfaces, { x, y: z })
                 ?? rooms.find((room) => pointInPolygon({ x, y: z }, room.vertices))?.height
                 ?? floorHeight;
         const stairMountAt = (x: number, z: number) => {
             const stair = findStairAtPoint(rooms, { x, y: z });
             return stair ? resolveStairUndersidePoint(stair, { x, y: z }) : null;
         };
+        const rampMountAt = (x: number, z: number, preferredHeight?: number) => {
+            const ramp = findRampAtPoint(structuralSurfaces, { x, y: z });
+            return ramp ? resolveRampUndersidePoint(ramp, { x, y: z }, preferredHeight) : null;
+        };
 
         const resolveNode = (id: string): { x: number; y: number; z: number } | null => {
             const fx = fixtures.find((f) => f.id === id);
             if (fx) {
                 const mount = stairMountAt(fx.x, fx.y);
-                return mount ? { x: mount.x, y: mount.height, z: mount.y } : {
+                const rampMount = rampMountAt(fx.x, fx.y, fx.z);
+                return mount ? { x: mount.x, y: mount.height, z: mount.y }
+                    : rampMount ? { x: rampMount.x, y: rampMount.height, z: rampMount.y } : {
                     x: fx.x,
                     y: resolveFixtureRenderHeight(fx, ceilingHeightAt(fx.x, fx.y)),
                     z: fx.y,
@@ -3295,6 +3367,40 @@ export class House3DBuilder {
                         else if (sample === 12) routed.push(new Vector3(to.x, to.y, to.z));
                     }
                 }
+                return routed.filter((point, index) =>
+                    index === 0 || !point.equalsWithEpsilon(routed[index - 1], 0.001),
+                );
+            }
+            if (routeType === 'wall_ceiling' && nodes.some((node) => rampMountAt(node.x, node.z))) {
+                const routed = [new Vector3(nodes[0].x, nodes[0].y, nodes[0].z)];
+                for (let index = 0; index < nodes.length - 1; index++) {
+                    const from = nodes[index]; const to = nodes[index + 1];
+                    for (let sample = 0; sample <= 24; sample++) {
+                        const ratio = sample / 24;
+                        const x = from.x + (to.x - from.x) * ratio;
+                        const z = from.z + (to.z - from.z) * ratio;
+                        const preferredHeight = from.y + (to.y - from.y) * ratio;
+                        const mount = rampMountAt(x, z, preferredHeight);
+                        if (mount) routed.push(new Vector3(mount.x, mount.height, mount.y));
+                        else if (sample === 24) routed.push(new Vector3(to.x, to.y, to.z));
+                    }
+                }
+                return routed.filter((point, index) =>
+                    index === 0 || !point.equalsWithEpsilon(routed[index - 1], 0.001),
+                );
+            }
+            if (routeType === 'wall_ceiling' && routeHeightM === undefined) {
+                const routed = [new Vector3(nodes[0].x, nodes[0].y, nodes[0].z)];
+                for (let index = 0; index < nodes.length - 1; index++) {
+                    const from = nodes[index]; const to = nodes[index + 1];
+                    for (let sample = 0; sample <= 16; sample++) {
+                        const ratio = sample / 16;
+                        const x = from.x + (to.x - from.x) * ratio;
+                        const z = from.z + (to.z - from.z) * ratio;
+                        routed.push(new Vector3(x, ceilingHeightAt(x, z), z));
+                    }
+                }
+                routed.push(new Vector3(nodes[nodes.length - 1].x, nodes[nodes.length - 1].y, nodes[nodes.length - 1].z));
                 return routed.filter((point, index) =>
                     index === 0 || !point.equalsWithEpsilon(routed[index - 1], 0.001),
                 );

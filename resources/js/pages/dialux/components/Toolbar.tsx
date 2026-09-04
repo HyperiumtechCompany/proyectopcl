@@ -627,6 +627,8 @@ export const Toolbar: React.FC = () => {
                     'canopy',
                     'corridor',
                     'stair',
+                    'ramp',
+                    'structural-obstacle',
                 ].includes(activeTool),
             },
             {

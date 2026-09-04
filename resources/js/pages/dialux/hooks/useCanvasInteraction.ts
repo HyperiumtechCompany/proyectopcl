@@ -406,7 +406,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             activeTool !== 'room' &&
             activeTool !== 'corridor' &&
             activeTool !== 'stair' &&
-            activeTool !== 'structural-obstacle' &&
+            activeTool !== 'structural-obstacle' && activeTool !== 'ramp' &&
             activeTool !== 'fixture-grid'
         ) {
             stateRef.current.roomVertices = [];
@@ -422,7 +422,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             activeTool !== 'room' &&
             activeTool !== 'corridor' &&
             activeTool !== 'stair' &&
-            activeTool !== 'structural-obstacle' &&
+            activeTool !== 'structural-obstacle' && activeTool !== 'ramp' &&
             activeTool !== 'fixture-grid' &&
             !isWallTool(activeTool) &&
             activeTool !== 'canopy'
@@ -565,7 +565,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 (tool === 'room' ||
                     tool === 'corridor' ||
                     tool === 'stair' ||
-                    tool === 'structural-obstacle' ||
+                    tool === 'structural-obstacle' || tool === 'ramp' ||
                     tool === 'fixture-grid') &&
                 s.roomVertices.length > 0
             )
@@ -592,7 +592,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 tool === 'room' ||
                 tool === 'corridor' ||
                 tool === 'stair' ||
-                tool === 'structural-obstacle' ||
+                tool === 'structural-obstacle' || tool === 'ramp' ||
                 tool === 'fixture-grid'
                     ? s.roomVertices
                     : isWallTool(tool)
@@ -626,7 +626,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             activeTool === 'room' ||
             activeTool === 'corridor' ||
             activeTool === 'stair' ||
-            activeTool === 'structural-obstacle' ||
+            activeTool === 'structural-obstacle' || activeTool === 'ramp' ||
             (activeTool === 'fixture-grid' && fixtureGridAreaMode === 'draw'),
         [activeTool, fixtureGridAreaMode],
     );
@@ -634,7 +634,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
     /** Dispara la acción de cierre correcta según la herramienta de polígono activa. */
     const emitPolygonClose = useCallback(
         (vertices: CanvasPoint[]) => {
-            if (activeTool === 'structural-obstacle') {
+            if (activeTool === 'structural-obstacle' || activeTool === 'ramp') {
                 onAddStructuralObstacle?.(vertices);
             } else if (activeTool === 'fixture-grid') {
                 onCloseFixtureGridArea?.(vertices);
@@ -704,7 +704,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 activeTool === 'room' ||
                 activeTool === 'corridor' ||
                 activeTool === 'stair' ||
-                activeTool === 'structural-obstacle' ||
+                activeTool === 'structural-obstacle' || activeTool === 'ramp' ||
                 (activeTool === 'fixture-grid' &&
                     fixtureGridAreaMode === 'draw')
             ) {
@@ -986,7 +986,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 activeTool === 'room' ||
                 activeTool === 'corridor' ||
                 activeTool === 'stair' ||
-                activeTool === 'structural-obstacle' ||
+                activeTool === 'structural-obstacle' || activeTool === 'ramp' ||
                 activeTool === 'fixture-grid'
                     ? s.roomVertices
                     : isWallTool(activeTool)
@@ -1722,7 +1722,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 activeTool === 'room' ||
                 activeTool === 'corridor' ||
                 activeTool === 'stair' ||
-                activeTool === 'structural-obstacle' ||
+                activeTool === 'structural-obstacle' || activeTool === 'ramp' ||
                 activeTool === 'fixture-grid'
                     ? s.roomVertices
                     : isWallTool(activeTool)
@@ -1788,7 +1788,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 (activeTool === 'room' ||
                     activeTool === 'corridor' ||
                     activeTool === 'stair' ||
-                    activeTool === 'structural-obstacle' ||
+                    activeTool === 'structural-obstacle' || activeTool === 'ramp' ||
                     activeTool === 'fixture-grid') &&
                 s.roomVertices.length > 0
             ) {
@@ -2396,7 +2396,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 (activeTool === 'room' ||
                     activeTool === 'corridor' ||
                     activeTool === 'stair' ||
-                    activeTool === 'structural-obstacle' ||
+                    activeTool === 'structural-obstacle' || activeTool === 'ramp' ||
                     activeTool === 'fixture-grid') &&
                 s.roomVertices.length > 0
             ) {

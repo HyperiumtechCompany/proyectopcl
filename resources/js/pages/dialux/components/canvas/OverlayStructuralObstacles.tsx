@@ -50,7 +50,13 @@ const ObstaclePolygon = memo(function ObstaclePolygon({
     const showMetrics = zoom >= 0.5 && area > 0;
     const patId = `hatch-obstacle-${obstacle.id}`;
     const isConstructionSurface = ['roof', 'ceiling', 'ramp'].includes(obstacle.obstacleType);
-    const baseColor = obstacle.obstacleType === 'ramp' ? '#0f766e' : isConstructionSurface ? '#1d4ed8' : '#44403c';
+    const rampColors: Record<string, string> = {
+        concrete: '#78716c', metal: '#64748b', plastic: '#0891b2',
+        wood: '#92400e', composite: '#475569',
+    };
+    const baseColor = obstacle.obstacleType === 'ramp'
+        ? (rampColors[obstacle.rampMaterial ?? 'concrete'] ?? '#78716c')
+        : isConstructionSurface ? '#1d4ed8' : '#44403c';
     const hatchColor = isConstructionSurface ? '#67e8f9' : '#dc2626';
 
     return (

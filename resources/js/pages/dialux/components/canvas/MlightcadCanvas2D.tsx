@@ -75,6 +75,7 @@ import {
     computeLegacyLinkUpdate,
 } from '@/pages/dialux/hooks/wireLegacySync';
 import { resolveStairUndersidePoint } from '@/pages/dialux/hooks/stairMountingGeometry';
+import { findRampAtPoint, resolveRampUndersidePoint } from '@/pages/dialux/hooks/rampGeometry';
 
 import { createCanvasTransforms } from '@/pages/dialux/geometry/coordinateTransform';
 import {
@@ -847,9 +848,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             onAddStructuralObstacle: (verticesM) => {
                 const obstacleCount = scene?.structuralObstacles?.length ?? 0;
                 const floorHeight = scene?.floorHeight ?? 3.0;
+                const isRamp = ui.activeTool === 'ramp';
                 const id = store.addStructuralObstacle({
-                    name: `Cubierta ${obstacleCount + 1}`,
-                    obstacleType: 'roof',
+                    name: isRamp ? `Rampa ${obstacleCount + 1}` : `Cubierta ${obstacleCount + 1}`,
+                    obstacleType: isRamp ? 'ramp' : 'roof',
                     vertices: verticesM,
                     // Piso a techo por defecto (caso mas comun: columna estructural);
                     // el usuario ajusta elevation/height en el panel de propiedades
@@ -867,6 +869,16 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     exteriorReflectance: 0.3,
                     overhang: 0,
                     rampType: 'pedestrian',
+                    rampUse: 'education',
+                    rampShape: 'straight',
+                    rampMaterial: 'concrete',
+                    rampDirection: 'north',
+                    rampTurns: 1,
+                    rampClockwise: true,
+                    rampStartAngleDeg: 0,
+                    rampFloorCount: 1,
+                    rampLandingLength: 1.5,
+                    rampHasRailings: true,
                     startLevel: 0,
                     endLevel: 0.5,
                     length: 6,
@@ -988,12 +1000,16 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 const stairMount = ambient?.sourceRoom.roomType === 'stair'
                     ? resolveStairUndersidePoint(ambient.sourceRoom, { x: xM, y: yM })
                     : null;
+                const ramp = findRampAtPoint(scene.structuralObstacles ?? [], { x: xM, y: yM });
+                const rampMount = ramp
+                    ? resolveRampUndersidePoint(ramp, { x: xM, y: yM }, t.z)
+                    : null;
                 const ceilingHeight = ambient
                     ? resolveRoomCeilingHeight(ambient.room, scene.walls)
                     : undefined;
                 const fixtureHeight = resolveFixtureRenderHeight(
                     {
-                        z: stairMount?.height ?? t.z ?? (ceilingHeight ? ceilingHeight - 0.08 : 2.4),
+                        z: stairMount?.height ?? rampMount?.height ?? t.z ?? (ceilingHeight ? ceilingHeight - 0.08 : 2.4),
                         fixtureType,
                         emergencyType: t.emergencyType,
                     },
@@ -1005,8 +1021,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     // colocar la luminaria, dejándola sin su identidad de catálogo.
                     ...t,
                     name: t.name ?? `Luminaria ${ambient?.name ?? 'exterior'}`,
-                    x: stairMount?.x ?? xM,
-                    y: stairMount?.y ?? yM,
+                    x: stairMount?.x ?? rampMount?.x ?? xM,
+                    y: stairMount?.y ?? rampMount?.y ?? yM,
                     z: fixtureHeight,
                     lumens: t.lumens ?? 4000,
                     power: t.power,
@@ -1286,6 +1302,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             ui.activeTool === 'room' ||
             ui.activeTool === 'corridor' ||
             ui.activeTool === 'stair' ||
+            ui.activeTool === 'ramp' ||
             ui.activeTool === 'wall' ||
             ui.activeTool === 'education-wall';
         const dynInputPrevScene = isDynInputTool ? getDraftPrevPoint() : null;

@@ -23,12 +23,12 @@ export function GeoSearchPanel({ onUseLocation }: Props) {
         <aside className="w-full border-b border-slate-200 bg-white lg:w-72 lg:border-r lg:border-b-0 dark:border-white/10 dark:bg-[#101218]">
             <div className="border-b border-slate-200 p-4 dark:border-white/10">
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
-                    <MapPin className="h-4 w-4 text-amber-500" /> Ubicación
-                    del proyecto
+                    <MapPin className="h-4 w-4 text-amber-500" /> Ubicación del
+                    proyecto
                 </div>
                 <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                    Busca la dirección o nombre del terreno para posicionar
-                    el emplazamiento.
+                    Busca la dirección o nombre del terreno para posicionar el
+                    emplazamiento.
                 </p>
             </div>
             <div className="space-y-3 p-3">

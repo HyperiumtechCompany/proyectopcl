@@ -61,9 +61,7 @@ describe('computeSatelliteTiles', () => {
 
     it('usa el orden z/y/x en la URL (convención Esri)', () => {
         const tiles = computeSatelliteTiles(location, 1, 19, 0);
-        expect(tiles[0].url).toMatch(
-            /MapServer\/tile\/19\/\d+\/\d+$/,
-        );
+        expect(tiles[0].url).toMatch(/MapServer\/tile\/19\/\d+\/\d+$/);
     });
 
     it('terrainScaleM mayor a 1 reduce el tamaño del tile en unidades de canvas', () => {

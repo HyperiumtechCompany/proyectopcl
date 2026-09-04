@@ -45,16 +45,16 @@ describe('syncFeederLengths', () => {
     });
 
     it('fuerza lengthMode a "site" y toma la longitud de la polilínea cuando hay un trazado vinculado', () => {
-        const edges = [makeEdge({ lengthMode: 'plan', horizontalLengthM: 999 })];
+        const edges = [
+            makeEdge({ lengthMode: 'plan', horizontalLengthM: 999 }),
+        ];
         const [result] = syncFeederLengths(edges, [makePath()]);
         expect(result.lengthMode).toBe('site');
         expect(result.horizontalLengthM).toBeCloseTo(50);
     });
 
     it('no crea un objeto nuevo si el edge ya está sincronizado (referencia estable)', () => {
-        const edges = [
-            makeEdge({ lengthMode: 'site', horizontalLengthM: 50 }),
-        ];
+        const edges = [makeEdge({ lengthMode: 'site', horizontalLengthM: 50 })];
         const result = syncFeederLengths(edges, [makePath()]);
         expect(result[0]).toBe(edges[0]);
     });
@@ -95,8 +95,12 @@ describe('deriveFeederStatus / feederStatusColor', () => {
     });
 
     it('mapea cada status a un color distinto', () => {
-        expect(feederStatusColor('complete')).not.toBe(feederStatusColor('warning'));
-        expect(feederStatusColor('non_compliant')).not.toBe(feederStatusColor('incomplete'));
+        expect(feederStatusColor('complete')).not.toBe(
+            feederStatusColor('warning'),
+        );
+        expect(feederStatusColor('non_compliant')).not.toBe(
+            feederStatusColor('incomplete'),
+        );
     });
 });
 

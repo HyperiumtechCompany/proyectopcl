@@ -356,6 +356,43 @@ describe('calculateConductorLength routeHeightM', () => {
         expect(calculateConductorLength(base, { ...conductor, routeHeightM: 3.5 })?.verticalLengthM)
             .toBeCloseTo(3.0, 8);
     });
+
+    it('suma la pendiente real de las dos caidas de una cubierta', () => {
+        const base = buildScene({
+            floorHeight: 3,
+            rooms: [{
+                id: 'room-1', name: 'Recinto', height: 3, color: '#fff',
+                vertices: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 6 }, { x: 0, y: 6 }],
+            }],
+            structuralObstacles: [{
+                id: 'roof-1', name: 'Dos aguas', obstacleType: 'roof',
+                vertices: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 6 }, { x: 0, y: 6 }],
+                height: 2, elevation: 3, eaveHeight: 3, ridgeHeight: 5,
+                roofType: 'gable', thickness: 0.2,
+            }],
+            lightSwitches: [{
+                id: 'switch-1', x: 1, y: 3, mountingHeight: 1.4,
+                type: 'single', connectedFixtureIds: [],
+            }],
+            fixtures: [{
+                id: 'fixture-1', name: 'L1', x: 9, y: 3, z: 2.9,
+                lumens: 1000, efficiency: 0.8, fixtureType: 'recessed', lightColor: '#fff',
+            }],
+        });
+        const conductor = {
+            id: 'wire-roof', sourceId: 'switch-1', targetId: 'fixture-1', wireCount: 2,
+            routeType: 'wall_ceiling' as const, tubeSize: 20, conductorType: 'THW-90',
+            sectionMm2: 2.5, waypoints: [],
+        };
+
+        const adaptive = calculateConductorLength(base, conductor)!;
+        const manual = calculateConductorLength(base, { ...conductor, routeHeightM: 3 })!;
+        expect(adaptive.horizontalLengthM).toBeGreaterThan(8);
+        expect(adaptive.totalLengthM).toBeCloseTo(
+            adaptive.horizontalLengthM + adaptive.verticalLengthM,
+        );
+        expect(manual.horizontalLengthM).toBeCloseTo(8);
+    });
 });
 
 describe('calculateConductorGroupLength', () => {

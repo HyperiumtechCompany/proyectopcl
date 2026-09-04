@@ -108,6 +108,12 @@ const STRUCTURE_TOOLS: ConstructionTool[] = [
         sublabel: 'Caja de escalera',
     },
     {
+        tool: 'ramp',
+        icon: <Triangle size={13} className="rotate-90" />,
+        tip: 'Rampa',
+        sublabel: 'Recta o helicoidal entre pisos',
+    },
+    {
         tool: 'structural-obstacle',
         icon: <Box size={13} />,
         tip: 'Estructura / techo / rampa',

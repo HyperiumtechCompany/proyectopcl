@@ -26,6 +26,7 @@ export type DrawTool =
     | 'antipanic-area'
     | 'partition'
     | 'structural-obstacle'
+    | 'ramp'
     | 'fixture'
     | 'fixture-grid'
     | 'switch'
@@ -306,6 +307,17 @@ export interface StructuralObstacle {
     centralOpening?: number;
     /** Configuración de una superficie inclinada transitable. */
     rampType?: 'pedestrian' | 'vehicular' | 'transition';
+    rampUse?: 'education' | 'housing' | 'industrial' | 'vehicular';
+    rampShape?: 'straight' | 'spiral';
+    rampMaterial?: 'concrete' | 'metal' | 'plastic' | 'wood' | 'composite';
+    rampDirection?: 'north' | 'south' | 'east' | 'west';
+    rampTurns?: number;
+    rampClockwise?: boolean;
+    rampStartAngleDeg?: number;
+    rampFloorCount?: number;
+    rampLandingLength?: number;
+    rampHasRailings?: boolean;
+    rampFlights?: RampFlight[];
     startLevel?: number;
     endLevel?: number;
     width?: number;
@@ -314,6 +326,19 @@ export interface StructuralObstacle {
     calculationSurfaceEnabled?: boolean;
     targetLux?: number;
     uniformityTarget?: number;
+}
+
+export interface RampFlight {
+    id: string;
+    direction: 'north' | 'south' | 'east' | 'west';
+    /** Desarrollo horizontal del tramo en metros. */
+    length: number;
+    /** Desnivel positivo o negativo aportado por el tramo. */
+    rise: number;
+    /** Plataforma horizontal al finalizar el tramo. */
+    landingLength: number;
+    /** Giro aplicado al siguiente tramo: -180 a 180 grados. */
+    turnAfterDeg: number;
 }
 
 export interface Room {

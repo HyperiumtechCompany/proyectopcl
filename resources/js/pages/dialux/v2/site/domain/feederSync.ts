@@ -26,7 +26,8 @@ export function syncFeederLengths(
     return edges.map((edge) => {
         const path = pathByEdge.get(edge.id);
         if (!path) return edge;
-        const lengthM = path.calculatedLengthM || polylineLength(path.waypoints);
+        const lengthM =
+            path.calculatedLengthM || polylineLength(path.waypoints);
         if (
             edge.lengthMode === 'site' &&
             Math.abs(edge.horizontalLengthM - lengthM) < 1e-6

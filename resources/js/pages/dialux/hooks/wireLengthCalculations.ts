@@ -2,6 +2,8 @@ import { circuitCurrent } from '../electrical/engine/formulas';
 import { deriveSceneAmbientSpaces, findAmbientSpaceContainingPoint, pointInPolygon } from './ambientSpaces';
 import { calculatePolygonArea, calculatePolygonPerimeter } from './lightingCalculations';
 import { CONDUCTOR_SECTION_OPTIONS, DEFAULT_OUTLET_POWER_W, isOutletDeviceType } from './types';
+import { structuralRouteHeightAt } from './roofGeometry';
+import { findRampAtPoint, resolveRampUndersidePoint } from './rampGeometry';
 import type {
     Conductor,
     ElectricalDevice,
@@ -64,6 +66,41 @@ function conductorPlanLength(
     }, 0);
 }
 
+function conductorCeilingRouteLength(
+    scene: Scene,
+    conductor: Conductor,
+    source: Vertex,
+    target: Vertex,
+): number {
+    const points = [source, ...(conductor.waypoints ?? []), target];
+    const hasAdaptiveRoof = (scene.structuralObstacles ?? []).some((surface) =>
+        ['roof', 'ceiling', 'ramp'].includes(surface.obstacleType) &&
+        points.some((point) => pointInPolygon(point, surface.vertices)),
+    );
+    if (!hasAdaptiveRoof || conductor.routeHeightM !== undefined) {
+        return conductorPlanLength(conductor, source, target);
+    }
+
+    let total = 0;
+    for (let index = 0; index < points.length - 1; index++) {
+        const from = points[index]; const to = points[index + 1];
+        let previous = from;
+        let previousHeight = routeHeightAtPoint(scene, from);
+        for (let sample = 1; sample <= 16; sample++) {
+            const ratio = sample / 16;
+            const current = {
+                x: from.x + (to.x - from.x) * ratio,
+                y: from.y + (to.y - from.y) * ratio,
+            };
+            const currentHeight = routeHeightAtPoint(scene, current);
+            total += Math.hypot(distance(previous, current), currentHeight - previousHeight);
+            previous = current;
+            previousHeight = currentHeight;
+        }
+    }
+    return total;
+}
+
 function nodeMountingHeight(node: WireNode): number {
     if (node.nodeType === 'fixture') {
         return Math.max(0, node.z ?? node.mountingHeight ?? 0);
@@ -103,7 +140,7 @@ function nodeVerticalAllowance(
     if (isCeiling) {
         const routeHeight = conductor.routeHeightM !== undefined
             ? Math.max(0, conductor.routeHeightM)
-            : roomHeightAt(scene, node);
+            : routeHeightAtPoint(scene, node);
         return Math.abs(routeHeight - mountingHeight) + SLACK_ALLOWANCE;
     }
 
@@ -116,7 +153,9 @@ function conductorLengthComponents(
     source: WireNode,
     target: WireNode,
 ): { horizontalLengthM: number; verticalLengthM: number; totalLengthM: number } {
-    const horizontalLengthM = conductorPlanLength(conductor, source, target);
+    const horizontalLengthM = conductor.routeType === 'floor'
+        ? conductorPlanLength(conductor, source, target)
+        : conductorCeilingRouteLength(scene, conductor, source, target);
     const verticalLengthM = [source, target].reduce(
         (total, node) =>
             total + nodeVerticalAllowance(scene, node, conductor),
@@ -209,6 +248,14 @@ function roomHeightAt(scene: Scene, point: Vertex): number {
     return room?.height ?? scene.floorHeight ?? DEFAULT_ROOM_HEIGHT;
 }
 
+function routeHeightAtPoint(scene: Scene, point: Vertex): number {
+    const ramp = findRampAtPoint(scene.structuralObstacles ?? [], point);
+    const rampPoint = ramp ? resolveRampUndersidePoint(ramp, point) : null;
+    if (rampPoint) return rampPoint.height;
+    return structuralRouteHeightAt(scene.structuralObstacles ?? [], point)
+        ?? roomHeightAt(scene, point);
+}
+
 /** Altura horizontal visible/efectiva de una ruta de cable. */
 export function resolveConductorRouteHeight(
     scene: Scene,
@@ -227,7 +274,7 @@ export function resolveConductorRouteHeight(
     ].filter((node): node is WireNode => node !== null);
 
     return endpoints.length > 0
-        ? Math.max(...endpoints.map((node) => roomHeightAt(scene, node)))
+        ? Math.max(...endpoints.map((node) => routeHeightAtPoint(scene, node)))
         : scene.floorHeight ?? DEFAULT_ROOM_HEIGHT;
 }
 
