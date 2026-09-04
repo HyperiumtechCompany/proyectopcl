@@ -7,6 +7,7 @@ import type {
     SiteElement,
     SiteElementConfig,
     StairConfig,
+    TerracePlatformConfig,
     TgConfig,
     TransformerConfig,
 } from '../domain/types';
@@ -397,6 +398,35 @@ export function SiteElementConfigFields({
                     <span className="text-slate-500">Peldaños (≈18 cm)</span>
                     <strong>{steps}</strong>
                 </div>
+            </div>
+        );
+    }
+
+    if (cfg.kind === 'terrace_platform') {
+        const t = cfg as TerracePlatformConfig;
+        return (
+            <div className="grid gap-2 rounded-lg border border-slate-200 p-2 dark:border-white/10">
+                <Num
+                    label="Ángulo del talud (° desde la horizontal)"
+                    value={t.taludAngleDeg}
+                    step={5}
+                    min={1}
+                    onChange={(taludAngleDeg) =>
+                        set({
+                            ...t,
+                            taludAngleDeg: Math.min(
+                                89,
+                                Math.max(1, taludAngleDeg),
+                            ),
+                        })
+                    }
+                />
+                <p className="text-[10px] text-slate-400">
+                    Plataforma a su cota (pestaña Posición). El talud baja de su
+                    borde hasta el terreno natural — o hasta la cota base si aún
+                    no hay topografía modelada — con este ángulo. Usa una
+                    plataforma por cada nivel de la ladera.
+                </p>
             </div>
         );
     }

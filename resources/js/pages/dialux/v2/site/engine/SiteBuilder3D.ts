@@ -31,6 +31,7 @@ import type {
     SiteData,
     SiteElement,
     StairConfig,
+    TerracePlatformConfig,
     TgConfig,
     TransformerConfig,
 } from '../domain/types';
@@ -52,6 +53,11 @@ function rampCfg(el: SiteElement): RampConfig | undefined {
 }
 function stairCfg(el: SiteElement): StairConfig | undefined {
     return el.config?.kind === 'stair' ? el.config : undefined;
+}
+function terracePlatformCfg(
+    el: SiteElement,
+): TerracePlatformConfig | undefined {
+    return el.config?.kind === 'terrace_platform' ? el.config : undefined;
 }
 
 export interface SiteModuleScene {
@@ -277,6 +283,9 @@ export class SiteBuilder3D {
                     this.buildSpotMarker(element, scaleM);
                 }
                 return;
+            case 'terrace_platform':
+                this.buildTerracePlatform(element, scaleM);
+                return;
             case 'street':
             case 'green_area':
             case 'parking':
@@ -485,6 +494,82 @@ export class SiteBuilder3D {
         );
         line.material = this.matFor(element.style.strokeColor, 1, 0.1);
         line.parent = node;
+    }
+
+    /**
+     * Plataforma de terreno a cota absoluta — "opción 2" para lotes no
+     * planos: en vez de digitalizar curvas de nivel, cada nivel de la ladera
+     * se dibuja como un polígono plano a su propia cota (`baseElevationM`,
+     * igual que una curva de nivel: valor absoluto, no offset), y el talud
+     * que lo une con el terreno se genera solo con el ángulo configurado
+     * (`taludAngleDeg`, 75° por defecto). El borde de cada vértice se
+     * desplaza en línea recta desde el centroide (aproximación válida para
+     * huellas convexas/típicas de plataforma — evita depender del sentido de
+     * giro con el que el usuario haya dibujado el polígono) hasta la cota
+     * del terreno natural bajo ese punto (o hasta el datum si aún no hay
+     * topografía modelada con curvas/puntos).
+     */
+    private buildTerracePlatform(element: SiteElement, scaleM: number) {
+        const { node, localVertices, center } = this.anchorNode(
+            element,
+            scaleM,
+        );
+        const platformYAbs = element.baseElevationM ?? 0;
+        // Cota absoluta, no relativa al terreno bajo el centroide.
+        node.position.y = this.rel(platformYAbs);
+
+        const cap = MeshBuilder.CreatePolygon(
+            `site_terrace_cap_${element.id}`,
+            {
+                shape: localVertices,
+                depth: 0.15,
+                sideOrientation: Mesh.DOUBLESIDE,
+            },
+            this.scene,
+        );
+        cap.material = this.matFor(
+            element.style.fillColor,
+            element.style.opacity ?? 1,
+        );
+        cap.receiveShadows = true;
+        cap.parent = node;
+
+        if (element.vertices.length < 3) return;
+        const cfg = terracePlatformCfg(element);
+        const angleDeg = Math.min(89, Math.max(1, cfg?.taludAngleDeg ?? 75));
+        const tanAngle = Math.tan((angleDeg * Math.PI) / 180);
+
+        const bottomRing = element.vertices.map((v) => {
+            const groundAbs = this.terrainModeled
+                ? sampleGroundElevation(this.terrainPoints, v.x, v.y)
+                : this.elevationDatum;
+            const dh = platformYAbs - groundAbs;
+            const dx = v.x - center.x;
+            const dy = v.y - center.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const spread = Math.abs(dh) / tanAngle;
+            const bx = v.x + (dx / len) * spread;
+            const by = v.y + (dy / len) * spread;
+            return new Vector3(
+                (bx - center.x) * scaleM,
+                groundAbs - platformYAbs,
+                -(by - center.y) * scaleM,
+            );
+        });
+        const topRing = [...localVertices, localVertices[0]];
+        bottomRing.push(bottomRing[0]);
+
+        const skirt = MeshBuilder.CreateRibbon(
+            `site_terrace_skirt_${element.id}`,
+            {
+                pathArray: [topRing, bottomRing],
+                sideOrientation: Mesh.DOUBLESIDE,
+            },
+            this.scene,
+        );
+        skirt.material = this.matFor('#a89270', 1, 0.05);
+        skirt.receiveShadows = true;
+        skirt.parent = node;
     }
 
     /** Punto acotado: varilla vertical hasta su cota (desde el 0 de referencia). */

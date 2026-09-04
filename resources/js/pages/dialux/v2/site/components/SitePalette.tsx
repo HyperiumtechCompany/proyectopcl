@@ -9,6 +9,7 @@ import {
     Fingerprint,
     Footprints,
     Hexagon,
+    Layers,
     MapPin,
     Mountain,
     MousePointer2,
@@ -233,6 +234,12 @@ export function SitePalette({ editor }: Props) {
                     label="Importar levantamiento"
                     active={editor.surveyImportOpen}
                     onClick={editor.openSurveyImport}
+                />
+                <PolygonTool
+                    editor={editor}
+                    type="terrace_platform"
+                    icon={Layers}
+                    label="Plataforma (terraza)"
                 />
                 {editor.topographyCount > 0 && (
                     <button

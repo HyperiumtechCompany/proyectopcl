@@ -29,6 +29,7 @@ const POLYGON_TYPES = new Set<SiteElementType>([
     'parking',
     'building_block',
     'custom_zone',
+    'terrace_platform',
 ]);
 
 /** Tipos que se colocan con un solo clic (equipo puntual, tamaño fijo por defecto). */

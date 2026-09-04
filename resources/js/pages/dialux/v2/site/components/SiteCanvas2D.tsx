@@ -795,6 +795,8 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                     className="pointer-events-none fill-slate-800 font-semibold dark:fill-white"
                                 >
                                     {element.label}
+                                    {element.type === 'terrace_platform' &&
+                                        `  ▲ ${(element.baseElevationM ?? 0).toFixed(2)} m`}
                                 </text>
                                 {selected &&
                                     editor.activeTool === 'select' &&

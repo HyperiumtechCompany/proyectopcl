@@ -25,6 +25,7 @@ export type SiteElementType =
     | 'gate' // Puerta / portón de acceso
     | 'contour' // Curva de nivel (polilínea con cota) — modela el terreno
     | 'spot_elevation' // Punto acotado (cota puntual de un levantamiento)
+    | 'terrace_platform' // Plataforma/plantío a una cota absoluta, unida a su entorno por un talud
     | 'custom_zone'; // Zona personalizada
 
 export interface Point2D {
@@ -107,6 +108,16 @@ export interface RampConfig {
     widthM: number;
 }
 
+export interface TerracePlatformConfig {
+    kind: 'terrace_platform';
+    /**
+     * Ángulo del talud respecto a la horizontal (°), entre el borde de la
+     * plataforma y el terreno/plataforma vecina. 75° por defecto (corte firme
+     * típico); editable — un talud en tierra suelta puede necesitar 30-45°.
+     */
+    taludAngleDeg: number;
+}
+
 export type SiteElementConfig =
     | GateConfig
     | PoleConfig
@@ -114,7 +125,8 @@ export type SiteElementConfig =
     | TgConfig
     | FenceConfig
     | StairConfig
-    | RampConfig;
+    | RampConfig
+    | TerracePlatformConfig;
 
 export interface SiteElement {
     id: string;

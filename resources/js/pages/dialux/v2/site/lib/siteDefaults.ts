@@ -59,6 +59,8 @@ export function defaultConfigFor(
                 widthM: 1.2,
                 run: 'straight',
             };
+        case 'terrace_platform':
+            return { kind: 'terrace_platform', taludAngleDeg: 75 };
         default:
             return undefined;
     }
@@ -140,6 +142,14 @@ export const SITE_ELEMENT_DEFAULTS: Record<
     spot_elevation: {
         label: 'Cota',
         style: { fillColor: '#f97316', strokeColor: '#c2410c' },
+    },
+    terrace_platform: {
+        label: 'Plataforma',
+        style: {
+            fillColor: '#c9a876',
+            strokeColor: '#92400e',
+            opacity: 0.7,
+        },
     },
     court: {
         label: 'Cancha',
@@ -239,6 +249,13 @@ export function createDefaultSiteLayers(): SiteLayer[] {
             id: 'layer-topography',
             label: 'Topografía (curvas de nivel)',
             types: ['contour', 'spot_elevation'],
+            visible: true,
+            locked: false,
+        },
+        {
+            id: 'layer-terraces',
+            label: 'Plataformas / terrazas',
+            types: ['terrace_platform'],
             visible: true,
             locked: false,
         },

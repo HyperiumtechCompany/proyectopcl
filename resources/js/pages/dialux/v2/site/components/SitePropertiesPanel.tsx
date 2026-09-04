@@ -98,7 +98,9 @@ function ElementProperties({
     modules: ModuleOption[];
 }) {
     const isTopo =
-        element.type === 'contour' || element.type === 'spot_elevation';
+        element.type === 'contour' ||
+        element.type === 'spot_elevation' ||
+        element.type === 'terrace_platform';
     const isFootprint =
         element.type !== 'ramp' && element.type !== 'stair' && !isTopo;
     const hasConfigTab = !!element.config || element.type === 'building_block';
