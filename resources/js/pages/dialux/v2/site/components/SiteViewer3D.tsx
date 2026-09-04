@@ -104,11 +104,25 @@ export function SiteViewer3D({
 
     useEffect(() => {
         isActiveRef.current = isActive;
-        if (isActive && engineRef.current) {
-            // El canvas estuvo con display:none: recalcular tamaño y pintar un frame.
-            engineRef.current.resize();
-            engineRef.current.scenes[0]?.render();
-        }
+        if (!isActive) return;
+        // El canvas venía con display:none (tamaño 0). Esperar a que el layout
+        // le dé dimensiones reales antes de `resize()` — si no, el viewport de
+        // Babylon queda en 0×0 y no se ve nada (mismo patrón que v1).
+        let raf = 0;
+        let tries = 0;
+        const kick = () => {
+            const canvas = canvasRef.current;
+            const engine = engineRef.current;
+            if (!canvas || !engine) return;
+            if (canvas.clientWidth > 0 && canvas.clientHeight > 0) {
+                engine.resize();
+                engine.scenes[0]?.render();
+                return;
+            }
+            if (tries++ < 60) raf = requestAnimationFrame(kick);
+        };
+        raf = requestAnimationFrame(kick);
+        return () => cancelAnimationFrame(raf);
     }, [isActive]);
 
     useEffect(() => {

@@ -241,19 +241,16 @@ export class SiteBuilder3D {
 
         this.frameCamera(siteData, scaleM);
 
-        console.log('[site3D] sync', {
-            elements: siteData.elements.length,
-            nodos: this.elementNodes.size,
-            terrainModeled: this.terrainModeled,
-            terrainPoints: this.terrainPoints.length,
-            datum: this.elevationDatum,
-            originX: this.originX,
-            originZ: this.originZ,
-            camTarget: this.camera
-                ? this.camera.target.asArray().map((n) => Math.round(n))
-                : null,
-            camRadius: this.camera ? Math.round(this.camera.radius) : null,
-        });
+        const t = this.camera
+            ? this.camera.target.asArray().map((n) => Math.round(n))
+            : [];
+        console.log(
+            `[site3D] elems=${siteData.elements.length} nodos=${this.elementNodes.size} ` +
+                `terrain=${this.terrainModeled}(${this.terrainPoints.length}pts) ` +
+                `datum=${this.elevationDatum.toFixed(1)} origin=(${Math.round(this.originX)},${Math.round(this.originZ)}) ` +
+                `camTarget=(${t.join(',')}) camRadius=${this.camera ? Math.round(this.camera.radius) : '?'} ` +
+                `scaleM=${scaleM}`,
+        );
     }
 
     private buildElement(
