@@ -34,6 +34,51 @@ function norm(s: string): string {
     return s.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
+/**
+ * Parte una línea de CSV respetando comillas (RFC4180-ish): una celda
+ * entre comillas puede contener el propio separador (ej. números con coma
+ * de miles: `"8,917,727.900"`) sin que la fila se desalinee.
+ */
+function splitCsvLine(line: string, sep: string): string[] {
+    const cells: string[] = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuotes) {
+            if (ch === '"') {
+                if (line[i + 1] === '"') {
+                    cur += '"';
+                    i++;
+                } else {
+                    inQuotes = false;
+                }
+            } else {
+                cur += ch;
+            }
+        } else if (ch === '"') {
+            inQuotes = true;
+        } else if (ch === sep) {
+            cells.push(cur.trim());
+            cur = '';
+        } else {
+            cur += ch;
+        }
+    }
+    cells.push(cur.trim());
+    return cells;
+}
+
+/**
+ * Convierte una celda numérica a `number`, tolerando coma de miles dentro
+ * de un valor entre comillas (`"374,837.180"` → 374837.18). El separador
+ * decimal siempre es `.` en estos levantamientos (formato US/Excel).
+ */
+function parseCellNumber(s: string | undefined): number {
+    if (s === undefined) return NaN;
+    return Number(s.replace(/,/g, '').trim());
+}
+
 const ESTE_KEYS = ['este', 'x', 'e', 'easting'];
 const NORTE_KEYS = ['norte', 'y', 'n', 'northing'];
 const COTA_KEYS = ['cota', 'z', 'elev', 'elevacion', 'altura'];
@@ -75,9 +120,11 @@ export function parseSurveyCsv(
     }
 
     const sep = [',', ';', '\t'].reduce((best, s) =>
-        lines[0].split(s).length > lines[0].split(best).length ? s : best,
+        splitCsvLine(lines[0], s).length > splitCsvLine(lines[0], best).length
+            ? s
+            : best,
     );
-    const cells = (line: string) => line.split(sep).map((c) => c.trim());
+    const cells = (line: string) => splitCsvLine(line, sep);
 
     const first = cells(lines[0]);
     const firstIsHeader = first.some(
@@ -104,9 +151,9 @@ export function parseSurveyCsv(
     let invalidCota = 0;
     let swapped = 0;
     for (const c of rows) {
-        let este = Number(c[map.este]);
-        let norte = Number(c[map.norte]);
-        const cota = Number(c[map.cota]);
+        let este = parseCellNumber(c[map.este]);
+        let norte = parseCellNumber(c[map.norte]);
+        const cota = parseCellNumber(c[map.cota]);
         if (!Number.isFinite(este) || !Number.isFinite(norte)) {
             skipped++;
             continue;
