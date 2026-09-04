@@ -1,10 +1,19 @@
 import { AlertTriangle, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
     parseSurveyCsv,
     type ColumnMap,
     type SurveyPoint,
 } from '../domain/surveyImport';
+
+type XlsxModule = {
+    read: (data: ArrayBuffer, opts: { type: 'array' }) => XlsxWorkbook;
+    utils: { sheet_to_csv: (ws: unknown) => string };
+};
+type XlsxWorkbook = {
+    SheetNames: string[];
+    Sheets: Record<string, unknown>;
+};
 
 interface Props {
     /** Centroide (x, y en coords del sitio) de la geometría actual, para avisar si el levantamiento no coincide. */
@@ -50,8 +59,57 @@ export function SiteSurveyImportDialog({
     }, [parsed]);
 
     const [align, setAlign] = useState(true);
+    const [sheets, setSheets] = useState<string[]>([]);
+    const [sheet, setSheet] = useState<string>('');
+    const xlsxRef = useRef<XlsxModule | null>(null);
+    const wbRef = useRef<XlsxWorkbook | null>(null);
+    const [fileError, setFileError] = useState<string | null>(null);
 
-    const handleFile = (file: File) => {
+    // Un .xlsx pegado como texto empieza con "PK" y trae bytes de control
+    // — no se puede pegar, hay que cargarlo como archivo.
+    const pastedBinary =
+        text.startsWith('PK') &&
+        [...text.slice(0, 200)].some((ch) => {
+            const c = ch.charCodeAt(0);
+            return c < 9 || (c > 13 && c < 32);
+        });
+
+    const pickSheet = (name: string) => {
+        setSheet(name);
+        const XLSX = xlsxRef.current;
+        const wb = wbRef.current;
+        if (XLSX && wb && wb.Sheets[name]) {
+            setText(XLSX.utils.sheet_to_csv(wb.Sheets[name]));
+        }
+    };
+
+    const handleFile = async (file: File) => {
+        setFileError(null);
+        const lower = file.name.toLowerCase();
+        if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
+            try {
+                const XLSX = (await import('xlsx')) as unknown as XlsxModule;
+                xlsxRef.current = XLSX;
+                const wb = XLSX.read(await file.arrayBuffer(), {
+                    type: 'array',
+                });
+                wbRef.current = wb;
+                setSheets(wb.SheetNames);
+                // Preferir una hoja de "levantamiento/topografía/puntos".
+                const pick =
+                    wb.SheetNames.find((n) =>
+                        /levant|topog|punto|estac/i.test(n),
+                    ) ?? wb.SheetNames[0];
+                pickSheet(pick);
+            } catch (err) {
+                setFileError(
+                    'No se pudo leer el Excel: ' +
+                        (err instanceof Error ? err.message : String(err)),
+                );
+            }
+            return;
+        }
+        setSheets([]);
         const reader = new FileReader();
         reader.onload = () => setText(String(reader.result ?? ''));
         reader.readAsText(file);
@@ -100,24 +158,37 @@ export function SiteSurveyImportDialog({
                 </div>
 
                 <p className="mb-2 text-[11px] leading-relaxed text-slate-500">
-                    Pega el CSV o carga el archivo. Columnas Este, Norte y Cota
-                    (m). Cada fila se coloca como un punto acotado; la cota
-                    alimenta la superficie del terreno.
+                    Carga el archivo (.xlsx, .xls o .csv) o pega el CSV.
+                    Columnas Este, Norte y Cota (m). Cada fila se coloca como un
+                    punto acotado; la cota alimenta la superficie del terreno.
                 </p>
 
                 <div className="mb-2 flex items-center gap-2">
                     <label className="cursor-pointer rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5">
-                        Cargar .csv
+                        Cargar archivo
                         <input
                             type="file"
-                            accept=".csv,.txt"
+                            accept=".csv,.txt,.xlsx,.xls"
                             className="hidden"
                             onChange={(e) => {
                                 const f = e.target.files?.[0];
-                                if (f) handleFile(f);
+                                if (f) void handleFile(f);
                             }}
                         />
                     </label>
+                    {sheets.length > 1 && (
+                        <select
+                            value={sheet}
+                            onChange={(e) => pickSheet(e.target.value)}
+                            className="h-7 rounded-md border border-slate-200 bg-white px-1 text-[11px] dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                        >
+                            {sheets.map((s) => (
+                                <option key={s} value={s}>
+                                    {s}
+                                </option>
+                            ))}
+                        </select>
+                    )}
                     <button
                         type="button"
                         onClick={() => setText(SAMPLE)}
@@ -128,14 +199,29 @@ export function SiteSurveyImportDialog({
                 </div>
 
                 <textarea
-                    value={text}
+                    value={pastedBinary ? '' : text}
                     onChange={(e) => setText(e.target.value)}
                     rows={6}
                     placeholder="N°,NORTE,ESTE,COTA,DESCRIPCIÓN&#10;1,8917727.9,374837.18,2643.25,E-1"
                     className="mb-2 w-full rounded-md border border-slate-200 bg-white p-2 font-mono text-[10px] text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                 />
 
-                {parsed?.error && (
+                {fileError && (
+                    <div className="mb-2 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-2 text-[11px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        {fileError}
+                    </div>
+                )}
+
+                {pastedBinary && (
+                    <div className="mb-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        Eso parece un archivo Excel pegado. Usa “Cargar archivo”
+                        y elige el .xlsx.
+                    </div>
+                )}
+
+                {parsed?.error && !pastedBinary && (
                     <div className="mb-2 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-2 text-[11px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
                         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                         {parsed.error}
@@ -202,6 +288,45 @@ export function SiteSurveyImportDialog({
                                 Cotas {cotaRange[0].toFixed(2)} –{' '}
                                 {cotaRange[1].toFixed(2)} m
                             </div>
+                        </div>
+
+                        <div className="mb-2 max-h-40 overflow-auto rounded-lg border border-slate-200 dark:border-white/10">
+                            <table className="w-full text-left text-[10px]">
+                                <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800">
+                                    <tr>
+                                        <th className="px-2 py-1">Este</th>
+                                        <th className="px-2 py-1">Norte</th>
+                                        <th className="px-2 py-1">Cota</th>
+                                        <th className="px-2 py-1">Desc.</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {parsed.points.slice(0, 30).map((p, i) => (
+                                        <tr
+                                            key={i}
+                                            className="border-t border-slate-100 dark:border-white/5"
+                                        >
+                                            <td className="px-2 py-0.5 tabular-nums">
+                                                {p.este.toFixed(2)}
+                                            </td>
+                                            <td className="px-2 py-0.5 tabular-nums">
+                                                {p.norte.toFixed(2)}
+                                            </td>
+                                            <td className="px-2 py-0.5 tabular-nums">
+                                                {p.cota.toFixed(2)}
+                                            </td>
+                                            <td className="px-2 py-0.5 text-slate-500">
+                                                {p.desc}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {parsed.points.length > 30 && (
+                                <p className="border-t border-slate-100 px-2 py-1 text-[10px] text-slate-400 dark:border-white/5">
+                                    … y {parsed.points.length - 30} más
+                                </p>
+                            )}
                         </div>
 
                         {mismatch && !align && (
