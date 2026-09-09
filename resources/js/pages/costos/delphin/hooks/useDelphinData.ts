@@ -959,6 +959,8 @@ export function useDelphinData({
         moveTaskDown,
         duplicateTask,
         saveTasks: ganttState.saveTasks,
+        pendingShrinkWarning: ganttState.pendingShrinkWarning,
+        clearShrinkWarning: ganttState.clearShrinkWarning,
         applyBarMove: ganttState.applyBarMove,
         importTasks: ganttState.importTasks,
         importDelphinRows,

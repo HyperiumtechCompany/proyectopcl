@@ -281,8 +281,34 @@ export default function DelphinView({
         addTaskAfter, addChildTask, deleteTask, indentTask, outdentTask,
         moveTaskUp, moveTaskDown, duplicateTask,
         saveTasks, applyBarMove, importTasks, importDelphinRows, importCronogramaTasks,
-        renameRootPartida,
+        renameRootPartida, pendingShrinkWarning, clearShrinkWarning,
     } = useDelphinData({ initialTasks, initialRows, schedulingMode, calendarSettings });
+
+    // Guarda de cordura del backend (422 suspicious_shrink): ofrecer forzar.
+    useEffect(() => {
+        if (!pendingShrinkWarning) return;
+        const msg = pendingShrinkWarning;
+        clearShrinkWarning(); // limpiar ya para que el efecto no re-dispare
+        void Swal.fire({
+            icon: 'warning',
+            title: 'Guardado del cronograma cancelado',
+            text: msg,
+            showCancelButton: true,
+            confirmButtonText: 'Guardar de todos modos',
+            cancelButtonText: 'Cerrar',
+            ...swalDark,
+            confirmButtonColor: '#dc2626',
+        }).then((r) => {
+            if (!r.isConfirmed) return;
+            void saveTasks(project, true).then((ok) => {
+                void Swal.fire(
+                    ok
+                        ? { icon: 'success', title: 'Cronograma guardado', timer: 1800, showConfirmButton: false, ...swalDark }
+                        : { icon: 'error', title: 'Error al guardar el cronograma', ...swalDark },
+                );
+            });
+        });
+    }, [pendingShrinkWarning, clearShrinkWarning, saveTasks, project]);
 
     // Elimina una fila (y su rama); si la partida está vinculada como predecesora
     // de otra tarea del cronograma, pide confirmación antes de borrar — de lo

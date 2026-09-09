@@ -1,5 +1,5 @@
 import AppLayout from '@/layouts/app-layout';
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import type { BreadcrumbItem } from '@/types';
@@ -18,6 +18,7 @@ import type { GanttCalendarSettings } from '../types/calendar';
 import { GanttShell } from '../components/layout/GanttShell';
 import { GanttToolbar } from '../components/toolbar/GanttToolbar';
 import { GanttSettingsModal } from '../components/settings/GanttSettingsModal';
+import { GanttSnapshotsModal } from '../components/GanttSnapshotsModal';
 import { DiagramaRed } from '../components/network/DiagramaRed';
 import { parseMSProjectXML } from '../utils/importMSProject';
 import { isUsedAsPredecessorElsewhere } from '../utils/predecessorUsage';
@@ -76,6 +77,7 @@ export default function CronogramaGeneralV2({
     const [continuousDayWidth, setContinuousDayWidth] = useState<number | null>(null);
     const [showCriticalPath, setShowCriticalPath] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [snapshotsOpen, setSnapshotsOpen] = useState(false);
     // Ref para scroll del chart (necesario para anchor de cursor en zoom)
     const chartScrollRef = useRef<HTMLDivElement | null>(null);
     const [schedulingMode, setSchedulingMode] = useState<SchedulingMode>(() => {
@@ -115,6 +117,8 @@ export default function CronogramaGeneralV2({
         indentTask,
         outdentTask,
         saveTasks,
+        pendingShrinkWarning,
+        clearShrinkWarning,
         applyBarMove,
         importTasks,
         // preservePartidaCodes: la vista comparte cronograma_general/presupuesto_general
@@ -203,6 +207,34 @@ export default function CronogramaGeneralV2({
         },
         [deleteTask, tasks],
     );
+
+    // Guarda de cordura del backend (422 suspicious_shrink): ofrecer forzar.
+    useEffect(() => {
+        if (!pendingShrinkWarning) return;
+        const msg = pendingShrinkWarning;
+        clearShrinkWarning();
+        void Swal.fire({
+            icon: 'warning',
+            title: 'Guardado del cronograma cancelado',
+            text: msg,
+            showCancelButton: true,
+            confirmButtonText: 'Guardar de todos modos',
+            cancelButtonText: 'Cerrar',
+            background: '#1e293b',
+            color: '#e2e8f0',
+            confirmButtonColor: '#dc2626',
+        }).then((r) => {
+            if (!r.isConfirmed) return;
+            void saveTasks(project, true).then((ok) =>
+                toast(
+                    ok
+                        ? 'Cronograma guardado.'
+                        : 'Error al guardar el cronograma.',
+                    ok ? 'success' : 'error',
+                ),
+            );
+        });
+    }, [pendingShrinkWarning, clearShrinkWarning, saveTasks, project]);
 
     // ── Keyboard ─────────────────────────────────────────────────────────────
     const onKeyDown = useGanttKeyboard({
@@ -380,6 +412,7 @@ export default function CronogramaGeneralV2({
                     onToggleCritical={() => setShowCriticalPath((p) => !p)}
                     onSchedulingModeChange={handleSchedulingModeChange}
                     onOpenSettings={() => setSettingsOpen(true)}
+                    onOpenSnapshots={() => setSnapshotsOpen(true)}
                     onSave={handleSave}
                     onImport={handleImportClick}
                 />
@@ -397,6 +430,13 @@ export default function CronogramaGeneralV2({
                     settings={calendarSettings}
                     onClose={() => setSettingsOpen(false)}
                     onSave={setCalendarSettings}
+                />
+
+                <GanttSnapshotsModal
+                    open={snapshotsOpen}
+                    project={project}
+                    onClose={() => setSnapshotsOpen(false)}
+                    onRestored={() => router.reload()}
                 />
 
                 {/* ── Contenido principal ───────────────────────────────────── */}

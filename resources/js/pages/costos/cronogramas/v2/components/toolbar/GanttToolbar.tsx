@@ -11,6 +11,7 @@ import {
     IndentDecrease,
     IndentIncrease,
     LayoutDashboard,
+    History,
     MoreHorizontal,
     Network,
     Plus,
@@ -46,6 +47,7 @@ interface Props {
     onToggleCritical: () => void;
     onSchedulingModeChange: (mode: SchedulingMode) => void;
     onOpenSettings: () => void;
+    onOpenSnapshots?: () => void;
     onSave: () => void;
     onImport?: () => void;
 }
@@ -157,6 +159,7 @@ export function GanttToolbar({
     onToggleCritical,
     onSchedulingModeChange,
     onOpenSettings,
+    onOpenSnapshots,
     onSave,
     onImport,
 }: Props) {
@@ -286,6 +289,15 @@ export function GanttToolbar({
                         title="Configurar calendario"
                         onClick={onOpenSettings}
                     />
+
+                    {onOpenSnapshots && (
+                        <Btn
+                            icon={<History size={13} />}
+                            label="Historial"
+                            title="Historial de guardados"
+                            onClick={onOpenSnapshots}
+                        />
+                    )}
 
                     {/* Scheduling mode */}
                     <div className="flex shrink-0 rounded bg-slate-800 p-0.5">

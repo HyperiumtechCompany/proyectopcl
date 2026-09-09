@@ -1,6 +1,6 @@
 # Plan: desacoplar Presupuesto ↔ Cronograma y estabilizar predecesoras
 
-**Estado:** Nivel A completo en `Emes` (sin desplegar). A1, A2, A3, A4, A5, A6 hechos. Pendiente: correr Pest en servidor, desplegar, UI de snapshots, Nivel B.
+**Estado:** Nivel A **cerrado** en `Emes` (sin desplegar). A1–A6 + UI de snapshots + surface del 422. Pendiente: correr Pest en servidor, `tenant:migrate`, desplegar, diagnóstico SSH del cliente, Nivel B.
 **Origen:** incidente en producción (cliente) — "moví precios en el presupuesto y se destruyó el cronograma general en Delphin; las predecesoras quedaron cruzadas / apuntando a padres e hijos en vez de a las hojas".
 **Rama de trabajo:** `Emes`. Todo lo de este plan es corrección del sistema y va aislado al repo. El refactor local de Gastos Generales vive en la rama `wip/gastos-generales-adicionales` — **no** se mezcla con `Emes` ni llega al cliente.
 
@@ -314,24 +314,32 @@ Incremental a `origin/Emes` → `deploy.sh` → probar en prod. Orden sugerido (
    `item_order` contra ids) y extraída a `utils/predecessorUsage.ts`. `importMSProject.ts`
    pone `refId`/`ref` en las predecesoras importadas. `useGanttTasks` `useEffect([calendarSettings])`
    solo ensucia las filas cuyas fechas realmente cambiaron.
-5. **Nivel B** — épica aparte una vez A esté estable en producción.
+5. ✅ **Commit `<422+standalone-UI>`:** el 422 `suspicious_shrink` se surfacea —
+   `useGanttTasks` expone `pendingShrinkWarning` + `saveTasks(project, force)`; Delphin y la
+   vista standalone muestran un Swal "Guardar de todos modos" que reintenta con `force=true`.
+   La `GanttSnapshotsModal` también está en la vista Cronograma standalone (botón "Historial"
+   en la `GanttToolbar`).
+6. **Nivel B** — épica aparte una vez A esté estable en producción.
 
 **Follow-ups conocidos:**
-- Surface del 422 `suspicious_shrink` en la UI con botón "guardar de todos modos" (hoy va a
-  `console.error` y el usuario ve "Error al guardar").
 - Backfill de `refId` para vínculos legado, por proyecto y tras verificación visual (no
   automático — congelaría el estado cruzado del cliente afectado).
 - Aviso hoja↔hoja cuando una predecesora apunta a una fila grupo/resumen.
 - Correr las migraciones tenant (`wbs_snapshots`) por proyecto en prod: `php artisan tenant:migrate {projectId}`.
 - Correr `php artisan test --filter=CronogramaControllerTest` en el servidor/CI (no se corrió local por el riesgo de config cache).
-- **A3 para `presupuesto_general`**: `PresupuestoController::update('general')` sigue haciendo
-  clear+reinsert (con snapshot + guarda anti-vacío). Pasarlo a upsert por `partida` (+
-  `deleted_partidas`, + tracking de renombres). Menor prioridad: el incidente era del
-  cronograma, la cara compartida (item/desc/monto) siempre viaja completa desde el modelo
-  fusionado, y este método es grande y compartido.
-- **Guardia extra**: además del conteo, abortar si el payload borra *todas* las fechas o
-  *todas* las predecesoras existentes.
-- **UI de snapshots en la vista Cronograma standalone** (Delphin ya la tiene).
+- **A3 para `presupuesto_general` — DIFERIDO a Nivel B, no se hará en Nivel A.**
+  `PresupuestoController::update('general')` sigue con clear+reinsert **+ snapshot + guarda
+  anti-vacío** (seguro). Razón de no hacer el upsert por `partida` ahora: el modelo fusionado
+  (`useDelphinData.effectiveTasks`) SIEMPRE sintetiza las partidas de presupuesto que falten
+  y manda el set completo, así que el clear+reinsert nunca pierde filas; el id de
+  `presupuesto_general` no lo referencia nada externo (los ACUs enlazan por `partida`), así
+  que el churn de ids es inocuo; y el upsert por `partida` obliga a trackear renombres de
+  código (`renameRootPartida`, `batchUpdatePartidas`, matched-by-description del import) —
+  complejidad que se resuelve sola en Nivel B al converger el modelo (FK por id, estructura
+  en una sola tabla). El incidente era del cronograma; esa cara ya está en upsert.
+- **Guardia "borra todas las fechas/predecesoras"** — descartada: una heurística así
+  bloquearía el caso legítimo de "limpiar todas las fechas". La guarda por conteo + el
+  snapshot ya cubren el caso de payload roto.
 
 Verificación por PR:
 - `npm run types`, `npm run build`, `npx vitest run resources/js/pages/costos`.

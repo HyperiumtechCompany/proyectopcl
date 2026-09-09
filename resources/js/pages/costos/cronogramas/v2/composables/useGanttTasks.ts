@@ -924,9 +924,16 @@ export function useGanttTasks(
         [],
     );
 
+    // Cuando el backend rechaza el guardado por payload parcial (422
+    // suspicious_shrink), se guarda aquí el mensaje para que la UI ofrezca
+    // "guardar de todos modos" (reintento con force=true).
+    const [pendingShrinkWarning, setPendingShrinkWarning] = useState<
+        string | null
+    >(null);
+
     // ── Guardar en API ───────────────────────────────────────────────────────
     const saveTasks = useCallback(
-        async (project: string): Promise<boolean> => {
+        async (project: string, force = false): Promise<boolean> => {
             setIsSaving(true);
             try {
                 const payload = tasks.map((t) => ({
@@ -942,18 +949,24 @@ export function useGanttTasks(
                     tasks: payload,
                     deleted_ids: [...deletedRealIds],
                     calendar_settings: calendarSettings,
+                    ...(force ? { force: true } : {}),
                 });
                 setDirtyIds(new Set());
                 setDeletedRealIds(new Set());
+                setPendingShrinkWarning(null);
                 return true;
             } catch (error) {
-                // La guardia de cordura del backend responde 422 suspicious_shrink
-                // cuando el payload llega recortado — dejar rastro para soporte.
-                if (axios.isAxiosError(error) && error.response?.data?.message) {
-                    console.error(
-                        'Cronograma no guardado:',
-                        error.response.data.message,
-                    );
+                if (axios.isAxiosError(error)) {
+                    const data = error.response?.data as
+                        | { code?: string; message?: string }
+                        | undefined;
+                    if (data?.message) {
+                        console.error('Cronograma no guardado:', data.message);
+                    }
+                    // Guarda de cordura: dejar que la UI ofrezca forzar
+                    if (data?.code === 'suspicious_shrink' && data.message) {
+                        setPendingShrinkWarning(data.message);
+                    }
                 }
                 return false;
             } finally {
@@ -961,6 +974,11 @@ export function useGanttTasks(
             }
         },
         [calendarSettings, tasks, deletedRealIds],
+    );
+
+    const clearShrinkWarning = useCallback(
+        () => setPendingShrinkWarning(null),
+        [],
     );
 
     // ── Importar tareas desde fuente externa (solo frontend) ─────────────────
@@ -1021,6 +1039,8 @@ export function useGanttTasks(
         moveTaskDown,
         duplicateTask,
         saveTasks,
+        pendingShrinkWarning,
+        clearShrinkWarning,
         applyBarMove,
         importTasks,
         batchUpdatePartidas,
