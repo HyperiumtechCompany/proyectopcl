@@ -409,51 +409,9 @@ class CronogramaV2Controller extends Controller
         DB::table('cronogramas')->updateOrInsert(['project_id' => $project], $values);
     }
 
-    /**
-     * Copia las filas actuales de $tabla a wbs_snapshots antes de una reescritura.
-     * Red de seguridad: el cliente no tiene backups de BD. Silencioso si la
-     * migración de wbs_snapshots aún no corrió en este tenant.
-     */
     private function snapshotTable(string $tabla, int $presupuestoId, string $motivo): void
     {
-        if (! Schema::connection('costos_tenant')->hasTable('wbs_snapshots')) {
-            return;
-        }
-
-        try {
-            $rows = DB::connection('costos_tenant')->table($tabla)
-                ->where('presupuesto_id', $presupuestoId)->get();
-
-            if ($rows->isEmpty()) {
-                return;
-            }
-
-            DB::connection('costos_tenant')->table('wbs_snapshots')->insert([
-                'presupuesto_id' => $presupuestoId,
-                'tabla' => $tabla,
-                'motivo' => $motivo,
-                'filas' => $rows->count(),
-                'payload' => json_encode($rows),
-                'user_id' => auth()->id(),
-                'created_at' => now(),
-            ]);
-
-            // Podar: conservar los últimos 20 por (presupuesto, tabla)
-            $keep = DB::connection('costos_tenant')->table('wbs_snapshots')
-                ->where('presupuesto_id', $presupuestoId)->where('tabla', $tabla)
-                ->orderByDesc('id')->limit(20)->pluck('id')->all();
-
-            if (! empty($keep)) {
-                DB::connection('costos_tenant')->table('wbs_snapshots')
-                    ->where('presupuesto_id', $presupuestoId)->where('tabla', $tabla)
-                    ->whereNotIn('id', $keep)->delete();
-            }
-        } catch (\Throwable $e) {
-            Log::warning('wbs_snapshots: no se pudo snapshotear', [
-                'tabla' => $tabla,
-                'error' => $e->getMessage(),
-            ]);
-        }
+        app(CostoDatabaseService::class)->snapshotWbs($tabla, $presupuestoId, $motivo);
     }
 
     // ──────────────────────────────────────────────────────────────────────────

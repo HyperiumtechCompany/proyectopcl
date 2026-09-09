@@ -1030,4 +1030,53 @@ class CostoDatabaseService
             ]);
         }
     }
+
+    /**
+     * Copia las filas actuales de $tabla (cronograma_general / presupuesto_general)
+     * a wbs_snapshots antes de una reescritura masiva. Red de seguridad: el
+     * cliente no tiene backups de BD. Silencioso si la migración de wbs_snapshots
+     * aún no corrió en este tenant. Conserva los últimos 20 por (presupuesto, tabla).
+     *
+     * Debe llamarse con la conexión costos_tenant ya apuntando al tenant correcto.
+     */
+    public function snapshotWbs(string $tabla, int $presupuestoId, string $motivo): void
+    {
+        if (! Schema::connection('costos_tenant')->hasTable('wbs_snapshots')) {
+            return;
+        }
+
+        try {
+            $rows = DB::connection('costos_tenant')->table($tabla)
+                ->where('presupuesto_id', $presupuestoId)->get();
+
+            if ($rows->isEmpty()) {
+                return;
+            }
+
+            DB::connection('costos_tenant')->table('wbs_snapshots')->insert([
+                'presupuesto_id' => $presupuestoId,
+                'tabla' => $tabla,
+                'motivo' => $motivo,
+                'filas' => $rows->count(),
+                'payload' => json_encode($rows),
+                'user_id' => auth()->id(),
+                'created_at' => now(),
+            ]);
+
+            $keep = DB::connection('costos_tenant')->table('wbs_snapshots')
+                ->where('presupuesto_id', $presupuestoId)->where('tabla', $tabla)
+                ->orderByDesc('id')->limit(20)->pluck('id')->all();
+
+            if (! empty($keep)) {
+                DB::connection('costos_tenant')->table('wbs_snapshots')
+                    ->where('presupuesto_id', $presupuestoId)->where('tabla', $tabla)
+                    ->whereNotIn('id', $keep)->delete();
+            }
+        } catch (\Throwable $e) {
+            Log::warning('wbs_snapshots: no se pudo snapshotear', [
+                'tabla' => $tabla,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
 }

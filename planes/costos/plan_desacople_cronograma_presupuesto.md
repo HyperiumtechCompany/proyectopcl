@@ -303,11 +303,20 @@ Incremental a `origin/Emes` → `deploy.sh` → probar en prod. Orden sugerido (
    `importTasks` para el caso de reemplazo). `wbs_snapshots` (migración tenant) +
    `snapshotTable()` antes de cada reescritura (últimos 20) + endpoints
    `GET /cronograma/v2/{p}/snapshots` y `POST .../snapshots/restore`.
-4. **Nivel B** — épica aparte una vez A esté estable en producción.
+4. ✅ **Commit `<A2b+A6b+UI>`:** A2 completo — `handleSaveGantt` solo llama `saveBudget()` si
+   `budgetDirty || acuDirty`; los mutadores estructurales de `useDelphinData`
+   (`addTaskAfter`, `indentTask`, `moveTaskUp`, `duplicateTask`, …) ahora marcan `budgetDirty`
+   (un cambio estructural ensucia AMBAS caras). A6 — `snapshotWbs()` movido a
+   `CostoDatabaseService` (compartido); `PresupuestoController::update('general')` snapshotea
+   `presupuesto_general` antes de su clear+reinsert. **UI de snapshots** — `GanttSnapshotsModal`
+   en Delphin (Config → "Historial de guardados…"), lista + revertir. A5 completo — guarda de
+   borrado en la vista standalone + `isUsedAsPredecessorElsewhere` corregida (comparaba
+   `item_order` contra ids) y extraída a `utils/predecessorUsage.ts`. `importMSProject.ts`
+   pone `refId`/`ref` en las predecesoras importadas. `useGanttTasks` `useEffect([calendarSettings])`
+   solo ensucia las filas cuyas fechas realmente cambiaron.
+5. **Nivel B** — épica aparte una vez A esté estable en producción.
 
 **Follow-ups conocidos:**
-- **UI de snapshots**: los snapshots se crean, pero no hay pantalla para listarlos/revertir.
-  Falta un modal "Historial de guardados" en Delphin/Cronograma que consuma los endpoints.
 - Surface del 422 `suspicious_shrink` en la UI con botón "guardar de todos modos" (hoy va a
   `console.error` y el usuario ve "Error al guardar").
 - Backfill de `refId` para vínculos legado, por proyecto y tras verificación visual (no
@@ -316,22 +325,13 @@ Incremental a `origin/Emes` → `deploy.sh` → probar en prod. Orden sugerido (
 - Correr las migraciones tenant (`wbs_snapshots`) por proyecto en prod: `php artisan tenant:migrate {projectId}`.
 - Correr `php artisan test --filter=CronogramaControllerTest` en el servidor/CI (no se corrió local por el riesgo de config cache).
 - **A3 para `presupuesto_general`**: `PresupuestoController::update('general')` sigue haciendo
-  clear+reinsert. Pasarlo a upsert por id (+ `deleted_ids`). Menor prioridad: el incidente
-  era del cronograma, y este método es grande y compartido con otras subsecciones — hacerlo
-  con cuidado y sus propios tests. `handleSaveGantt` también podría condicionar su
-  `saveBudget()` a `budgetDirty || ganttDirty` (hoy siempre lo llama).
-- **Snapshot de `presupuesto_general`**: `snapshotTable()` solo se llama para
-  `cronograma_general` (su save es el único que cambió). Cuando se haga A3 del presupuesto,
-  llamar también ahí.
+  clear+reinsert (con snapshot + guarda anti-vacío). Pasarlo a upsert por `partida` (+
+  `deleted_partidas`, + tracking de renombres). Menor prioridad: el incidente era del
+  cronograma, la cara compartida (item/desc/monto) siempre viaja completa desde el modelo
+  fusionado, y este método es grande y compartido.
 - **Guardia extra**: además del conteo, abortar si el payload borra *todas* las fechas o
   *todas* las predecesoras existentes.
-- **`useGanttTasks` `useEffect([calendarSettings])`** hace `setDirtyIds(todas)` — solo
-  dispara si cambia la identidad de `calendarSettings` (raro), pero conviene acotarlo a las
-  filas cuyas fechas realmente cambiaron.
-- **`importMSProject.ts`**: las predecesoras importadas de MSP no llevan `refId` (resuelven
-  por `item_order` hasta que se editan). Se les puede poner `refId` = id temporal.
-- **Vista Cronograma standalone**: falta la guarda `isUsedAsPredecessorElsewhere` en su
-  `deleteTask` (Delphin ya la tiene).
+- **UI de snapshots en la vista Cronograma standalone** (Delphin ya la tiene).
 
 Verificación por PR:
 - `npm run types`, `npm run build`, `npx vitest run resources/js/pages/costos`.

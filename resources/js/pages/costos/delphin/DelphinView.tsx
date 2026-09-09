@@ -10,6 +10,7 @@ import { Group, Panel, Separator } from 'react-resizable-panels';
 import { GanttChart } from '../cronogramas/v2/components/chart/GanttChart';
 import { DiagramaRed } from '../cronogramas/v2/components/network/DiagramaRed';
 import { GanttSettingsModal } from '../cronogramas/v2/components/settings/GanttSettingsModal';
+import { GanttSnapshotsModal } from '../cronogramas/v2/components/GanttSnapshotsModal';
 import { useGanttCriticalPath } from '../cronogramas/v2/composables/useGanttCriticalPath';
 import { useGanttKeyboard } from '../cronogramas/v2/composables/useGanttKeyboard';
 import { useGanttSelection } from '../cronogramas/v2/composables/useGanttSelection';
@@ -23,6 +24,7 @@ import { CHART_HEADER_H } from '../cronogramas/v2/types/timeline';
 import type { ZoomLevel } from '../cronogramas/v2/types/timeline';
 import { parseMSProjectXML } from '../cronogramas/v2/utils/importMSProject';
 import { findCircularPredecessors } from '../cronogramas/v2/utils/predecessorCycles';
+import { isUsedAsPredecessorElsewhere } from '../cronogramas/v2/utils/predecessorUsage';
 import { router } from '@inertiajs/react';
 import { AcuPanel } from '../presupuesto/components/AcuPanel';
 import { ImportExcelPresupuestoModal } from '../presupuesto/components/ImportExcelPresupuestoModal';
@@ -78,27 +80,6 @@ function getIconForPartida(partida: string): string {
         5: '📡', 6: '🔥', 7: '⚡', 8: '🏊',
     };
     return icons[num] ?? '📄';
-}
-// IDs of a task and all its descendants (tasks is nivel-ordered, same convention as useGanttTasks.deleteTask).
-function subtreeIds(id: number, tasks: GanttTask[]): Set<number> {
-    const idx = tasks.findIndex((t) => t.id === id);
-    if (idx === -1) return new Set([id]);
-    const ids = new Set<number>([id]);
-    for (let i = idx + 1; i < tasks.length && tasks[i].nivel > tasks[idx].nivel; i++) {
-        ids.add(tasks[i].id);
-    }
-    return ids;
-}
-
-// True when some task OUTSIDE the deleted subtree lists one of its ids as predecessor —
-// deleting it would silently break that dependency link in the cronograma.
-function isUsedAsPredecessorElsewhere(id: number, tasks: GanttTask[]): boolean {
-    const toDelete = subtreeIds(id, tasks);
-    return tasks.some(
-        (t) =>
-            !toDelete.has(t.id) &&
-            (t.predecesoras ?? []).some((p) => toDelete.has(p.taskId)),
-    );
 }
 
 function modeKey(pid: string) { return `pcl:delphin:${pid}:mode`; }
@@ -228,6 +209,7 @@ export default function DelphinView({
 
     const [showCriticalPath, setShowCriticalPath] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [snapshotsOpen, setSnapshotsOpen] = useState(false);
     const [exportOpen, setExportOpen] = useState(false);
     const [importExcelOpen, setImportExcelOpen] = useState(false);
     const [importMetradosOpen, setImportMetradosOpen] = useState(false);
@@ -751,8 +733,13 @@ export default function DelphinView({
 
     const handleSaveGantt = useCallback(async () => {
         const ac = new AbortController();
+        // Simétrico a handleSaveBudget: mover barras / cambiar fechas NO debe
+        // reescribir presupuesto_general (clear+reinsert). saveBudget() solo corre
+        // si el presupuesto cambió (precio/cantidad) o hubo cambio estructural
+        // (agregar/quitar/mover partida — todas marcan budgetDirty).
+        const mustSaveBudget = budgetDirty || acuDirty;
         let ganttOk = false;
-        let budgetOk = false;
+        let budgetOk = !mustSaveBudget;
         let acuOk = false;
 
         await Swal.fire({
@@ -775,7 +762,7 @@ export default function DelphinView({
                 try {
                     [ganttOk, budgetOk, acuOk] = await Promise.all([
                         saveTasks(project),
-                        saveBudget(project_id_int),
+                        mustSaveBudget ? saveBudget(project_id_int) : Promise.resolve(true),
                         flushPendingAcus((p) => {
                             const s = document.getElementById('dsave-status');
                             const b = document.getElementById('dsave-bar');
@@ -800,7 +787,7 @@ export default function DelphinView({
             const errMsg = !ganttOk ? 'Error al guardar el cronograma.' : !budgetOk ? 'Error al guardar las partidas.' : 'Error al guardar los ACUs.';
             await Swal.fire({ icon: 'error', title: 'Error al guardar', text: errMsg, ...swalDark });
         }
-    }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus]);
+    }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus, budgetDirty, acuDirty]);
 
     // ── Alertar antes de ir a Valorizado si hay cambios sin guardar ──────────
     const handleNavigateValorizado = useCallback(
@@ -964,6 +951,7 @@ export default function DelphinView({
     const handleDuplicateClick = useCallback(() => { if (selectedRowId !== null) setPendingSelect(duplicateTask(selectedRowId)); }, [duplicateTask, selectedRowId]);
     const handleToggleCritical = useCallback(() => setShowCriticalPath((p) => !p), []);
     const handleOpenSettingsClick = useCallback(() => setSettingsOpen(true), []);
+    const handleOpenSnapshotsClick = useCallback(() => setSnapshotsOpen(true), []);
     const handleOpenImportExcelClick = useCallback(() => setImportExcelOpen(true), []);
     const handleOpenImportMetradosClick = useCallback(() => setImportMetradosOpen(true), []);
     const handleOpenInsumosModal = useCallback((scope: InsumosScope) => {
@@ -1015,6 +1003,7 @@ export default function DelphinView({
                     onSchedulingMode={handleSchedulingMode}
                     onBarLabelChange={setGanttBarLabel}
                     onOpenSettings={handleOpenSettingsClick}
+                    onOpenSnapshots={handleOpenSnapshotsClick}
                     onImport={handleImportClick}
                     onImportExcel={handleOpenImportExcelClick}
                     onImportMetrados={handleOpenImportMetradosClick}
@@ -1245,6 +1234,13 @@ export default function DelphinView({
                     settings={calendarSettings}
                     onClose={() => setSettingsOpen(false)}
                     onSave={setCalendarSettings}
+                />
+
+                <GanttSnapshotsModal
+                    open={snapshotsOpen}
+                    project={project}
+                    onClose={() => setSnapshotsOpen(false)}
+                    onRestored={() => router.reload()}
                 />
 
 

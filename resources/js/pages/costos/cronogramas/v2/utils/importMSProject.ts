@@ -147,6 +147,10 @@ export function parseMSProjectXML(xmlText: string): GanttTask[] {
                     taskId: predRaw.id,
                     tipo,
                     lag: link.lag,
+                    // Ancla estable: tempId negativo del predecesor. El backend lo
+                    // re-mapea al id real al guardar (igual que las filas nuevas).
+                    refId: uidToTempId.get(link.uid) ?? null,
+                    ref: { codigo: predRaw.wbs ?? '', desc: predRaw.name ?? '' },
                 } as Predecessor;
             })
             .filter((p): p is Predecessor => p !== null);

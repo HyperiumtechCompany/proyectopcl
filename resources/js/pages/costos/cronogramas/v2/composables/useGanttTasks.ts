@@ -330,7 +330,23 @@ export function useGanttTasks(
 
         setTasks((prev) => {
             const next = recomputeHierarchy(prev, calendarSettings, preserveRef.current);
-            setDirtyIds(new Set(next.map((task) => task.id)));
+            // Solo ensuciar las filas cuyas fechas/duración realmente cambiaron
+            // con el nuevo calendario (antes se marcaba TODO el árbol dirty).
+            const prevById = new Map(prev.map((t) => [t.id, t]));
+            const changed = next
+                .filter((t) => {
+                    const p = prevById.get(t.id);
+                    return (
+                        !p ||
+                        p.fecha_inicio !== t.fecha_inicio ||
+                        p.fecha_fin !== t.fecha_fin ||
+                        p.duracion_dias !== t.duracion_dias
+                    );
+                })
+                .map((t) => t.id);
+            if (changed.length) {
+                setDirtyIds((d) => new Set([...d, ...changed]));
+            }
             return next;
         });
     }, [calendarSettings]);

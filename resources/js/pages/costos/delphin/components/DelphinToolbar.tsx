@@ -17,6 +17,7 @@ import {
     Eraser,
     GitBranch,
     Hand,
+    History,
     IndentDecrease,
     IndentIncrease,
     LayoutDashboard,
@@ -76,6 +77,7 @@ interface Props {
     onSchedulingMode: (m: SchedulingMode) => void;
     onBarLabelChange: (l: GanttBarLabel) => void;
     onOpenSettings: () => void;
+    onOpenSnapshots: () => void;
     onImport?: () => void;
     onImportExcel?: () => void;
     onImportMetrados?: () => void;
@@ -294,10 +296,12 @@ function ConfigDropdown({
     ganttBarLabel,
     onBarLabelChange,
     onOpenSettings,
+    onOpenSnapshots,
 }: {
     ganttBarLabel: GanttBarLabel;
     onBarLabelChange: (l: GanttBarLabel) => void;
     onOpenSettings: () => void;
+    onOpenSnapshots: () => void;
 }) {
     const [open, setOpen] = useState(false);
     const [pos, setPos] = useState({ top: 0, left: 0 });
@@ -383,6 +387,16 @@ function ConfigDropdown({
                             <Calendar size={13} className="shrink-0 text-slate-400" />
                             Ajustes de calendario…
                         </button>
+                        <button
+                            className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[11px] text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+                            onClick={() => {
+                                onOpenSnapshots();
+                                setOpen(false);
+                            }}
+                        >
+                            <History size={13} className="shrink-0 text-slate-400" />
+                            Historial de guardados…
+                        </button>
                     </div>
                 </div>,
                 document.body,
@@ -398,7 +412,7 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
     onMoveUp, onMoveDown, onDuplicate, onExpandAll, onCollapseAll,
     zoomLevel, showCriticalPath, schedulingMode, ganttBarLabel,
     onZoomChange, onToggleCritical, onSchedulingMode, onBarLabelChange,
-    onOpenSettings, onImport, onImportExcel, onImportMetrados, onOpenInsumos, onExport,
+    onOpenSettings, onOpenSnapshots, onImport, onImportExcel, onImportMetrados, onOpenInsumos, onExport,
     isParentSelected, onFormulaView,
     incompatiblesCount, onOpenCompatibilidad,
     circularPredecessorsCount, onOpenCircularPredecessors,
@@ -682,7 +696,8 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                     <ConfigDropdown
                         ganttBarLabel={ganttBarLabel}
                         onBarLabelChange={onBarLabelChange}
-                        onOpenSettings={onOpenSettings} />
+                        onOpenSettings={onOpenSettings}
+                        onOpenSnapshots={onOpenSnapshots} />
                 </>
             )}
 

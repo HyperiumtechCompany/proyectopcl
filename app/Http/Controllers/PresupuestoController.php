@@ -253,6 +253,14 @@ class PresupuestoController extends Controller
             $connection->beginTransaction();
 
             try {
+                // Red de seguridad para las partidas del presupuesto (el cliente
+                // no tiene backups de BD): copia las filas actuales antes del
+                // clear+reinsert. Silencioso si wbs_snapshots aún no existe en el
+                // tenant. Solo presupuesto_general — el resto de sub-secciones no.
+                if ($subsection === 'general') {
+                    $this->dbService->snapshotWbs('presupuesto_general', $tenantPresupuestoId, 'presupuesto_general_save');
+                }
+
                 // Strategy: clear + re-insert (simple for spreadsheet-like data).
                 // Scoped por presupuesto_id — nunca un delete() global de la tabla.
                 if ($this->hasTenantColumn($tableName, 'presupuesto_id')) {

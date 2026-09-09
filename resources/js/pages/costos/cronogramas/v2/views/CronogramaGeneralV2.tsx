@@ -20,6 +20,8 @@ import { GanttToolbar } from '../components/toolbar/GanttToolbar';
 import { GanttSettingsModal } from '../components/settings/GanttSettingsModal';
 import { DiagramaRed } from '../components/network/DiagramaRed';
 import { parseMSProjectXML } from '../utils/importMSProject';
+import { isUsedAsPredecessorElsewhere } from '../utils/predecessorUsage';
+import Swal from 'sweetalert2';
 
 const EMPTY_SET = new Set<number>();
 
@@ -179,6 +181,29 @@ export default function CronogramaGeneralV2({
         [updateField, stopEdit],
     );
 
+    // Borrar con aviso si la fila está vinculada como predecesora de otra (si no,
+    // el vínculo se rompería en silencio). Mismo criterio que Delphin.
+    const confirmDeleteRow = useCallback(
+        async (taskId: number) => {
+            if (isUsedAsPredecessorElsewhere(taskId, tasks)) {
+                const result = await Swal.fire({
+                    icon: 'warning',
+                    title: '¿Eliminar de todos modos?',
+                    text: 'Esta fila está vinculada como predecesora de otras tareas. Si la eliminas, esos vínculos se perderán.',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar',
+                    background: '#1e293b',
+                    color: '#e2e8f0',
+                    confirmButtonColor: '#dc2626',
+                });
+                if (!result.isConfirmed) return;
+            }
+            deleteTask(taskId);
+        },
+        [deleteTask, tasks],
+    );
+
     // ── Keyboard ─────────────────────────────────────────────────────────────
     const onKeyDown = useGanttKeyboard({
         visibleTasks,
@@ -190,7 +215,7 @@ export default function CronogramaGeneralV2({
         cancelEdit,
         addTaskAfter,
         addChildTask,
-        deleteTask,
+        deleteTask: confirmDeleteRow,
         indentTask,
         outdentTask,
         onPendingSelect: setPendingSelect,
@@ -276,7 +301,7 @@ export default function CronogramaGeneralV2({
             setPendingSelect(addChildTask(selectedRowId));
     };
     const handleDeleteRow = () => {
-        if (selectedRowId !== null) deleteTask(selectedRowId);
+        if (selectedRowId !== null) void confirmDeleteRow(selectedRowId);
     };
     const handleIndent = () => {
         if (selectedRowId !== null) indentTask(selectedRowId);
@@ -291,14 +316,14 @@ export default function CronogramaGeneralV2({
             switch (action) {
                 case 'addAfter':  setPendingSelect(addTaskAfter(taskId));  break;
                 case 'addChild':  setPendingSelect(addChildTask(taskId));  break;
-                case 'delete':    deleteTask(taskId);                      break;
+                case 'delete':    void confirmDeleteRow(taskId);           break;
                 case 'indent':    indentTask(taskId);                      break;
                 case 'outdent':   outdentTask(taskId);                     break;
                 case 'expand':
                 case 'collapse':  toggleExpand(taskId);                    break;
             }
         },
-        [addTaskAfter, addChildTask, deleteTask, indentTask, outdentTask, toggleExpand, setPendingSelect],
+        [addTaskAfter, addChildTask, confirmDeleteRow, indentTask, outdentTask, toggleExpand, setPendingSelect],
     );
 
     // ── Ref para input de archivo oculto (importación MSP) ───────────────

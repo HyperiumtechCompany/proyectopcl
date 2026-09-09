@@ -513,17 +513,44 @@ export function useDelphinData({
         [updateBudgetField, ganttState],
     );
 
-    // ── Eliminar fila (sincroniza también budgetDirty) ────────────────────────
-    // ganttState.deleteTask solo marca dirty el árbol del cronograma (dirtyIds),
-    // pero la fila eliminada también sale de presupuesto_general en el próximo
-    // saveBudget(). Sin esto, borrar en modo "budget" no activa el botón Guardar
-    // (que en ese modo depende de budgetDirty, no de ganttState.isDirty).
+    // ── Cambios estructurales: ensucian AMBAS caras ──────────────────────────
+    // La lista/orden/códigos de partidas viven en presupuesto_general Y en
+    // cronograma_general. Cualquier alta/baja/mover/duplicar cambia las dos, así
+    // que budgetDirty (= "presupuesto por guardar") debe encenderse igual que
+    // ganttDirty. Sin esto, agregar/mover una partida desde la pestaña CPM no
+    // persistía a presupuesto_general → la fila "resucitaba" o quedaba
+    // descuadrada al recargar. (deleteTask ya lo hacía; el resto no.)
     const deleteTask = useCallback(
-        (id: number) => {
-            ganttState.deleteTask(id);
-            setBudgetDirty(true);
-        },
+        (id: number) => { ganttState.deleteTask(id); setBudgetDirty(true); },
         [ganttState.deleteTask],
+    );
+    const addTaskAfter = useCallback(
+        (afterId: number | null) => { const r = ganttState.addTaskAfter(afterId); setBudgetDirty(true); return r; },
+        [ganttState.addTaskAfter],
+    );
+    const addChildTask = useCallback(
+        (parentId: number) => { const r = ganttState.addChildTask(parentId); setBudgetDirty(true); return r; },
+        [ganttState.addChildTask],
+    );
+    const indentTask = useCallback(
+        (id: number) => { ganttState.indentTask(id); setBudgetDirty(true); },
+        [ganttState.indentTask],
+    );
+    const outdentTask = useCallback(
+        (id: number) => { ganttState.outdentTask(id); setBudgetDirty(true); },
+        [ganttState.outdentTask],
+    );
+    const moveTaskUp = useCallback(
+        (id: number) => { ganttState.moveTaskUp(id); setBudgetDirty(true); },
+        [ganttState.moveTaskUp],
+    );
+    const moveTaskDown = useCallback(
+        (id: number) => { ganttState.moveTaskDown(id); setBudgetDirty(true); },
+        [ganttState.moveTaskDown],
+    );
+    const duplicateTask = useCallback(
+        (id: number) => { const r = ganttState.duplicateTask(id); setBudgetDirty(true); return r; },
+        [ganttState.duplicateTask],
     );
 
     // ── Save budget ───────────────────────────────────────────────────────────
@@ -923,14 +950,14 @@ export function useDelphinData({
         toggleExpand: ganttState.toggleExpand,
         expandAll: ganttState.expandAll,
         collapseAll: ganttState.collapseAll,
-        addTaskAfter: ganttState.addTaskAfter,
-        addChildTask: ganttState.addChildTask,
+        addTaskAfter,
+        addChildTask,
         deleteTask,
-        indentTask: ganttState.indentTask,
-        outdentTask: ganttState.outdentTask,
-        moveTaskUp: ganttState.moveTaskUp,
-        moveTaskDown: ganttState.moveTaskDown,
-        duplicateTask: ganttState.duplicateTask,
+        indentTask,
+        outdentTask,
+        moveTaskUp,
+        moveTaskDown,
+        duplicateTask,
         saveTasks: ganttState.saveTasks,
         applyBarMove: ganttState.applyBarMove,
         importTasks: ganttState.importTasks,
