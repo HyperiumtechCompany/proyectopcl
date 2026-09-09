@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { resolvePredecessorTaskId } from '../../types/task';
 import type { GanttTask } from '../../types/task';
 import type { GanttTimeline } from '../../types/timeline';
 import { ROW_HEIGHT } from '../../types/cell';
@@ -115,8 +116,8 @@ export function GanttDependencyLines({
     }
 
     const arrows = useMemo((): Arrow[] => {
-        // pred.taskId contiene el item_order (Nº de fila), no el id de BD
-        const taskByOrder = new Map(visibleTasks.map((t) => [t.item_order, t]));
+        // Ancla estable (refId) con respaldo a item_order para vínculos legado
+        const taskByOrder = new Map(visibleTasks.map((t) => [t.item_order, t.id]));
         const taskById = new Map(visibleTasks.map((t) => [t.id, t]));
         const result: Arrow[] = [];
 
@@ -124,9 +125,13 @@ export function GanttDependencyLines({
             if (!succ.fecha_inicio) continue;
 
             for (const pred of succ.predecesoras) {
-                if (pred.taskId === succ.item_order) continue; // auto-loop
-                const predTask =
-                    taskByOrder.get(pred.taskId) ?? taskById.get(pred.taskId);
+                const predId = resolvePredecessorTaskId(
+                    pred,
+                    (id) => taskById.has(id),
+                    taskByOrder,
+                );
+                if (predId === null || predId === succ.id) continue; // roto / auto-loop
+                const predTask = taskById.get(predId);
                 if (!predTask?.fecha_inicio) continue;
 
                 const y1 = getY(predTask.id);

@@ -5,6 +5,7 @@ import {
     subtractWorkingDays,
     type GanttCalendarSettings,
 } from '../types/calendar';
+import { resolvePredecessorTaskId } from '../types/task';
 import type { GanttTask, SchedulingMode } from '../types/task';
 
 /**
@@ -33,9 +34,13 @@ export function computeConstrainedDates(
     let latestEnd: dayjs.Dayjs | null = null;
 
     for (const pred of task.predecesoras) {
-        // pred.taskId es el item_order (Nº) — traducir a id real
-        const predId = itemOrderToId.get(pred.taskId);
-        if (predId === undefined) continue;
+        // Ancla estable (refId) con respaldo a item_order para vínculos legado
+        const predId = resolvePredecessorTaskId(
+            pred,
+            (id) => taskMap.has(id),
+            itemOrderToId,
+        );
+        if (predId === null) continue;
         const predTask = taskMap.get(predId);
         if (!predTask?.fecha_inicio || !predTask?.fecha_fin) continue;
 
@@ -155,8 +160,12 @@ export function applySchedule(
     const successorsOf = new Map<number, number[]>();
     for (const task of tasks) {
         for (const pred of task.predecesoras) {
-            const predId = itemOrderToId.get(pred.taskId);
-            if (predId === undefined) continue;
+            const predId = resolvePredecessorTaskId(
+                pred,
+                (id) => taskMap.has(id),
+                itemOrderToId,
+            );
+            if (predId === null) continue;
             if (!successorsOf.has(predId)) successorsOf.set(predId, []);
             successorsOf.get(predId)!.push(task.id);
         }

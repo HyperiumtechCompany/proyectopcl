@@ -319,6 +319,102 @@ it('rejects valorizado save when gantt exceeds 30 periods', function () {
     }
 });
 
+it('cronograma v2 save: preserves refId and remaps new-row references', function () {
+    [$user, $project, $dbName] = createCronoValorizadoTenant(1);
+
+    try {
+        app(CostoDatabaseService::class)->setTenantConnection($dbName);
+        $presupuestoId = DB::connection('costos_tenant')->table('presupuestos')->value('id');
+
+        $existingId = DB::connection('costos_tenant')->table('cronograma_general')
+            ->where('presupuesto_id', $presupuestoId)->value('id');
+
+        // Payload: la fila existente + 2 nuevas (client_id negativo). La fila -2
+        // depende de la -1 mediante refId negativo → el backend debe re-mapearlo.
+        $payload = [
+            'tasks' => [
+                ['client_id' => $existingId, 'id' => $existingId, 'item_order' => 1, 'partida' => '01.01', 'descripcion' => 'A', 'duracion_dias' => 2, 'fecha_inicio' => '2026-01-01', 'fecha_fin' => '2026-01-02', 'nivel' => 1, 'parent_id' => null, 'predecesoras' => []],
+                ['client_id' => -1, 'id' => -1, 'item_order' => 2, 'partida' => '01.02', 'descripcion' => 'B', 'duracion_dias' => 2, 'fecha_inicio' => '2026-01-03', 'fecha_fin' => '2026-01-04', 'nivel' => 1, 'parent_id' => null, 'predecesoras' => []],
+                ['client_id' => -2, 'id' => -2, 'item_order' => 3, 'partida' => '01.03', 'descripcion' => 'C', 'duracion_dias' => 2, 'fecha_inicio' => '2026-01-05', 'fecha_fin' => '2026-01-06', 'nivel' => 1, 'parent_id' => null, 'predecesoras' => [
+                    ['source' => 2, 'target' => -2, 'type' => '0', 'lag' => 0, 'refId' => -1, 'ref' => ['codigo' => '01.02', 'desc' => 'B']],
+                ]],
+            ],
+        ];
+
+        $this->actingAs($user)
+            ->withSession(['_token' => 'test-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-token')
+            ->postJson("/cronograma/v2/{$project->id}/save", $payload)
+            ->assertSuccessful()
+            ->assertJsonPath('status', 'success');
+
+        app(CostoDatabaseService::class)->setTenantConnection($dbName);
+        $rowB = DB::connection('costos_tenant')->table('cronograma_general')
+            ->where('presupuesto_id', $presupuestoId)->where('partida', '01.02')->first();
+        $rowC = DB::connection('costos_tenant')->table('cronograma_general')
+            ->where('presupuesto_id', $presupuestoId)->where('partida', '01.03')->first();
+
+        $links = json_decode($rowC->predecesoras, true);
+
+        expect($links)->toHaveCount(1)
+            ->and($links[0]['refId'])->toBe((int) $rowB->id)  // re-mapeado al id real
+            ->and($links[0]['ref']['codigo'])->toBe('01.02')
+            ->and($links[0]['target'])->toBe((int) $rowC->id);
+    } finally {
+        dropCronoValorizadoTenant($dbName);
+    }
+});
+
+it('cronograma v2 save: guardrail blocks a suspicious shrink', function () {
+    [$user, $project, $dbName] = createCronoValorizadoTenant(1);
+
+    try {
+        app(CostoDatabaseService::class)->setTenantConnection($dbName);
+        $presupuestoId = DB::connection('costos_tenant')->table('presupuestos')->value('id');
+
+        $rows = [];
+        for ($i = 2; $i <= 21; $i++) {
+            $rows[] = [
+                'presupuesto_id' => $presupuestoId, 'item_order' => $i,
+                'partida' => sprintf('01.%02d', $i), 'descripcion' => "P{$i}",
+                'duracion_dias' => 1, 'nivel' => 1, 'created_at' => now(), 'updated_at' => now(),
+            ];
+        }
+        DB::connection('costos_tenant')->table('cronograma_general')->insert($rows); // 21 filas totales
+
+        // Payload con solo 2 filas → < 25% de 21 → debe abortar
+        $this->actingAs($user)
+            ->withSession(['_token' => 'test-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-token')
+            ->postJson("/cronograma/v2/{$project->id}/save", [
+                'tasks' => [
+                    ['client_id' => 1, 'id' => 1, 'item_order' => 1, 'partida' => '01.01', 'descripcion' => 'A', 'duracion_dias' => 1, 'nivel' => 1, 'predecesoras' => []],
+                    ['client_id' => 2, 'id' => 2, 'item_order' => 2, 'partida' => '01.02', 'descripcion' => 'B', 'duracion_dias' => 1, 'nivel' => 1, 'predecesoras' => []],
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'suspicious_shrink');
+
+        // El cronograma no se tocó
+        expect(DB::connection('costos_tenant')->table('cronograma_general')
+            ->where('presupuesto_id', $presupuestoId)->count())->toBe(21);
+
+        // Con force=true sí pasa
+        $this->actingAs($user)
+            ->withSession(['_token' => 'test-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-token')
+            ->postJson("/cronograma/v2/{$project->id}/save", [
+                'force' => true,
+                'tasks' => [
+                    ['client_id' => 1, 'id' => 1, 'item_order' => 1, 'partida' => '01.01', 'descripcion' => 'A', 'duracion_dias' => 1, 'nivel' => 1, 'predecesoras' => []],
+                ],
+            ])
+            ->assertSuccessful();
+    } finally {
+        dropCronoValorizadoTenant($dbName);
+    }
+});
+
 function createCronoValorizadoTenant(int $months): array
 {
     if (config('database.default') !== 'mysql') {

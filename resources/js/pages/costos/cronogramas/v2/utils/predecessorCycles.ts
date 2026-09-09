@@ -1,3 +1,4 @@
+import { resolvePredecessorTaskId } from '../types/task';
 import type { GanttTask } from '../types/task';
 
 export interface CircularPredecessorIssue {
@@ -48,8 +49,11 @@ export function findCircularPredecessors(
 
     for (const task of tasks) {
         for (const pred of task.predecesoras ?? []) {
-            const predId =
-                idByItemOrder.get(Number(pred.taskId)) ?? undefined;
+            const predId = resolvePredecessorTaskId(
+                pred,
+                (id) => rowById.has(id),
+                idByItemOrder,
+            );
             if (predId == null) continue;
 
             if (isAncestor(predId, task)) {

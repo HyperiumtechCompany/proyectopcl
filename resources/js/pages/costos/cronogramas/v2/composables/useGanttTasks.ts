@@ -39,6 +39,9 @@ function parsePreds(raw: unknown): Predecessor[] {
         tipo: (FROM_DHTMLX[String(l.type ?? '0')] ??
             'FC') as Predecessor['tipo'],
         lag: Number(l.lag ?? 0),
+        // Ancla estable + snapshot: se preservan tal cual si el backend los mandó
+        refId: l.refId != null ? Number(l.refId) : null,
+        ref: l.ref ?? null,
     }));
 }
 
@@ -48,6 +51,10 @@ function serializePreds(preds: Predecessor[], targetId: number): object[] {
         target: targetId,
         type: TO_DHTMLX[p.tipo] ?? '0',
         lag: p.lag ?? 0,
+        // refId = id estable de la tarea predecesora; ref = snapshot código/desc.
+        // El backend re-mapea refId/target de filas nuevas (id negativo → id real).
+        refId: p.refId ?? null,
+        ref: p.ref ?? null,
     }));
 }
 
@@ -894,11 +901,12 @@ export function useGanttTasks(
             try {
                 const payload = tasks.map((t) => ({
                     ...t,
-                    id: t.id > 0 ? t.id : null,
-                    predecesoras: serializePreds(
-                        t.predecesoras,
-                        t.id > 0 ? t.id : 0,
-                    ),
+                    // Se envía el id tal cual (negativo para filas nuevas). El
+                    // backend inserta las nuevas con id real y re-mapea parent_id
+                    // y las referencias refId/target de las predecesoras.
+                    id: t.id,
+                    client_id: t.id,
+                    predecesoras: serializePreds(t.predecesoras, t.id),
                 }));
                 await axios.post(`/cronograma/v2/${project}/save`, {
                     tasks: payload,
@@ -906,7 +914,15 @@ export function useGanttTasks(
                 });
                 setDirtyIds(new Set());
                 return true;
-            } catch {
+            } catch (error) {
+                // La guardia de cordura del backend responde 422 suspicious_shrink
+                // cuando el payload llega recortado — dejar rastro para soporte.
+                if (axios.isAxiosError(error) && error.response?.data?.message) {
+                    console.error(
+                        'Cronograma no guardado:',
+                        error.response.data.message,
+                    );
+                }
                 return false;
             } finally {
                 setIsSaving(false);

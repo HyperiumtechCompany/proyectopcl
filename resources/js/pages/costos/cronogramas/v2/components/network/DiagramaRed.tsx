@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
+import { resolvePredecessorTaskId } from '../../types/task';
 import type { GanttTask } from '../../types/task';
 
 // ─── Node geometry ─────────────────────────────────────────────────────────────
@@ -111,9 +112,11 @@ function buildLayout(
 ): { nodes: NetNode[]; edges: NetEdge[]; canvasW: number; canvasH: number } {
     if (!tasks.length) return { nodes: [], edges: [], canvasW: 0, canvasH: 0 };
 
-    // pred.taskId is item_order — translate to DB id
+    // Predecesora → id estable (refId) con respaldo a item_order para vínculos legado
     const orderToId = new Map(tasks.map((t) => [t.item_order, t.id]));
     const taskById  = new Map(tasks.map((t) => [t.id, t]));
+    const predId = (p: { taskId: number; refId?: number | null }): number | undefined =>
+        resolvePredecessorTaskId(p, (id) => taskById.has(id), orderToId) ?? undefined;
 
     // ── Assign levels (longest path from source) ──────────────────────────────
     const levels = new Map<number, number>();
@@ -125,7 +128,7 @@ function buildLayout(
         visiting.add(id);
         const task = taskById.get(id);
         const validPreds = (task?.predecesoras ?? [])
-            .map((p) => orderToId.get(p.taskId))
+            .map((p) => predId(p))
             .filter((pid): pid is number => pid !== undefined && taskById.has(pid));
         const l = validPreds.length
             ? Math.max(...validPreds.map(lvl)) + 1
@@ -190,7 +193,7 @@ function buildLayout(
     const edges: NetEdge[] = [];
     nodes.forEach((toN) => {
         (toN.task.predecesoras ?? []).forEach((pred) => {
-            const fromId = orderToId.get(pred.taskId);
+            const fromId = predId(pred);
             if (fromId === undefined || !nodeById.has(fromId)) return;
             edges.push({
                 fromId,

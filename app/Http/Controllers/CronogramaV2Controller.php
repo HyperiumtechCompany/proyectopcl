@@ -78,73 +78,134 @@ class CronogramaV2Controller extends Controller
         $maxAttempts = 5;
         $concurrencyDetector = new ConcurrencyErrorDetector;
 
+        $incomingTasks = $request->input('tasks', []);
+        $force = filter_var($request->input('force', false), FILTER_VALIDATE_BOOLEAN);
+
         for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
             DB::connection('costos_tenant')->beginTransaction();
 
             try {
+                // ── Guardia de cordura ────────────────────────────────────────
+                // El guardado hace clear + reinsert. Si el payload llega vacío o
+                // recortado (estado en memoria parcial, árbol a medio cargar), esto
+                // arrasaría el cronograma sin vuelta atrás. Se aborta salvo force=true.
+                $existingCount = DB::connection('costos_tenant')
+                    ->table('cronograma_general')
+                    ->where('presupuesto_id', $presupuestoId)
+                    ->count();
+                $incomingCount = count($incomingTasks);
+
+                if (! $force && $existingCount >= 15 && $incomingCount < $existingCount * 0.25) {
+                    DB::connection('costos_tenant')->rollBack();
+
+                    Log::warning('cronograma_general: guardado abortado por recorte sospechoso', [
+                        'project' => $project,
+                        'existing' => $existingCount,
+                        'incoming' => $incomingCount,
+                    ]);
+
+                    return response()->json([
+                        'status' => 'error',
+                        'code' => 'suspicious_shrink',
+                        'message' => "El guardado traía {$incomingCount} filas frente a {$existingCount} existentes. Se canceló por seguridad; recarga la página y vuelve a intentar. Si el recorte es correcto, reenvía con force=true.",
+                    ], 422);
+                }
+
                 // Limpiar registros anteriores
                 DB::connection('costos_tenant')
                     ->table('cronograma_general')
                     ->where('presupuesto_id', $presupuestoId)
                     ->delete();
 
-                $insertData = [];
-                foreach ($request->input('tasks') as $task) {
-                    $taskId = isset($task['id']) && $task['id'] > 0 ? (int) $task['id'] : null;
-                    $parentId = (isset($task['parent_id']) && $task['parent_id'] !== null && $task['parent_id'] > 0)
-                        ? (int) $task['parent_id']
-                        : null;
-
-                    // El frontend envía el formato DHTMLX: {source, target, type, lag}
-                    $links = [];
-                    foreach ($task['predecesoras'] ?? [] as $pred) {
-                        $source = (int) ($pred['source'] ?? 0);
-                        if ($source <= 0) {
-                            continue;
-                        }
-                        $links[] = [
-                            'source' => $source,
-                            'target' => (int) ($pred['target'] ?? $taskId),
-                            'type' => (string) ($pred['type'] ?? '0'),
-                            'lag' => (int) ($pred['lag'] ?? 0),
-                        ];
-                    }
+                // ── Paso 1: insertar filas y mapear client_id → id real ────────
+                // client_id puede ser negativo (fila nueva sin persistir). Se
+                // captura el id real para re-mapear parent_id y las referencias
+                // refId/target de las predecesoras en el paso 2.
+                $idMap = [];
+                foreach ($incomingTasks as $task) {
+                    $clientId = (int) ($task['client_id'] ?? $task['id'] ?? 0);
+                    $explicitId = $clientId > 0 ? $clientId : null;
 
                     $row = [
-                        // Siempre presente (aunque sea null para tareas nuevas): un INSERT
-                        // masivo de Laravel arma la lista de columnas a partir de las claves
-                        // de la PRIMERA fila del chunk y luego solo toma array_values() de
-                        // cada fila — si una fila no tiene esta clave le faltará un valor y
-                        // el INSERT completo del chunk falla con "Column count doesn't match
-                        // value count" (SQLSTATE 21S01). NULL en una columna AUTO_INCREMENT
-                        // simplemente hace que MySQL genere el id, igual que omitir la columna.
-                        'id' => $taskId,
                         'presupuesto_id' => $presupuestoId,
                         'item_order' => (int) ($task['item_order'] ?? 0),
                         // Se guarda tal cual (sin zero-padding): presupuesto_general.partida
-                        // tampoco se guarda con padding (ver PresupuestoController), y el join
-                        // en fetchTasks() compara cg.partida = pg.partida por igualdad exacta —
-                        // paddear aquí rompía ese match y duplicaba el árbol en Delphin (las
-                        // partidas de presupuesto quedaban como "faltantes" y se sintetizaban
-                        // como una segunda copia del árbol).
+                        // tampoco se guarda con padding, y el join en fetchTasks() compara
+                        // cg.partida = pg.partida por igualdad exacta.
                         'partida' => trim((string) ($task['partida'] ?? '')),
                         'descripcion' => $task['descripcion'] ?? '',
                         'duracion_dias' => (int) ($task['duracion_dias'] ?? 0),
                         'fecha_inicio' => ! empty($task['fecha_inicio']) ? $task['fecha_inicio'] : null,
                         'fecha_fin' => ! empty($task['fecha_fin']) ? $task['fecha_fin'] : null,
                         'avance' => (float) ($task['avance'] ?? 0),
-                        'parent_id' => $parentId,
                         'nivel' => (int) ($task['nivel'] ?? 1),
-                        'predecesoras' => empty($links) ? null : json_encode($links),
+                        // parent_id y predecesoras se resuelven en el paso 2 (necesitan el idMap completo)
+                        'parent_id' => null,
+                        'predecesoras' => null,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];
 
-                    $insertData[] = $row;
+                    if ($explicitId !== null) {
+                        $row['id'] = $explicitId;
+                        DB::connection('costos_tenant')->table('cronograma_general')->insert($row);
+                        $newId = $explicitId;
+                    } else {
+                        $newId = DB::connection('costos_tenant')->table('cronograma_general')->insertGetId($row);
+                    }
+
+                    if ($clientId !== 0) {
+                        $idMap[$clientId] = $newId;
+                    }
                 }
 
-                foreach (array_chunk($insertData, 500) as $chunk) {
-                    DB::connection('costos_tenant')->table('cronograma_general')->insert($chunk);
+                $remap = static fn ($id) => $idMap[(int) $id] ?? null;
+
+                // ── Paso 2: resolver parent_id + predecesoras con el idMap completo ──
+                foreach ($incomingTasks as $task) {
+                    $clientId = (int) ($task['client_id'] ?? $task['id'] ?? 0);
+                    $selfId = $remap($clientId);
+                    if ($selfId === null) {
+                        continue;
+                    }
+
+                    $parentId = null;
+                    $rawParent = $task['parent_id'] ?? null;
+                    if ($rawParent !== null && (int) $rawParent !== 0) {
+                        $parentId = $remap($rawParent);
+                    }
+
+                    $links = [];
+                    foreach ($task['predecesoras'] ?? [] as $pred) {
+                        $source = (int) ($pred['source'] ?? 0);
+                        $rawRef = $pred['refId'] ?? null;
+                        // refId estable: si apuntaba a una fila nueva, re-mapear al id real
+                        $refId = $rawRef !== null ? ($remap($rawRef) ?? (int) $rawRef) : null;
+                        if ($refId === null && $source <= 0) {
+                            continue;
+                        }
+                        $links[] = [
+                            'source' => $source,
+                            'target' => $selfId,
+                            'type' => (string) ($pred['type'] ?? '0'),
+                            'lag' => (int) ($pred['lag'] ?? 0),
+                            'refId' => $refId,
+                            'ref' => isset($pred['ref']) && is_array($pred['ref'])
+                                ? [
+                                    'codigo' => (string) ($pred['ref']['codigo'] ?? ''),
+                                    'desc' => (string) ($pred['ref']['desc'] ?? ''),
+                                ]
+                                : null,
+                        ];
+                    }
+
+                    DB::connection('costos_tenant')
+                        ->table('cronograma_general')
+                        ->where('id', $selfId)
+                        ->update([
+                            'parent_id' => $parentId,
+                            'predecesoras' => empty($links) ? null : json_encode($links),
+                        ]);
                 }
 
                 DB::connection('costos_tenant')->commit();
@@ -244,6 +305,13 @@ class CronogramaV2Controller extends Controller
                         'taskId' => (int) ($link['source'] ?? 0),
                         'tipo' => $typeMap[$link['type'] ?? '0'] ?? 'FC',
                         'lag' => (int) ($link['lag'] ?? 0),
+                        // Ancla estable + snapshot legible (nulos en vínculos legado)
+                        'refId' => isset($link['refId']) && $link['refId'] !== null
+                            ? (int) $link['refId']
+                            : null,
+                        'ref' => isset($link['ref']) && is_array($link['ref'])
+                            ? $link['ref']
+                            : null,
                     ];
                 }
             }

@@ -190,7 +190,9 @@ export function buildDelphinMSPXml(
         const predecessors = Array.isArray(row.predecesoras)
             ? row.predecesoras.map((predecessor) => ({
                 predecessor,
-                uid: uidByItemOrder.get(Number(predecessor.taskId))
+                // refId estable primero; luego item_order; luego id legado
+                uid: (predecessor.refId != null ? uidMap.get(predecessor.refId) : undefined)
+                    ?? uidByItemOrder.get(Number(predecessor.taskId))
                     ?? uidMap.get(Number(predecessor.taskId)),
             })).filter((link): link is { predecessor: typeof row.predecesoras[number]; uid: number } => link.uid != null)
                 .filter((link) => {

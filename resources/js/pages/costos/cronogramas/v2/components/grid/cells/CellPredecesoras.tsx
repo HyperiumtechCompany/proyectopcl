@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Search } from 'lucide-react';
 import { formatPredecessoras, parsePredecessoras } from '../../../types/task';
@@ -42,10 +42,20 @@ export function CellPredecesoras({
     const cellRef  = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
+    // id → item_order en vivo (para mostrar el Nº actual del vínculo vía refId)
+    const itemOrderById = useMemo(
+        () => new Map(allTasks.map((t) => [t.id, Number(t.item_order)])),
+        [allTasks],
+    );
+    const byOrder = useMemo(
+        () => new Map(allTasks.map((t) => [Number(t.item_order), t])),
+        [allTasks],
+    );
+
     // Sincronizar texto cuando el valor externo cambia o se entra en modo edición
     useEffect(() => {
         if (isEditing) {
-            setLocalValue(formatPredecessoras(value));
+            setLocalValue(formatPredecessoras(value, itemOrderById));
             setHasError(false);
         }
     }, [isEditing]);                 // solo al cambiar isEditing, NO en cada render
@@ -64,9 +74,17 @@ export function CellPredecesoras({
     const handleCommitLocal = () => {
         const text = localValue.trim();
         if (!text) { onCommit([]); return; }
-        const parsed   = parsePredecessoras(text);
-        const byOrder  = new Map(allTasks.map(t => [Number(t.item_order), t]));
-        const invalid  = parsed.find(p => !byOrder.has(Number(p.taskId)));
+        const parsed = parsePredecessoras(text).map((p) => {
+            const t = byOrder.get(Number(p.taskId));
+            return t
+                ? {
+                      ...p,
+                      refId: t.id,
+                      ref: { codigo: t.partida ?? '', desc: t.descripcion ?? '' },
+                  }
+                : p;
+        });
+        const invalid = parsed.find((p) => !byOrder.has(Number(p.taskId)));
         if (invalid) { setHasError(true); return; }
         setHasError(false);
         onCommit(parsed);
@@ -98,7 +116,7 @@ export function CellPredecesoras({
         requestAnimationFrame(() => inputRef.current?.focus());
     };
 
-    const display = formatPredecessoras(value);
+    const display = formatPredecessoras(value, itemOrderById);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // MODO EDICIÓN INLINE

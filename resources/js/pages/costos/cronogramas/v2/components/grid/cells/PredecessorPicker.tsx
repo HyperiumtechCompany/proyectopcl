@@ -38,10 +38,10 @@ interface TreeRow extends GanttTask {
 // ─── Validación ───────────────────────────────────────────────────────────────
 function validatePreds(
     preds: Predecessor[],
-    byOrder: Map<number, GanttTask>,
+    resolve: (p: Predecessor) => GanttTask | undefined,
 ): string | null {
     for (const p of preds) {
-        if (!byOrder.has(Number(p.taskId))) {
+        if (!resolve(p)) {
             return `N° ${p.taskId} no existe`;
         }
     }
@@ -60,7 +60,12 @@ export function PredecessorPicker({
     // ── Estado ────────────────────────────────────────────────────────────────
     const [preds, setPreds]             = useState<Predecessor[]>(() => [...value]);
     const [searchQuery, setSearch]      = useState('');
-    const [manualText, setManual]       = useState(() => formatPredecessoras(value));
+    const [manualText, setManual]       = useState(() =>
+        formatPredecessoras(
+            value,
+            new Map(allTasks.map((t) => [t.id, Number(t.item_order)])),
+        ),
+    );
     const [manualError, setManualError] = useState<string | null>(null);
     const [addTipo, setAddTipo]         = useState<PredecessorType>('FC');
     const [addLag, setAddLag]           = useState(0);
@@ -81,6 +86,39 @@ export function PredecessorPicker({
     const byOrder = useMemo(
         () => new Map(allTasks.map(t => [Number(t.item_order), t])),
         [allTasks],
+    );
+    const byId = useMemo(
+        () => new Map(allTasks.map(t => [t.id, t])),
+        [allTasks],
+    );
+    const itemOrderById = useMemo(
+        () => new Map(allTasks.map(t => [t.id, Number(t.item_order)])),
+        [allTasks],
+    );
+
+    // Resuelve una predecesora a su tarea destino: refId estable primero,
+    // luego item_order (Nº) como respaldo para vínculos legado / entrada manual.
+    const resolvePredTask = useCallback(
+        (p: Predecessor): GanttTask | undefined =>
+            p.refId != null && byId.has(p.refId)
+                ? byId.get(p.refId)
+                : byOrder.get(Number(p.taskId)),
+        [byId, byOrder],
+    );
+
+    // Adjunta el ancla estable (refId) + snapshot código/descripción a partir del Nº.
+    const enrichPred = useCallback(
+        (p: Predecessor): Predecessor => {
+            const t = byOrder.get(Number(p.taskId));
+            return t
+                ? {
+                      ...p,
+                      refId: t.id,
+                      ref: { codigo: t.partida ?? '', desc: t.descripcion ?? '' },
+                  }
+                : p;
+        },
+        [byOrder],
     );
 
     const groupIds = useMemo(() => {
@@ -179,6 +217,15 @@ export function PredecessorPicker({
         };
     }, [onClose, anchorRef]);
 
+    // ¿La predecesora p apunta a esta tarea? (por refId estable, o por Nº legado)
+    const sameTarget = useCallback(
+        (p: Predecessor, task: GanttTask): boolean =>
+            p.refId != null
+                ? p.refId === task.id
+                : Number(p.taskId) === Number(task.item_order),
+        [],
+    );
+
     // ── Sync manual → preds ──────────────────────────────────────────────────
     const commitManual = useCallback(() => {
         if (!manualText.trim()) {
@@ -186,39 +233,44 @@ export function PredecessorPicker({
             setPreds([]);
             return;
         }
-        const parsed = parsePredecessoras(manualText);
-        const err    = validatePreds(parsed, byOrder);
+        const parsed = parsePredecessoras(manualText).map(enrichPred);
+        const err    = validatePreds(parsed, resolvePredTask);
         if (err) { setManualError(err); return; }
         setManualError(null);
         setPreds(parsed);
-        setManual(formatPredecessoras(parsed));
-    }, [manualText, byOrder]);
+        setManual(formatPredecessoras(parsed, itemOrderById));
+    }, [manualText, enrichPred, resolvePredTask, itemOrderById]);
 
     // ── Toggle desde árbol ────────────────────────────────────────────────────
     const togglePred = useCallback((task: GanttTask) => {
-        const taskIdNum = Number(task.item_order);
-        const already   = preds.some(p => Number(p.taskId) === taskIdNum);
-        let next: Predecessor[];
-        if (already) {
-            next = preds.filter(p => Number(p.taskId) !== taskIdNum);
-        } else {
-            next = [...preds, { taskId: taskIdNum, tipo: addTipo, lag: addLag }];
-        }
+        const already = preds.some(p => sameTarget(p, task));
+        const next: Predecessor[] = already
+            ? preds.filter(p => !sameTarget(p, task))
+            : [
+                  ...preds,
+                  {
+                      taskId: Number(task.item_order),
+                      tipo: addTipo,
+                      lag: addLag,
+                      refId: task.id,
+                      ref: { codigo: task.partida ?? '', desc: task.descripcion ?? '' },
+                  },
+              ];
         setPreds(next);
-        setManual(formatPredecessoras(next));
+        setManual(formatPredecessoras(next, itemOrderById));
         setManualError(null);
-    }, [preds, addTipo, addLag]);
+    }, [preds, addTipo, addLag, sameTarget, itemOrderById]);
 
     // ── Eliminar chip ─────────────────────────────────────────────────────────
-    const removePred = useCallback((taskId: number) => {
-        const next = preds.filter(p => Number(p.taskId) !== Number(taskId));
+    const removePred = useCallback((index: number) => {
+        const next = preds.filter((_, i) => i !== index);
         setPreds(next);
-        setManual(formatPredecessoras(next));
-    }, [preds]);
+        setManual(formatPredecessoras(next, itemOrderById));
+    }, [preds, itemOrderById]);
 
     // ── Guardar ───────────────────────────────────────────────────────────────
     const handleSave = () => {
-        const err = validatePreds(preds, byOrder);
+        const err = validatePreds(preds, resolvePredTask);
         if (err) { setManualError(err); return; }
         onCommit(preds);
     };
@@ -342,25 +394,31 @@ export function PredecessorPicker({
                 {preds.length > 0 && (
                     <div className="flex flex-wrap gap-1 rounded-lg border border-slate-700/50 bg-slate-800/30 p-2">
                         <span className="w-full text-[9px] uppercase tracking-wider text-slate-600">Seleccionados:</span>
-                        {preds.map(p => {
-                            const task   = byOrder.get(Number(p.taskId));
+                        {preds.map((p, index) => {
+                            const task   = resolvePredTask(p);
+                            const num    = task?.item_order ?? p.taskId;
                             const lagStr = p.lag > 0 ? `+${p.lag}` : p.lag < 0 ? String(p.lag) : '';
-                            const label  = `${p.taskId}${p.tipo}${lagStr}`;
+                            const label  = `${num}${p.tipo}${lagStr}`;
                             return (
                                 <span
-                                    key={p.taskId}
+                                    key={`${p.refId ?? p.taskId}-${index}`}
                                     className={`flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] ${
                                         !task
                                             ? 'bg-red-900/50 text-red-300'
                                             : 'bg-blue-800/60 text-blue-200'
                                     }`}
-                                    title={task?.descripcion ?? 'ID no encontrado'}
+                                    title={
+                                        task?.descripcion ??
+                                        (p.ref
+                                            ? `Roto: apuntaba a ${p.ref.codigo} ${p.ref.desc}`
+                                            : 'Destino no encontrado')
+                                    }
                                 >
                                     {label}
                                     <button
                                         type="button"
                                         className="ml-0.5 rounded-full opacity-60 hover:opacity-100"
-                                        onClick={() => removePred(p.taskId)}
+                                        onClick={() => removePred(index)}
                                     >
                                         <X size={9} />
                                     </button>
@@ -405,7 +463,7 @@ export function PredecessorPicker({
                             {virtualizer.getVirtualItems().map(vRow => {
                                 const task        = treeRows[vRow.index];
                                 if (!task) return null;
-                                const isSelected  = preds.some(p => Number(p.taskId) === Number(task.item_order));
+                                const isSelected  = preds.some(p => sameTarget(p, task));
                                 const isGroup     = task._isGroup;
                                 const depth       = task._depth;
                                 const isExpanded  = expandedIds.has(task.id);

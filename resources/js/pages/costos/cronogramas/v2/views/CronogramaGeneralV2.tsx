@@ -115,7 +115,10 @@ export default function CronogramaGeneralV2({
         saveTasks,
         applyBarMove,
         importTasks,
-    } = useGanttTasks(initialTasks, schedulingMode, calendarSettings);
+        // preservePartidaCodes: la vista comparte cronograma_general/presupuesto_general
+        // con Delphin. Regenerar los códigos de partida por posición rompe el JOIN
+        // cg.partida = pg.partida al guardar y duplica el árbol en Delphin.
+    } = useGanttTasks(initialTasks, schedulingMode, calendarSettings, true);
 
     // ── Timeline (barras) ────────────────────────────────────────────────────
     const timeline = useGanttTimeline(tasks, zoomLevel, calendarSettings, continuousDayWidth);

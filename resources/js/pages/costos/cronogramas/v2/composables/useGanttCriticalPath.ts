@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import dayjs from 'dayjs';
+import { resolvePredecessorTaskId } from '../types/task';
 import type { GanttTask } from '../types/task';
 
 export interface CriticalPathResult {
@@ -139,7 +140,12 @@ export function computeCriticalPath(tasks: GanttTask[]): CriticalPathResult {
 
     for (const t of valid) {
         for (const pred of t.predecesoras) {
-            const predId = resolveTaskId(pred.taskId);
+            const predId =
+                resolvePredecessorTaskId(
+                    pred,
+                    (id) => taskMap.has(id),
+                    itemOrderToId,
+                ) ?? resolveTaskId(pred.taskId);
             if (predId === null || !taskMap.has(predId)) continue;
 
             const edge = {
