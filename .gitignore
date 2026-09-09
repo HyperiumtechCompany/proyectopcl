@@ -15,6 +15,7 @@
 /public/storage
 /storage/*.key
 /storage/pail
+/storage/app/private/backups
 /resources/js/actions
 /resources/js/routes
 /resources/js/wayfinder

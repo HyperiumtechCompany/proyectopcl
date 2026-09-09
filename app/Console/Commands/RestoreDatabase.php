@@ -3,14 +3,19 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
 
 class RestoreDatabase extends Command
 {
-    protected $signature = 'db:restore {file : Ruta al .sql.gz (o .sql)} {database? : BD destino (default: nombre del archivo)} {--force}';
+    protected $signature = 'db:restore
+        {file : Ruta al .sql.gz (o .sql)}
+        {database? : BD destino (default: nombre del archivo)}
+        {--force : No pedir confirmación}
+        {--no-snapshot : No respaldar la BD destino antes de sobrescribirla}';
 
-    protected $description = 'Restaura UNA base de datos desde un dump de db:backup. Pide confirmación si la BD ya existe.';
+    protected $description = 'Restaura UNA base de datos desde un dump de db:backup. Respalda la BD destino antes (undo) salvo --no-snapshot.';
 
     public function handle(): int
     {
@@ -38,6 +43,17 @@ class RestoreDatabase extends Command
             $confirm = $this->ask('Escribe el nombre de la BD para confirmar');
             if ($confirm !== $target) {
                 $this->warn('Cancelado.');
+
+                return self::FAILURE;
+            }
+        }
+
+        // Snapshot de la BD destino ANTES de sobrescribirla (undo).
+        if ($exists && ! $this->option('no-snapshot')) {
+            $this->line("Respaldando $target antes de restaurar…");
+            $code = Artisan::call('db:backup', ['--only' => $target], $this->output);
+            if ($code !== self::SUCCESS) {
+                $this->error('El respaldo previo falló — restauración abortada. Usa --no-snapshot para forzar.');
 
                 return self::FAILURE;
             }

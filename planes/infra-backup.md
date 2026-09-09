@@ -15,10 +15,15 @@ Servidor: `ingenieros.tech` · `ssh gerente@2.24.83.11 -p 2222` · app en
 - `pcl_central`
 - todas las BD tenant de Costos (`costos_%`) — incluye automáticamente las nuevas
 
-Un `.sql.gz` por BD en `~/backups/mysql/<fecha>/`, con `MANIFEST.txt` y un symlink
-`latest`. Copia mensual el día 1. Retención: **14 días** de diarios, **6 meses** de
-mensuales. Log en `~/backups/mysql/backup.log`. Marcadores `LAST_RUN_OK` /
-`LAST_RUN_FAILED`.
+Un `.sql.gz` por BD en `storage/app/private/backups/db/<fecha>/`, con `MANIFEST.txt`
+y un symlink `latest`. Copia mensual el día 1. Retención: **14 días** de diarios,
+**6 meses** de mensuales. Log en `.../backups/db/backup.log`. Marcadores `LAST_RUN_OK`
+/ `LAST_RUN_FAILED`.
+
+**Panel visual** en `/backups` (rol `root` / `gerencia` / `administracion`): lista por
+fecha, «crear backup ahora», descargar un `.sql.gz`, y **restaurar** (solo `root`;
+respalda la BD destino automáticamente antes de sobrescribir). Override de ruta con
+`--dir` si se prefiere fuera del repo (`php artisan db:backup --dir=/var/backups/pcl`).
 
 **Usa `config('database.connections.mysql')`** — las mismas credenciales/socket que
 usa la app (no parsea `.env` a mano; el descubrimiento de BD va por la conexión PDO
@@ -34,16 +39,22 @@ cd /var/www/ingenieros.tech
 git pull --ff-only origin Emes
 
 # 1. Prueba manual
-php artisan db:backup --list              # ¿qué BD detecta? (usa la conexión de la app)
-php artisan db:backup                     # corre el backup completo
-ls -lh ~/backups/mysql/latest/            # verifica los .sql.gz
-cat ~/backups/mysql/latest/MANIFEST.txt
+php artisan db:backup --list
+php artisan db:backup
+ls -lh storage/app/private/backups/db/latest/
+cat storage/app/private/backups/db/latest/MANIFEST.txt
 
-# 2. Cron diario 02:15 (hora del servidor)
-( crontab -l 2>/dev/null | grep -v 'db:backup'
-  echo '15 2 * * * cd /var/www/ingenieros.tech && php artisan db:backup >> $HOME/backups/mysql/cron.log 2>&1'
+# 2. Cron diario 02:15 (limpiar líneas viejas primero)
+( crontab -l 2>/dev/null | grep -vE 'db:backup|backup-db.sh'
+  echo '15 2 * * * cd /var/www/ingenieros.tech && php artisan db:backup >> storage/logs/db-backup.log 2>&1'
 ) | crontab -
 crontab -l
+
+# 3. Perms compartidos: la web (php-fpm) y el cron (gerente) escriben en el mismo
+#    dir. Que compartan grupo con setgid:
+sudo chgrp -R www-data storage/app/private/backups
+sudo chmod -R 2775 storage/app/private/backups
+# (gerente ya debería estar en el grupo www-data; si no: `sudo usermod -aG www-data gerente`)
 ```
 
 `deploy.sh` ya corre `php artisan db:backup` **antes de las migraciones** (best-effort;

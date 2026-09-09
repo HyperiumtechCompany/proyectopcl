@@ -11,7 +11,8 @@ class BackupDatabases extends Command
     protected $signature = 'db:backup
         {--only= : Respaldar solo esta BD}
         {--list : Solo listar las BD que respaldaría}
-        {--dir= : Directorio destino (default: $HOME/backups/mysql)}
+        {--dir= : Directorio destino (default: storage/app/private/backups/db)}
+        {--json : Salida JSON}
         {--retention-days=14}
         {--monthly-keep=6}
         {--min-free-mb=2048}';
@@ -24,14 +25,15 @@ class BackupDatabases extends Command
         $c = config('database.connections.mysql');
 
         $root = rtrim(
-            (string) ($this->option('dir') ?: (getenv('HOME') ?: sys_get_temp_dir()).'/backups/mysql'),
+            (string) ($this->option('dir') ?: storage_path('app/private/backups/db')),
             '/'
         );
         $date = date('Y-m-d');
         $dest = "$root/$date";
         $log = "$root/backup.log";
 
-        @mkdir($root, 0755, true);
+        @mkdir($root, 0775, true);
+        @chmod($root, 0775);
         $write = function (string $msg) use ($log) {
             $line = '['.date('Y-m-d H:i:s')."] $msg";
             $this->line($line);
@@ -64,7 +66,9 @@ class BackupDatabases extends Command
         }
 
         if ($this->option('list')) {
-            $this->line(implode(PHP_EOL, $dbs));
+            $this->option('json')
+                ? $this->line(json_encode(['databases' => $dbs]))
+                : $this->line(implode(PHP_EOL, $dbs));
 
             return self::SUCCESS;
         }
@@ -76,7 +80,8 @@ class BackupDatabases extends Command
             return $fail("espacio insuficiente: {$freeMb}MB < {$minFree}MB");
         }
 
-        @mkdir($dest, 0755, true);
+        @mkdir($dest, 0775, true);
+        @chmod($dest, 0775);
         $write('Respaldando '.count($dbs)." BD → $dest");
 
         // ── Archivo de credenciales temporal (600) para mysqldump ────────────
@@ -115,6 +120,7 @@ class BackupDatabases extends Command
             $proc->run();
 
             if ($proc->isSuccessful() && is_file($out) && filesize($out) > 0) {
+                @chmod($out, 0664);
                 $write(sprintf('  ✔ %s  (%s)', $db, $this->human((int) filesize($out))));
             } else {
                 @unlink($out);
@@ -149,7 +155,17 @@ class BackupDatabases extends Command
 
         @unlink("$root/LAST_RUN_FAILED");
         file_put_contents("$root/LAST_RUN_OK", date('Y-m-d H:i:s').PHP_EOL);
+        @chmod("$root/LAST_RUN_OK", 0664);
         $write("OK — $dest");
+
+        if ($this->option('json')) {
+            $this->line(json_encode([
+                'ok' => true,
+                'date' => $date,
+                'dest' => $dest,
+                'databases' => $dbs,
+            ]));
+        }
 
         return self::SUCCESS;
     }

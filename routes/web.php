@@ -173,11 +173,13 @@ Route::middleware(['auth', 'verified', 'role:root|gerencia|administracion'])->gr
     Route::post('/solicitudes/{planRequest}/approve', [PlanRequestController::class, 'approve'])->name('plan-requests.approve');
     Route::post('/solicitudes/{planRequest}/reject', [PlanRequestController::class, 'reject'])->name('plan-requests.reject');
 
-    // Backups
+    // Backups (copias de seguridad de BD — db:backup / db:restore)
     Route::get('/backups', [BackupController::class, 'index'])->name('backups.index');
     Route::post('/backups', [BackupController::class, 'store'])->name('backups.store');
-    Route::get('/backups/{file}', [BackupController::class, 'download'])->name('backups.download');
-    Route::delete('/backups/{file}', [BackupController::class, 'destroy'])->name('backups.destroy');
+    Route::get('/backups/{date}/{database}', [BackupController::class, 'download'])->name('backups.download');
+    Route::delete('/backups/{date}', [BackupController::class, 'destroy'])->name('backups.destroy');
+    Route::post('/backups/restore', [BackupController::class, 'restore'])
+        ->name('backups.restore')->middleware('role:root'); // restaurar SOLO root
 });
 
 // ─── Caída de Tensión ──────────────────────────────────────────────────────────
