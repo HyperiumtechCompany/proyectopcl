@@ -6,6 +6,7 @@ use App\Services\CostoDatabaseService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia as Assert;
 
 it('loads the general cronograma from the tenant database', function () {
@@ -314,6 +315,49 @@ it('rejects valorizado save when gantt exceeds 30 periods', function () {
             ])
             ->assertUnprocessable()
             ->assertJsonPath('message', 'El cronograma valorizado admite como máximo 30 periodos.');
+    } finally {
+        dropCronoValorizadoTenant($dbName);
+    }
+});
+
+it('cronograma v2: enlaza cronograma_general a presupuesto_general por FK (Nivel B fase 1)', function () {
+    [$user, $project, $dbName] = createCronoValorizadoTenant(1);
+
+    try {
+        app(CostoDatabaseService::class)->setTenantConnection($dbName);
+        $cx = DB::connection('costos_tenant');
+        $pid = $cx->table('presupuestos')->value('id');
+
+        // La columna FK existe (migración corrió al crear el tenant)
+        expect(Schema::connection('costos_tenant')->hasColumn('cronograma_general', 'presupuesto_general_id'))->toBeTrue();
+
+        $pgId = $cx->table('presupuesto_general')->insertGetId([
+            'presupuesto_id' => $pid, 'partida' => '01.01', 'descripcion' => 'Con precio',
+            'unidad' => 'und', 'metrado' => 10, 'precio_unitario' => 25, 'item_order' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ]); // parcial = 250
+
+        $cgId = $cx->table('cronograma_general')->where('presupuesto_id', $pid)->where('partida', '01.01')->value('id');
+        $cx->table('cronograma_general')->where('id', $cgId)->update(['presupuesto_general_id' => null]);
+
+        // Sin FK → fetchTasks cae al match por partida y trae el parcial igual
+        $r1 = $this->actingAs($user)->getJson("/cronograma/v2/{$project->id}/tasks")->assertOk()->json('tasks.0');
+        expect((float) $r1['presupuesto'])->toBe(250.0);
+
+        // Guardar → store() setea la FK
+        $this->actingAs($user)->withSession(['_token' => 't'])->withHeader('X-CSRF-TOKEN', 't')
+            ->postJson("/cronograma/v2/{$project->id}/save", ['tasks' => [
+                ['client_id' => $cgId, 'id' => $cgId, 'item_order' => 1, 'partida' => '01.01', 'descripcion' => 'X', 'duracion_dias' => 1, 'nivel' => 1, 'predecesoras' => []],
+            ]])->assertSuccessful();
+
+        app(CostoDatabaseService::class)->setTenantConnection($dbName);
+        expect((int) DB::connection('costos_tenant')->table('cronograma_general')->where('id', $cgId)->value('presupuesto_general_id'))
+            ->toBe((int) $pgId);
+
+        // Ahora por FK trae el mismo parcial
+        $r2 = $this->actingAs($user)->getJson("/cronograma/v2/{$project->id}/tasks")->assertOk()->json('tasks.0');
+        expect((float) $r2['presupuesto'])->toBe(250.0)
+            ->and($r2['presupuesto_general_id'])->toBe((int) $pgId);
     } finally {
         dropCronoValorizadoTenant($dbName);
     }

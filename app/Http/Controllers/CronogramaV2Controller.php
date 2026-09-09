@@ -144,6 +144,37 @@ class CronogramaV2Controller extends Controller
                         ->all()
                 );
 
+                // Nivel B Fase 1: mapa partida → presupuesto_general.id para setear
+                // la FK en cada fila (nueva o existente) que aún no la tenga.
+                $hasFkColumn = Schema::connection('costos_tenant')
+                    ->hasColumn('cronograma_general', 'presupuesto_general_id');
+                $pgIdByPartida = [];
+                if ($hasFkColumn) {
+                    $svc = app(CostoDatabaseService::class);
+                    foreach (
+                        DB::connection('costos_tenant')->table('presupuesto_general')
+                            ->where('presupuesto_id', $presupuestoId)->whereNull('deleted_at')
+                            ->get(['id', 'partida']) as $pg
+                    ) {
+                        $p = trim((string) $pg->partida);
+                        if ($p === '') {
+                            continue;
+                        }
+                        $pgIdByPartida[$p] ??= $pg->id;
+                        $pgIdByPartida[$svc->normalizePartidaCode($p)] ??= $pg->id;
+                    }
+                }
+                $resolvePgId = function (string $partida) use ($pgIdByPartida, $hasFkColumn) {
+                    if (! $hasFkColumn) {
+                        return null;
+                    }
+                    $p = trim($partida);
+
+                    return $pgIdByPartida[$p]
+                        ?? $pgIdByPartida[app(CostoDatabaseService::class)->normalizePartidaCode($p)]
+                        ?? null;
+                };
+
                 // ── Paso 1: upsert por id, mapear client_id → id real ──────────
                 // client_id puede ser negativo (fila nueva). Se captura el id real
                 // para re-mapear parent_id y refId/target de predecesoras en el paso 2.
@@ -168,6 +199,13 @@ class CronogramaV2Controller extends Controller
                         'nivel' => (int) ($task['nivel'] ?? 1),
                         'updated_at' => now(),
                     ];
+
+                    if ($hasFkColumn) {
+                        $pgId = $resolvePgId($row['partida']);
+                        if ($pgId !== null) {
+                            $row['presupuesto_general_id'] = $pgId;
+                        }
+                    }
 
                     if ($clientId > 0 && isset($existingIds[$clientId])) {
                         DB::connection('costos_tenant')->table('cronograma_general')
@@ -314,15 +352,38 @@ class CronogramaV2Controller extends Controller
 
     private function fetchTasks(int $presupuestoId): array
     {
-        $records = DB::connection('costos_tenant')
-            ->table('cronograma_general as cg')
-            ->leftJoin('presupuesto_general as pg', 'cg.partida', '=', 'pg.partida')
-            ->where('cg.presupuesto_id', $presupuestoId)
-            ->orderBy('cg.item_order')
-            ->select('cg.*', DB::raw('COALESCE(pg.parcial, 0) as presupuesto'))
-            ->get();
+        // Nivel B Fase 1: enlaza a presupuesto_general por FK
+        // (cronograma_general.presupuesto_general_id) cuando existe; si la fila
+        // aún no tiene FK (backfill sin match), cae al match por partida —
+        // ahora SÍ acotado por presupuesto_id (el JOIN viejo no lo estaba y
+        // podía traer el parcial de otra obra con la misma partida).
+        $hasFk = Schema::connection('costos_tenant')
+            ->hasColumn('cronograma_general', 'presupuesto_general_id');
 
-        return $records->map(fn ($row) => $this->rowToV2($row))->all();
+        $query = DB::connection('costos_tenant')
+            ->table('cronograma_general as cg')
+            ->where('cg.presupuesto_id', $presupuestoId)
+            ->orderBy('cg.item_order');
+
+        if ($hasFk) {
+            $query
+                ->leftJoin('presupuesto_general as pg', 'cg.presupuesto_general_id', '=', 'pg.id')
+                ->leftJoin('presupuesto_general as pgf', function ($join) use ($presupuestoId) {
+                    $join->whereNull('cg.presupuesto_general_id')
+                        ->whereColumn('cg.partida', 'pgf.partida')
+                        ->where('pgf.presupuesto_id', $presupuestoId);
+                })
+                ->select('cg.*', DB::raw('COALESCE(pg.parcial, pgf.parcial, 0) as presupuesto'));
+        } else {
+            $query
+                ->leftJoin('presupuesto_general as pg', function ($join) use ($presupuestoId) {
+                    $join->whereColumn('cg.partida', 'pg.partida')
+                        ->where('pg.presupuesto_id', $presupuestoId);
+                })
+                ->select('cg.*', DB::raw('COALESCE(pg.parcial, 0) as presupuesto'));
+        }
+
+        return $query->get()->map(fn ($row) => $this->rowToV2($row))->all();
     }
 
     private function rowToV2(object $row): array
@@ -365,6 +426,9 @@ class CronogramaV2Controller extends Controller
             'avance' => (float) ($row->avance ?? 0),
             'predecesoras' => $predecesoras,
             'presupuesto' => (float) ($row->presupuesto ?? 0),
+            'presupuesto_general_id' => isset($row->presupuesto_general_id) && $row->presupuesto_general_id !== null
+                ? (int) $row->presupuesto_general_id
+                : null,
         ];
     }
 

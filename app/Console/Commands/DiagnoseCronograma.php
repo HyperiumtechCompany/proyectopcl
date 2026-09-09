@@ -6,6 +6,7 @@ use App\Models\CostoProject;
 use App\Services\CostoDatabaseService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DiagnoseCronograma extends Command
 {
@@ -46,6 +47,30 @@ class DiagnoseCronograma extends Command
         $partDup = $rows->groupBy('partida')->filter(fn ($g) => $g->count() > 1)->keys();
         $ioDup = $rows->groupBy('item_order')->filter(fn ($g) => $g->count() > 1)->keys();
         $joinRoto = $rows->filter(fn ($r) => ! isset($presupuestoPartidas[$r->partida]));
+
+        // ── Nivel B Fase 1: FK presupuesto_general_id ────────────────────────
+        $fkCol = Schema::connection('costos_tenant')
+            ->hasColumn('cronograma_general', 'presupuesto_general_id');
+        $fkNull = 0;
+        $fkParcialMismatch = 0;
+        if ($fkCol) {
+            $pgById = $cx->table('presupuesto_general')->where('presupuesto_id', $pid)
+                ->pluck('parcial', 'id');
+            $pgByPartida = $cx->table('presupuesto_general')->where('presupuesto_id', $pid)
+                ->pluck('parcial', 'partida');
+            foreach ($rows as $r) {
+                if ($r->presupuesto_general_id === null) {
+                    $fkNull++;
+
+                    continue;
+                }
+                $fkParcial = round((float) ($pgById[$r->presupuesto_general_id] ?? 0), 2);
+                $partidaParcial = round((float) ($pgByPartida[$r->partida] ?? 0), 2);
+                if (abs($fkParcial - $partidaParcial) >= 0.01) {
+                    $fkParcialMismatch++;
+                }
+            }
+        }
 
         // ── Predecesoras: refId vs source(item_order) ────────────────────────
         $refIdUsados = 0;
@@ -109,6 +134,11 @@ class DiagnoseCronograma extends Command
                 'refId_rotos' => $rotasRefId,
                 'item_order_cruzados_vs_snapshot' => $cruzadasItemOrder,
             ],
+            'nivel_b' => [
+                'fk_column' => $fkCol,
+                'filas_sin_fk' => $fkNull,
+                'fk_vs_partida_parcial_mismatch' => $fkParcialMismatch,
+            ],
             'detalle' => $detalle,
         ];
 
@@ -132,6 +162,9 @@ class DiagnoseCronograma extends Command
             ['predecesoras legado (item_order)', $legadoSoloItemOrder],
             ['refId rotos', $rotasRefId.($rotasRefId ? '  ⚠' : '')],
             ['item_order cruzados vs snapshot', $cruzadasItemOrder.($cruzadasItemOrder ? '  ⚠' : '')],
+            ['[Nivel B] FK presupuesto_general_id', $fkCol ? 'columna presente' : 'columna ausente (fase 1 sin correr)'],
+            ['[Nivel B] filas sin FK (fallback partida)', $fkCol ? $fkNull.($fkNull ? '  (ok si son títulos/renombres)' : '') : '—'],
+            ['[Nivel B] FK vs partida: parcial distinto', $fkCol ? $fkParcialMismatch.($fkParcialMismatch ? '  ⚠ DIVERGEN' : '  ✓') : '—'],
         ]);
 
         if (! empty($detalle)) {
@@ -143,7 +176,10 @@ class DiagnoseCronograma extends Command
         }
 
         $this->newLine();
-        if ($rotasRefId === 0 && $cruzadasItemOrder === 0 && $joinRoto->isEmpty() && $ioDup->isEmpty() && $partDup->isEmpty()) {
+        if ($fkCol && $fkParcialMismatch > 0) {
+            $this->error("⚠ Nivel B: {$fkParcialMismatch} filas donde el JOIN por FK y el JOIN por partida dan un parcial distinto. Revisar ANTES de retirar el fallback por partida.");
+        }
+        if ($rotasRefId === 0 && $cruzadasItemOrder === 0 && $joinRoto->isEmpty() && $ioDup->isEmpty() && $partDup->isEmpty() && $fkParcialMismatch === 0) {
             $this->info('✓ Sin señales de corrupción. El cronograma se ve sano.');
         } else {
             $this->error('⚠ Hay señales de daño previo. Revisar el detalle; puede requerir re-ingresar vínculos.');

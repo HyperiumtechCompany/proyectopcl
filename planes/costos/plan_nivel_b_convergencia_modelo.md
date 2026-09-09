@@ -1,8 +1,24 @@
 # Nivel B — Converger el modelo Presupuesto ↔ Cronograma
 
-**Estado:** diseño. **NO implementar la migración de datos en prod hasta que los
-backups estén probados** (2+ corridas OK del cron + un restore real a `_staging`
-verificado — ver `planes/infra-backup.md`).
+**Estado:** **Fase 1 implementada** (`Emes`, sin desplegar) — aditiva y reversible.
+Fases 2-3 en diseño. La migración de Fase 1 solo AGREGA una columna nullable + backfill;
+igual conviene tener el backup del día corriendo antes de desplegarla.
+
+### Fase 1 — hecho
+- Migración tenant `2026_09_10_000010_add_presupuesto_general_id_to_cronograma_general`:
+  columna `cronograma_general.presupuesto_general_id` nullable + índice + backfill por
+  partida (exacta → normalizada por padding), loguea las filas sin match. `down()` la quita.
+- `CronogramaV2Controller::fetchTasks` — JOIN por FK cuando existe, **fallback por partida
+  acotado por `presupuesto_id`** (el JOIN viejo no lo acotaba). `rowToV2` expone
+  `presupuesto_general_id`.
+- `CronogramaV2Controller::store` — setea la FK (por partida→id) en toda fila que guarde.
+- `cronograma:diagnose` — sección Nivel B: filas sin FK + **"FK vs partida: parcial
+  distinto"** (debe ser 0 durante el soak antes de retirar el fallback).
+- Test Pest: la columna existe, fallback por partida da el mismo parcial, `store` setea la FK.
+
+**Soak (1-2 semanas tras desplegar Fase 1):** `php artisan cronograma:diagnose {id}` en los
+proyectos activos — `FK vs partida: parcial distinto` debe quedar en **0 / ✓**. Recién
+entonces Fase 2.
 
 **Contexto:** Nivel A ya resolvió el incidente (predecesoras cruzadas → `refId`) y
 el riesgo de destrucción (upsert + snapshots + guardia). Nivel B ataca la **causa
