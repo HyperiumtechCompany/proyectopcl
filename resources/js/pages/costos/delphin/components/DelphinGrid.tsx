@@ -490,6 +490,8 @@ export function DelphinGrid({
         [allRows],
     );
 
+    const [expandedSummary, setExpandedSummary] = useState(false);
+
     return (
         <div
             className="flex min-h-0 flex-1 flex-col overflow-hidden"
@@ -587,12 +589,56 @@ export function DelphinGrid({
                                 onPercentageChange={onUtilidadPorcentajeChange}
                                 saving={savingUtilidad}
                             />
+                            
+                            {/* SUBTOTAL BASE (antes llamado Total) */}
                             <SummaryRow
                                 columns={columns}
-                                labelPrefix="Total"
-                                amount={costoDirecto + resumenPresupuesto.gastosGenerales + resumenPresupuesto.utilidad}
-                                emphasize
+                                labelPrefix={resumenPresupuesto.igv !== undefined ? "Subtotal (CD + GG + Utilidad)" : "Total"}
+                                amount={resumenPresupuesto.total ?? (costoDirecto + resumenPresupuesto.gastosGenerales + resumenPresupuesto.utilidad)}
+                                emphasize={true}
                             />
+
+                            {resumenPresupuesto.igv !== undefined && (
+                                <div className="flex justify-center border-t border-slate-300 bg-slate-100 py-1 dark:border-slate-700/50 dark:bg-slate-900">
+                                    <button
+                                        type="button"
+                                        onClick={() => setExpandedSummary(!expandedSummary)}
+                                        className="flex items-center gap-1.5 rounded-full bg-slate-200 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 transition hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
+                                    >
+                                        {expandedSummary ? 'Ocultar Cascada' : 'Mostrar Cascada Completa'}
+                                    </button>
+                                </div>
+                            )}
+
+                            {expandedSummary && resumenPresupuesto.igv !== undefined && (
+                                <div className="border-t-2 border-indigo-500/20 max-h-60 overflow-y-auto [scrollbar-width:thin]">
+                                    <SummaryRow columns={columns} labelPrefix="IGV" percentage={resumenPresupuesto.igvPorcentaje} amount={resumenPresupuesto.igv ?? 0} />
+                                    <SummaryRow columns={columns} labelPrefix="Subtotal Componente I" amount={resumenPresupuesto.subTotalComponenteI ?? 0} />
+                                    
+                                    {(resumenPresupuesto.componenteIIMonto ?? 0) > 0 && (
+                                        <>
+                                            <SummaryRow columns={columns} labelPrefix="Componente II" amount={resumenPresupuesto.componenteIIMonto ?? 0} />
+                                            <SummaryRow columns={columns} labelPrefix="IGV Componente II" percentage={resumenPresupuesto.igvPorcentaje} amount={(resumenPresupuesto.subTotalComponenteII ?? 0) - (resumenPresupuesto.componenteIIMonto ?? 0)} />
+                                            <SummaryRow columns={columns} labelPrefix="Subtotal Componente II" amount={resumenPresupuesto.subTotalComponenteII ?? 0} />
+                                        </>
+                                    )}
+                                    
+                                    {(resumenPresupuesto.extrasTotal ?? 0) > 0 && (
+                                        <SummaryRow columns={columns} labelPrefix="Extras (con IGV)" amount={resumenPresupuesto.extrasTotal ?? 0} />
+                                    )}
+                                    
+                                    <SummaryRow columns={columns} labelPrefix="Total Componentes" amount={resumenPresupuesto.totalComponents ?? 0} />
+                                    
+                                    {(resumenPresupuesto.supervision ?? 0) > 0 && (
+                                        <SummaryRow columns={columns} labelPrefix="Supervisión" percentage={resumenPresupuesto.supervisionPorcentaje} amount={resumenPresupuesto.supervision ?? 0} />
+                                    )}
+                                    
+                                    <SummaryRow columns={columns} labelPrefix="Total Consolidado" amount={resumenPresupuesto.totalConsolidado ?? 0} />
+                                    <SummaryRow columns={columns} labelPrefix="Control Concurrente" percentage={resumenPresupuesto.controlConcurrentePorcentaje} amount={resumenPresupuesto.controlConcurrente ?? 0} />
+                                    
+                                    <SummaryRow columns={columns} labelPrefix="Total Presupuesto de Inversión" amount={resumenPresupuesto.totalInversion ?? 0} emphasize />
+                                </div>
+                            )}
                         </>
                     )}
                 </>

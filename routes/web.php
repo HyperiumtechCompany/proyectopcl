@@ -29,6 +29,7 @@ use App\Http\Controllers\Dialux\V2\PlanFileController as DialuxV2PlanFileControl
 use App\Http\Controllers\Dialux\V2\ProjectController as DialuxV2ProjectController;
 use App\Http\Controllers\Dialux\V2\ProjectSummaryController as DialuxV2ProjectSummaryController;
 use App\Http\Controllers\EttpController;
+use App\Http\Controllers\GastosGeneralesViewController;
 use App\Http\Controllers\GestorProyectoController;
 use App\Http\Controllers\GestorProyectoNodoController;
 use App\Http\Controllers\InsumoProductoController;
@@ -431,6 +432,9 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::put('/presupuesto/acus/{acuId}/componentes/{tipo}/{id}', [PresupuestoController::class, 'updateAcuComponente'])->name('proyectos.presupuesto.acus.componentes.update');
             Route::delete('/presupuesto/acus/{acuId}/componentes/{tipo}/{id}', [PresupuestoController::class, 'destroyAcuComponente'])->name('proyectos.presupuesto.acus.componentes.destroy');
             Route::post('/presupuesto/copy', [PresupuestoController::class, 'copy'])->name('proyectos.presupuesto.copy');
+
+            // ─── Gastos Generales (Vista Aislada) ────
+            Route::get('/gastos-generales/{subsection?}', [GastosGeneralesViewController::class, 'index'])->name('proyectos.gastos-generales.index');
 
             // ─── Rutas Comodín (Wildcards) - DEBEN IR AL FINAL ────
             Route::get('/presupuesto/{subsection?}', [PresupuestoController::class, 'index'])->name('proyectos.presupuesto.index');

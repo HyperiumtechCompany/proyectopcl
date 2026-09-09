@@ -15,10 +15,10 @@
 
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { useGastosGeneralesStore } from './gastosGeneralesStore';
-import { useGGFijosStore } from './ggFijosStore';
-import { useGGVariablesStore } from './ggVariablesStore';
-import { useSupervisionStore } from './supervisionStore';
+import { useGastosGeneralesStore } from '../../gastos-generales/stores/gastosGeneralesStore';
+import { useGGFijosStore } from '../../gastos-generales/stores/ggFijosStore';
+import { useGGVariablesStore } from '../../gastos-generales/stores/ggVariablesStore';
+import { useSupervisionStore } from '../../gastos-generales/stores/supervisionStore';
 
 interface ConsolidadoState {
     // ── Estado de carga ──

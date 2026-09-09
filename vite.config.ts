@@ -56,9 +56,11 @@ export default defineConfig(({ command }) => ({
             },
         }),
         tailwindcss(),
-        wayfinder({
-            formVariants: true,
-        }),
+        ...(process.env.VITEST
+            ? []
+            : [wayfinder({
+                  formVariants: true,
+              })]),
         viteStaticCopy({
             targets: [
                 {

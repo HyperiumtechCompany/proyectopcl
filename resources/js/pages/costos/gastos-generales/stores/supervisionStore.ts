@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { produce } from 'immer';
 import { create } from 'zustand';
+import { calcularParcial, decimalSeguro, redondearMoneda, sumarDecimales } from '../lib/calculos';
 
 export interface SupervisionRow {
     id?: number | null;
@@ -361,14 +362,14 @@ function reorganizeToSupervisionStructure(
         hijos: etapaIIHijos,
     };
 
-    const costoDirecto = sectionI.total + sectionII.total;
+    const costoDirecto = sumarDecimales([sectionI.total, sectionII.total]);
     // Section IV: GASTOS GENERALES - Calculated as 22.8% of Costo Directo (CD)
     const ggPercentage = 0.228; // 22.8%
-    const gastosGenerales = Number((costoDirecto * ggPercentage).toFixed(2));
-    const utilidad = Number((costoDirecto * 0.05).toFixed(2));
-    const total = costoDirecto + gastosGenerales + utilidad;
-    const igv = Number((total * 0.18).toFixed(2));
-    const totalConIgv = total + igv;
+    const gastosGenerales = redondearMoneda(decimalSeguro(costoDirecto).times(ggPercentage));
+    const utilidad = redondearMoneda(decimalSeguro(costoDirecto).times(0.05));
+    const total = sumarDecimales([costoDirecto, gastosGenerales, utilidad]);
+    const igv = redondearMoneda(decimalSeguro(total).times(0.18));
+    const totalConIgv = sumarDecimales([total, igv]);
 
     return [
         sectionI,
@@ -846,11 +847,12 @@ export const useSupervisionStore = create<SupervisionState>((set, get) => ({
     },
 
     saveToDatabase: async () => {
-        const { rows, projectId, isSaving, isDirty } = get();
+        const { projectId, isSaving, isDirty } = get();
         if (!projectId || isSaving || !isDirty) return false;
         
         // Ensure all totals/subtotals are recalculated before persisting
         get().calculateTree();
+        const { rows } = get();
 
         set({ isSaving: true });
         try {
@@ -894,12 +896,11 @@ export const useSupervisionStore = create<SupervisionState>((set, get) => ({
                             field === 'meses' ||
                             field === 'precio'
                         ) {
-                            current[idx].subtotal = Number(
-                                (
-                                    (Number(current[idx].cantidad) || 0) *
-                                    (Number(current[idx].meses) || 1) *
-                                    (Number(current[idx].precio) || 0)
-                                ).toFixed(2),
+                            current[idx].subtotal = calcularParcial(
+                                current[idx].cantidad,
+                                Number(current[idx].meses) || 1,
+                                100,
+                                current[idx].precio,
                             );
                             current[idx].total = current[idx].subtotal;
                         }
@@ -925,20 +926,18 @@ export const useSupervisionStore = create<SupervisionState>((set, get) => ({
                             const cantidad = toNumber(row.cantidad);
                             const meses = toNumber(row.meses) || 1;
                             const precio = toNumber(row.precio);
-                            row.subtotal = Number(
-                                (cantidad * meses * precio).toFixed(2),
-                            );
+                            row.subtotal = calcularParcial(cantidad, meses, 100, precio);
                             row.total = row.subtotal;
                             return row.total;
                         }
                         return toNumber(row.total);
                     }
-                    let sum = 0;
+                    const totals: number[] = [];
                     for (const hijo of row.hijos) {
                         hijo.total = calculateSectionTotal(hijo);
-                        sum += toNumber(hijo.total);
+                        totals.push(toNumber(hijo.total));
                     }
-                    row.total = Number(sum.toFixed(2));
+                    row.total = sumarDecimales(totals);
                     return row.total;
                 };
 
@@ -947,26 +946,22 @@ export const useSupervisionStore = create<SupervisionState>((set, get) => ({
                 const totalII = calculateSectionTotal(rows[1]);
 
                 // Section III: COSTO DIRECTO = Section I + Section II
-                rows[2].total = Number((totalI + totalII).toFixed(2));
+                rows[2].total = sumarDecimales([totalI, totalII]);
 
                 // Section IV: GASTOS GENERALES — driven by supervision_gg_detalle store;
                 // do NOT recalculate here, preserve whatever was set by setGastosGeneralesFromDetalle.
 
                 // Section V: UTILIDAD (5% CD) = ROUND(Section III * 5 / 100, 2)
-                rows[4].total = Number((rows[2].total * 0.05).toFixed(2));
+                rows[4].total = redondearMoneda(decimalSeguro(rows[2].total).times(0.05));
 
                 // Section VI: TOTAL = III + IV + V
-                rows[5].total = Number(
-                    (rows[2].total + rows[3].total + rows[4].total).toFixed(2),
-                );
+                rows[5].total = sumarDecimales([rows[2].total, rows[3].total, rows[4].total]);
 
                 // Section VII: IGV (18%) = VI * 0.18
-                rows[6].total = Number((rows[5].total * 0.18).toFixed(2));
+                rows[6].total = redondearMoneda(decimalSeguro(rows[5].total).times(0.18));
 
                 // Section VIII: TOTAL = VI + VII
-                rows[7].total = Number(
-                    (rows[5].total + rows[6].total).toFixed(2),
-                );
+                rows[7].total = sumarDecimales([rows[5].total, rows[6].total]);
             }),
         );
     },
@@ -977,32 +972,22 @@ export const useSupervisionStore = create<SupervisionState>((set, get) => ({
                 const rows = state.rows;
                 // Section IV index = 3
                 if (rows[3]) {
-                    rows[3].total = Number(toNumber(total).toFixed(2));
+                    rows[3].total = redondearMoneda(total);
                 }
                 // Recalculate downstream
                 // Section V: UTILIDAD (5% CD)
                 if (rows[4])
-                    rows[4].total = Number(
-                        (toNumber(rows[2]?.total) * 0.05).toFixed(2),
-                    );
+                    rows[4].total = redondearMoneda(decimalSeguro(rows[2]?.total).times(0.05));
                 // Section VI: TOTAL = III + IV + V
                 if (rows[5]) {
-                    const totalVI =
-                        toNumber(rows[2]?.total) +
-                        toNumber(rows[3]?.total) +
-                        toNumber(rows[4]?.total);
-                    rows[5].total = Number(totalVI.toFixed(2));
+                    rows[5].total = sumarDecimales([rows[2]?.total, rows[3]?.total, rows[4]?.total]);
                 }
                 // Section VII: IGV (18%)
                 if (rows[6])
-                    rows[6].total = Number(
-                        (toNumber(rows[5]?.total) * 0.18).toFixed(2),
-                    );
+                    rows[6].total = redondearMoneda(decimalSeguro(rows[5]?.total).times(0.18));
                 // Section VIII: TOTAL = VI + VII
                 if (rows[7]) {
-                    const totalVIII =
-                        toNumber(rows[5]?.total) + toNumber(rows[6]?.total);
-                    rows[7].total = Number(totalVIII.toFixed(2));
+                    rows[7].total = sumarDecimales([rows[5]?.total, rows[6]?.total]);
                 }
                 state.isDirty = true;
             }),

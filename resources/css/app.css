@@ -297,3 +297,61 @@
 /* Fix SweetAlert2 z-index for modals */
 .swal2-container { z-index: 99999 !important; }
 
+/* Gastos Generales: superficie densa y uniforme inspirada en una hoja de cálculo. */
+.gg-sheet {
+    font-variant-numeric: tabular-nums;
+}
+
+.gg-sheet table {
+    border: 1px solid #475569;
+    border-collapse: collapse;
+    background: #0f172a;
+}
+
+.gg-sheet th {
+    height: 30px;
+    border: 1px solid #475569 !important;
+    background: #1e293b !important;
+    color: #cbd5e1 !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.04em !important;
+    white-space: nowrap;
+}
+
+.gg-sheet td {
+    height: 29px;
+    border: 1px solid rgba(71, 85, 105, 0.7) !important;
+}
+
+.gg-sheet input,
+.gg-sheet select,
+.gg-sheet textarea {
+    border-radius: 0 !important;
+    font-variant-numeric: tabular-nums;
+}
+
+.gg-sheet input:focus,
+.gg-sheet select:focus,
+.gg-sheet textarea:focus {
+    outline: 2px solid #38bdf8 !important;
+    outline-offset: -2px;
+    box-shadow: none !important;
+}
+
+.gg-sheet button:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
+}
+
+.gg-sheet .rounded-xl,
+.gg-sheet .rounded-2xl {
+    border-radius: 2px !important;
+}
+
+.gg-sheet .shadow-lg,
+.gg-sheet .shadow-xl,
+.gg-sheet .shadow-2xl {
+    box-shadow: none !important;
+}
+

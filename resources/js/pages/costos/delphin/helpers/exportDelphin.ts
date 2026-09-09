@@ -6,12 +6,13 @@ import type { GanttTask } from '../../cronogramas/v2/types/task';
 import type { GanttCalendarSettings } from '../../cronogramas/v2/types/calendar';
 import {
     flattenMonomiosForExport,
+    flattenNodes,
     sumNode,
     type FormulaMonomio,
 } from './formulaPolinomicaTree';
 
 // ── Tipos públicos ────────────────────────────────────────────────────────────
-export type DelphinExportContent = 'budget_only' | 'budget_gantt' | 'gantt_only' | 'formula_polinomica';
+export type DelphinExportContent = 'budget_only' | 'budget_gantt' | 'gantt_only' | 'formula_polinomica' | 'formula_polinomica_agrupamiento';
 export type DelphinExportFormat = 'excel' | 'pdf' | 'msp';
 
 // backward-compat alias (modal anterior usaba DelphinExportType)
@@ -19,29 +20,8 @@ export type DelphinExportType = DelphinExportContent;
 
 type MonomioExport = FormulaMonomio;
 
-// ── Fórmula Polinómica ──────────────────────────────────────────────────────
-async function exportFormulaPolinomicaExcel(
-    projectData: any,
-    formulaMonomios: any,
-    rows: DelphinRow[],
-    projectName: string,
-) {
-    const { exportDelphinExcel } = await import('./exportDelphinExcel');
-
-    await exportDelphinExcel(
-        'formula_polinomica',
-        rows,
-        projectName,
-        projectData,
-        [],
-        formulaMonomios
-    );
-}
-
 // ── Construir formulaData desde monomios ──────────────────────────────────────
 function buildFormulaData(monomios: any[]): any {
-    
-
     if (!monomios || monomios.length === 0) {
         return {
             formula: 'K = No hay monomios configurados',
@@ -87,6 +67,75 @@ function buildFormulaData(monomios: any[]): any {
     return result;
 }
 
+// ── Tipos de agrupamiento ─────────────────────────────────────────────────────
+export interface AgrupamientoRow {
+    codigo: string;
+    descripcion: string;
+    nomenclatura: string;
+    coeficiente: number;
+    porcentaje: number;
+    agrupamiento: string;
+}
+
+export interface AgrupamientoData {
+    rows: AgrupamientoRow[];
+    totalCoeficiente: number;
+    hasData: boolean;
+}
+
+// ── Construir agrupamientoData desde monomios ─────────────────────────────────
+function buildAgrupamientoData(monomios: FormulaMonomio[]): AgrupamientoData {
+    if (!monomios || monomios.length === 0) {
+        return { rows: [], totalCoeficiente: 0, hasData: false };
+    }
+
+    const totalK = monomios.reduce((s, m) => s + sumNode(m.root), 0);
+    const rowMap = new Map<string, AgrupamientoRow>();
+
+    monomios.forEach((monomio) => {
+        const allNodes = flattenNodes(monomio.root);
+        const leafNodes = allNodes.filter((n) => n.children.length === 0);
+        const siblingCodes = leafNodes.map((n) => n.code);
+
+        leafNodes.forEach((leaf) => {
+            const existing = rowMap.get(leaf.code);
+            const coef = leaf.coefDefinido;
+
+            if (existing) {
+                existing.coeficiente += coef;
+                existing.porcentaje += totalK > 0 ? (coef / totalK) * 100 : 0;
+                if (monomio.nomenclatura && !existing.nomenclatura.includes(monomio.nomenclatura)) {
+                    existing.nomenclatura += `+${monomio.nomenclatura}`;
+                }
+            } else {
+                // Agrupamiento: códigos de los demás índices en el mismo monomio
+                const agrupamiento = leafNodes.length > 1
+                    ? siblingCodes.filter((c) => c !== leaf.code).join('+')
+                    : '';
+
+                rowMap.set(leaf.code, {
+                    codigo: leaf.code,
+                    descripcion: leaf.descripcion,
+                    nomenclatura: monomio.nomenclatura,
+                    coeficiente: coef,
+                    porcentaje: totalK > 0 ? (coef / totalK) * 100 : 0,
+                    agrupamiento,
+                });
+            }
+        });
+    });
+
+    // Ordenar por código INEI numérico
+    const rows = Array.from(rowMap.values()).sort((a, b) => {
+        const na = parseInt(a.codigo, 10);
+        const nb = parseInt(b.codigo, 10);
+        if (!isNaN(na) && !isNaN(nb)) return na - nb;
+        return a.codigo.localeCompare(b.codigo);
+    });
+
+    return { rows, totalCoeficiente: totalK, hasData: rows.length > 0 };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // exportDelphin - FUNCIÓN PRINCIPAL 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -128,6 +177,19 @@ export async function exportDelphin(
             );
         } else {
             throw new Error(`Formato ${format} no soportado para Fórmula Polinómica`);
+        }
+    }
+
+    // ── FÓRMULA POLINÓMICA AGRUPAMIENTO ────────────────────────────────────
+    if (content === 'formula_polinomica_agrupamiento') {
+        const agrupamientoData = buildAgrupamientoData(formulaMonomios);
+
+        if (format === 'excel') {
+            return exportDelphinExcel(content, rows, projectName, projectData, selectedSpecialties, agrupamientoData);
+        } else if (format === 'pdf') {
+            return exportDelphinPdf(content, rows, projectName, projectData, selectedSpecialties, agrupamientoData);
+        } else {
+            throw new Error(`Formato ${format} no soportado para Agrupamiento`);
         }
     }
 

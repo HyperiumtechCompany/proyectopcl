@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRealtimeSync, type RemoteUpdate } from '@/hooks/useRealtimeSync';
 import AppLayout from '@/layouts/app-layout';
 import { exportAcCalculationToExcel } from '@/lib/ac-export';
-import * as acCalculationRoutes from '@/routes/ac-calculation';
+import * as acCalculationRoutes from '@/routes/ac-calculation/index';
 import type { BreadcrumbItem } from '@/types';
 
 // --- Types ---

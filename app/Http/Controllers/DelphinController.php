@@ -149,6 +149,37 @@ class DelphinController extends Controller
             : $gastosGeneralesDetalle;
 
         $utilidad = $costoDirecto * ($utilidadPorcentaje / 100);
+        $subtotalBase = $costoDirecto + $gastosGenerales + $utilidad;
+
+        // --- Cascada extendida ---
+        $igvPorcentaje = (float) ($snapshot?->igv_porcentaje ?? 18);
+        $igvComponenteI = $subtotalBase * ($igvPorcentaje / 100);
+        $subTotalComponenteI = $subtotalBase + $igvComponenteI;
+
+        $componenteIIMonto = (float) ($snapshot?->componente_ii_monto ?? 0);
+        $igvComponenteII = $componenteIIMonto * ($igvPorcentaje / 100);
+        $subTotalComponenteII = $componenteIIMonto + $igvComponenteII;
+
+        $extrasJson = json_decode($snapshot?->componentes_extra_json ?? '[]', true);
+        $extrasTotal = 0;
+        if (is_array($extrasJson)) {
+            foreach ($extrasJson as $ext) {
+                $m = (float) ($ext['monto'] ?? 0);
+                $extrasTotal += $m + ($m * ($igvPorcentaje / 100));
+            }
+        }
+
+        $totalComponents = $subTotalComponenteI + $subTotalComponenteII + $extrasTotal;
+
+        $supervisionTotal = (float) ($snapshot?->total_supervision ?? 0);
+        $supervisionPorcentaje = $totalComponents > 0 ? round(($supervisionTotal / $totalComponents) * 100, 4) : 0;
+
+        $totalConsolidado = $totalComponents + $supervisionTotal;
+
+        $ccPorcentaje = (float) ($snapshot?->control_concurrente_porcentaje ?? 0.5);
+        $ccMonto = $totalConsolidado * ($ccPorcentaje / 100);
+
+        $totalInversion = $totalConsolidado + $ccMonto;
 
         return [
             'costoDirecto' => $costoDirecto,
@@ -156,7 +187,21 @@ class DelphinController extends Controller
             'gastosGeneralesPorcentaje' => $costoDirecto > 0 ? round(($gastosGenerales / $costoDirecto) * 100, 4) : 0,
             'utilidad' => $utilidad,
             'utilidadPorcentaje' => $utilidadPorcentaje,
-            'total' => $costoDirecto + $gastosGenerales + $utilidad,
+            'total' => $subtotalBase,
+            // Campos extendidos
+            'igv' => $igvComponenteI,
+            'igvPorcentaje' => $igvPorcentaje,
+            'subTotalComponenteI' => $subTotalComponenteI,
+            'componenteIIMonto' => $componenteIIMonto,
+            'subTotalComponenteII' => $subTotalComponenteII,
+            'extrasTotal' => $extrasTotal,
+            'totalComponents' => $totalComponents,
+            'supervision' => $supervisionTotal,
+            'supervisionPorcentaje' => $supervisionPorcentaje,
+            'totalConsolidado' => $totalConsolidado,
+            'controlConcurrente' => $ccMonto,
+            'controlConcurrentePorcentaje' => $ccPorcentaje,
+            'totalInversion' => $totalInversion,
         ];
     }
 

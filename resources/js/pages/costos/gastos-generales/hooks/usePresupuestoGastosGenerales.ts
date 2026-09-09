@@ -1,6 +1,6 @@
 // hooks/usePresupuestoGastosGenerales.ts
 import axios from 'axios';
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useGastosGeneralesStore } from '../stores/gastosGeneralesStore';
 
 interface UsePresupuestoGastosGeneralesProps {
@@ -12,17 +12,13 @@ export function usePresupuestoGastosGenerales({
     projectId,
     subsection,
 }: UsePresupuestoGastosGeneralesProps) {
+    const loadedProjectId = useRef<number | null>(null);
     const { rows, loading, setRows, setLoading, setDirty } = useGastosGeneralesStore();
 
-    const isGGSubsection = [
-        'gastos_generales', 
-        'gastos_fijos', 
-        'supervision', 
-        'control_concurrente'
-    ].includes(subsection);
+    const isGGSubsection = subsection === 'control_concurrente';
 
     useEffect(() => {
-        if (!isGGSubsection) {
+        if (!isGGSubsection || loadedProjectId.current === projectId) {
             return;
         }
 
@@ -34,6 +30,7 @@ export function usePresupuestoGastosGenerales({
                 const response = await axios.get(endpoint);
                 if (response.data?.success) {
                     setRows(response.data.rows || []);
+                    loadedProjectId.current = projectId;
                 } else {
                     setRows([]);
                 }
@@ -49,11 +46,9 @@ export function usePresupuestoGastosGenerales({
     }, [projectId, subsection, setRows, setLoading, isGGSubsection]);
 
     const saveGastoGeneral = useCallback(async (data: any) => {
-        if (!isGGSubsection) return { success: false, error: 'Invalid subsection' };
-        
         try {
             const response = await axios.patch(
-                `/costos/proyectos/${projectId}/presupuesto/${subsection}`,
+                `/costos/proyectos/${projectId}/presupuesto/control_concurrente`,
                 { rows: data },
             );
             

@@ -25,22 +25,11 @@ import type { BreadcrumbItem } from '@/types';
 import type { PresupuestoSubsection } from '@/types/presupuestos';
 import { AcuPanel } from './components/AcuPanel';
 import { BudgetTree } from './components/BudgetTree';
-import { ConsolidadoPanel } from './components/ConsolidadoPanel';
-import { ControlConcurrentePanel } from './components/controlconcurrentePanel';
 import { FormulaPolinomica } from './components/formula_polinomica';
-import { GGFijosDesagregadoPanel } from './components/GGFijosDesagregadoPanel';
-import { GGFijosPanel } from './components/GGFijosPanel';
-import { GGVariablesPanel } from './components/GGVariablesPanel';
 import { ImportMetradosModal } from './components/ImportMetradosModal';
 import { InsumosPanel } from './components/InsumosPanel';
-import { RemuneracionesPanel } from './components/RemuneracionesPanel';
 import { SubsectionNav } from './components/SubsectionNav';
-import { SupervisionPanel } from './components/SupervisionPanel';
-import { useGGFijos } from './hooks/useGGFijos';
-import { useGGVariables } from './hooks/useGGVariables';
 import { usePresupuestoAcu } from './hooks/usePresupuestoAcu';
-import { usePresupuestoGastosGenerales } from './hooks/usePresupuestoGastosGenerales';
-import { usePresupuestoRemuneraciones } from './hooks/usePresupuestoRemuneraciones';
 import { useBudgetStore } from './stores/budgetStore';
 import { useProjectParamsStore } from './stores/projectParamsStore';
 
@@ -316,91 +305,16 @@ export default function Index() {
         }
     }, [localSaveAcu, updateCell, setDirty]);
 
-    const { remuneracionesRows, remuneracionesLoading, saveRemuneracion } =
-        usePresupuestoRemuneraciones({
-            projectId: project.id,
-            subsection,
-        });
-
-    const { ggFijosNodes, ggFijosLoading, saveGGFijos } = useGGFijos({
-        projectId: project.id,
-        subsection,
-    });
-
-    const { ggVariablesNodes, ggVariablesLoading, saveGGVariables } = useGGVariables({
-        projectId: project.id,
-        subsection,
-    });
-
-    const {
-        gastosGeneralesRows,
-        gastosGeneralesLoading,
-        saveGastoGeneral,
-    } = usePresupuestoGastosGenerales({
-        projectId: project.id,
-        subsection,
-    });
-
-    const handleSaveGGFijos = async (data: any) => {
-        return await saveGGFijos(data);
-    };
-
-    const handleSaveGGVariables = async (data: any) => {
-        return await saveGGVariables(data);
-    };
-
-    const handleSaveRemuneracion = async (data: any) => {
-        return await saveRemuneracion(data);
-    };
-
-    const handleSaveControlConcurrente = async (data: any) => {
-        return await saveGastoGeneral(data);
-    };
-
     // --- Navigation Groups ---
     const mainTabs = [
         { key: 'general', label: 'P. General', icon: Building2 },
-        {
-            key: 'gg_group',
-            label: 'Gastos Gen.',
-            icon: Wallet,
-            subTabs: [
-                { key: 'consolidado', label: 'Consolidado' },
-                { key: 'gastos_generales', label: 'Gastos Generales' },
-                { key: 'gastos_fijos', label: 'G.G. Fijos' },
-                { key: 'supervision', label: 'Supervisión' },
-                { key: 'control_concurrente', label: 'Control Concurrente' },
-            ],
-        },
-        { key: 'remuneraciones', label: 'Remuneraciones', icon: Users },
         { key: 'insumos', label: 'Insumos', icon: Settings2 },
         { key: 'f_polinomica', label: 'Formula Polinomica', icon: Calculator },
     ];
 
-    const isGGSubsection = [
-        'consolidado',
-        'gastos_generales',
-        'gastos_fijos',
-        'supervision',
-        'control_concurrente',
-    ].includes(subsection);
-    const activeMainTab = isGGSubsection
-        ? 'gg_group'
-        : subsection === 'indices'
-            ? 'insumos'
-            : subsection;
+    const activeMainTab = subsection === 'indices' ? 'insumos' : subsection;
 
     const handleMainTabChange = (key: string) => {
-        if (key === 'gg_group') {
-            router.get(
-                `/costos/proyectos/${project.id}/presupuesto/consolidado`,
-            );
-        } else {
-            router.get(`/costos/proyectos/${project.id}/presupuesto/${key}`);
-        }
-    };
-
-    const handleSubTabChange = (key: string) => {
         router.get(`/costos/proyectos/${project.id}/presupuesto/${key}`);
     };
 
@@ -437,29 +351,7 @@ export default function Index() {
 
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
                     {/* --- Sub-Tabs Secondary Layer --- */}
-                    {isGGSubsection && (
-                        <div className="flex items-center gap-8 border-b border-slate-700/50 bg-slate-800/40 px-6 py-2.5 backdrop-blur-sm">
-                            {mainTabs
-                                .find((t) => t.key === 'gg_group')
-                                ?.subTabs?.map((sub) => (
-                                    <button
-                                        key={sub.key}
-                                        onClick={() =>
-                                            handleSubTabChange(sub.key)
-                                        }
-                                        className={`relative text-[10px] font-bold tracking-[0.2em] uppercase transition-all ${subsection === sub.key
-                                            ? 'text-amber-400'
-                                            : 'text-slate-500 hover:text-slate-300'
-                                            }`}
-                                    >
-                                        {sub.label}
-                                        {subsection === sub.key && (
-                                            <span className="absolute right-0 -bottom-[10px] left-0 h-0.5 bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.5)]"></span>
-                                        )}
-                                    </button>
-                                ))}
-                        </div>
-                    )}
+
 
                     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                         {subsection === 'general' || subsection === 'acus' ? (
@@ -609,56 +501,6 @@ export default function Index() {
                                     />
                                 </Panel>
                             </Group>
-                        ) : subsection === 'remuneraciones' ? (
-                            <RemuneracionesPanel
-                                loading={remuneracionesLoading}
-                                rows={remuneracionesRows}
-                                onSaveRemuneracion={handleSaveRemuneracion}
-                                projectId={project.id}
-                            />
-                        ) : subsection === 'gastos_generales' ? (
-                            <div className="flex min-h-0 flex-1 flex-col overflow-auto gap-4 p-4">
-                                {/* Gastos Generales Fijos - Listado 1 */}
-                                <div className="flex min-h-[300px] flex-col rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden">
-                                    <div className="flex-1 overflow-auto">
-                                        <GGFijosPanel
-                                            loading={ggFijosLoading}
-                                            nodes={ggFijosNodes}
-                                            onSave={handleSaveGGFijos}
-                                            projectId={project.id}
-                                            totalBudget={totalBudget}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Gastos Generales Variables - Listado 2 */}
-                                <div className="flex min-h-[300px] flex-col rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden">
-                                    <div className="flex-1 overflow-auto">
-                                        <GGVariablesPanel
-                                            loading={ggVariablesLoading}
-                                            nodes={ggVariablesNodes}
-                                            onSave={handleSaveGGVariables}
-                                            projectId={project.id}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        ) : subsection === 'gastos_fijos' ? (
-                            //gastos fijos desagregados (parámetros vienen del store)
-                            <GGFijosDesagregadoPanel
-                                projectId={project.id}
-                            />
-                        ) : subsection === 'supervision' ? (
-                            <SupervisionPanel projectId={project.id} />
-                        ) : subsection === 'control_concurrente' ? (
-                            <ControlConcurrentePanel
-                                loading={gastosGeneralesLoading}
-                                rows={gastosGeneralesRows}
-                                onSaveGastoGeneral={handleSaveControlConcurrente}
-                                projectId={project.id}
-                            />
-                        ) : subsection === 'consolidado' ? (
-                            <ConsolidadoPanel projectId={project.id} />
                         ) : subsection === 'insumos' ? (
                             <InsumosPanel projectId={project.id} />
                         ) : subsection === 'f_polinomica' ? (

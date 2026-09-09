@@ -41,11 +41,12 @@ interface GGFijosState {
 }
 
 import axios from 'axios';
-import { GGVARIABLES_TEMPLATES } from '../utils/ggTemplates';
+import { GGVARIABLES_TEMPLATES } from '../helpers/ggTemplates';
+import { multiplicarDecimales, sumarDecimales } from '../lib/calculos';
 
 function calcParcial(node: GGFijoNode): number {
     if (node.tipo_fila !== 'detalle') return 0;
-    return Number(node.cantidad || 0) * Number(node.costo_unitario || 0);
+    return multiplicarDecimales([node.cantidad, node.costo_unitario]);
 }
 
 export const useGGFijosStore = create<GGFijosState>((set, get) => ({
@@ -198,9 +199,7 @@ export const useGGFijosStore = create<GGFijosState>((set, get) => ({
 
     getTotal: () => {
         const { nodes } = get();
-        return nodes
-            .filter(n => n.tipo_fila === 'detalle')
-            .reduce((acc, n) => acc + (Number(n.parcial) || 0), 0);
+        return sumarDecimales(nodes.filter(n => n.tipo_fila === 'detalle').map(n => n.parcial));
     },
 
     getSectionTotals: () => {
@@ -222,7 +221,7 @@ export const useGGFijosStore = create<GGFijosState>((set, get) => ({
                 const grupo = nodes.find(n => n.id === node.parent_id);
                 const seccion = grupo ? nodes.find(n => n.id === grupo.parent_id) : null;
                 if (seccion?.id !== undefined) {
-                    totals[String(seccion.id)] = (totals[String(seccion.id)] || 0) + (Number(node.parcial) || 0);
+                    totals[String(seccion.id)] = sumarDecimales([totals[String(seccion.id)], node.parcial]);
                 }
             }
         });

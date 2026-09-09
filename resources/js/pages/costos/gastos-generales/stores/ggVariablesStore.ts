@@ -3,8 +3,9 @@ import { produce } from 'immer';
 import { create } from 'zustand';
 import type { TipoFilaVariable, GGVariableNode } from './ggTypes';
 export type { GGVariableNode } from './ggTypes';
-import { useProjectParamsStore } from './projectParamsStore';
+import { useProjectParamsStore } from '../../presupuesto/stores/projectParamsStore';
 import { useRemuneracionesStore } from './remuneracionesStore';
+import { calcularParcial, decimalSeguro, factorParticipacion, redondearMoneda, sumarDecimales } from '../lib/calculos';
 
 
 interface GGVariablesState {
@@ -30,12 +31,7 @@ interface GGVariablesState {
 
 function calcParcial(node: GGVariableNode): number {
     if (node.tipo_fila !== 'detalle') return 0;
-    return (
-        Number(node.cantidad_descripcion || 0) *
-        Number(node.cantidad_tiempo || 0) *
-        (Number(node.participacion || 0) / 100) *
-        Number(node.precio || 0)
-    );
+    return calcularParcial(node.cantidad_descripcion, node.cantidad_tiempo, node.participacion, node.precio);
 }
 
 // Genera un hash simple para detectar cambios en las remuneraciones
@@ -125,9 +121,7 @@ export const useGGVariablesStore = create<GGVariablesState>((set, get) => ({
 
     getTotal: () => {
         const { nodes } = get();
-        return nodes
-            .filter(n => n.tipo_fila === 'detalle')
-            .reduce((acc, n) => acc + (Number(n.parcial) || 0), 0);
+        return sumarDecimales(nodes.filter(n => n.tipo_fila === 'detalle').map(n => n.parcial));
     },
 
     getSectionTotals: () => {
@@ -156,7 +150,7 @@ export const useGGVariablesStore = create<GGVariablesState>((set, get) => ({
                 }
 
                 if (seccion?.id !== undefined) {
-                    totals[String(seccion.id)] = (totals[String(seccion.id)] || 0) + (Number(node.parcial) || 0);
+                    totals[String(seccion.id)] = sumarDecimales([totals[String(seccion.id)], node.parcial]);
                 }
             }
         });
@@ -403,7 +397,7 @@ export const useGGVariablesStore = create<GGVariablesState>((set, get) => ({
                     unidad: t.unidad || (t.tipo_fila === 'detalle' ? 'mes' : ''),
                     cantidad_descripcion: t.cantidad_descripcion || 0,
                     cantidad_tiempo: t.cantidad_tiempo || 0,
-                    participacion: t.participacion || 100,
+                    participacion: t.participacion ?? 100,
                     precio: t.precio || 0,
                     parcial: 0, 
                     item_order: state.nodes.length + idx,
@@ -426,7 +420,7 @@ export const useGGVariablesStore = create<GGVariablesState>((set, get) => ({
     recalculateBenefits: () => {
         const projectParamsStore = useProjectParamsStore.getState();
         const duracionMeses = projectParamsStore.getDuracionMeses();
-        const globalRMV = projectParamsStore.getRmv();
+        const params = projectParamsStore.params;
 
         set(produce((state: GGVariablesState) => {
             // 1. Identificar todos los sueldos (filas detalle en grupos de "Sueldos" o seccion 2.01)
@@ -442,21 +436,25 @@ export const useGGVariablesStore = create<GGVariablesState>((set, get) => ({
 
             // 2. Calcular montos base del proyecto (PU * Meses * Cant * Part%)
             // Para beneficios usualmente se usa el PU * meses de cada cargo
-            const totalSueldoBasicoProyecto = sueldosNodes.reduce((acc, n) => {
-                const factor = (n.participacion || 100) / 100;
-                return acc + (n.precio * factor * n.cantidad_descripcion * n.cantidad_tiempo);
-            }, 0);
+            const totalSueldoBasicoProyecto = sumarDecimales(sueldosNodes.map(n =>
+                decimalSeguro(n.precio)
+                    .times(factorParticipacion(n.participacion))
+                    .times(n.cantidad_descripcion)
+                    .times(n.cantidad_tiempo),
+            ));
 
             // Suma de count de personas para AF (ajustado por participacion si es necesario, pero usualmente es por cabeza)
-            const totalPersonas = sueldosNodes.reduce((acc, n) => acc + (n.cantidad_descripcion || 1), 0);
+            const totalPersonas = sumarDecimales(sueldosNodes.map((node) => node.cantidad_descripcion || 1), 4);
             
             // 3. Buscar las filas de beneficios sociales y actualizar
             state.nodes.forEach(node => {
                 if (node.tipo_fila !== 'detalle') return;
                 
                 const desc = node.descripcion.toLowerCase();
-                const af_unit = globalRMV * 0.10; // 10% de RMV
-                const totalAfProyecto = af_unit * totalPersonas * duracionMeses;
+                const afUnit = params?.asignacion_familiar_factor ?? 46;
+                const totalAfProyecto = redondearMoneda(decimalSeguro(afUnit).times(totalPersonas).times(duracionMeses));
+                const baseBeneficios = decimalSeguro(totalSueldoBasicoProyecto).plus(totalAfProyecto);
+                const gratificacion = baseBeneficios.times(params?.gratificacion_porcentaje ?? 8.3333).dividedBy(100);
 
                 if (desc.includes('asignación familiar')) {
                     node.precio = totalAfProyecto;
@@ -465,27 +463,26 @@ export const useGGVariablesStore = create<GGVariablesState>((set, get) => ({
                     node.parcial = node.precio;
                 } else if (desc.includes('essalud')) {
                     // ESSALUD 9% del (Sueldo + AF)
-                    node.precio = (totalSueldoBasicoProyecto + totalAfProyecto) * 0.09;
+                    node.precio = redondearMoneda(baseBeneficios.times(params?.essalud_porcentaje ?? 9).dividedBy(100));
                     node.cantidad_descripcion = 1;
                     node.cantidad_tiempo = 1;
                     node.parcial = node.precio;
                 } else if (desc.includes('c.t.s')) {
                     // CTS: 8.3333% de (Sueldo + AF + 1/6 gratif)
                     // Para simplificar: (sueldo + af + gratif/6) * 1/12 (aprox 8.33%)
-                    const gratifAprox = totalSueldoBasicoProyecto / 6;
-                    node.precio = (totalSueldoBasicoProyecto + totalAfProyecto + (gratifAprox * 2 / 6)) * 0.083333;
+                    node.precio = redondearMoneda(baseBeneficios.plus(gratificacion).times(params?.cts_porcentaje ?? 8.3333).dividedBy(100));
                     node.cantidad_descripcion = 1;
                     node.cantidad_tiempo = 1;
                     node.parcial = node.precio;
                 } else if (desc.includes('vacaciones')) {
                     // 1/12 de (Sueldo + AF)
-                    node.precio = (totalSueldoBasicoProyecto + totalAfProyecto) / 12;
+                    node.precio = redondearMoneda(baseBeneficios.times(params?.vacaciones_porcentaje ?? 8.3333).dividedBy(100));
                     node.cantidad_descripcion = 1;
                     node.cantidad_tiempo = 1;
                     node.parcial = node.precio;
                 } else if (desc.includes('gratificación')) {
                     // 1/6 de Sueldo x 2 (Julio y Diciembre)
-                    node.precio = (totalSueldoBasicoProyecto / 6) * 2;
+                    node.precio = redondearMoneda(gratificacion);
                     node.cantidad_descripcion = 1;
                     node.cantidad_tiempo = 1;
                     node.parcial = node.precio;

@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import type { GGFijoNode} from '../stores/ggFijosStore';
 import { useGGFijosStore, TipoFilaFijo } from '../stores/ggFijosStore';
 import { PlazoDisplay } from './PlazoDisplay';
+import { calcularSencico, formatoMoneda, sumarDecimales } from '../lib/calculos';
+import { useProjectParamsStore } from '../../presupuesto/stores/projectParamsStore';
 
 interface GGFijosPanelProps {
     loading: boolean;
@@ -13,13 +15,13 @@ interface GGFijosPanelProps {
     totalBudget?: number;
 }
 
-const fmt = (n: number) => new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+const fmt = (n: number) => formatoMoneda.format(n);
 
 export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 0 }: GGFijosPanelProps) {
     const { updateNode, addNode, removeNode, getTotal, isDirty, applyTemplate, syncFromGlobals } = useGGFijosStore();
     const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
-    const [isSaving, setIsSaving] = useState(false);
+    const sencicoPorcentaje = useProjectParamsStore((state) => state.params?.sencico_porcentaje ?? 0.2);
 
     const isActive = true; // For the sync effect
     const total = getTotal();
@@ -37,24 +39,6 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
             syncFromGlobals(projectId);
         }
     }, [loading, projectId, isActive, syncFromGlobals]);
-
-    // 3. Auto-save with debounce
-    React.useEffect(() => {
-        if (!isDirty || isSaving || loading) return;
-
-        const timer = setTimeout(async () => {
-            setIsSaving(true);
-            try {
-                await onSave(nodes);
-            } catch (err) {
-                console.error("Auto-save failed", err);
-            } finally {
-                setIsSaving(false);
-            }
-        }, 3000); // 3 seconds debounce
-
-        return () => clearTimeout(timer);
-    }, [isDirty, nodes, onSave, isSaving, loading]);
 
     const toggleSection = (id: number) => {
         setExpandedSections(prev => {
@@ -86,19 +70,19 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
     React.useEffect(() => {
         const sencicoIndex = nodes.findIndex(n => n.descripcion.toLowerCase().includes('sencico'));
         if (sencicoIndex !== -1 && totalBudget > 0) {
-            const calculatedSencico = totalBudget * 0.002;
+            const calculatedSencico = calcularSencico(totalBudget, sencicoPorcentaje);
             if (nodes[sencicoIndex].costo_unitario !== calculatedSencico) {
                 updateNode(sencicoIndex, 'costo_unitario', calculatedSencico);
             }
         }
-    }, [totalBudget, nodes.length]);
+    }, [nodes, sencicoPorcentaje, totalBudget, updateNode]);
 
     // Early return AFTER all hooks are declared (including useEffect)
     if (loading) {
         return (
             <div className="flex h-full items-center justify-center bg-slate-900/50">
-                <div className="flex flex-col items-center gap-3">
-                    <Loader2 className="h-10 w-10 animate-spin text-sky-500" />
+                <div className="flex flex-col items-center gap-1.5">
+                    <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
                     <span className="text-xs font-medium tracking-widest text-slate-400 uppercase">Cargando G.G. Fijos...</span>
                 </div>
             </div>
@@ -108,21 +92,21 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
     return (
         <div className="flex h-full flex-col bg-slate-900" onClick={() => setContextMenu(null)}>
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800/80 px-4 py-3">
+            <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800/80 px-2 py-1">
                 <div>
-                    <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest text-slate-200 uppercase">
+                    <h2 className="flex items-center gap-1 text-xs font-bold tracking-widest text-slate-200 uppercase">
                         <span className="h-2.5 w-2.5 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.6)]" />
                         01) Gastos Generales Fijos
                     </h2>
-                    <p className="mt-0.5 text-[10px] font-medium text-slate-500 uppercase tracking-tight">
+                    <p className="mt-0.5 text-xs font-medium text-slate-500 uppercase tracking-tight">
                         Fianzas · Seguros · Impuestos y tributos
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
                     <PlazoDisplay variant="compact" color="sky" />
                     <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase">Total G.G. Fijos</span>
-                        <span className="font-mono text-sm font-bold text-sky-400">S/. {fmt(total)}</span>
+                        <span className="text-xs font-semibold text-slate-500 uppercase">Total G.G. Fijos</span>
+                        <span className="font-mono text-xs font-bold text-sky-400">S/. {fmt(total)}</span>
                     </div>
                 </div>
             </div>
@@ -130,15 +114,15 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
             {/* Table */}
             <div className="flex-1 overflow-auto custom-scrollbar">
                 <table className="w-full border-collapse text-left text-xs">
-                    <thead className="sticky top-0 z-10 bg-slate-800/95 text-[10px] font-bold tracking-wider text-slate-400 uppercase backdrop-blur-md">
+                    <thead className="sticky top-0 z-10 bg-slate-800/95 text-xs font-bold tracking-wider text-slate-400 uppercase backdrop-blur-md">
                         <tr>
-                            <th className="border-b border-slate-700 p-2 w-24">ÍTEM</th>
-                            <th className="border-b border-slate-700 p-2">DESCRIPCIÓN</th>
-                            <th className="border-b border-slate-700 p-2 w-20 text-center">UNIDAD</th>
-                            <th className="border-b border-slate-700 p-2 w-20 text-right">CANT</th>
-                            <th className="border-b border-slate-700 p-2 w-28 text-right">COSTO UNIT.</th>
-                            <th className="border-b border-slate-700 p-2 w-28 text-right bg-sky-950/40">PARCIAL</th>
-                            <th className="border-b border-slate-700 p-2 w-10 text-center" />
+                            <th className="border-b border-slate-700 p-1 w-24">ÍTEM</th>
+                            <th className="border-b border-slate-700 p-1">DESCRIPCIÓN</th>
+                            <th className="border-b border-slate-700 p-1 w-20 text-center">UNIDAD</th>
+                            <th className="border-b border-slate-700 p-1 w-20 text-right">CANT</th>
+                            <th className="border-b border-slate-700 p-1 w-28 text-right">COSTO UNIT.</th>
+                            <th className="border-b border-slate-700 p-1 w-28 text-right bg-sky-950/40">PARCIAL</th>
+                            <th className="border-b border-slate-700 p-1 w-10 text-center" />
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/30">
@@ -169,7 +153,7 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
                                             type="text"
                                             value={node.item_codigo ?? ''}
                                             onChange={e => updateNode(index, 'item_codigo', e.target.value)}
-                                            className={`w-full border-none bg-transparent p-1 font-mono text-[11px] ${getTextColor(node)} focus:bg-slate-700/50 focus:outline-none rounded`}
+                                            className={`w-full border-none bg-transparent p-1 font-mono text-xs ${getTextColor(node)} focus:bg-slate-700/50 focus:outline-none rounded`}
                                             placeholder="01.01.00"
                                         />
                                     </div>
@@ -181,7 +165,7 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
                                         type="text"
                                         value={node.descripcion ?? ''}
                                         onChange={e => updateNode(index, 'descripcion', e.target.value)}
-                                        className={`w-full border-none bg-transparent p-1.5 ${getTextColor(node)} ${node.tipo_fila !== 'detalle' ? 'font-semibold uppercase text-[11px] tracking-wide' : 'text-[11px]'} focus:bg-slate-700/50 focus:outline-none rounded`}
+                                        className={`w-full border-none bg-transparent p-1.5 ${getTextColor(node)} ${node.tipo_fila !== 'detalle' ? 'font-semibold uppercase text-xs tracking-wide' : 'text-xs'} focus:bg-slate-700/50 focus:outline-none rounded`}
                                         placeholder={node.tipo_fila === 'seccion' ? 'Nombre de sección...' : node.tipo_fila === 'grupo' ? 'Nombre de grupo...' : 'Descripción del ítem...'}
                                     />
                                 </td>
@@ -193,7 +177,7 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
                                             type="text"
                                             value={node.unidad ?? ''}
                                             onChange={e => updateNode(index, 'unidad', e.target.value)}
-                                            className="w-full border-none bg-transparent p-1 text-center text-slate-400 focus:bg-slate-700/50 focus:outline-none rounded text-[11px]"
+                                            className="w-full border-none bg-transparent p-1 text-center text-slate-400 focus:bg-slate-700/50 focus:outline-none rounded text-xs"
                                         />
                                     ) : null}
                                 </td>
@@ -203,9 +187,11 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
                                     {node.tipo_fila === 'detalle' ? (
                                         <input
                                             type="number"
+                                            min="0"
+                                            step="any"
                                             value={node.cantidad ?? ''}
                                             onChange={e => updateNode(index, 'cantidad', parseFloat(e.target.value) || 0)}
-                                            className="w-full border-none bg-transparent p-1 text-right font-mono text-slate-300 focus:bg-slate-700/50 focus:outline-none rounded text-[11px]"
+                                            className="w-full border-none bg-transparent p-1 text-right font-mono text-slate-300 focus:bg-slate-700/50 focus:outline-none rounded text-xs"
                                         />
                                     ) : null}
                                 </td>
@@ -215,30 +201,32 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
                                     {node.tipo_fila === 'detalle' ? (
                                         <input
                                             type="number"
+                                            min="0"
+                                            step="0.01"
                                             value={node.costo_unitario ?? ''}
                                             onChange={e => updateNode(index, 'costo_unitario', parseFloat(e.target.value) || 0)}
-                                            className="w-full border-none bg-transparent p-1 text-right font-mono text-sky-400/80 focus:bg-slate-700/50 focus:outline-none rounded text-[11px]"
+                                            className="w-full border-none bg-transparent p-1 text-right font-mono text-sky-400/80 focus:bg-slate-700/50 focus:outline-none rounded text-xs"
                                         />
                                     ) : null}
                                 </td>
 
                                 {/* PARCIAL */}
-                                <td className="p-2 text-right font-mono font-semibold bg-sky-950/20">
+                                <td className="p-1 text-right font-mono font-semibold bg-sky-950/20">
                                     {node.tipo_fila === 'detalle' ? (
-                                        <span className="text-slate-200 text-[11px]">{fmt(node.parcial)}</span>
+                                        <span className="text-slate-200 text-xs">{fmt(node.parcial)}</span>
                                     ) : node.tipo_fila === 'grupo' ? (
-                                        <span className="text-sky-300/60 text-[10px] italic">sub</span>
+                                        <span className="text-sky-300/60 text-xs italic">sub</span>
                                     ) : (
                                         <span className="text-sky-400 text-xs font-bold">
                                             {/* Section total */}
                                             {fmt(
-                                                nodes
+                                                sumarDecimales(nodes
                                                     .filter(n => n.tipo_fila === 'detalle')
                                                     .filter(n => {
                                                         const grupo = nodes.find(g => g.id === n.parent_id);
                                                         return grupo?.parent_id === node.id;
                                                     })
-                                                    .reduce((sum, n) => sum + (Number(n.parcial) || 0), 0)
+                                                    .map(n => n.parcial))
                                             )}
                                         </span>
                                     )}
@@ -266,10 +254,10 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
                     </tbody>
                     <tfoot>
                         <tr className="bg-slate-800/80 border-t-2 border-sky-800/50">
-                            <td colSpan={5} className="p-3 text-right text-[10px] font-bold tracking-widest text-slate-300 uppercase">
+                            <td colSpan={5} className="p-3 text-right text-xs font-bold tracking-widest text-slate-300 uppercase">
                                 TOTAL GASTOS FIJOS
                             </td>
-                            <td className="p-3 text-right font-mono font-bold text-sky-400 text-sm bg-sky-950/30">
+                            <td className="p-3 text-right font-mono font-bold text-sky-400 text-xs bg-sky-950/30">
                                 S/. {fmt(total)}
                             </td>
                             <td />
@@ -280,41 +268,36 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
 
             {/* Footer */}
             <div className="flex items-center justify-between border-t border-slate-700 bg-slate-800/40 p-3 backdrop-blur-sm">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                     <button
                         onClick={() => addNode(nodes.length - 1, 'seccion')}
-                        className="flex items-center gap-1.5 rounded-lg bg-sky-900/30 px-3 py-1.5 text-[10px] font-bold text-sky-300 transition-all hover:bg-sky-900/50 hover:text-sky-200 border border-sky-800/40"
+                        className="flex items-center gap-1.5 rounded-lg bg-sky-900/30 px-3 py-1.5 text-xs font-bold text-sky-300 transition-all hover:bg-sky-900/50 hover:text-sky-200 border border-sky-800/40"
                     >
                         <Plus className="h-3.5 w-3.5" /> Sección
                     </button>
                     <button
                         onClick={() => addNode(nodes.length - 1, 'grupo')}
-                        className="flex items-center gap-1.5 rounded-lg bg-slate-700/50 px-3 py-1.5 text-[10px] font-bold text-slate-300 transition-all hover:bg-slate-700 hover:text-white"
+                        className="flex items-center gap-1.5 rounded-lg bg-slate-700/50 px-3 py-1.5 text-xs font-bold text-slate-300 transition-all hover:bg-slate-700 hover:text-white"
                     >
                         <Plus className="h-3.5 w-3.5" /> Grupo
                     </button>
                     <button
                         onClick={() => addNode(nodes.length - 1, 'detalle')}
-                        className="flex items-center gap-1.5 rounded-lg bg-slate-700/50 px-3 py-1.5 text-[10px] font-bold text-slate-300 transition-all hover:bg-slate-700 hover:text-white"
+                        className="flex items-center gap-1.5 rounded-lg bg-slate-700/50 px-3 py-1.5 text-xs font-bold text-slate-300 transition-all hover:bg-slate-700 hover:text-white"
                     >
                         <Plus className="h-3.5 w-3.5" /> Ítem
                     </button>
                 </div>
-                <div className="flex items-center gap-3">
-                    {isSaving ? (
-                        <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-widest text-sky-400 uppercase">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            Guardando...
-                        </span>
-                    ) : isDirty ? (
-                        <span className="flex animate-pulse items-center gap-1.5 text-[10px] font-bold tracking-widest text-amber-500 uppercase">
+                <div className="flex items-center gap-1.5">
+                    {isDirty ? (
+                        <span className="flex items-center gap-1.5 text-xs font-bold tracking-widest text-amber-500 uppercase">
                             <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                            Sincronizando...
+                            Cambios sin guardar
                         </span>
                     ) : (
-                        <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-widest text-emerald-500 uppercase">
+                        <span className="flex items-center gap-1.5 text-xs font-bold tracking-widest text-emerald-500 uppercase">
                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                            Sincronizado
+                            Guardado
                         </span>
                     )}
                 </div>
@@ -328,7 +311,7 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
                         className="fixed z-50 min-w-[180px] rounded-lg border border-slate-700 bg-slate-800 py-1 text-xs text-slate-300 shadow-2xl"
                         style={{ top: contextMenu.y, left: contextMenu.x }}
                     >
-                        <div className="px-3 py-1.5 text-[10px] font-bold tracking-widest text-slate-500 uppercase">Añadir después</div>
+                        <div className="px-3 py-1.5 text-xs font-bold tracking-widest text-slate-500 uppercase">Añadir después</div>
                         <button
                             className="w-full px-4 py-1.5 text-left hover:bg-sky-900/30 hover:text-sky-300"
                             onClick={() => { addNode(contextMenu.index, 'seccion'); setContextMenu(null); }}

@@ -1,6 +1,6 @@
 // hooks/useGGVariables.ts
 import axios from 'axios';
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import type { GGVariableNode } from '../stores/ggVariablesStore';
 import { useGGVariablesStore } from '../stores/ggVariablesStore';
 
@@ -10,9 +10,10 @@ interface UseGGVariablesProps {
 }
 
 export function useGGVariables({ projectId, subsection }: UseGGVariablesProps) {
+    const loadedProjectId = useRef<number | null>(null);
     const { nodes, loading, setNodes, setLoading, setDirty, checkAndSyncRemuneraciones, syncFromRemuneraciones } = useGGVariablesStore();
 
-    const isActive = subsection === 'gastos_generales' || subsection === 'consolidado';
+    const isActive = subsection === 'gastos_generales';
     const normalizeText = (value: string) =>
         (value || '')
             .toLowerCase()
@@ -73,7 +74,7 @@ export function useGGVariables({ projectId, subsection }: UseGGVariablesProps) {
     };
 
     useEffect(() => {
-        if (!isActive) return;
+        if (!isActive || loadedProjectId.current === projectId) return;
 
         const fetchData = async () => {
             setLoading(true);
@@ -87,6 +88,7 @@ export function useGGVariables({ projectId, subsection }: UseGGVariablesProps) {
                         const totals = await fetchFianzaAdelantoTotals();
                         const applied = applyFianzaAdelantoTotals(baseRows, totals);
                         setNodes(applied.rows);
+                        loadedProjectId.current = projectId;
                         if (applied.changed) {
                             setDirty(true);
                         }
@@ -109,8 +111,6 @@ export function useGGVariables({ projectId, subsection }: UseGGVariablesProps) {
     }, [projectId, subsection, setNodes, setLoading, isActive]);
 
     const saveGGVariables = useCallback(async (data: GGVariableNode[]) => {
-        if (!isActive) return { success: false };
-
         try {
             const cleanRows = data.map(({ _level, _expanded, _fromRemuneraciones, parcial, ...rest }) => rest);
 
@@ -131,7 +131,7 @@ export function useGGVariables({ projectId, subsection }: UseGGVariablesProps) {
             console.error('Error saving GG Variables:', error);
             return { success: false, error };
         }
-    }, [projectId, isActive, setDirty, setNodes]);
+    }, [projectId, setDirty, setNodes]);
 
     return {
         ggVariablesNodes: nodes,

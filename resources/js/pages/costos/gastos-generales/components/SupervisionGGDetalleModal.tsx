@@ -38,7 +38,7 @@ const DetailRow: React.FC<DetailRowProps> = ({ row, sectionIdx, rowIdx, onRemove
                     type="text"
                     value={row.concepto ?? ''}
                     onChange={(e) => updateCell(sectionIdx, rowIdx, 'concepto', e.target.value)}
-                    className="w-full bg-transparent border-none text-[11px] text-slate-200 focus:ring-1 focus:ring-sky-500 rounded px-1 py-0.5"
+                    className="w-full bg-transparent border-none text-xs text-slate-200 focus:ring-1 focus:ring-sky-500 rounded px-1 py-0.5"
                     placeholder="Concepto..."
                 />
             </td>
@@ -47,7 +47,7 @@ const DetailRow: React.FC<DetailRowProps> = ({ row, sectionIdx, rowIdx, onRemove
                     type="text"
                     value={row.unidad ?? ''}
                     onChange={(e) => updateCell(sectionIdx, rowIdx, 'unidad', e.target.value)}
-                    className="w-14 bg-transparent border-none text-[10px] text-center text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1"
+                    className="w-14 bg-transparent border-none text-xs text-center text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1"
                     placeholder="und"
                 />
             </td>
@@ -56,7 +56,7 @@ const DetailRow: React.FC<DetailRowProps> = ({ row, sectionIdx, rowIdx, onRemove
                     type="number"
                     value={row.cantidad ?? ''}
                     onChange={(e) => handleChange('cantidad', e.target.value)}
-                    className="w-16 bg-transparent border border-slate-700/50 text-[10px] text-center text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1 focus:bg-slate-800"
+                    className="w-16 bg-transparent border border-slate-700/50 text-xs text-center text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1 focus:bg-slate-800"
                 />
             </td>
             <td className="py-1 px-2 text-center">
@@ -64,7 +64,7 @@ const DetailRow: React.FC<DetailRowProps> = ({ row, sectionIdx, rowIdx, onRemove
                     type="number"
                     value={row.meses ?? ''}
                     onChange={(e) => handleChange('meses', e.target.value)}
-                    className="w-16 bg-transparent border border-slate-700/50 text-[10px] text-center text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1 focus:bg-slate-800"
+                    className="w-16 bg-transparent border border-slate-700/50 text-xs text-center text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1 focus:bg-slate-800"
                 />
             </td>
             <td className="py-1 px-3 text-right">
@@ -72,11 +72,11 @@ const DetailRow: React.FC<DetailRowProps> = ({ row, sectionIdx, rowIdx, onRemove
                     type="number"
                     value={row.importe ?? ''}
                     onChange={(e) => handleChange('importe', e.target.value)}
-                    className="w-28 bg-transparent border border-slate-700/50 text-[10px] text-right text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1 focus:bg-slate-800"
+                    className="w-28 bg-transparent border border-slate-700/50 text-xs text-right text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1 focus:bg-slate-800"
                 />
             </td>
             <td className="py-1 px-3 text-right">
-                <span className="text-[10px] font-mono text-slate-400">{fmt(row.subtotal)}</span>
+                <span className="text-xs font-mono text-slate-400">{fmt(row.subtotal)}</span>
             </td>
             <td className="py-1 px-3 text-center">
                 <button
@@ -109,7 +109,7 @@ const SectionComponent: React.FC<SectionProps> = ({ section, sectionIdx, onRemov
             {/* Section Header row */}
             <tr className="bg-sky-900/30 border-b border-sky-500/20 group/sec">
                 <td className="py-2 px-4">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                         <button
                             onClick={() => setExpanded(!expanded)}
                             className="p-0.5 rounded hover:bg-white/10 text-slate-500"
@@ -122,13 +122,13 @@ const SectionComponent: React.FC<SectionProps> = ({ section, sectionIdx, onRemov
                             type="text"
                             value={section.concepto ?? ''}
                             onChange={(e) => updateCell(sectionIdx, -1, 'concepto', e.target.value)}
-                            className="flex-1 bg-transparent border-none text-[11px] font-bold text-sky-300 uppercase tracking-wide focus:ring-1 focus:ring-sky-500 rounded px-1"
+                            className="flex-1 bg-transparent border-none text-xs font-bold text-sky-300 uppercase tracking-wide focus:ring-1 focus:ring-sky-500 rounded px-1"
                         />
                     </div>
                 </td>
                 <td colSpan={4} />
                 <td className="py-2 px-3 text-right">
-                    <span className="text-[11px] font-black font-mono text-sky-300">
+                    <span className="text-xs font-black font-mono text-sky-300">
                         {fmt(section.total_seccion)}
                     </span>
                 </td>
@@ -160,7 +160,7 @@ const SectionComponent: React.FC<SectionProps> = ({ section, sectionIdx, onRemov
                     <td colSpan={7} className="py-1 px-10 border-b border-slate-800/30">
                         <button
                             onClick={() => addRow(sectionIdx)}
-                            className="flex items-center gap-1 text-[10px] text-sky-500 hover:text-sky-300 transition-colors py-0.5"
+                            className="flex items-center gap-1 text-xs text-sky-500 hover:text-sky-300 transition-colors py-0.5"
                         >
                             <Plus size={11} />
                             Agregar partida
@@ -249,35 +249,35 @@ export function SupervisionGGDetalleModal({
 
                 {/* ── Header ── */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md flex-shrink-0">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5">
                         <div className="h-9 w-9 flex items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/30">
                             <ClipboardList className="h-5 w-5 text-amber-400" />
                         </div>
                         <div>
-                            <h2 className="text-sm font-black text-white uppercase tracking-wide">
+                            <h2 className="text-xs font-black text-white uppercase tracking-wide">
                                 Detalle de Gastos Generales de Supervisión
                             </h2>
-                            <p className="text-[10px] text-slate-500 uppercase tracking-widest">
+                            <p className="text-xs text-slate-500 uppercase tracking-widest">
                                 Sección IV — Resumen de Costos
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5">
                         {isSaving && (
-                            <div className="flex items-center gap-1.5 text-[10px] text-amber-400 font-medium">
+                            <div className="flex items-center gap-1.5 text-xs text-amber-400 font-medium">
                                 <Loader2 size={12} className="animate-spin" />
                                 Guardando...
                             </div>
                         )}
                         {!isSaving && !loading && (
-                            <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-medium">
+                            <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
                                 <Save size={12} />
                                 Auto-guardado
                             </div>
                         )}
                         <button
                             onClick={onClose}
-                            className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                            className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
                         >
                             <X size={16} />
                         </button>
@@ -287,33 +287,33 @@ export function SupervisionGGDetalleModal({
                 {/* ── Body ── */}
                 <div className="flex-1 overflow-auto custom-scrollbar">
                     {loading ? (
-                        <div className="flex items-center justify-center h-48 gap-3 text-slate-500">
+                        <div className="flex items-center justify-center h-48 gap-1.5 text-slate-500">
                             <Loader2 size={20} className="animate-spin" />
-                            <span className="text-sm">Cargando datos...</span>
+                            <span className="text-xs">Cargando datos...</span>
                         </div>
                     ) : (
                         <table className="w-full border-collapse">
                             <thead className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-md shadow border-b border-slate-700">
                                 <tr>
-                                    <th className="py-2.5 px-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest w-[340px]">Concepto</th>
-                                    <th className="py-2.5 px-2 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest w-[70px]">Unidad</th>
-                                    <th className="py-2.5 px-2 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest w-[70px]">Cantidad</th>
-                                    <th className="py-2.5 px-2 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest w-[80px]">T. Meses</th>
-                                    <th className="py-2.5 px-3 text-right  text-[10px] font-black text-slate-400 uppercase tracking-widest w-[120px]">Importe S/.</th>
-                                    <th className="py-2.5 px-3 text-right  text-[10px] font-black text-slate-400 uppercase tracking-widest w-[120px]">Subtotal S/.</th>
-                                    <th className="py-2.5 px-3 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest w-[50px]"></th>
+                                    <th className="py-2.5 px-4 text-left text-xs font-black text-slate-400 uppercase tracking-widest w-[340px]">Concepto</th>
+                                    <th className="py-2.5 px-2 text-center text-xs font-black text-slate-400 uppercase tracking-widest w-[70px]">Unidad</th>
+                                    <th className="py-2.5 px-2 text-center text-xs font-black text-slate-400 uppercase tracking-widest w-[70px]">Cantidad</th>
+                                    <th className="py-2.5 px-2 text-center text-xs font-black text-slate-400 uppercase tracking-widest w-[80px]">T. Meses</th>
+                                    <th className="py-2.5 px-3 text-right  text-xs font-black text-slate-400 uppercase tracking-widest w-[120px]">Importe S/.</th>
+                                    <th className="py-2.5 px-3 text-right  text-xs font-black text-slate-400 uppercase tracking-widest w-[120px]">Subtotal S/.</th>
+                                    <th className="py-2.5 px-3 text-center text-xs font-black text-slate-400 uppercase tracking-widest w-[50px]"></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800/30">
                                 {/* Section I — Detalle de Gastos Generales title row */}
                                 <tr className="bg-slate-800/40 border-b border-slate-700/50">
                                     <td colSpan={5} className="py-2 px-4">
-                                        <span className="text-[11px] font-black text-slate-200 uppercase tracking-wider">
+                                        <span className="text-xs font-black text-slate-200 uppercase tracking-wider">
                                             I. DETALLE DE GASTOS GENERALES
                                         </span>
                                     </td>
                                     <td className="py-2 px-3 text-right">
-                                        <span className="text-[11px] font-black font-mono text-amber-400">
+                                        <span className="text-xs font-black font-mono text-amber-400">
                                             {fmt(totalGlobal)}
                                         </span>
                                     </td>
@@ -335,7 +335,7 @@ export function SupervisionGGDetalleModal({
                                     <td colSpan={7} className="py-4 px-6 bg-slate-900/40">
                                         <button
                                             onClick={addSection}
-                                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 hover:text-sky-300 transition-all text-xs font-bold uppercase tracking-wider"
+                                            className="flex items-center gap-1 px-2 py-1 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 hover:text-sky-300 transition-all text-xs font-bold uppercase tracking-wider"
                                         >
                                             <Plus size={14} />
                                             Agregar Nueva Sección (A, B, C...)
@@ -349,10 +349,10 @@ export function SupervisionGGDetalleModal({
 
                 {/* ── Footer total ── */}
                 <div className="flex-shrink-0 border-t border-amber-500/30 bg-amber-900/20 px-6 py-3 flex items-center justify-between">
-                    <span className="text-[11px] font-black text-amber-300 uppercase tracking-widest">
+                    <span className="text-xs font-black text-amber-300 uppercase tracking-widest">
                         VIII. TOTAL GASTOS GENERALES
                     </span>
-                    <span className="text-xl font-black text-amber-400 font-mono tracking-tighter">
+                    <span className="text-sm font-black text-amber-400 font-mono tracking-tighter">
                         S/. {fmt(totalGlobal)}
                     </span>
                 </div>

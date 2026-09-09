@@ -25,7 +25,29 @@ export interface ResumenPresupuesto {
     gastosGeneralesPorcentaje: number;
     utilidad: number;
     utilidadPorcentaje: number;
-    total: number;
+    total: number; // Subtotal Componente I (CD + GG + U)
+    
+    // --- Campos extendidos (opcionales para compatibilidad) ---
+    igv?: number;
+    igvPorcentaje?: number;
+    subTotalComponenteI?: number;
+    
+    componenteIIMonto?: number;
+    subTotalComponenteII?: number;
+    
+    extrasTotal?: number;
+    
+    totalComponents?: number; // Total presupuesto de obra (Sub I + Sub II + Extras)
+    
+    supervision?: number;
+    supervisionPorcentaje?: number;
+    
+    totalConsolidado?: number; // Total Components + Supervision
+    
+    controlConcurrente?: number;
+    controlConcurrentePorcentaje?: number;
+    
+    totalInversion?: number; // Total Consolidado + CC
 }
 
 export function defaultBudget(): BudgetFields {

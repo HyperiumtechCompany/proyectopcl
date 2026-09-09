@@ -320,6 +320,21 @@ class CostoDatabaseService
             'igv_porcentaje',
             'jornada_laboral_horas',
             'rmv',
+            'asignacion_familiar_factor',
+            'snp_porcentaje',
+            'essalud_porcentaje',
+            'cts_porcentaje',
+            'gratificacion_porcentaje',
+            'vacaciones_porcentaje',
+            'sencico_porcentaje',
+            'itf_porcentaje',
+            'itf_cargo_adicional',
+            'control_concurrente_porcentaje',
+            'sctr_salud_porcentaje',
+            'sctr_pension_porcentaje',
+            'poliza_essalud_vida_porcentaje',
+            'seguro_car_porcentaje',
+            'recargo_administrativo_cc_porcentaje',
         ];
 
         $filtered = array_intersect_key($params, array_flip($allowed));

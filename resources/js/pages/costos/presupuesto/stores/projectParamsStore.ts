@@ -41,6 +41,21 @@ export interface ProjectParams {
     igv_porcentaje: number;
     jornada_laboral_horas: number;
     rmv: number;
+    asignacion_familiar_factor: number;
+    snp_porcentaje: number;
+    essalud_porcentaje: number;
+    cts_porcentaje: number;
+    gratificacion_porcentaje: number;
+    vacaciones_porcentaje: number;
+    sencico_porcentaje: number;
+    itf_porcentaje: number;
+    itf_cargo_adicional: number;
+    control_concurrente_porcentaje: number;
+    sctr_salud_porcentaje: number;
+    sctr_pension_porcentaje: number;
+    poliza_essalud_vida_porcentaje: number;
+    seguro_car_porcentaje: number;
+    recargo_administrativo_cc_porcentaje: number;
 }
 
 interface ProjectParamsState {
@@ -101,6 +116,21 @@ function normalizeParams(data: Record<string, any>): ProjectParams {
         igv_porcentaje: parseNumber(data.igv_porcentaje, 18),
         jornada_laboral_horas: parseNumber(data.jornada_laboral_horas, 8),
         rmv: parseNumber(data.rmv, 1025),
+        asignacion_familiar_factor: parseNumber(data.asignacion_familiar_factor, 46),
+        snp_porcentaje: parseNumber(data.snp_porcentaje, 13),
+        essalud_porcentaje: parseNumber(data.essalud_porcentaje, 9),
+        cts_porcentaje: parseNumber(data.cts_porcentaje, 8.3333),
+        gratificacion_porcentaje: parseNumber(data.gratificacion_porcentaje, 8.3333),
+        vacaciones_porcentaje: parseNumber(data.vacaciones_porcentaje, 8.3333),
+        sencico_porcentaje: parseNumber(data.sencico_porcentaje, 0.2),
+        itf_porcentaje: parseNumber(data.itf_porcentaje, 0.005),
+        itf_cargo_adicional: parseNumber(data.itf_cargo_adicional, 0),
+        control_concurrente_porcentaje: parseNumber(data.control_concurrente_porcentaje, 0.6),
+        sctr_salud_porcentaje: parseNumber(data.sctr_salud_porcentaje, 0.5),
+        sctr_pension_porcentaje: parseNumber(data.sctr_pension_porcentaje, 1.5),
+        poliza_essalud_vida_porcentaje: parseNumber(data.poliza_essalud_vida_porcentaje, 0.53),
+        seguro_car_porcentaje: parseNumber(data.seguro_car_porcentaje, 0.3),
+        recargo_administrativo_cc_porcentaje: parseNumber(data.recargo_administrativo_cc_porcentaje, 15),
     };
 }
 

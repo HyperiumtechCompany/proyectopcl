@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
     BarChart2, Calculator, CalendarDays, FileSpreadsheet, FileText,
-    Layers, Milestone, X, ChevronLeft,
+    Layers, Milestone, X, ChevronLeft, GitMerge,
 } from 'lucide-react';
 import type { DelphinRow } from '../types';
 import type { GanttTask } from '../../cronogramas/v2/types/task';
@@ -34,6 +34,13 @@ const CONTENT_OPTIONS: {
             title: 'F. Polinómica',
             desc: 'Fórmula K con coeficientes de incidencia por especialidad.',
             sheets: ['Fórmula Polinómica'],
+        },
+        {
+            key: 'formula_polinomica_agrupamiento' as DelphinExportContent,
+            icon: <GitMerge size={20} />,
+            title: 'F. Polinómica Agrupamiento',
+            desc: 'Listado de índices INEI con nomenclatura, coeficiente, porcentaje y agrupamiento.',
+            sheets: ['F.P. Agrupamiento'],
         },
         {
             key: 'budget_gantt',
@@ -109,7 +116,7 @@ export function DelphinExportModal({
         format === 'msp' && content === 'budget_only' ? 'excel' : format;
 
     const isBudget = content !== 'gantt_only';
-    const isFormula = content === 'formula_polinomica';
+    const isFormula = content === 'formula_polinomica' || content === 'formula_polinomica_agrupamiento';
     const hasSpecialties = availableSpecialties.length > 0;
     const shouldShowSpecialties = !isFormula && (resolvedFormat === 'excel' || resolvedFormat === 'pdf') && isBudget && hasSpecialties;
 
@@ -142,7 +149,7 @@ export function DelphinExportModal({
     };
     const handleExport = () => {
 
-        if (content === 'formula_polinomica') {
+        if (isFormula) {
             doExport();
             return;
         }
@@ -330,8 +337,8 @@ export function DelphinExportModal({
                     </p>
                     <div className="flex gap-2">
                         {FORMAT_OPTIONS.map((opt) => {
-                            const isFormula = content === 'formula_polinomica';
-                            const disabled = (opt.onlyGantt && content === 'budget_only') || (opt.disabledWhenFormula && isFormula);
+                            const isFormulaLocal = content === 'formula_polinomica' || content === 'formula_polinomica_agrupamiento';
+                            const disabled = (opt.onlyGantt && content === 'budget_only') || (opt.disabledWhenFormula && isFormulaLocal);
                             const active = format === opt.key && !disabled;
 
                             return (
@@ -340,7 +347,7 @@ export function DelphinExportModal({
                                     disabled={disabled}
                                     onClick={() => !disabled && setFormat(opt.key)}
                                     title={disabled
-                                        ? (isFormula ? 'No disponible para Fórmula Polinómica' : 'No disponible para Solo Presupuesto')
+                                        ? (isFormulaLocal ? 'No disponible para Fórmula Polinómica' : 'No disponible para Solo Presupuesto')
                                         : opt.label}
                                     className={`flex flex-1 flex-col items-center gap-1.5 rounded-lg border py-3 text-xs font-medium transition-all 
                 ${disabled ? 'cursor-not-allowed opacity-35' : ''}

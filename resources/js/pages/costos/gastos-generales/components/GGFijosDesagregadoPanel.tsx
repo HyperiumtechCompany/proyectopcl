@@ -11,7 +11,7 @@ import {
 import React, { useState, useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useGGVariablesStore } from '../stores/ggVariablesStore';
-import { useProjectParamsStore } from '../stores/projectParamsStore';
+import { useProjectParamsStore } from '../../presupuesto/stores/projectParamsStore';
 import { GGFijosDesagregadoEditor } from './GGFijosDesagregadoEditor';
 import { PlazoDisplay } from './PlazoDisplay';
 
@@ -143,16 +143,16 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
             {/* Header / Stats Bar */}
             <div className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm">
                 {/* FILA 1: Resultados principales */}
-                <div className="flex items-center justify-between border-b border-slate-800/50 px-4 py-2">
+                <div className="flex items-center justify-between border-b border-slate-800/50 px-2 py-1">
                     {/* Lado izquierdo - Métricas principales */}
                     <div className="flex items-center gap-6">
                         {/* Costo Directo */}
-                        <div className="flex items-center gap-2">
-                            <div className="rounded-lg bg-sky-500/10 p-2">
+                        <div className="flex items-center gap-1">
+                            <div className="rounded-lg bg-sky-500/10 p-1">
                                 <DollarSign className="h-4 w-4 text-sky-500" />
                             </div>
                             <div>
-                                <p className="text-[9px] font-bold tracking-wider text-slate-500 uppercase">
+                                <p className="text-xs font-bold tracking-wider text-slate-500 uppercase">
                                     Costo Directo
                                 </p>
                                 <p className="font-mono text-base font-black text-sky-400">
@@ -165,12 +165,12 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
                         </div>
 
                         {/* GGF */}
-                        <div className="flex items-center gap-2">
-                            <div className="rounded-lg bg-purple-500/10 p-2">
+                        <div className="flex items-center gap-1">
+                            <div className="rounded-lg bg-purple-500/10 p-1">
                                 <Calculator className="h-4 w-4 text-purple-500" />
                             </div>
                             <div>
-                                <p className="text-[9px] font-bold tracking-wider text-slate-500 uppercase">
+                                <p className="text-xs font-bold tracking-wider text-slate-500 uppercase">
                                     GGF
                                 </p>
                                 <p className="font-mono text-base font-black text-purple-400">
@@ -183,12 +183,12 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
                         </div>
 
                         {/* GGV */}
-                        <div className="flex items-center gap-2">
-                            <div className="rounded-lg bg-amber-500/10 p-2">
+                        <div className="flex items-center gap-1">
+                            <div className="rounded-lg bg-amber-500/10 p-1">
                                 <Calculator className="h-4 w-4 text-amber-500" />
                             </div>
                             <div>
-                                <p className="text-[9px] font-bold tracking-wider text-slate-500 uppercase">
+                                <p className="text-xs font-bold tracking-wider text-slate-500 uppercase">
                                     GGV
                                 </p>
                                 <p className="font-mono text-base font-black text-amber-400">
@@ -201,12 +201,12 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
                         </div>
 
                         {/* UTILIDAD */}
-                        <div className="flex items-center gap-2">
-                            <div className="rounded-lg bg-emerald-500/10 p-2">
+                        <div className="flex items-center gap-1">
+                            <div className="rounded-lg bg-emerald-500/10 p-1">
                                 <TrendingUp className="h-4 w-4 text-emerald-500" />
                             </div>
                             <div>
-                                <p className="text-[9px] font-bold tracking-wider text-slate-500 uppercase">
+                                <p className="text-xs font-bold tracking-wider text-slate-500 uppercase">
                                     Utilidad
                                 </p>
                                 <p className="font-mono text-base font-black text-emerald-400">
@@ -226,13 +226,13 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
                     </div>
 
                     {/* Lado derecho - Sueldos totales */}
-                    <div className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-800/50 px-4 py-2">
+                    <div className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/50 px-2 py-1">
                         <Info className="h-5 w-5 text-emerald-500" />
                         <div>
-                            <p className="text-[9px] font-bold tracking-wider text-slate-500 uppercase">
+                            <p className="text-xs font-bold tracking-wider text-slate-500 uppercase">
                                 Sueldos + Beneficios
                             </p>
-                            <p className="font-mono text-lg font-black text-emerald-400">
+                            <p className="font-mono text-sm font-black text-emerald-400">
                                 S/{' '}
                                 {new Intl.NumberFormat('es-PE', {
                                     minimumFractionDigits: 2,
@@ -243,15 +243,15 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
                 </div>
 
                 {/* FILA 2: Controles, desglose y acciones */}
-                <div className="flex items-center justify-between bg-slate-900/70 px-4 py-2">
+                <div className="flex items-center justify-between bg-slate-900/70 px-2 py-1">
                     {/* Lado izquierdo - Inputs de porcentajes */}
                     <div className="flex items-center gap-4">
-                        <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+                        <span className="text-xs font-bold tracking-wider text-slate-400 uppercase">
                             %
                         </span>
 
                         {/* GGF % */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                             <span className="text-xs font-medium text-purple-400">
                                 GGF
                             </span>
@@ -275,7 +275,7 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
                         </div>
 
                         {/* GGV % */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                             <span className="text-xs font-medium text-amber-400">
                                 GGV
                             </span>
@@ -299,7 +299,7 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
                         </div>
 
                         {/* UTIL % */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                             <span className="text-xs font-medium text-emerald-400">
                                 UTIL
                             </span>
@@ -324,15 +324,15 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
                     </div>
 
                     {/* Centro - Desglose compacto */}
-                    <div className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-800/30 px-3 py-1.5">
-                        <span className="text-[9px] font-bold tracking-wider text-slate-400 uppercase">
+                    <div className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/30 px-3 py-1.5">
+                        <span className="text-xs font-bold tracking-wider text-slate-400 uppercase">
                             Desglose
                         </span>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                             {/* CD */}
                             <div className="flex items-center gap-1">
-                                <span className="text-[8px] text-slate-500">
+                                <span className="text-xs text-slate-500">
                                     CD
                                 </span>
                                 <span className="font-mono text-xs text-slate-300">
@@ -347,7 +347,7 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
 
                             {/* GGF */}
                             <div className="flex items-center gap-1">
-                                <span className="text-[8px] text-purple-400">
+                                <span className="text-xs text-purple-400">
                                     F
                                 </span>
                                 <span className="font-mono text-xs text-purple-400">
@@ -356,14 +356,14 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
                                         minimumFractionDigits: 0,
                                     }).format(ggfMonto)}
                                 </span>
-                                {/* <span className="text-[8px] text-purple-400/60">({ggfPorcentaje}%)</span> */}
+                                {/* <span className="text-xs text-purple-400/60">({ggfPorcentaje}%)</span> */}
                             </div>
 
                             <div className="h-4 w-px bg-slate-700" />
 
                             {/* GGV */}
                             <div className="flex items-center gap-1">
-                                <span className="text-[8px] text-amber-400">
+                                <span className="text-xs text-amber-400">
                                     V
                                 </span>
                                 <span className="font-mono text-xs text-amber-400">
@@ -372,14 +372,14 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
                                         minimumFractionDigits: 0,
                                     }).format(ggvMonto)}
                                 </span>
-                                {/* <span className="text-[8px] text-amber-400/60">({ggvPorcentaje}%)</span> */}
+                                {/* <span className="text-xs text-amber-400/60">({ggvPorcentaje}%)</span> */}
                             </div>
 
                             <div className="h-4 w-px bg-slate-700" />
 
                             {/* UTIL */}
                             <div className="flex items-center gap-1">
-                                <span className="text-[8px] text-emerald-400">
+                                <span className="text-xs text-emerald-400">
                                     U
                                 </span>
                                 <span className="font-mono text-xs text-emerald-400">
@@ -388,14 +388,14 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
                                         minimumFractionDigits: 0,
                                     }).format(utilidadMonto)}
                                 </span>
-                                {/* <span className="text-[8px] text-emerald-400/60">({utilidadPorcentaje}%)</span> */}
+                                {/* <span className="text-xs text-emerald-400/60">({utilidadPorcentaje}%)</span> */}
                             </div>
 
                             <div className="h-4 w-px bg-slate-700" />
 
                             {/* IGV */}
                             <div className="flex items-center gap-1">
-                                <span className="text-[8px] text-rose-400">
+                                <span className="text-xs text-rose-400">
                                     IGV
                                 </span>
                                 <span className="font-mono text-xs text-rose-400">
@@ -410,7 +410,7 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
 
                             {/* Total CG */}
                             <div className="flex items-center gap-1">
-                                <span className="text-[8px] text-sky-400">
+                                <span className="text-xs text-sky-400">
                                     TCG
                                 </span>
                                 <span className="font-mono text-xs text-sky-400">
@@ -424,13 +424,13 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
                     </div>
 
                     {/* Lado derecho - Acciones */}
-                    <div className="flex items-center gap-2">
-                        <p className="hidden text-[8px] text-slate-500 italic xl:block">
+                    <div className="flex items-center gap-1">
+                        <p className="hidden text-xs text-slate-500 italic xl:block">
                             Actualización automática
                         </p>
                         <button
                             onClick={handleSync}
-                            className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-300 transition-all hover:bg-slate-700 active:scale-95"
+                            className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-300 transition-all hover:bg-slate-700 active:scale-95"
                         >
                             <RefreshCw className="h-3.5 w-3.5" />
                             <span>Sincronizar</span>
@@ -444,7 +444,7 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
                 <div className="w-full">
                     <div className="mb-6 flex items-center gap-4 px-2">
                         <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-800 to-transparent" />
-                        <h2 className="text-[11px] font-black tracking-[0.3em] text-slate-500 uppercase">
+                        <h2 className="text-xs font-black tracking-[0.3em] text-slate-500 uppercase">
                             Configuración de Gastos Generales Fijos
                         </h2>
                         <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-800 to-transparent" />

@@ -242,7 +242,32 @@ async function buildPresupuestoPdf(doc: jsPDF, rows: DelphinRow[], projectName: 
     body.push(['', '', 'COSTO DIRECTO', '', '', '', fmtNum(summary.costoDirecto)]);
     body.push(['', '', 'GASTOS GENERALES', '', `${summary.gastosGeneralesPorcentaje.toFixed(2)}%`, '', fmtNum(summary.gastosGenerales)]);
     body.push(['', '', 'UTILIDAD', '', `${summary.utilidadPorcentaje.toFixed(2)}%`, '', fmtNum(summary.utilidad)]);
-    body.push(['', '', 'TOTAL', '', '', '', fmtNum(summary.total)]);
+    body.push(['', '', 'SUBTOTAL (COSTO DIRECTO + GG + UTILIDAD)', '', '', '', fmtNum(summary.total)]);
+
+    if (summary.igv !== undefined) {
+        body.push(['', '', 'IGV', '', `${summary.igvPorcentaje?.toFixed(2)}%`, '', fmtNum(summary.igv)]);
+        body.push(['', '', 'SUBTOTAL COMPONENTE I', '', '', '', fmtNum(summary.subTotalComponenteI ?? 0)]);
+        
+        if ((summary.componenteIIMonto ?? 0) > 0) {
+            body.push(['', '', 'COMPONENTE II', '', '', '', fmtNum(summary.componenteIIMonto!)]);
+            body.push(['', '', 'IGV COMPONENTE II', '', `${summary.igvPorcentaje?.toFixed(2)}%`, '', fmtNum((summary.subTotalComponenteII ?? 0) - summary.componenteIIMonto!)]);
+            body.push(['', '', 'SUBTOTAL COMPONENTE II', '', '', '', fmtNum(summary.subTotalComponenteII ?? 0)]);
+        }
+        
+        if ((summary.extrasTotal ?? 0) > 0) {
+            body.push(['', '', 'EXTRAS (CON IGV)', '', '', '', fmtNum(summary.extrasTotal!)]);
+        }
+        
+        body.push(['', '', 'TOTAL COMPONENTES', '', '', '', fmtNum(summary.totalComponents ?? 0)]);
+        
+        if ((summary.supervision ?? 0) > 0) {
+            body.push(['', '', 'SUPERVISION', '', `${summary.supervisionPorcentaje?.toFixed(2)}%`, '', fmtNum(summary.supervision!)]);
+        }
+        
+        body.push(['', '', 'TOTAL CONSOLIDADO', '', '', '', fmtNum(summary.totalConsolidado ?? 0)]);
+        body.push(['', '', 'CONTROL CONCURRENTE', '', `${summary.controlConcurrentePorcentaje?.toFixed(2)}%`, '', fmtNum(summary.controlConcurrente ?? 0)]);
+        body.push(['', '', 'TOTAL PRESUPUESTO DE INVERSION', '', '', '', fmtNum(summary.totalInversion ?? 0)]);
+    }
 
     autoTable(doc, {
         startY,
@@ -265,8 +290,13 @@ async function buildPresupuestoPdf(doc: jsPDF, rows: DelphinRow[], projectName: 
             if (data.section !== 'body') return;
             const i = data.row.index;
             if (i >= rows.length) {
-                data.cell.styles.fillColor = C.totalBg!;
-                data.cell.styles.textColor = C.totalFg!;
+                const label = Array.isArray(data.row.raw)
+                    ? String(data.row.raw[2] ?? '')
+                    : '';
+                const isTotal = label === 'TOTAL PRESUPUESTO DE INVERSION' || (label === 'TOTAL' && summary.igv === undefined);
+                
+                data.cell.styles.fillColor = isTotal ? C.totalBg! : [242, 242, 242]; // C.titulo2Bg approx (#f2f2f2)
+                data.cell.styles.textColor = isTotal ? C.totalFg! : [64, 64, 64];    // #404040
                 data.cell.styles.fontStyle = 'bold';
                 return;
             }
@@ -553,6 +583,81 @@ async function buildAcusPdf(doc: jsPDF, acusData: any[], filteredRows: DelphinRo
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────────
+async function buildFormulaAgrupamientoPdf(doc: jsPDF, agrupamientoData: any, startY: number): Promise<number> {
+    const rows: any[] = agrupamientoData?.rows ?? [];
+
+    if (rows.length === 0) {
+        autoTable(doc, {
+            startY,
+            margin: { left: 10, right: 10 },
+            theme: 'grid',
+            head: [],
+            body: [['No hay índices configurados. Abra la Fórmula Polinómica y configure los monomios.']],
+            styles: { fontSize: 9, font: 'helvetica' },
+        });
+        return (doc as any).lastAutoTable.finalY + 4;
+    }
+
+    const totalK = agrupamientoData?.totalCoeficiente ?? 0;
+    const totalPorcentaje = rows.reduce((s: number, r: any) => s + (r.porcentaje ?? 0), 0);
+
+    const body = rows.map((row: any) => [
+        `${row.codigo ? `${row.codigo} ` : ''}${row.descripcion || ''}`,
+        row.nomenclatura ?? '',
+        Number(row.coeficiente ?? 0).toFixed(3),
+        Number(row.porcentaje ?? 0).toFixed(2),
+        row.agrupamiento ?? '',
+    ]);
+
+    // Total row
+    body.push([
+        { content: 'TOTAL', colSpan: 2, styles: { halign: 'right' as const, fontStyle: 'bold' as const, fillColor: C.totalBg!, textColor: C.totalFg! } },
+        { content: totalK.toFixed(3), styles: { fontStyle: 'bold' as const, fillColor: C.totalBg!, textColor: C.totalFg! } },
+        { content: totalPorcentaje.toFixed(2), styles: { fontStyle: 'bold' as const, fillColor: C.totalBg!, textColor: C.totalFg! } },
+        { content: '', styles: { fillColor: C.totalBg!, textColor: C.totalFg! } },
+    ]);
+
+    autoTable(doc, {
+        startY,
+        margin: { left: 10, right: 10 },
+        theme: 'grid',
+        head: [['Descripción', 'Nomenclatura', 'Coeficiente', 'Porcentaje (%)', 'Agrupamiento']],
+        body,
+        styles: { fontSize: 8, font: 'helvetica', cellPadding: 2 },
+        headStyles: {
+            fillColor: C.headerBg!,
+            textColor: C.fgLight!,
+            fontStyle: 'bold',
+            halign: 'center',
+        },
+        columnStyles: {
+            0: { cellWidth: 'auto', halign: 'left' },
+            1: { cellWidth: 28, halign: 'center', textColor: [5, 150, 105] },
+            2: { cellWidth: 26, halign: 'right' },
+            3: { cellWidth: 28, halign: 'right' },
+            4: { cellWidth: 35, halign: 'center' },
+        },
+        didParseCell(data) {
+            if (data.section === 'body' && data.row.index < rows.length) {
+                const idx = data.row.index;
+                data.cell.styles.fillColor = idx % 2 === 0 ? [255, 255, 255] : [248, 250, 252];
+                data.cell.styles.textColor = [30, 41, 59];
+            }
+        },
+    });
+
+    // Nota al pie
+    const finalY = (doc as any).lastAutoTable.finalY + 4;
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text(
+        'NOTA: LOS ÍNDICES UNIFICADOS EN LA FORMULA POLINOMICA CUENTAN CON LA VIGENCIA CORRESPONDIENTE',
+        10, finalY + 4,
+    );
+
+    return finalY + 10;
+}
+
 export async function exportDelphinPdf(
     content: DelphinExportContent,
     rows: DelphinRow[],
@@ -569,13 +674,14 @@ export async function exportDelphinPdf(
 
     const date = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-    const suffix = {
+    const suffixMap: Record<string, string> = {
         budget_only: 'Presupuesto',
         budget_gantt: 'Presupuesto_Cronograma',
         gantt_only: 'Cronograma',
         formula_polinomica: 'Formula_Polinomica',
-
-    }[content];
+        formula_polinomica_agrupamiento: 'FP_Agrupamiento',
+    };
+    const suffix = suffixMap[content] ?? 'Export';
 
     const fileName = `${projectName.replace(/\s+/g, '_')}_${suffix}_${date.replace(/\//g, '-')}.pdf`;
 
@@ -602,11 +708,16 @@ export async function exportDelphinPdf(
     if (content === 'gantt_only' || content === 'budget_gantt') {
         await buildCronogramaPdf(doc, filteredRows, projectName, projectData);
     }
-    if (content === 'formula_polinomica') {
-    const startY = await addPageHeader(doc, projectName, 'FÓRMULA POLINÓMICA', projectData);
 
-    await buildFormulaPolinomicaBlock(doc, formulaData, startY);
-}
+    if (content === 'formula_polinomica') {
+        const startY = await addPageHeader(doc, projectName, 'FÓRMULA POLINÓMICA', projectData);
+        await buildFormulaPolinomicaBlock(doc, formulaData, startY);
+    }
+
+    if (content === 'formula_polinomica_agrupamiento') {
+        const startY = await addPageHeader(doc, projectName, 'FÓRMULA POLINÓMICA-AGRUPAMIENTO PRELIMINAR', projectData);
+        await buildFormulaAgrupamientoPdf(doc, formulaData, startY);
+    }
 
     // Page numbers
     const totalPages = doc.getNumberOfPages();

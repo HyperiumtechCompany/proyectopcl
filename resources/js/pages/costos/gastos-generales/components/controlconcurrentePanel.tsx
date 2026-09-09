@@ -17,10 +17,12 @@ import React, {
     useRef,
     useState,
 } from 'react';
-import { useConsolidado } from '../stores/consolidadoStore';
+import { useConsolidado } from '../../presupuesto/stores/consolidadoStore';
 import type { GastoGeneralRow } from '../stores/gastosGeneralesStore';
 import { useGastosGeneralesStore } from '../stores/gastosGeneralesStore';
+import { calcularParcial, decimalSeguro, redondearMoneda, sumarDecimales } from '../lib/calculos';
 import { PlazoDisplay } from './PlazoDisplay';
+import { useProjectParamsStore } from '../../presupuesto/stores/projectParamsStore';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 interface ControlConcurrentePanelProps {
@@ -31,7 +33,7 @@ interface ControlConcurrentePanelProps {
 }
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
-const DEFAULT_PCT_CC = 2;
+const DEFAULT_PCT_CC = 0.6;
 
 const ITEM_JEFE = '1.2';
 const ITEM_PROFESIONAL = '1.3';
@@ -407,7 +409,7 @@ const rowsEquivalent = (a: GastoGeneralRow[], b: GastoGeneralRow[]) => {
     });
 };
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
+const r2 = (n: number) => redondearMoneda(n);
 
 const fmt = (n: number) =>
     new Intl.NumberFormat('es-PE', {
@@ -432,16 +434,11 @@ export const recalculate = (source: GastoGeneralRow[]): GastoGeneralRow[] => {
     const details = (sec: string) =>
         rows.filter((r) => r.tipo_fila !== 'seccion' && getSec(r) === sec);
     const secTotal = (sec: string) =>
-        details(sec).reduce((s, r) => s + (Number(r.parcial) || 0), 0);
+        sumarDecimales(details(sec).map((row) => row.parcial));
 
     // Seccion 1 — personal, calculo directo
     details('1').forEach((row) => {
-        row.parcial = r2(
-            (Number(row.cantidad) || 0) *
-                (Number(row.periodo) || 0) *
-                toFactor(row.participacion) *
-                (Number(row.precio_unitario) || 0),
-        );
+        row.parcial = calcularParcial(row.cantidad, row.periodo, row.participacion, row.precio_unitario);
     });
 
     const totalPersonal = secTotal('1');
@@ -456,62 +453,34 @@ export const recalculate = (source: GastoGeneralRow[]): GastoGeneralRow[] => {
         const pct = Number(row.porcentaje ?? 0);
         if (pct > 0) {
             // Auto-calcula precio_unitario como fracción del personal total
-            row.precio_unitario = r2(totalPersonal * (pct / 100));
+            row.precio_unitario = redondearMoneda(decimalSeguro(totalPersonal).times(pct).dividedBy(100));
             // Aseguramos que parcial considere cantidad, periodo y participación (por defecto 1,1,100)
-            row.parcial = r2(
-                (Number(row.cantidad) || 0) *
-                    (Number(row.periodo) || 0) *
-                    toFactor(row.participacion) *
-                    (Number(row.precio_unitario) || 0),
-            );
+            row.parcial = calcularParcial(row.cantidad, row.periodo, row.participacion, row.precio_unitario);
         } else {
             // Fórmula estándar para filas sin porcentaje automático
-            row.parcial = r2(
-                (Number(row.cantidad) || 0) *
-                    (Number(row.periodo) || 0) *
-                    toFactor(row.participacion) *
-                    (Number(row.precio_unitario) || 0),
-            );
+            row.parcial = calcularParcial(row.cantidad, row.periodo, row.participacion, row.precio_unitario);
         }
     });
 
     // Secciones 3-6 — calculo directo
     ['3', '4', '5', '6'].forEach((sec) => {
         details(sec).forEach((row) => {
-            row.parcial = r2(
-                (Number(row.cantidad) || 0) *
-                    (Number(row.periodo) || 0) *
-                    toFactor(row.participacion) *
-                    (Number(row.precio_unitario) || 0),
-            );
+            row.parcial = calcularParcial(row.cantidad, row.periodo, row.participacion, row.precio_unitario);
         });
     });
 
     // Seccion 7 — gastos admin, precio = % de secciones 1-6
-    const base16 = ['1', '2', '3', '4', '5', '6'].reduce(
-        (a, s) => a + secTotal(s),
-        0,
-    );
+    const base16 = sumarDecimales(['1', '2', '3', '4', '5', '6'].map(secTotal));
     details('7').forEach((row) => {
         const pct7 = Number(row.porcentaje ?? 0);
         if (pct7 > 0) {
             // Auto-calcula precio_unitario como % de la suma secciones 1-6
-            row.precio_unitario = r2(base16 * (pct7 / 100));
+            row.precio_unitario = redondearMoneda(decimalSeguro(base16).times(pct7).dividedBy(100));
             // Aseguramos que parcial considere factores (por defecto 1,1,100)
-            row.parcial = r2(
-                (Number(row.cantidad) || 0) *
-                    (Number(row.periodo) || 0) *
-                    toFactor(row.participacion) *
-                    (Number(row.precio_unitario) || 0),
-            );
+            row.parcial = calcularParcial(row.cantidad, row.periodo, row.participacion, row.precio_unitario);
         } else {
             // Precio manual: fórmula estándar
-            row.parcial = r2(
-                (Number(row.cantidad) || 0) *
-                    (Number(row.periodo) || 0) *
-                    toFactor(row.participacion) *
-                    (Number(row.precio_unitario) || 0),
-            );
+            row.parcial = calcularParcial(row.cantidad, row.periodo, row.participacion, row.precio_unitario);
         }
     });
 
@@ -581,6 +550,7 @@ export function ControlConcurrentePanel({
     const { setRows, setRowsCalculated, setDirty, isDirty } =
         useGastosGeneralesStore();
     const { consolidadoBase: consolidadoBaseLocal } = useConsolidado();
+    const configuredPctCC = useProjectParamsStore((state) => state.params?.control_concurrente_porcentaje ?? DEFAULT_PCT_CC);
 
     const [consolidadoBaseSnapshot, setConsolidadoBaseSnapshot] = useState<
         number | null
@@ -597,8 +567,12 @@ export function ControlConcurrentePanel({
     const [nVisitas, setNVisitas] = useState(3.1);
     const [duracionVisita, setDuracion] = useState(4);
     const [pctCCInput, setPctCCInput] = useState<number | string>(
-        DEFAULT_PCT_CC,
+        configuredPctCC,
     );
+
+    useEffect(() => {
+        setPctCCInput(configuredPctCC);
+    }, [configuredPctCC]);
 
     // Expansion del arbol
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -831,8 +805,8 @@ export function ControlConcurrentePanel({
     if (loading) {
         return (
             <div className="flex h-full items-center justify-center bg-slate-900/50">
-                <div className="flex flex-col items-center gap-3">
-                    <Loader2 className="h-10 w-10 animate-spin text-amber-500" />
+                <div className="flex flex-col items-center gap-1.5">
+                    <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
                     <span className="text-xs font-medium tracking-widest text-slate-400 uppercase">
                         Cargando control concurrente...
                     </span>
@@ -865,37 +839,37 @@ export function ControlConcurrentePanel({
     return (
         <div className="flex h-full flex-col bg-slate-900">
             {/* ── Cabecera ── */}
-            <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800/80 px-4 py-3 backdrop-blur-sm">
+            <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800/80 px-2 py-1 backdrop-blur-sm">
                 <div>
-                    <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest text-slate-200 uppercase">
+                    <h2 className="flex items-center gap-1 text-xs font-bold tracking-widest text-slate-200 uppercase">
                         <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
                         Control Concurrente
                     </h2>
-                    <p className="mt-0.5 text-[10px] font-medium tracking-tight text-slate-500 uppercase">
+                    <p className="mt-0.5 text-xs font-medium tracking-tight text-slate-500 uppercase">
                         Gastos de control y supervision de obra
                     </p>
                 </div>
                 <div className="flex flex-col items-end">
-                    <span className="text-[10px] font-semibold text-slate-500 uppercase">
+                    <span className="text-xs font-semibold text-slate-500 uppercase">
                         Total CC
                     </span>
-                    <span className="font-mono text-sm font-bold text-emerald-400">
+                    <span className="font-mono text-xs font-bold text-emerald-400">
                         {fmtCur(totalFilas)}
                     </span>
                 </div>
             </div>
 
             {/* ── Plazo del proyecto ── */}
-            <div className="border-b border-slate-700 bg-slate-800/30 px-4 py-2">
+            <div className="border-b border-slate-700 bg-slate-800/30 px-2 py-1">
                 <PlazoDisplay variant="compact" color="emerald" />
             </div>
 
             {/* ── Panel resumen porcentaje dinámico ── */}
-            <div className="border-b border-slate-700 bg-slate-800/40 px-4 py-2">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-slate-800/60 px-4 py-2 text-xs">
+            <div className="border-b border-slate-700 bg-slate-800/40 px-2 py-1">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-slate-800/60 px-2 py-1 text-xs">
                     {/* Primera línea - Cálculo automático */}
                     <label className="flex items-center gap-1.5 whitespace-nowrap">
-                        <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+                        <span className="text-xs font-bold tracking-wider text-slate-400 uppercase">
                             Calculo automatico
                         </span>
                         <input
@@ -910,7 +884,7 @@ export function ControlConcurrentePanel({
                             }
                             className="w-16 rounded border border-slate-600 bg-slate-700/60 px-1.5 py-1 text-right font-mono text-xs text-slate-200 focus:border-emerald-500 focus:outline-none"
                         />
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase">
+                        <span className="text-xs font-semibold text-slate-500 uppercase">
                             %
                         </span>
                     </label>
@@ -947,14 +921,14 @@ export function ControlConcurrentePanel({
                     {/* Título de visitas compacto */}
                     <div className="flex items-center gap-1 whitespace-nowrap">
                         <Users className="h-3.5 w-3.5 text-amber-400" />
-                        <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+                        <span className="text-xs font-bold tracking-wider text-slate-400 uppercase">
                             Visitas
                         </span>
                     </div>
 
                     {/* N° de visitas */}
                     <label className="flex items-center gap-1.5 whitespace-nowrap">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase">
+                        <span className="text-xs font-semibold text-slate-500 uppercase">
                             Visitas
                         </span>
                         <input
@@ -972,7 +946,7 @@ export function ControlConcurrentePanel({
 
                     {/* Duración de visita */}
                     <label className="flex items-center gap-1.5 whitespace-nowrap">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase">
+                        <span className="text-xs font-semibold text-slate-500 uppercase">
                             Duración
                         </span>
                         <input
@@ -989,10 +963,10 @@ export function ControlConcurrentePanel({
                     </label>
 
                     {/* Valores derivados */}
-                    <div className="flex items-center gap-2 whitespace-nowrap">
+                    <div className="flex items-center gap-1 whitespace-nowrap">
                         <div className="flex items-center gap-1 rounded bg-slate-700/50 px-1.5 py-1">
                             <Calculator className="h-3 w-3 text-emerald-400" />
-                            <span className="text-[10px] text-slate-500">
+                            <span className="text-xs text-slate-500">
                                 Com:
                             </span>
                             <span className="font-mono text-xs font-bold text-emerald-300">
@@ -1001,7 +975,7 @@ export function ControlConcurrentePanel({
                         </div>
                         <div className="flex items-center gap-1 rounded bg-slate-700/50 px-1.5 py-1">
                             <Calculator className="h-3 w-3 text-amber-400" />
-                            <span className="text-[10px] text-slate-500">
+                            <span className="text-xs text-slate-500">
                                 Pas:
                             </span>
                             <span className="font-mono text-xs font-bold text-amber-300">
@@ -1010,7 +984,7 @@ export function ControlConcurrentePanel({
                         </div>
                         <div className="flex items-center gap-1 rounded bg-slate-700/50 px-1.5 py-1">
                             <Calculator className="h-3 w-3 text-sky-400" />
-                            <span className="text-[10px] text-slate-500">
+                            <span className="text-xs text-slate-500">
                                 Dias:
                             </span>
                             <span className="font-mono text-xs font-bold text-sky-300">
@@ -1024,36 +998,36 @@ export function ControlConcurrentePanel({
             {/* ── Tabla DataTree ── */}
             <div className="flex-1 overflow-auto">
                 <table className="w-full border-collapse text-left text-xs">
-                    <thead className="sticky top-0 z-10 bg-slate-800/95 text-[10px] font-bold tracking-wider text-slate-400 uppercase backdrop-blur-sm">
+                    <thead className="sticky top-0 z-10 bg-slate-800/95 text-xs font-bold tracking-wider text-slate-400 uppercase backdrop-blur-sm">
                         <tr>
-                            <th className="border-b border-slate-700 p-2 pl-4">
+                            <th className="border-b border-slate-700 p-1 pl-4">
                                 Concepto / Gasto
                             </th>
-                            <th className="w-16 border-b border-slate-700 p-2 text-center">
+                            <th className="w-16 border-b border-slate-700 p-1 text-center">
                                 Und.
                             </th>
-                            <th className="w-20 border-b border-slate-700 p-2 text-right">
+                            <th className="w-20 border-b border-slate-700 p-1 text-right">
                                 Cant.
                             </th>
-                            <th className="w-20 border-b border-slate-700 p-2 text-right">
+                            <th className="w-20 border-b border-slate-700 p-1 text-right">
                                 Partic. %
                             </th>
-                            <th className="w-20 border-b border-slate-700 p-2 text-right">
+                            <th className="w-20 border-b border-slate-700 p-1 text-right">
                                 Periodo
                             </th>
-                            <th className="w-14 border-b border-slate-700 p-2 text-right">
+                            <th className="w-14 border-b border-slate-700 p-1 text-right">
                                 %
                             </th>
-                            <th className="w-28 border-b border-slate-700 p-2 text-right">
+                            <th className="w-28 border-b border-slate-700 p-1 text-right">
                                 P.Unit.
                             </th>
-                            <th className="w-28 border-b border-slate-700 p-2 text-right">
+                            <th className="w-28 border-b border-slate-700 p-1 text-right">
                                 Sub total
                             </th>
-                            <th className="w-28 border-b border-slate-700 p-2 text-right">
+                            <th className="w-28 border-b border-slate-700 p-1 text-right">
                                 Total S/.
                             </th>
-                            <th className="w-8 border-b border-slate-700 p-2" />
+                            <th className="w-8 border-b border-slate-700 p-1" />
                         </tr>
                     </thead>
 
@@ -1069,7 +1043,7 @@ export function ControlConcurrentePanel({
                                     {/* Fila seccion */}
                                     <tr className="bg-slate-800/70">
                                         <td
-                                            className="cursor-pointer p-2 pl-3 select-none"
+                                            className="cursor-pointer p-1 pl-3 select-none"
                                             colSpan={8}
                                             onClick={() =>
                                                 setExpanded((p) => ({
@@ -1078,21 +1052,21 @@ export function ControlConcurrentePanel({
                                                 }))
                                             }
                                         >
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-1">
                                                 {isExp ? (
                                                     <ChevronDown className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
                                                 ) : (
                                                     <ChevronRight className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
                                                 )}
-                                                <span className="text-[11px] font-bold tracking-widest text-emerald-300 uppercase">
+                                                <span className="text-xs font-bold tracking-widest text-emerald-300 uppercase">
                                                     {sec.descripcion}
                                                 </span>
-                                                <span className="text-[9px] text-slate-600">
+                                                <span className="text-xs text-slate-600">
                                                     ({children.length} items)
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="p-2 text-right font-mono font-bold text-emerald-300">
+                                        <td className="p-1 text-right font-mono font-bold text-emerald-300">
                                             {fmt(Number(sec.parcial) || 0)}
                                         </td>
                                         <td />
@@ -1235,7 +1209,7 @@ export function ControlConcurrentePanel({
                                                     </td>
 
                                                     {/* Sub total */}
-                                                    <td className="p-2 text-right font-mono font-semibold text-slate-200">
+                                                    <td className="p-1 text-right font-mono font-semibold text-slate-200">
                                                         {fmt(
                                                             Number(
                                                                 row.parcial,
@@ -1244,7 +1218,7 @@ export function ControlConcurrentePanel({
                                                     </td>
 
                                                     {/* Total S/. (vacio en detalle) */}
-                                                    <td className="p-2 text-right text-slate-700">
+                                                    <td className="p-1 text-right text-slate-700">
                                                         —
                                                     </td>
 
@@ -1277,7 +1251,7 @@ export function ControlConcurrentePanel({
                                                     onClick={() =>
                                                         handleAddRow(secCode)
                                                     }
-                                                    className="flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-medium text-slate-600 transition-all hover:bg-slate-700/40 hover:text-emerald-400"
+                                                    className="flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-medium text-slate-600 transition-all hover:bg-slate-700/40 hover:text-emerald-400"
                                                 >
                                                     <Plus className="h-3 w-3" />
                                                     Anadir item a esta seccion
@@ -1319,13 +1293,13 @@ export function ControlConcurrentePanel({
             </div>
 
             {/* ── Footer ── */}
-            <div className="flex items-center justify-between border-t border-slate-700 bg-slate-800/40 px-4 py-3 backdrop-blur-sm">
-                <span className="text-[10px] text-slate-600 italic">
+            <div className="flex items-center justify-between border-t border-slate-700 bg-slate-800/40 px-2 py-1 backdrop-blur-sm">
+                <span className="text-xs text-slate-600 italic">
                     Usa el boton "+" dentro de cada seccion para agregar items
                 </span>
                 <div className="flex items-center gap-4">
                     {isDirty && (
-                        <span className="flex animate-pulse items-center gap-1.5 text-[10px] font-bold tracking-widest text-emerald-500 uppercase">
+                        <span className="flex animate-pulse items-center gap-1.5 text-xs font-bold tracking-widest text-emerald-500 uppercase">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                             Cambios pendientes
                         </span>
@@ -1334,7 +1308,7 @@ export function ControlConcurrentePanel({
                         onClick={handleSave}
                         disabled={!isDirty || loading}
                         className={[
-                            'flex items-center gap-2 rounded-lg px-6 py-2 text-xs font-bold text-white shadow-lg transition-all',
+                            'flex items-center gap-1 rounded-lg px-6 py-2 text-xs font-bold text-white shadow-lg transition-all',
                             isDirty && !loading
                                 ? 'bg-emerald-600 shadow-emerald-900/30 hover:bg-emerald-500 active:scale-95'
                                 : 'cursor-not-allowed bg-slate-700 opacity-50',

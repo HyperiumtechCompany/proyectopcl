@@ -488,6 +488,15 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                                 </button>
                             </div>
 
+                            {/* Botón Gastos Generales */}
+                            <a
+                                href={`/costos/proyectos/${project}/gastos-generales/consolidado`}
+                                className="flex shrink-0 items-center gap-1 rounded border border-purple-600/30 bg-purple-50 px-2.5 py-0.5 text-[10px] font-medium text-purple-700 hover:bg-purple-100 transition-colors dark:border-purple-500/30 dark:bg-purple-900/20 dark:text-purple-300 dark:hover:bg-purple-900/40"
+                                title="Ir a Gastos Generales y Consolidado"
+                            >
+                                <Calculator size={11} /> Gastos Generales
+                            </a>
+
                             {/* Botón Valorizado */}
                             <a
                                 href={`/module/crono_valorizado?project=${project}`}

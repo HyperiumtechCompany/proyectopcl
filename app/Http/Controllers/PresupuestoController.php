@@ -11,6 +11,7 @@ use App\Models\AcuSubpartida;
 use App\Models\CostoProject;
 use App\Services\CostoDatabaseService;
 use App\Services\GGFijoDesagregadoService;
+use App\Support\GastosGeneralesDecimal as DecimalAmount;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\ConcurrencyErrorDetector;
 use Illuminate\Database\Schema\Blueprint;
@@ -454,6 +455,7 @@ class PresupuestoController extends Controller
             'utilidad_porcentaje' => $request->input('utilidad_porcentaje'),
             'gastos_generales_porcentaje' => $request->input('gastos_generales_porcentaje'),
             'igv_porcentaje' => $request->input('igv_porcentaje'),
+            'control_concurrente_porcentaje' => $request->input('control_concurrente_porcentaje'),
             'componente_ii_monto' => $request->input('componente_ii_monto'),
             'componentes_extra' => $request->input('componentes_extra'),
             'conceptos_adicionales' => $request->input('conceptos_adicionales'),
@@ -529,104 +531,116 @@ class PresupuestoController extends Controller
         // partida una vez por cada nivel de su árbol (padre + abuelo + ... + raíz),
         // inflando Costo Directo varias veces. Mismo criterio que ConsolidadoPanel.tsx
         // (filtra por unidad) y CronoValorizadoController (filtra por metrado > 0).
-        $costoDirecto = (float) $connection->table('presupuesto_general')
+        $costoDirecto = DecimalAmount::of($connection->table('presupuesto_general')
             ->where('presupuesto_id', $tenantPresupuestoId)
             ->where('metrado', '>', 0)
-            ->sum('parcial');
+            ->sum('parcial'));
 
-        $ggFijosTotal = (float) $connection->table('gg_fijos')
+        $ggFijosTotal = DecimalAmount::of($connection->table('gg_fijos')
             ->where('presupuesto_id', $tenantPresupuestoId)
             ->where('tipo_fila', 'detalle')
-            ->sum('parcial');
+            ->sum('parcial'));
 
-        $ggVariablesTotal = (float) $connection->table('gg_variables')
+        $ggVariablesTotal = DecimalAmount::of($connection->table('gg_variables')
             ->where('presupuesto_id', $tenantPresupuestoId)
             ->where('tipo_fila', 'detalle')
-            ->sum('parcial');
+            ->sum('parcial'));
 
         $supervisionRow = $connection->table('gg_supervision')
             ->where('presupuesto_id', $tenantPresupuestoId)
             ->where('item_codigo', 'VIII')
             ->orderBy('id', 'desc')
             ->first();
-        $supervisionTotal = $supervisionRow
-            ? (float) (($supervisionRow->subtotal ?? $supervisionRow->sub_total) ?? 0)
-            : (float) $connection->table('gg_supervision')
+        $supervisionTotal = DecimalAmount::of($supervisionRow
+            ? (($supervisionRow->subtotal ?? $supervisionRow->sub_total) ?? 0)
+            : $connection->table('gg_supervision')
                 ->where('presupuesto_id', $tenantPresupuestoId)
                 ->where('tipo_fila', 'detalle')
-                ->sum('subtotal');
+                ->sum('subtotal'));
 
-        $controlConcurrenteTotal = (float) $connection->table('gg_control_concurrente')
+        $controlConcurrenteTotal = DecimalAmount::of($connection->table('gg_control_concurrente')
             ->where('presupuesto_id', $tenantPresupuestoId)
             ->where('tipo_fila', 'detalle')
-            ->sum('sub_total');
+            ->sum('sub_total'));
 
         $totalGastosGenerales = $gastosGeneralesPctOverride !== null
-            ? $costoDirecto * ((float) $gastosGeneralesPctOverride / 100)
-            : $ggFijosTotal + $ggVariablesTotal;
-        $utilidadTotal = $costoDirecto * ($utilidadPct / 100);
-        $subTotalPresupuesto = $costoDirecto + $totalGastosGenerales + $utilidadTotal;
-        $igvComponenteI = $subTotalPresupuesto * ($igvPct / 100);
-        $subTotalComponenteI = $subTotalPresupuesto + $igvComponenteI;
+            ? DecimalAmount::percent($costoDirecto, $gastosGeneralesPctOverride)
+            : DecimalAmount::add($ggFijosTotal, $ggVariablesTotal);
+        $utilidadTotal = DecimalAmount::percent($costoDirecto, $utilidadPct);
+        $subTotalPresupuesto = DecimalAmount::add($costoDirecto, $totalGastosGenerales, $utilidadTotal);
+        $igvComponenteI = DecimalAmount::percent($subTotalPresupuesto, $igvPct);
+        $subTotalComponenteI = DecimalAmount::add($subTotalPresupuesto, $igvComponenteI);
 
-        $componenteIIMontoNum = (float) $componenteIIMonto;
-        $igvComponenteII = $componenteIIMontoNum * ($igvPct / 100);
-        $subTotalComponenteII = $componenteIIMontoNum + $igvComponenteII;
+        $componenteIIMontoNum = DecimalAmount::of($componenteIIMonto);
+        $igvComponenteII = DecimalAmount::percent($componenteIIMontoNum, $igvPct);
+        $subTotalComponenteII = DecimalAmount::add($componenteIIMontoNum, $igvComponenteII);
 
-        $extraTotal = 0.0;
+        $extraTotal = DecimalAmount::of(0);
         foreach ($extraComponents as $comp) {
-            $monto = (float) ($comp['monto'] ?? 0);
-            $extraTotal += $monto + ($monto * ($igvPct / 100));
+            if (($comp['active'] ?? true) === false) {
+                continue;
+            }
+            $monto = DecimalAmount::of($comp['monto'] ?? 0);
+            $extraTotal = DecimalAmount::add($extraTotal, $monto, DecimalAmount::percent($monto, $igvPct));
         }
 
-        $totalComponents = $subTotalComponenteI + $subTotalComponenteII + $extraTotal;
-        $additionalTotal = 0.0;
+        $totalComponents = DecimalAmount::add($subTotalComponenteI, $subTotalComponenteII, $extraTotal);
+        $additionalTotal = DecimalAmount::of(0);
         foreach ($additionalConcepts as $concept) {
-            $value = (float) ($concept['valor'] ?? 0);
-            $additionalTotal += ($concept['tipo'] ?? 'porcentaje') === 'monto'
-                ? $value
-                : $totalComponents * ($value / 100);
+            $value = DecimalAmount::of($concept['valor'] ?? 0);
+            $additionalTotal = $additionalTotal->plus(
+                ($concept['tipo'] ?? 'porcentaje') === 'monto'
+                    ? $value
+                    : DecimalAmount::percent($totalComponents, $value)
+            );
         }
-        $totalConsolidado = $totalComponents + ($hasAdditionalConceptsConfig ? $additionalTotal : $supervisionTotal);
-        $controlConcurrenteFinanciado = $totalConsolidado * 0.02;
-        $totalInversionObra = $totalConsolidado + $controlConcurrenteFinanciado;
+        $totalConsolidado = DecimalAmount::add($totalComponents, $hasAdditionalConceptsConfig ? $additionalTotal : $supervisionTotal);
+        $ccPct = $inputs['control_concurrente_porcentaje']
+            ?? ($projectParams->control_concurrente_porcentaje ?? 0.6);
+        $controlConcurrenteFinanciado = DecimalAmount::percent($totalConsolidado, $ccPct);
+
+        $totalInversionObra = DecimalAmount::add($totalConsolidado, $controlConcurrenteFinanciado);
 
         $payload = [
             'presupuesto_id' => $tenantPresupuestoId,
-            'total_costo_directo' => round($costoDirecto, 4),
-            'total_gg_fijos' => round($ggFijosTotal, 4),
-            'total_gg_variables' => round($ggVariablesTotal, 4),
-            'total_supervision' => round($supervisionTotal, 4),
-            'total_control_concurrente' => round($controlConcurrenteTotal, 4),
+            'total_costo_directo' => DecimalAmount::storage($costoDirecto),
+            'total_gg_fijos' => DecimalAmount::storage($ggFijosTotal),
+            'total_gg_variables' => DecimalAmount::storage($ggVariablesTotal),
+            'total_supervision' => DecimalAmount::storage($supervisionTotal),
+            'total_control_concurrente' => DecimalAmount::storage($controlConcurrenteTotal),
 
             'utilidad_porcentaje' => round((float) $utilidadPct, 4),
             'gastos_generales_porcentaje' => $gastosGeneralesPctOverride !== null ? round((float) $gastosGeneralesPctOverride, 4) : null,
             'igv_porcentaje' => round((float) $igvPct, 4),
-            'componente_ii_monto' => round($componenteIIMontoNum, 4),
+            'componente_ii_monto' => DecimalAmount::storage($componenteIIMontoNum),
             'componentes_extra_json' => json_encode($extraComponents),
             'conceptos_adicionales_json' => $hasAdditionalConceptsConfig ? json_encode($additionalConcepts) : null,
 
-            'comp_i_costo_directo' => round($costoDirecto, 4),
+            'comp_i_costo_directo' => DecimalAmount::storage($costoDirecto),
             'comp_i_porcentaje' => 100.0000,
-            'comp_ii_gastos_generales' => round($totalGastosGenerales, 4),
-            'comp_ii_porcentaje' => $costoDirecto > 0 ? round(($totalGastosGenerales / $costoDirecto) * 100, 4) : 0,
-            'comp_iii_utilidad' => round($utilidadTotal, 4),
+            'comp_ii_gastos_generales' => DecimalAmount::storage($totalGastosGenerales),
+            'comp_ii_porcentaje' => DecimalAmount::storage(DecimalAmount::percentageOf($totalGastosGenerales, $costoDirecto)),
+            'comp_iii_utilidad' => DecimalAmount::storage($utilidadTotal),
             'comp_iii_porcentaje' => round((float) $utilidadPct, 4),
-            'comp_iv_subtotal_sin_igv' => round($subTotalPresupuesto, 4),
+            'comp_iv_subtotal_sin_igv' => DecimalAmount::storage($subTotalPresupuesto),
             'comp_iv_porcentaje' => 100.0000,
-            'comp_v_igv' => round($igvComponenteI, 4),
+            'comp_v_igv' => DecimalAmount::storage($igvComponenteI),
             'comp_v_porcentaje' => round((float) $igvPct, 4),
-            'comp_vi_valor_con_igv' => round($subTotalComponenteI, 4),
+            'comp_vi_valor_con_igv' => DecimalAmount::storage($subTotalComponenteI),
             'comp_vi_porcentaje' => 100.0000,
 
-            'total_presupuesto_obra' => round($totalComponents, 4),
-            'total_con_igv' => round($subTotalComponenteI, 4),
-            'total_inversion_obra' => round($totalInversionObra, 4),
+            'total_presupuesto_obra' => DecimalAmount::storage($totalComponents),
+            'total_con_igv' => DecimalAmount::storage($subTotalComponenteI),
+            'total_inversion_obra' => DecimalAmount::storage($totalInversionObra),
 
-            'total_letras' => $this->amountToWords($totalConsolidado),
-            'total_inversion_obra_letras' => $this->amountToWords($totalInversionObra),
-            'porcentaje_gg_sobre_cd' => $costoDirecto > 0 ? round($totalGastosGenerales / $costoDirecto, 4) : 0,
-            'porcentaje_supervision_sobre_cd' => $costoDirecto > 0 ? round($supervisionTotal / $costoDirecto, 4) : 0,
+            // Control Concurrente configurable
+            'control_concurrente_porcentaje' => round($ccPct, 4),
+            'total_control_concurrente_financiado' => DecimalAmount::storage($controlConcurrenteFinanciado),
+
+            'total_letras' => $this->amountToWords($totalConsolidado->toFloat()),
+            'total_inversion_obra_letras' => $this->amountToWords($totalInversionObra->toFloat()),
+            'porcentaje_gg_sobre_cd' => DecimalAmount::storage(DecimalAmount::percentageOf($totalGastosGenerales, $costoDirecto)),
+            'porcentaje_supervision_sobre_cd' => DecimalAmount::storage(DecimalAmount::percentageOf($supervisionTotal, $costoDirecto)),
             'calculado_at' => now(),
             'updated_at' => now(),
         ];
@@ -2524,6 +2538,21 @@ class PresupuestoController extends Controller
             'igv_porcentaje' => 'nullable|numeric|min:0|max:100',
             'jornada_laboral_horas' => 'nullable|numeric|min:1|max:24',
             'rmv' => 'nullable|numeric|min:0',
+            'asignacion_familiar_factor' => 'nullable|numeric|min:0',
+            'snp_porcentaje' => 'nullable|numeric|min:0|max:100',
+            'essalud_porcentaje' => 'nullable|numeric|min:0|max:100',
+            'cts_porcentaje' => 'nullable|numeric|min:0|max:100',
+            'gratificacion_porcentaje' => 'nullable|numeric|min:0|max:100',
+            'vacaciones_porcentaje' => 'nullable|numeric|min:0|max:100',
+            'sencico_porcentaje' => 'nullable|numeric|min:0|max:100',
+            'itf_porcentaje' => 'nullable|numeric|min:0|max:100',
+            'itf_cargo_adicional' => 'nullable|numeric|min:0',
+            'control_concurrente_porcentaje' => 'nullable|numeric|min:0|max:100',
+            'sctr_salud_porcentaje' => 'nullable|numeric|min:0|max:100',
+            'sctr_pension_porcentaje' => 'nullable|numeric|min:0|max:100',
+            'poliza_essalud_vida_porcentaje' => 'nullable|numeric|min:0|max:100',
+            'seguro_car_porcentaje' => 'nullable|numeric|min:0|max:100',
+            'recargo_administrativo_cc_porcentaje' => 'nullable|numeric|min:0|max:100',
         ]);
 
         $this->dbService->updateProjectFinancialParams(
@@ -2692,7 +2721,17 @@ class PresupuestoController extends Controller
      */
     private function getAvailableSubsections(): array
     {
+        $excluded = [
+            'consolidado',
+            'gastos_generales',
+            'gastos_fijos',
+            'supervision',
+            'control_concurrente',
+            'remuneraciones',
+        ];
+
         return collect(self::SUBSECTION_LABELS)
+            ->filter(fn ($label, $key) => ! in_array($key, $excluded))
             ->map(fn ($label, $key) => [
                 'key' => $key,
                 'label' => $label,

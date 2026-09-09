@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { produce } from 'immer';
 import { create } from 'zustand';
+import { calcularParcial, sumarDecimales } from '../lib/calculos';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -94,12 +95,15 @@ interface SupervisionGGDetalleState {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function calcSubtotal(row: SupervisionGGDetalleRow): number {
-    return Number(((row.cantidad || 0) * (row.meses || 0) * (row.importe || 0)).toFixed(2));
+    return calcularParcial(row.cantidad, row.meses, 100, row.importe);
 }
 
 function calcSectionTotal(section: SupervisionGGDetalleRow): number {
-    return Number((section.hijos || []).reduce((s, r) => s + (r.subtotal || 0), 0).toFixed(2));
+    return sumarDecimales((section.hijos || []).map((row) => row.subtotal));
 }
+
+const calcGrandTotal = (sections: SupervisionGGDetalleRow[]): number =>
+    sumarDecimales(sections.map((section) => section.total_seccion));
 
 function flattenToDbRows(sections: SupervisionGGDetalleRow[]): any[] {
     const out: any[] = [];
@@ -258,7 +262,7 @@ export const useSupervisionGGDetalleStore = create<SupervisionGGDetalleState>((s
                 }
 
                 section.total_seccion = calcSectionTotal(section);
-                state.totalGlobal = Number(state.sections.reduce((s, sec) => s + sec.total_seccion, 0).toFixed(2));
+                state.totalGlobal = calcGrandTotal(state.sections);
             })
         );
     },
@@ -287,7 +291,7 @@ export const useSupervisionGGDetalleStore = create<SupervisionGGDetalleState>((s
         set(
             produce((state: SupervisionGGDetalleState) => {
                 state.sections.splice(sectionIdx, 1);
-                state.totalGlobal = Number(state.sections.reduce((s, sec) => s + sec.total_seccion, 0).toFixed(2));
+                state.totalGlobal = calcGrandTotal(state.sections);
             })
         );
     },
@@ -312,7 +316,7 @@ export const useSupervisionGGDetalleStore = create<SupervisionGGDetalleState>((s
                     total_seccion: 0,
                 });
                 section.total_seccion = calcSectionTotal(section);
-                state.totalGlobal = Number(state.sections.reduce((s, sec) => s + sec.total_seccion, 0).toFixed(2));
+                state.totalGlobal = calcGrandTotal(state.sections);
             })
         );
     },
@@ -324,7 +328,7 @@ export const useSupervisionGGDetalleStore = create<SupervisionGGDetalleState>((s
                 if (!section?.hijos) return;
                 section.hijos.splice(rowIdx, 1);
                 section.total_seccion = calcSectionTotal(section);
-                state.totalGlobal = Number(state.sections.reduce((s, sec) => s + sec.total_seccion, 0).toFixed(2));
+                state.totalGlobal = calcGrandTotal(state.sections);
             })
         );
     },
@@ -332,17 +336,13 @@ export const useSupervisionGGDetalleStore = create<SupervisionGGDetalleState>((s
     calculateTree: () => {
         set(
             produce((state: SupervisionGGDetalleState) => {
-                let grandTotal = 0;
                 for (const section of state.sections) {
-                    let sectionSum = 0;
                     for (const row of (section.hijos || [])) {
                         row.subtotal = calcSubtotal(row);
-                        sectionSum += row.subtotal;
                     }
-                    section.total_seccion = Number(sectionSum.toFixed(2));
-                    grandTotal += section.total_seccion;
+                    section.total_seccion = calcSectionTotal(section);
                 }
-                state.totalGlobal = Number(grandTotal.toFixed(2));
+                state.totalGlobal = calcGrandTotal(state.sections);
             })
         );
     },

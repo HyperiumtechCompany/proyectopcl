@@ -2,8 +2,40 @@ import { produce } from 'immer';
 import { create } from 'zustand';
 
 import type { Remuneracion } from '../../../../types/presupuestos';
+import { calcularRemuneracion, decimalSeguro, sumarDecimales } from '../lib/calculos';
+import { useProjectParamsStore } from '../../presupuesto/stores/projectParamsStore';
 
 export type RemuneracionRow = Remuneracion;
+
+function recalcularFila(row: RemuneracionRow): RemuneracionRow {
+    const params = useProjectParamsStore.getState().params;
+    const calculo = calcularRemuneracion({
+        sueldoBasico: row.sueldo_basico,
+        cantidad: row.cantidad,
+        meses: row.meses,
+        participacion: row.participacion,
+        tasas: params ? {
+            asignacionFamiliarFactor: params.asignacion_familiar_factor,
+            snpPorcentaje: params.snp_porcentaje,
+            essaludPorcentaje: params.essalud_porcentaje,
+            ctsPorcentaje: params.cts_porcentaje,
+            gratificacionPorcentaje: params.gratificacion_porcentaje,
+            vacacionesPorcentaje: params.vacaciones_porcentaje,
+        } : undefined,
+    });
+
+    return {
+        ...row,
+        asignacion_familiar: calculo.asignacionFamiliar,
+        snp: calculo.snp,
+        essalud: calculo.essalud,
+        cts: calculo.cts,
+        vacaciones: calculo.vacaciones,
+        gratificacion: calculo.gratificacion,
+        total_mensual_unitario: calculo.totalMensual,
+        total_proyecto: calculo.totalProyecto,
+    };
+}
 
 interface RemuneracionesState {
     rows: RemuneracionRow[];
@@ -30,6 +62,7 @@ interface RemuneracionesState {
         total: any;
     };
     setMesesAll: (meses: number) => void;
+    recalculateAll: () => void;
 }
 
 export const useRemuneracionesStore = create<RemuneracionesState>(
@@ -38,9 +71,13 @@ export const useRemuneracionesStore = create<RemuneracionesState>(
         loading: false,
         isDirty: false,
 
-        setRows: (rows) => set({ rows, isDirty: false }),
+        setRows: (rows) => set({ rows: rows.map(recalcularFila), isDirty: false }),
         setLoading: (loading) => set({ loading }),
         setDirty: (isDirty) => set({ isDirty }),
+        recalculateAll: () => set((state) => ({
+            rows: state.rows.map(recalcularFila),
+            isDirty: state.rows.length > 0 || state.isDirty,
+        })),
 
         updateCell: (index, field, value) => {
             set(
@@ -59,62 +96,36 @@ export const useRemuneracionesStore = create<RemuneracionesState>(
                         ];
 
                         if (baseFields.includes(field as string)) {
-                            const s = Number(row.sueldo_basico) || 0;
-                            const cantidad = Number(row.cantidad) || 0;
-                            const meses = Number(row.meses) || 0;
-                            const participacion =
-                                (Number(row.participacion) || 100) / 100;
+                            const calculo = recalcularFila(row);
 
                             // Monto base mensual para ESTA FILA (TOTAL MENSUAL DE LA FILA)
-                            const pu_total = s * cantidad * participacion;
 
                             // asignación familiar (Calculada para el total de la fila)
                             const AF_UNIT = 102.5; // RMV Actual en Perú es 1025, 10% es 102.5. El usuario usaba 46, pero mantendré 102.5 o lo que guste.
                             // Sin embargo, el usuario puso 46 en el código anterior. Usaré 46 si es lo que prefieren o 102.5.
                             // Re-chequeando: el usuario puso 46. Mantengo 46 por consistencia con su entorno.
-                            const af_row = 46 * cantidad * participacion;
-                            row.asignacion_familiar = Number(af_row.toFixed(2));
-                            const af = row.asignacion_familiar;
+                            row.asignacion_familiar = calculo.asignacion_familiar;
 
                             // base remunerativa para cálculos de beneficios (PU + AF)
-                            const base = pu_total + af;
 
                             // beneficios según nuevas reglas del usuario (SOBRE EL TOTAL DE LA FILA)
-                            row.gratificacion = Number(
-                                ((s + af) / 12).toFixed(2),
-                            );
-                            row.vacaciones = Number(((s + af) / 12).toFixed(2));
+                            row.gratificacion = calculo.gratificacion;
+                            row.vacaciones = calculo.vacaciones;
 
                             // para snp es 13% (0.13)
-                            row.snp = Number(((s + af) * 0.13).toFixed(2));
+                            row.snp = calculo.snp;
 
                             // para esalud es 9% (0.09) de PU
-                            row.essalud = Number((s * 0.09).toFixed(2));
+                            row.essalud = calculo.essalud;
 
                             // para cts es (pu + af + gratif) * 0.083333
-                            row.cts = Number(
-                                (
-                                    (s + af + row.gratificacion) *
-                                    0.083333
-                                ).toFixed(2),
-                            );
+                            row.cts = calculo.cts;
 
                             // total mensual (de la fila completa). SNP NO se suma al costo del empleador.
-                            row.total_mensual_unitario = Number(
-                                (
-                                    s +
-                                    af +
-                                    row.essalud +
-                                    row.cts +
-                                    row.vacaciones +
-                                    row.gratificacion
-                                ).toFixed(2),
-                            );
+                            row.total_mensual_unitario = calculo.total_mensual_unitario;
 
                             // total proyecto
-                            row.total_proyecto = Number(
-                                (row.total_mensual_unitario * meses).toFixed(2),
-                            );
+                            row.total_proyecto = calculo.total_proyecto;
                         }
                         state.isDirty = true;
                     }
@@ -160,55 +171,38 @@ export const useRemuneracionesStore = create<RemuneracionesState>(
         getSummary: () => {
             const { rows } = get();
 
-            // 1. Mensual row sums (Sum of row columns)
-            const m_pu = rows.reduce(
-                (acc, r) => acc + (Number(r.sueldo_basico) || 0),
-                0,
+            const calculadas = rows.map(recalcularFila);
+            const sumar = (field: keyof RemuneracionRow, porMeses = false) => sumarDecimales(
+                calculadas.map((row) => decimalSeguro(row[field]).times(porMeses ? row.meses : 1)),
             );
-            const m_af = rows.reduce(
-                (acc, r) => acc + (Number(r.asignacion_familiar) || 0),
-                0,
-            );
-            const m_gratif = rows.reduce(
-                (acc, r) => acc + (Number(r.gratificacion) || 0),
-                0,
-            );
-            const m_vac = rows.reduce(
-                (acc, r) => acc + (Number(r.vacaciones) || 0),
-                0,
-            );
+            const m_pu = sumarDecimales(calculadas.map((row) => {
+                const calculo = calcularRemuneracion({ sueldoBasico: row.sueldo_basico, cantidad: row.cantidad, meses: row.meses, participacion: row.participacion });
+                return calculo.sueldoBase;
+            }));
+            const m_af = sumar('asignacion_familiar');
+            const m_gratif = sumar('gratificacion');
+            const m_vac = sumar('vacaciones');
 
             // Mensual row calculated formulas as requested
-            const m_snp = (m_pu + m_af) * 0.13;
-            const m_essalud = m_pu * 0.09;
-            const m_cts = (m_pu + m_af + m_gratif) * 0.083333;
-            const m_total = m_pu + m_af + m_essalud + m_gratif + m_vac + m_cts;
+            const m_snp = sumar('snp');
+            const m_essalud = sumar('essalud');
+            const m_cts = sumar('cts');
+            const m_total = sumar('total_mensual_unitario');
 
             // 2. Total Project row sums (SumaProducto: meses * sueldo_basico)
-            const t_pu = rows.reduce(
-                (acc, r) =>
-                    acc + (Number(r.sueldo_basico) || 0) * (Number(r.meses) || 0),
-                0,
-            );
-            const t_af = rows.reduce(
-                (acc, r) =>
-                    acc + (Number(r.asignacion_familiar) || 0) * (Number(r.meses) || 0),
-                0,
-            );
-            const t_gratif = rows.reduce(
-                (acc, r) => (acc + (Number(r.gratificacion) || 0) * (Number(r.meses) || 0)),
-                0,
-            );
-            const t_vac = rows.reduce(
-                (acc, r) => (acc + (Number(r.vacaciones) || 0) * (Number(r.meses) || 0)),
-                0,
-            );
+            const t_pu = sumarDecimales(calculadas.map((row) => {
+                const calculo = calcularRemuneracion({ sueldoBasico: row.sueldo_basico, cantidad: row.cantidad, meses: row.meses, participacion: row.participacion });
+                return decimalSeguro(calculo.sueldoBase).times(row.meses);
+            }));
+            const t_af = sumar('asignacion_familiar', true);
+            const t_gratif = sumar('gratificacion', true);
+            const t_vac = sumar('vacaciones', true);
 
             // Total Project row calculated formulas
-            const t_snp = (t_pu + t_af) * 0.13;
-            const t_essalud = t_pu * 0.09; 
-            const t_cts = (t_pu + t_af + t_gratif) * 0.083333;
-            const t_total = t_pu + t_af + t_essalud + t_gratif + t_vac + t_cts;
+            const t_snp = sumar('snp', true);
+            const t_essalud = sumar('essalud', true);
+            const t_cts = sumar('cts', true);
+            const t_total = sumarDecimales(calculadas.map((row) => row.total_proyecto));
 
             return {
                 mensual: {
@@ -240,10 +234,10 @@ export const useRemuneracionesStore = create<RemuneracionesState>(
         },
 
         setMesesAll: (meses) => {
+            const mesesValidos = Math.max(1, Number(meses) || 1);
             set(produce((state: RemuneracionesState) => {
                 state.rows.forEach(row => {
-                    row.meses = meses;
-                    row.total_proyecto = Number((row.total_mensual_unitario * meses).toFixed(2));
+                    Object.assign(row, recalcularFila({ ...row, meses: mesesValidos }));
                 });
                 state.isDirty = true;
             }));

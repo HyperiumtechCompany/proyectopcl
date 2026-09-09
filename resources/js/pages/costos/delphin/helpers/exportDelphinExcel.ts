@@ -434,12 +434,40 @@ async function buildPresupuestoSheet(
         .reduce((s, r) => s + (r.parcial || r.metrado * r.precio_unitario || 0), 0);
 
     const summary = buildBudgetExportSummary(totalPres, resumenPresupuesto, isFiltered);
-    const summaryRows = [
+    const summaryRows: any[] = [
         { label: 'COSTO DIRECTO', amount: summary.costoDirecto },
         { label: 'GASTOS GENERALES', percentage: summary.gastosGeneralesPorcentaje, amount: summary.gastosGenerales },
         { label: 'UTILIDAD', percentage: summary.utilidadPorcentaje, amount: summary.utilidad },
-        { label: 'TOTAL', amount: summary.total, isTotal: true },
+        { label: 'SUBTOTAL (COSTO DIRECTO + GG + UTILIDAD)', amount: summary.total },
     ];
+
+    if (summary.igv !== undefined) {
+        summaryRows.push({ label: 'IGV', percentage: summary.igvPorcentaje, amount: summary.igv });
+        summaryRows.push({ label: 'SUBTOTAL COMPONENTE I', amount: summary.subTotalComponenteI });
+        
+        if ((summary.componenteIIMonto ?? 0) > 0) {
+            summaryRows.push({ label: 'COMPONENTE II', amount: summary.componenteIIMonto });
+            summaryRows.push({ label: 'IGV COMPONENTE II', percentage: summary.igvPorcentaje, amount: summary.subTotalComponenteII ? summary.subTotalComponenteII - summary.componenteIIMonto! : 0 });
+            summaryRows.push({ label: 'SUBTOTAL COMPONENTE II', amount: summary.subTotalComponenteII });
+        }
+        
+        if ((summary.extrasTotal ?? 0) > 0) {
+            summaryRows.push({ label: 'EXTRAS (CON IGV)', amount: summary.extrasTotal });
+        }
+        
+        summaryRows.push({ label: 'TOTAL COMPONENTES', amount: summary.totalComponents });
+        
+        if ((summary.supervision ?? 0) > 0) {
+            summaryRows.push({ label: 'SUPERVISION', percentage: summary.supervisionPorcentaje, amount: summary.supervision });
+        }
+        
+        summaryRows.push({ label: 'TOTAL CONSOLIDADO', amount: summary.totalConsolidado });
+        summaryRows.push({ label: 'CONTROL CONCURRENTE', percentage: summary.controlConcurrentePorcentaje, amount: summary.controlConcurrente });
+        summaryRows.push({ label: 'TOTAL PRESUPUESTO DE INVERSION', amount: summary.totalInversion, isTotal: true });
+    } else {
+        // Fallback for filtered view or old snapshot
+        summaryRows[3].isTotal = true;
+    }
 
     summaryRows.forEach((summaryRow, index) => {
         const rowNumber = filaActual + index;
@@ -725,6 +753,153 @@ async function buildFormulaPolinomicaSheet(
     ws.views = [{}];
 }
 
+async function buildFormulaAgrupamientoSheet(
+    ws: ExcelJS.Worksheet,
+    agrupamientoData: any,
+    proyecto: any,
+    projectName: string,
+    workbook: ExcelJS.Workbook
+) {
+    // 5 columns: Descripción | Nomenclatura | Coeficiente | Porcentaje | Agrupamiento
+    const totalColumnas = 5;
+    ws.getColumn(1).width = 50; // Descripción
+    ws.getColumn(2).width = 16; // Nomenclatura
+    ws.getColumn(3).width = 14; // Coeficiente
+    ws.getColumn(4).width = 16; // Porcentaje (%)
+    ws.getColumn(5).width = 28; // Agrupamiento
+
+    const nombreProyecto = String(projectName || 'PROYECTO');
+    let filaActual = await buildHeader(
+        workbook, ws, nombreProyecto, proyecto, totalColumnas,
+        'FÓRMULA POLINÓMICA-AGRUPAMIENTO PRELIMINAR'
+    );
+
+    // ── Cabecera de columnas ──────────────────────────────────────────────────
+    const headers = ['Descripción', 'Nomenclatura', 'Coeficiente', 'Porcentaje (%)', 'Agrupamiento'];
+    for (let i = 0; i < headers.length; i++) {
+        const cell = ws.getCell(filaActual, i + 1);
+        cell.value = headers[i];
+        fill(cell, C.headerBg);
+        font(cell, C.headerFg, true, 10);
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        border(cell);
+    }
+    ws.getRow(filaActual).height = 22;
+    filaActual++;
+
+    // ── Datos ─────────────────────────────────────────────────────────────────
+    const rows: any[] = agrupamientoData?.rows ?? [];
+
+    if (rows.length === 0) {
+        ws.mergeCells(filaActual, 1, filaActual, totalColumnas);
+        const cell = ws.getCell(filaActual, 1);
+        cell.value = 'No hay índices configurados. Seleccione un padre y abra la Fórmula Polinómica.';
+        fill(cell, C.leafBg);
+        font(cell, C.leafFg, false, 9);
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        border(cell);
+        ws.getRow(filaActual).height = 18;
+        return;
+    }
+
+    let altIdx = 0;
+    rows.forEach((row: any, idx: number) => {
+        const bg = altIdx % 2 === 0 ? C.leafBg : C.altBg;
+        const fg = C.leafFg;
+
+        // Col 1: Descripción (with INEI code prefix like in the image)
+        const c1 = ws.getCell(filaActual, 1);
+        c1.value = `${row.codigo ? `${row.codigo} ` : ''}${row.descripcion || ''}`;
+        fill(c1, bg); font(c1, fg, false, 10); border(c1);
+        c1.alignment = { vertical: 'middle', horizontal: 'left', wrapText: false };
+
+        // Col 2: Nomenclatura
+        const c2 = ws.getCell(filaActual, 2);
+        c2.value = row.nomenclatura ?? '';
+        fill(c2, bg); font(c2, 'FF059669', true, 11); border(c2);
+        c2.alignment = { vertical: 'middle', horizontal: 'center' };
+
+        // Col 3: Coeficiente
+        const c3 = ws.getCell(filaActual, 3);
+        c3.value = typeof row.coeficiente === 'number' ? row.coeficiente : 0;
+        fill(c3, bg); font(c3, fg, false, 10); border(c3);
+        c3.alignment = { vertical: 'middle', horizontal: 'right' };
+        c3.numFmt = '#,##0.000';
+
+        // Col 4: Porcentaje
+        const c4 = ws.getCell(filaActual, 4);
+        c4.value = typeof row.porcentaje === 'number' ? row.porcentaje : 0;
+        fill(c4, bg); font(c4, fg, false, 10); border(c4);
+        c4.alignment = { vertical: 'middle', horizontal: 'right' };
+        c4.numFmt = '0.00';
+
+        // Col 5: Agrupamiento
+        const c5 = ws.getCell(filaActual, 5);
+        c5.value = row.agrupamiento ?? '';
+        fill(c5, bg); font(c5, 'FF1A3C5E', false, 10); border(c5);
+        c5.alignment = { vertical: 'middle', horizontal: 'center' };
+
+        ws.getRow(filaActual).height = 16;
+        altIdx++;
+        filaActual++;
+    });
+
+    // ── TOTAL ─────────────────────────────────────────────────────────────────
+    const totalK = agrupamientoData?.totalCoeficiente ?? 0;
+    const totalPorcentaje = rows.reduce((s: number, r: any) => s + (r.porcentaje ?? 0), 0);
+
+    const totalDefs = [
+        { col: 1, v: 'TOTAL', span: true },
+        { col: 3, v: totalK },
+        { col: 4, v: totalPorcentaje },
+        { col: 5, v: '' },
+    ];
+
+    // Merge cols 1-2 for TOTAL label
+    ws.mergeCells(filaActual, 1, filaActual, 2);
+    const labelCell = ws.getCell(filaActual, 1);
+    labelCell.value = 'TOTAL';
+    fill(labelCell, C.totalBg);
+    font(labelCell, C.totalFg, true, 11);
+    border(labelCell);
+    labelCell.alignment = { vertical: 'middle', horizontal: 'right' };
+
+    const totalCoefCell = ws.getCell(filaActual, 3);
+    totalCoefCell.value = totalK;
+    fill(totalCoefCell, C.totalBg);
+    font(totalCoefCell, C.totalFg, true, 11);
+    border(totalCoefCell);
+    totalCoefCell.alignment = { vertical: 'middle', horizontal: 'right' };
+    totalCoefCell.numFmt = '#,##0.000';
+
+    const totalPctCell = ws.getCell(filaActual, 4);
+    totalPctCell.value = totalPorcentaje;
+    fill(totalPctCell, C.totalBg);
+    font(totalPctCell, C.totalFg, true, 11);
+    border(totalPctCell);
+    totalPctCell.alignment = { vertical: 'middle', horizontal: 'right' };
+    totalPctCell.numFmt = '0.00';
+
+    const totalEmptyCell = ws.getCell(filaActual, 5);
+    totalEmptyCell.value = '';
+    fill(totalEmptyCell, C.totalBg);
+    font(totalEmptyCell, C.totalFg, true, 11);
+    border(totalEmptyCell);
+
+    ws.getRow(filaActual).height = 22;
+    filaActual++;
+
+    // ── Nota al pie ───────────────────────────────────────────────────────────
+    ws.mergeCells(filaActual, 1, filaActual, totalColumnas);
+    const notaCell = ws.getCell(filaActual, 1);
+    notaCell.value = 'NOTA: LOS ÍNDICES UNIFICADOS EN LA FORMULA POLINOMICA CUENTAN CON LA VIGENCIA CORRESPONDIENTE';
+    font(notaCell, 'FF475569', false, 8);
+    notaCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+    ws.getRow(filaActual).height = 18;
+
+    ws.views = [{}];
+}
+
 async function buildAcusSheet(
     ws: ExcelJS.Worksheet,
     acusData: any[],
@@ -895,15 +1070,22 @@ export async function exportDelphinExcel(
         await buildFormulaPolinomicaSheet(ws, formulaData, proyecto, projectName, wb);
     }
 
+    //  NUEVO: Hoja de Agrupamiento Fórmula Polinómica
+    if (content === 'formula_polinomica_agrupamiento' && formulaData) {
+        const ws = wb.addWorksheet('F.P. Agrupamiento');
+        await buildFormulaAgrupamientoSheet(ws, formulaData, proyecto, projectName, wb);
+    }
+
     const date = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const suffix = {
+    const suffix: Record<string, string> = {
         budget_only: 'Presupuesto',
         budget_gantt: 'Presupuesto_Cronograma',
         gantt_only: 'Cronograma',
         formula_polinomica: 'Formula_Polinomica',
-    }[content];
+        formula_polinomica_agrupamiento: 'FP_Agrupamiento',
+    };
 
-    const fileName = `${projectName.replace(/\s+/g, '_')}_${suffix}_${date.replace(/\//g, '-')}.xlsx`;
+    const fileName = `${projectName.replace(/\s+/g, '_')}_${suffix[content] ?? 'Export'}_${date.replace(/\//g, '-')}.xlsx`;
     const buf = await wb.xlsx.writeBuffer();
     saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
 }

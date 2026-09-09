@@ -1,6 +1,6 @@
 // hooks/useGGFijos.ts
 import axios from 'axios';
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import type { GGFijoNode } from '../stores/ggFijosStore';
 import { useGGFijosStore } from '../stores/ggFijosStore';
 
@@ -10,6 +10,7 @@ interface UseGGFijosProps {
 }
 
 export function useGGFijos({ projectId, subsection }: UseGGFijosProps) {
+    const loadedProjectId = useRef<number | null>(null);
     const { nodes, loading, setNodes, setLoading, setDirty } = useGGFijosStore();
     const normalizeText = (value: string) =>
         (value || '')
@@ -50,11 +51,11 @@ export function useGGFijos({ projectId, subsection }: UseGGFijosProps) {
         return { rows: next, injected: true };
     };
 
-    // Cargar datos cuando es 'gastos_fijos', 'gastos_generales' o 'consolidado'
-    const isActive = subsection === 'gastos_fijos' || subsection === 'gastos_generales' || subsection === 'consolidado';
+    // La sección resumida de gastos fijos pertenece a la hoja G GENERALES.
+    const isActive = subsection === 'gastos_generales';
 
     useEffect(() => {
-        if (!isActive) return;
+        if (!isActive || loadedProjectId.current === projectId) return;
 
         const fetchData = async () => {
             setLoading(true);
@@ -65,6 +66,7 @@ export function useGGFijos({ projectId, subsection }: UseGGFijosProps) {
                 if (response.data?.success) {
                     const result = ensureEnsayoCompresionRow(response.data.rows || []);
                     setNodes(result.rows);
+                    loadedProjectId.current = projectId;
                     if (result.injected) {
                         setDirty(true);
                     }
@@ -83,8 +85,6 @@ export function useGGFijos({ projectId, subsection }: UseGGFijosProps) {
     }, [projectId, subsection, setNodes, setLoading, isActive]);
 
     const saveGGFijos = useCallback(async (data: GGFijoNode[]) => {
-        if (!isActive) return { success: false };
-
         try {
             // Strip UI-only fields before sending
             const cleanRows = data.map(({ _level, _expanded, _children_count, parcial, ...rest }) => rest);
@@ -106,7 +106,7 @@ export function useGGFijos({ projectId, subsection }: UseGGFijosProps) {
             console.error('Error saving GG Fijos:', error);
             return { success: false, error };
         }
-    }, [projectId, isActive, setDirty, setNodes]);
+    }, [projectId, setDirty, setNodes]);
 
     return {
         ggFijosNodes: nodes,

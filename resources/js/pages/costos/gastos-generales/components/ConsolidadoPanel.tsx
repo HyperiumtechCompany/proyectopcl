@@ -8,11 +8,14 @@ import {
     Loader2,
 } from 'lucide-react';
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { useBudgetStore } from '../stores/budgetStore';
+import { useBudgetStore } from '../../presupuesto/stores/budgetStore';
 import { useGastosGeneralesStore } from '../stores/gastosGeneralesStore';
+import { calcularTopeControlConcurrente, decimalSeguro, redondearMoneda, sumarDecimales } from '../lib/calculos';
 import { useGGFijosStore } from '../stores/ggFijosStore';
 import { useGGVariablesStore } from '../stores/ggVariablesStore';
 import { useSupervisionStore } from '../stores/supervisionStore';
+import { useProjectParamsStore } from '../../presupuesto/stores/projectParamsStore';
+import { ParametrosGastosGeneralesPanel } from './ParametrosGastosGeneralesPanel';
 
 interface ConsolidadoPanelProps {
     projectId: number;
@@ -22,6 +25,7 @@ interface ExtraComponent {
     id: string;
     name: string;
     monto: number;
+    active: boolean;
 }
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -70,7 +74,7 @@ const toNumber = (value: unknown): number => {
 };
 
 const ratio = (numerator: number, denominator: number) =>
-    denominator > 0 ? numerator / denominator : 0;
+    denominator > 0 ? decimalSeguro(numerator).dividedBy(denominator).toNumber() : 0;
 
 // ─── Number → Spanish words ───────────────────────────────────────────────────
 
@@ -185,6 +189,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
     const ggVariablesNodes = useGGVariablesStore((s) => s.nodes);
     const ggVariablesSetNodes = useGGVariablesStore((s) => s.setNodes);
     const supervisionRows = useSupervisionStore((s) => s.rows);
+    const financialParams = useProjectParamsStore((state) => state.params);
     const supervisionLoadFromDatabase = useSupervisionStore(
         (s) => s.loadFromDatabase,
     );
@@ -200,60 +205,30 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
         const fetchAllData = async () => {
             setLoading(true);
             try {
-                // Cargar presupuesto general
-                try {
-                    const budgetRes = await axios.get(
-                        `/costos/proyectos/${projectId}/presupuesto/general/data`,
-                    );
-                    if (budgetRes.data?.success && budgetRes.data.rows) {
-                        budgetInitialize(budgetRes.data.rows);
-                    }
-                } catch (e) {
-                    console.error('Error loading budget:', e);
+                const [budgetResult, ggFijosResult, ggVarsResult, supervisionResult, ccResult] = await Promise.allSettled([
+                    axios.get(`/costos/proyectos/${projectId}/presupuesto/general/data`),
+                    axios.get(`/costos/proyectos/${projectId}/presupuesto/gastos_fijos/data`),
+                    axios.get(`/costos/proyectos/${projectId}/presupuesto/gastos_generales/data`),
+                    supervisionLoadFromDatabase(projectId),
+                    axios.get(`/costos/proyectos/${projectId}/presupuesto/control_concurrente/data`),
+                ]);
+
+                if (budgetResult.status === 'fulfilled' && budgetResult.value.data?.success) {
+                    budgetInitialize(budgetResult.value.data.rows ?? []);
+                }
+                if (ggFijosResult.status === 'fulfilled' && ggFijosResult.value.data?.success) {
+                    ggFijosSetNodes(ggFijosResult.value.data.rows ?? []);
+                }
+                if (ggVarsResult.status === 'fulfilled' && ggVarsResult.value.data?.success) {
+                    ggVariablesSetNodes(ggVarsResult.value.data.rows ?? []);
+                }
+                if (ccResult.status === 'fulfilled' && ccResult.value.data?.success) {
+                    ccSetRows(ccResult.value.data.rows ?? []);
                 }
 
-                // Cargar GG Fijos
-                try {
-                    const ggFijosRes = await axios.get(
-                        `/costos/proyectos/${projectId}/presupuesto/gastos_fijos/data`,
-                    );
-                    if (ggFijosRes.data?.success && ggFijosRes.data.rows) {
-                        ggFijosSetNodes(ggFijosRes.data.rows);
-                    }
-                } catch (e) {
-                    console.error('Error loading GG Fijos:', e);
-                }
-
-                // Cargar GG Variables
-                try {
-                    const ggVarsRes = await axios.get(
-                        `/costos/proyectos/${projectId}/presupuesto/gastos_generales/data`,
-                    );
-                    if (ggVarsRes.data?.success && ggVarsRes.data.rows) {
-                        ggVariablesSetNodes(ggVarsRes.data.rows);
-                    }
-                } catch (e) {
-                    console.error('Error loading GG Variables:', e);
-                }
-
-                // Cargar Supervisión
-                try {
-                    await supervisionLoadFromDatabase(projectId);
-                } catch (e) {
-                    console.error('Error loading supervision:', e);
-                }
-
-                // Cargar Control Concurrente
-                try {
-                    const ccRes = await axios.get(
-                        `/costos/proyectos/${projectId}/presupuesto/control_concurrente/data`,
-                    );
-                    if (ccRes.data?.success && ccRes.data.rows) {
-                        ccSetRows(ccRes.data.rows);
-                    }
-                } catch (e) {
-                    console.error('Error loading Control Concurrente:', e);
-                }
+                [budgetResult, ggFijosResult, ggVarsResult, supervisionResult, ccResult].forEach((result) => {
+                    if (result.status === 'rejected') console.error('Error loading consolidated data:', result.reason);
+                });
             } finally {
                 setLoading(false);
             }
@@ -279,25 +254,22 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
     );
     // Costo directo = suma de parciales de partidas (filas con unidad)
     const costoDirecto = useMemo(
-        () =>
+        () => sumarDecimales(
             budgetRows
                 .filter((r) => r.unidad && r.unidad.trim() !== '')
-                .reduce((acc, r) => acc + toNumber(r.parcial), 0),
-        [parentBudgetSections],
+                .map((r) => toNumber(r.parcial)),
+        ),
+        [budgetRows],
     );
 
     // Calcular GG Fijos desde los nodos del store
     const ggFijosTotal = useMemo(() => {
-        return ggFijosNodes
-            .filter((n) => n.tipo_fila === 'detalle')
-            .reduce((acc, n) => acc + (Number(n.parcial) || 0), 0);
+        return sumarDecimales(ggFijosNodes.filter((n) => n.tipo_fila === 'detalle').map((n) => n.parcial));
     }, [ggFijosNodes]);
 
     // Calcular GG Variables desde los nodos del store
     const ggVariablesTotal = useMemo(() => {
-        return ggVariablesNodes
-            .filter((n) => n.tipo_fila === 'detalle')
-            .reduce((acc, n) => acc + (Number(n.parcial) || 0), 0);
+        return sumarDecimales(ggVariablesNodes.filter((n) => n.tipo_fila === 'detalle').map((n) => n.parcial));
     }, [ggVariablesNodes]);
 
     // Calcular Supervision Total desde las filas del store
@@ -357,6 +329,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                     id: c.id ?? crypto.randomUUID(),
                     name: c.name ?? 'NUEVO COMPONENTE',
                     monto: Number(c.monto) || 0,
+                    active: c.active !== false,
                 })),
             );
         }
@@ -364,51 +337,53 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
     }, [snapshot]);
 
     // ── Calculations: Componente I (Ejecución de Obra) ───────────────────────
-    const totalGastosGenerales = ggFijosTotal + ggVariablesTotal;
-    const utilidadTotal = costoDirecto * (porcentajeUtilidad / 100);
-    const subTotalPresupuesto =
-        costoDirecto + totalGastosGenerales + utilidadTotal;
-    const igvComponenteI = subTotalPresupuesto * 0.18;
-    const subTotalComponenteI = subTotalPresupuesto + igvComponenteI;
+    const totalGastosGenerales = sumarDecimales([ggFijosTotal, ggVariablesTotal]);
+    const utilidadTotal = redondearMoneda(decimalSeguro(costoDirecto).times(porcentajeUtilidad).dividedBy(100));
+    const subTotalPresupuesto = sumarDecimales([costoDirecto, totalGastosGenerales, utilidadTotal]);
+    const igvPorcentaje = financialParams?.igv_porcentaje ?? 18;
+    const controlConcurrentePorcentaje = financialParams?.control_concurrente_porcentaje ?? 0.6;
+    const igvComponenteI = redondearMoneda(decimalSeguro(subTotalPresupuesto).times(igvPorcentaje).dividedBy(100));
+    const subTotalComponenteI = sumarDecimales([subTotalPresupuesto, igvComponenteI]);
 
     // ── Calculations: Componente II ───────────────────────────────────────────
     const componenteIIMontoNum = toNumber(componenteIIMonto);
-    const igvComponenteII = componenteIIMontoNum * 0.18;
-    const subTotalComponenteII = componenteIIMontoNum + igvComponenteII;
+    const igvComponenteII = redondearMoneda(decimalSeguro(componenteIIMontoNum).times(igvPorcentaje).dividedBy(100));
+    const subTotalComponenteII = sumarDecimales([componenteIIMontoNum, igvComponenteII]);
 
     // ── Calculations: Extra Components ────────────────────────────────────────
     const extraCalcs = extraComponents.map((c) => {
         const monto = toNumber(c.monto);
+        const montoActivo = c.active ? monto : 0;
         return {
             ...c,
-            monto,
-            igv: monto * 0.18,
-            subtotal: monto * 1.18,
+            monto: montoActivo,
+            montoConfigurado: monto,
+            igv: redondearMoneda(decimalSeguro(montoActivo).times(igvPorcentaje).dividedBy(100)),
+            subtotal: sumarDecimales([montoActivo, redondearMoneda(decimalSeguro(montoActivo).times(igvPorcentaje).dividedBy(100))]),
         };
     });
 
     // ── Grand totals ──────────────────────────────────────────────────────────
-    const totalComponents =
-        subTotalComponenteI +
-        subTotalComponenteII +
-        extraCalcs.reduce((acc, c) => acc + c.subtotal, 0);
+    const totalComponents = sumarDecimales([
+        subTotalComponenteI,
+        subTotalComponenteII,
+        ...extraCalcs.map((component) => component.subtotal),
+    ]);
 
     // Total Consolidado (sin Control Concurrente)
-    const totalConsolidado = totalComponents + supervisionTotal;
+    const totalConsolidado = sumarDecimales([totalComponents, supervisionTotal]);
 
     // Control Concurrente financiado por la entidad (hasta 2.0%)
-    const controlConcurrenteFinanciado = totalConsolidado * 0.02;
+    const controlConcurrenteFinanciado = calcularTopeControlConcurrente(totalConsolidado, controlConcurrentePorcentaje);
 
     // Total de Inversión para la Obra = Total Consolidado + Control Concurrente
-    const totalInversionObra =
-        totalConsolidado + controlConcurrenteFinanciado;
+    const totalInversionObra = sumarDecimales([totalConsolidado, controlConcurrenteFinanciado]);
 
     const totalConsolidadoDisplay = snapshot
-        ? Number(snapshot.total_presupuesto_obra || 0) +
-          Number(snapshot.total_supervision || 0)
+        ? sumarDecimales([snapshot.total_presupuesto_obra, snapshot.total_supervision])
         : totalConsolidado;
     const controlConcurrenteFinanciadoDisplay = snapshot
-        ? totalConsolidadoDisplay * 0.02
+        ? calcularTopeControlConcurrente(totalConsolidadoDisplay, controlConcurrentePorcentaje)
         : controlConcurrenteFinanciado;
     const totalInversionDisplay = snapshot?.total_inversion_obra
         ? Number(snapshot.total_inversion_obra)
@@ -427,12 +402,14 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                     `/costos/proyectos/${projectId}/presupuesto/consolidado/snapshot`,
                     {
                         utilidad_porcentaje: porcentajeUtilidad,
-                        igv_porcentaje: 18,
+                        igv_porcentaje: igvPorcentaje,
+                        control_concurrente_porcentaje: controlConcurrentePorcentaje,
                         componente_ii_monto: componenteIIMonto,
                         componentes_extra: extraComponents.map((c) => ({
                             id: c.id,
                             name: c.name,
                             monto: Number(c.monto) || 0,
+                            active: c.active,
                         })),
                     },
                 );
@@ -444,7 +421,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
             }
         }, 800);
         return () => clearTimeout(timer);
-    }, [porcentajeUtilidad, componenteIIMonto, extraComponents, projectId]);
+    }, [porcentajeUtilidad, componenteIIMonto, controlConcurrentePorcentaje, extraComponents, igvPorcentaje, projectId]);
 
     // ── Percentages ───────────────────────────────────────────────────────────
     const pctGG = ratio(totalGastosGenerales, costoDirecto);
@@ -477,30 +454,34 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
     const addExtraComponent = () => {
         setExtraComponents((prev) => [
             ...prev,
-            { id: crypto.randomUUID(), name: 'NUEVO COMPONENTE', monto: 0 },
+            { id: crypto.randomUUID(), name: 'PLAN COVID', monto: 0, active: false },
         ]);
     };
     const removeExtraComponent = (id: string) =>
         setExtraComponents((prev) => prev.filter((c) => c.id !== id));
     const updateExtra = (
         id: string,
-        field: 'name' | 'monto',
-        value: string | number,
+        field: 'name' | 'monto' | 'active',
+        value: string | number | boolean,
     ) =>
         setExtraComponents((prev) =>
             prev.map((c) => (c.id === id ? { ...c, [field]: value } : c)),
         );
 
     // Label for "TOTAL PRESUPUESTO DE OBRA COMPONENTE I + II + ..."
-    const romanList = ROMAN.slice(0, 2 + extraComponents.length).join(' + ');
+    const romanList = [
+        ROMAN[0],
+        ROMAN[1],
+        ...extraComponents.flatMap((component, index) => component.active ? [ROMAN[index + 2]] : []),
+    ].join(' + ');
 
     // ── Shared CSS shortcuts ──────────────────────────────────────────────────
     const TH =
-        'border-r border-slate-200 dark:border-slate-700 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400';
+        'border-r border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400';
     const TD = 'border-r border-slate-200 dark:border-slate-700';
     const moneyInput =
         'w-full rounded border border-slate-300 dark:border-slate-600 bg-transparent px-2 py-0.5 ' +
-        'text-right text-[11px] text-slate-700 dark:text-slate-300 ' +
+        'text-right text-xs text-slate-700 dark:text-slate-300 ' +
         'focus:outline-none focus:ring-1 focus:ring-amber-400 dark:focus:ring-amber-500';
 
     // ── Component row builder for reuse ───────────────────────────────────────
@@ -515,6 +496,8 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
         nameEditable,
         onNameChange,
         onMontoChange,
+        active,
+        onActiveChange,
         onRemove,
     }: {
         romanIdx: number;
@@ -527,33 +510,46 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
         nameEditable?: boolean;
         onNameChange?: (v: string) => void;
         onMontoChange: (v: number) => void;
+        active?: boolean;
+        onActiveChange?: (active: boolean) => void;
         onRemove?: () => void;
     }) => (
         <>
             {/* Section header */}
             <tr className="bg-slate-50 dark:bg-slate-800/50">
                 <td colSpan={4} className="px-3 py-1.5">
-                    <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black tracking-widest text-slate-500 uppercase dark:text-slate-400">
+                    <div className="flex items-center gap-1">
+                        <span className="text-xs font-black tracking-widest text-slate-500 uppercase dark:text-slate-400">
                             COMPONENTE {ROMAN[romanIdx]}:
                         </span>
                         {nameEditable ? (
                             <input
                                 type="text"
-                                className="flex-1 border-b border-dashed border-slate-300 bg-transparent text-[10px] font-black tracking-widest text-slate-500 uppercase focus:outline-none dark:border-slate-600 dark:text-slate-400"
+                                className="flex-1 border-b border-dashed border-slate-300 bg-transparent text-xs font-black tracking-widest text-slate-500 uppercase focus:outline-none dark:border-slate-600 dark:text-slate-400"
                                 value={label}
                                 onChange={(e) => onNameChange?.(e.target.value)}
                                 placeholder="NOMBRE DEL COMPONENTE"
                             />
                         ) : (
-                            <span className="text-[10px] font-black tracking-widest text-slate-500 uppercase dark:text-slate-400">
+                            <span className="text-xs font-black tracking-widest text-slate-500 uppercase dark:text-slate-400">
                                 {label}
                             </span>
                         )}
                         {onRemove && (
+                            <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[10px] font-bold tracking-wide text-slate-500 uppercase">
+                                <input
+                                    type="checkbox"
+                                    checked={active}
+                                    onChange={(event) => onActiveChange?.(event.target.checked)}
+                                    className="h-3.5 w-3.5 accent-emerald-500"
+                                />
+                                {active ? 'Incluido' : 'No incluido'}
+                            </label>
+                        )}
+                        {onRemove && (
                             <button
                                 onClick={onRemove}
-                                className="ml-auto text-red-400 transition-colors hover:text-red-600 dark:text-red-500 dark:hover:text-red-300"
+                                className="text-red-400 transition-colors hover:text-red-600 dark:text-red-500 dark:hover:text-red-300"
                                 title="Eliminar componente"
                             >
                                 <Trash2 size={13} />
@@ -601,7 +597,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                 <td
                     className={`${TD} px-3 py-2 pl-8 text-slate-600 dark:text-slate-400`}
                 >
-                    Impuesto General a las Ventas (18%)
+                    Impuesto General a las Ventas ({igvPorcentaje}%)
                 </td>
                 <td
                     className={`${TD} px-2 py-2 text-center text-slate-600 dark:text-slate-400`}
@@ -646,7 +642,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
         return (
             <div className="flex h-full flex-col items-center justify-center bg-gray-50 dark:bg-slate-950">
                 <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
-                <p className="mt-4 text-sm font-medium text-slate-500 dark:text-slate-400">
+                <p className="mt-4 text-xs font-medium text-slate-500 dark:text-slate-400">
                     Cargando datos del consolidado...
                 </p>
             </div>
@@ -662,23 +658,24 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                         <Calculator className="h-5 w-5 text-amber-500" />
                     </div>
                     <div>
-                        <h1 className="text-lg font-black tracking-tight text-slate-900 uppercase dark:text-white">
+                        <h1 className="text-sm font-black tracking-tight text-slate-900 uppercase dark:text-white">
                             Presupuesto Consolidado
                         </h1>
-                        <p className="text-[10px] font-semibold tracking-[0.2em] text-slate-400 uppercase">
+                        <p className="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
                             Estructura uniforme para presentación al cliente
                         </p>
                     </div>
                 </div>
+                <ParametrosGastosGeneralesPanel projectId={projectId} />
             </div>
 
-            <div className="flex-1 overflow-auto p-2">
+            <div className="flex-1 overflow-auto p-1">
                 <div className="max-w-8xl mx-auto flex flex-col gap-6">
                     {/* ════════════════════════════════════════════════════════
                         1) Resumen de Análisis de Gastos Generales
                     ═════════════════════════════════════════════════════════ */}
                     <SectionCard title="Resumen de Análisis de Gastos Generales">
-                        <table className="w-full text-[11px]">
+                        <table className="w-full text-xs">
                             <thead>
                                 <tr className="bg-slate-50 dark:bg-slate-800/60">
                                     <th className={`w-14 ${TH} text-left`}>
@@ -696,7 +693,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                     <th className={`w-32 ${TH} text-right`}>
                                         Precio Unitario S/.
                                     </th>
-                                    <th className="w-32 px-3 py-2 text-right text-[10px] font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">
+                                    <th className="w-32 px-3 py-2 text-right text-xs font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">
                                         Valor Total S/.
                                     </th>
                                 </tr>
@@ -735,7 +732,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                         2) Resumen de Análisis de Gastos de Supervisión
                     ═════════════════════════════════════════════════════════ */}
                     <SectionCard title="Resumen de Análisis de Gastos de Supervisión">
-                        <table className="w-full text-[11px]">
+                        <table className="w-full text-xs">
                             <thead>
                                 <tr className="bg-slate-50 dark:bg-slate-800/60">
                                     <th className={`w-14 ${TH} text-left`}>
@@ -753,7 +750,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                     <th className={`w-32 ${TH} text-right`}>
                                         Precio Unitario S/.
                                     </th>
-                                    <th className="w-32 px-3 py-2 text-right text-[10px] font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">
+                                    <th className="w-32 px-3 py-2 text-right text-xs font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">
                                         Valor Total S/.
                                     </th>
                                 </tr>
@@ -786,25 +783,25 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                         3) Detalle de Costo Directo (referencia interna)
                     ═════════════════════════════════════════════════════════ */}
                     <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow dark:border-slate-800 dark:bg-slate-900/60">
-                        <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-2 dark:border-slate-800">
+                        <div className="flex items-center gap-1 border-b border-slate-200 px-2 py-1 dark:border-slate-800">
                             <FileText
                                 size={14}
                                 className="text-sky-500 dark:text-sky-400"
                             />
-                            <h2 className="text-[11px] font-bold tracking-widest text-slate-600 uppercase dark:text-slate-300">
+                            <h2 className="text-xs font-bold tracking-widest text-slate-600 uppercase dark:text-slate-300">
                                 Detalle de Costo Directo (referencia interna)
                             </h2>
                         </div>
-                        <table className="w-full text-[10px]">
+                        <table className="w-full text-xs">
                             <thead className="bg-slate-200/60 dark:bg-slate-800/80">
                                 <tr>
-                                    <th className="w-14 px-3 py-2 text-left text-[10px] font-bold tracking-wider text-slate-500 uppercase">
+                                    <th className="w-14 px-3 py-2 text-left text-xs font-bold tracking-wider text-slate-500 uppercase">
                                         Item
                                     </th>
-                                    <th className="px-3 py-2 text-left text-[10px] font-bold tracking-wider text-slate-500 uppercase">
+                                    <th className="px-3 py-2 text-left text-xs font-bold tracking-wider text-slate-500 uppercase">
                                         Descripción
                                     </th>
-                                    <th className="w-32 px-3 py-2 text-right text-[10px] font-bold tracking-wider text-slate-500 uppercase">
+                                    <th className="w-32 px-3 py-2 text-right text-xs font-bold tracking-wider text-slate-500 uppercase">
                                         Monto (S/.)
                                     </th>
                                 </tr>
@@ -833,7 +830,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                 <tr>
                                     <td
                                         colSpan={2}
-                                        className="px-3 py-2 text-right text-[10px] font-bold tracking-wider text-slate-500 uppercase"
+                                        className="px-3 py-2 text-right text-xs font-bold tracking-wider text-slate-500 uppercase"
                                     >
                                         Total Costo Directo
                                     </td>
@@ -850,11 +847,11 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                     ═════════════════════════════════════════════════════════ */}
                     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
                         {/* Title bar */}
-                        <div className="border-b-2 border-slate-300 bg-slate-100 px-4 py-2.5 text-center text-xs font-black tracking-widest text-slate-700 uppercase dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+                        <div className="border-b-2 border-slate-300 bg-slate-100 px-2 py-1.5 text-center text-xs font-black tracking-widest text-slate-700 uppercase dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
                             DESCRIPCION DEL COSTO
                         </div>
 
-                        <table className="w-full text-[11px]">
+                        <table className="w-full text-xs">
                             {/* Column headers */}
                             <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800/80">
                                 <tr>
@@ -867,7 +864,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                     <th className={`w-40 ${TH} text-right`}>
                                         Monto
                                     </th>
-                                    <th className="w-24 px-3 py-2 text-right text-[10px] font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">
+                                    <th className="w-24 px-3 py-2 text-right text-xs font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">
                                         %
                                     </th>
                                 </tr>
@@ -878,7 +875,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                 <tr className="bg-slate-100 dark:bg-slate-800/70">
                                     <td
                                         colSpan={4}
-                                        className="px-3 py-1.5 text-[10px] font-black tracking-widest text-slate-500 uppercase dark:text-slate-400"
+                                        className="px-3 py-1.5 text-xs font-black tracking-widest text-slate-500 uppercase dark:text-slate-400"
                                     >
                                         COMPONENTE I: EJECUCIÓN DE OBRA
                                     </td>
@@ -933,7 +930,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                 {/* Utilidad */}
                                 <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/20">
                                     <td className={`${TD} px-3 py-2`}>
-                                        <div className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-200">
+                                        <div className="flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200">
                                             Utilidad
                                         </div>
                                     </td>
@@ -954,7 +951,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                                 min={0}
                                                 max={100}
                                                 step={0.5}
-                                                className="w-14 rounded border border-slate-300 bg-white px-1 py-0.5 text-right text-[10px] text-slate-700 focus:ring-1 focus:ring-amber-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                                                className="w-14 rounded border border-slate-300 bg-white px-1 py-0.5 text-right text-xs text-slate-700 focus:ring-1 focus:ring-amber-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300"
                                                 value={porcentajeUtilidad}
                                                 onChange={(e) =>
                                                     setPorcentajeUtilidad(
@@ -964,7 +961,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                                     )
                                                 }
                                             />
-                                            <span className="text-[10px] text-slate-400">
+                                            <span className="text-xs text-slate-400">
                                                 %
                                             </span>
                                         </label>
@@ -998,7 +995,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                     <td
                                         className={`${TD} px-3 py-2 pl-7 text-slate-700 dark:text-slate-300`}
                                     >
-                                        Impuesto General a las Ventas (18%)
+                                        Impuesto General a las Ventas ({igvPorcentaje}%)
                                     </td>
                                     <td
                                         className={`${TD} px-2 py-2 text-center text-slate-500 dark:text-slate-400`}
@@ -1056,7 +1053,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                         romanIdx={idx + 2} // III = index 2
                                         label={comp.name}
                                         montoInput
-                                        monto={comp.monto}
+                                        monto={comp.montoConfigurado}
                                         igv={comp.igv}
                                         subtotal={comp.subtotal}
                                         pctIgv={
@@ -1065,6 +1062,10 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                                 : 0
                                         }
                                         nameEditable
+                                        active={comp.active}
+                                        onActiveChange={(active) =>
+                                            updateExtra(comp.id, 'active', active)
+                                        }
                                         onNameChange={(v) =>
                                             updateExtra(comp.id, 'name', v)
                                         }
@@ -1085,10 +1086,10 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                     >
                                         <button
                                             onClick={addExtraComponent}
-                                            className="flex items-center gap-1.5 text-[10px] font-bold text-amber-600 transition-colors hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+                                            className="flex items-center gap-1.5 text-xs font-bold text-amber-600 transition-colors hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
                                         >
                                             <Plus size={13} />
-                                            Agregar Componente
+                                            Agregar componente opcional
                                         </button>
                                     </td>
                                 </tr>
@@ -1096,7 +1097,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                 {/* ── TOTAL PRESUPUESTO DE OBRA ── */}
                                 <tr className="bg-slate-200 dark:bg-slate-700/70">
                                     <td
-                                        className={`${TD} px-3 py-3 text-[11px] font-black tracking-wide text-slate-800 uppercase dark:text-slate-100`}
+                                        className={`${TD} px-3 py-3 text-xs font-black tracking-wide text-slate-800 uppercase dark:text-slate-100`}
                                     >
                                         Total Presupuesto de Obra Componente{' '}
                                         {romanList}
@@ -1143,12 +1144,12 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                 {/* ── TOTAL (Descripcion del costo) ── */}
                                 <tr className="bg-emerald-50 dark:bg-emerald-950/40">
                                     <td
-                                        className={`${TD} px-3 py-3.5 text-sm font-black tracking-widest text-emerald-800 uppercase dark:text-emerald-400`}
+                                        className={`${TD} px-3 py-3.5 text-xs font-black tracking-widest text-emerald-800 uppercase dark:text-emerald-400`}
                                     >
                                         TOTAL
                                     </td>
                                     <td
-                                        className={`${TD} px-2 py-3.5 text-center text-sm font-black text-emerald-800 dark:text-emerald-400`}
+                                        className={`${TD} px-2 py-3.5 text-center text-xs font-black text-emerald-800 dark:text-emerald-400`}
                                     >
                                         S/.
                                     </td>
@@ -1166,7 +1167,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                 <tr className="bg-amber-50 dark:bg-amber-950/30">
                                     <td
                                         colSpan={4}
-                                        className="px-4 py-3 text-center text-[11px] font-bold tracking-wide text-amber-800 uppercase italic dark:text-amber-400"
+                                        className="px-2 py-1 text-center text-xs font-bold tracking-wide text-amber-800 uppercase italic dark:text-amber-400"
                                     >
                                         {totalConsolidadoLetras}
                                     </td>
@@ -1197,12 +1198,12 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                 {/* ── TOTAL DE INVERSION PARA LA OBRA ── */}
                                 <tr className="bg-emerald-100 dark:bg-emerald-900/40">
                                     <td
-                                        className={`${TD} px-3 py-3 text-sm font-black tracking-widest text-emerald-900 uppercase dark:text-emerald-300`}
+                                        className={`${TD} px-3 py-3 text-xs font-black tracking-widest text-emerald-900 uppercase dark:text-emerald-300`}
                                     >
                                         TOTAL DE INVERSION PARA LA OBRA
                                     </td>
                                     <td
-                                        className={`${TD} px-2 py-3 text-center text-sm font-black text-emerald-900 dark:text-emerald-300`}
+                                        className={`${TD} px-2 py-3 text-center text-xs font-black text-emerald-900 dark:text-emerald-300`}
                                     >
                                         S/.
                                     </td>
@@ -1220,7 +1221,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                                 <tr className="bg-amber-50 dark:bg-amber-950/30">
                                     <td
                                         colSpan={4}
-                                        className="px-4 py-3 text-center text-[11px] font-bold tracking-wide text-amber-800 uppercase italic dark:text-amber-400"
+                                        className="px-2 py-1 text-center text-xs font-bold tracking-wide text-amber-800 uppercase italic dark:text-amber-400"
                                     >
                                         {totalInversionLetras}
                                     </td>
@@ -1229,7 +1230,7 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
                         </table>
 
                         {/* Footer note */}
-                        <div className="flex items-center gap-2 border-t border-slate-200 bg-slate-50 px-3 py-2 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-800/40">
+                        <div className="flex items-center gap-1 border-t border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/40">
                             <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0 text-amber-500" />
                             El total de supervisión se toma de la Sección VIII.
                             El IGV (18%) se calcula sobre el subtotal de cada
@@ -1253,7 +1254,7 @@ function SectionCard({
 }) {
     return (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow dark:border-slate-700 dark:bg-slate-900">
-            <div className="border-b border-slate-200 bg-slate-100 px-4 py-2 text-center text-xs font-bold tracking-widest text-slate-700 uppercase dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            <div className="border-b border-slate-200 bg-slate-100 px-2 py-1 text-center text-xs font-bold tracking-widest text-slate-700 uppercase dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                 {title}
             </div>
             {children}

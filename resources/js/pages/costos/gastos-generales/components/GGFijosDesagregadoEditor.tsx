@@ -2,7 +2,8 @@ import axios from 'axios';
 import { Save, Loader2, Plus, Trash2, Info } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { useGGFijosStore } from '../stores/ggFijosStore';
-import { useProjectParamsStore } from '../stores/projectParamsStore';
+import { useProjectParamsStore } from '../../presupuesto/stores/projectParamsStore';
+import { decimalSeguro, redondearMoneda, sumarDecimales } from '../lib/calculos';
 
 interface GGFijosDesagregadoEditorProps {
     projectId: number;
@@ -62,6 +63,13 @@ export function GGFijosDesagregadoEditor({
     // Consume parameters from store
     const globalBase = useProjectParamsStore(s => s.getCostoDirecto());
     const globalDays = useProjectParamsStore(s => s.getDuracionDias());
+    const sencicoPorcentaje = useProjectParamsStore(s => s.params?.sencico_porcentaje ?? 0.2);
+    const itfPorcentaje = useProjectParamsStore(s => s.params?.itf_porcentaje ?? 0.005);
+    const itfCargoAdicional = useProjectParamsStore(s => s.params?.itf_cargo_adicional ?? 0);
+    const sctrSaludPorcentaje = useProjectParamsStore(s => s.params?.sctr_salud_porcentaje ?? 0.5);
+    const sctrPensionPorcentaje = useProjectParamsStore(s => s.params?.sctr_pension_porcentaje ?? 1.5);
+    const polizaEssaludVidaPorcentaje = useProjectParamsStore(s => s.params?.poliza_essalud_vida_porcentaje ?? 0.53);
+    const seguroCarPorcentaje = useProjectParamsStore(s => s.params?.seguro_car_porcentaje ?? 0.3);
     
     // Usar montoCG como base para los cálculos si está disponible, sino usar globalBase
     const baseParaCalculos = montoCG > 0 ? montoCG : globalBase;
@@ -80,13 +88,13 @@ export function GGFijosDesagregadoEditor({
                     // Initialize default rows based on tipoCalculo
                     if (tipoCalculo === 'poliza_sctr') {
                         setRows([
-                            { ...DEFAULT_ROW, descripcion: 'Tasa SALUD (Empleados)', tipo_poliza: 'sctr_salud', tea_porcentaje: 0.5 },
-                            { ...DEFAULT_ROW, descripcion: 'Tasa PENSION', tipo_poliza: 'sctr_pension', tea_porcentaje: 1.5 }
+                            { ...DEFAULT_ROW, descripcion: 'Tasa SALUD (Empleados)', tipo_poliza: 'sctr_salud', tea_porcentaje: sctrSaludPorcentaje },
+                            { ...DEFAULT_ROW, descripcion: 'Tasa PENSION', tipo_poliza: 'sctr_pension', tea_porcentaje: sctrPensionPorcentaje }
                         ]);
                     } else if (tipoCalculo === 'sencico') {
-                        setRows([{ ...DEFAULT_ROW, descripcion: 'Sencico (0.20% del ppto)', tea_porcentaje: 0.2 }]);
+                        setRows([{ ...DEFAULT_ROW, descripcion: 'Sencico', tea_porcentaje: sencicoPorcentaje }]);
                     } else if (tipoCalculo === 'itf') {
-                        setRows([{ ...DEFAULT_ROW, descripcion: 'Impuestos ITF', tea_porcentaje: 0.01 }]);
+                        setRows([{ ...DEFAULT_ROW, descripcion: 'Impuestos ITF', tea_porcentaje: itfPorcentaje }]);
                     } else if (tipoCalculo === 'fianza_fiel_cumplimiento') {
                         setRows([{ ...DEFAULT_ROW, descripcion: 'FIANZA POR GARANTIA DE FC', garantia_porcentaje: 10 }]);
                     } else if (tipoCalculo === 'fianza_adelanto_efectivo') {
@@ -96,14 +104,14 @@ export function GGFijosDesagregadoEditor({
                     } else if (tipoCalculo === 'poliza_essalud_vida') {
                         setRows([{ ...DEFAULT_ROW, descripcion: 'PÓLIZA DE SEGUROS ESSALUD + VIDA' }]);
                     } else if (tipoCalculo === 'poliza_car') {
-                        setRows([{ ...DEFAULT_ROW, descripcion: 'SEGUROS CAR' }]);
+                        setRows([{ ...DEFAULT_ROW, descripcion: 'SEGUROS CAR', tea_porcentaje: seguroCarPorcentaje }]);
                     } else {
                         setRows([{ ...DEFAULT_ROW }]);
                     }
                 }
             })
             .finally(() => setLoading(false));
-    }, [tipoCalculo, projectId]);
+    }, [itfPorcentaje, polizaEssaludVidaPorcentaje, projectId, seguroCarPorcentaje, sencicoPorcentaje, sctrPensionPorcentaje, sctrSaludPorcentaje, tipoCalculo]);
 
     // syncTrigger, totalSueldos, totalBeneficios, baseParaCalculos, globalDays
     useEffect(() => {
@@ -113,6 +121,24 @@ export function GGFijosDesagregadoEditor({
             let changed = false;
             const newRows = prev.map(row => {
                 const nr = { ...row };
+                const configuredRate = tipoCalculo === 'sencico'
+                    ? sencicoPorcentaje
+                    : tipoCalculo === 'itf'
+                      ? itfPorcentaje
+                      : tipoCalculo === 'poliza_car'
+                        ? seguroCarPorcentaje
+                        : tipoCalculo === 'poliza_essalud_vida'
+                          ? polizaEssaludVidaPorcentaje
+                          : row.tipo_poliza === 'sctr_pension'
+                            ? sctrPensionPorcentaje
+                            : tipoCalculo === 'poliza_sctr'
+                              ? sctrSaludPorcentaje
+                              : null;
+
+                if (configuredRate !== null && nr.tea_porcentaje !== configuredRate) {
+                    nr.tea_porcentaje = configuredRate;
+                    changed = true;
+                }
                 
                 // Determine base calculation - usar montoCG si está disponible
                 let targetBase = baseParaCalculos;
@@ -142,7 +168,7 @@ export function GGFijosDesagregadoEditor({
             if (changed) setIsDirty(true);
             return changed ? newRows : prev;
         });
-    }, [syncTrigger, baseParaCalculos, globalDays, totalSueldos, totalBeneficios, tipoCalculo, loading]);
+    }, [baseParaCalculos, globalDays, itfPorcentaje, loading, polizaEssaludVidaPorcentaje, seguroCarPorcentaje, sencicoPorcentaje, sctrPensionPorcentaje, sctrSaludPorcentaje, syncTrigger, tipoCalculo, totalBeneficios, totalSueldos]);
 
     // Auto-save effect
     useEffect(() => {
@@ -201,24 +227,25 @@ export function GGFijosDesagregadoEditor({
 
     const calcRowTotal = (row: DesagregadoRow) => {
         if (tipoCalculo.startsWith('fianza_')) {
-            const montoGarantia = row.base_calculo * (row.garantia_porcentaje / 100);
-            const teaDiaria = (row.tea_porcentaje / 100) / 360;
+            const montoGarantia = decimalSeguro(row.base_calculo).times(row.garantia_porcentaje).dividedBy(100);
+            const teaDiaria = decimalSeguro(row.tea_porcentaje).dividedBy(100).dividedBy(360);
             if (tipoCalculo === 'fianza_fiel_cumplimiento') {
-                return montoGarantia * teaDiaria * (row.duracion_obra_dias + row.duracion_liquidacion_dias);
+                return redondearMoneda(montoGarantia.times(teaDiaria).times(decimalSeguro(row.duracion_obra_dias).plus(row.duracion_liquidacion_dias)));
             } else {
-                return montoGarantia * teaDiaria * (row.renovacion_dias || 0) * (row.factor_porcentaje / 100);
+                return redondearMoneda(montoGarantia.times(teaDiaria).times(row.renovacion_dias || 0).times(row.factor_porcentaje).dividedBy(100));
             }
         } else {
             if (row.duracion_dias > 0) {
-                const tasaDiaria = (row.tea_porcentaje / 100) / 360;
-                return row.base_calculo * tasaDiaria * row.duracion_dias;
+                const tasaDiaria = decimalSeguro(row.tea_porcentaje).dividedBy(100).dividedBy(360);
+                return redondearMoneda(decimalSeguro(row.base_calculo).times(tasaDiaria).times(row.duracion_dias));
             } else {
-                return row.base_calculo * (row.tea_porcentaje / 100);
+                const total = decimalSeguro(row.base_calculo).times(row.tea_porcentaje).dividedBy(100);
+                return redondearMoneda(tipoCalculo === 'itf' && rows[0] === row ? total.plus(itfCargoAdicional) : total);
             }
         }
     };
 
-    const globalTotal = rows.reduce((sum, row) => sum + calcRowTotal(row), 0);
+    const globalTotal = sumarDecimales(rows.map(calcRowTotal));
 
     const isFianza = tipoCalculo.startsWith('fianza_');
     const isSctr = tipoCalculo === 'poliza_sctr';
@@ -237,7 +264,7 @@ export function GGFijosDesagregadoEditor({
     return (
         <div className="flex flex-col bg-slate-900/40 p-5 rounded-xl border border-slate-800/60 shadow-lg mb-6 group/editor">
             <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
                     <div className="h-2 w-2 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.5)]" />
                     <div>
                         <h3 className="text-xs font-black tracking-[0.2em] text-slate-200 uppercase">
@@ -245,35 +272,35 @@ export function GGFijosDesagregadoEditor({
                         </h3>
                     </div>
                 </div>
-                <div className="flex gap-3 items-center">
+                <div className="flex gap-1.5 items-center">
                     {(isFianza || isSctr || isAdelanto) && (
                         <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/20">
-                            <span className="text-[10px] font-bold text-sky-400 capitalize">Base: {isSctr || tipoCalculo === 'poliza_essalud_vida' ? 'Variable' : 'General'}</span>
+                            <span className="text-xs font-bold text-sky-400 capitalize">Base: {isSctr || tipoCalculo === 'poliza_essalud_vida' ? 'Variable' : 'General'}</span>
                         </div>
                     )}
 
                     {(isAdelanto || isSctr) && (
                         <button
                             onClick={addRow}
-                            className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-1.5 text-[10px] font-bold text-slate-300 transition-all hover:bg-slate-700"
+                            className="flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-300 transition-all hover:bg-slate-700"
                         >
                             <Plus className="h-3 w-3" /> Añadir Fila
                         </button>
                     )}
                     
-                    <div className="flex items-center gap-2 min-w-[100px] justify-end">
+                    <div className="flex items-center gap-1 min-w-[100px] justify-end">
                         {saving ? (
-                            <span className="flex items-center gap-1.5 text-[9px] font-bold tracking-widest text-sky-400 uppercase">
+                            <span className="flex items-center gap-1.5 text-xs font-bold tracking-widest text-sky-400 uppercase">
                                 <Loader2 className="h-2.5 w-2.5 animate-spin" />
                                 Guardando
                             </span>
                         ) : isDirty ? (
-                            <span className="flex animate-pulse items-center gap-1.5 text-[9px] font-bold tracking-widest text-amber-500 uppercase">
+                            <span className="flex animate-pulse items-center gap-1.5 text-xs font-bold tracking-widest text-amber-500 uppercase">
                                 <span className="h-1 w-1 rounded-full bg-amber-500" />
                                 Pendiente
                             </span>
                         ) : (
-                            <span className="flex items-center gap-1.5 text-[9px] font-bold tracking-widest text-emerald-500 uppercase opacity-0 group-hover/editor:opacity-100 transition-opacity">
+                            <span className="flex items-center gap-1.5 text-xs font-bold tracking-widest text-emerald-500 uppercase opacity-0 group-hover/editor:opacity-100 transition-opacity">
                                 <span className="h-1 w-1 rounded-full bg-emerald-500" />
                                 Guardado
                             </span>
@@ -284,7 +311,7 @@ export function GGFijosDesagregadoEditor({
 
             {isFianza && (
                 <div className="mb-4 flex items-center gap-4 bg-slate-900/50 p-3 rounded-lg border border-slate-700/30 w-fit">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
                         % Garantía Global
                     </label>
                     <input
@@ -297,38 +324,38 @@ export function GGFijosDesagregadoEditor({
             )}
 
             <div className="overflow-x-auto rounded-lg border border-slate-800">
-                <table className="w-full text-left text-[11px] text-slate-300 border-collapse">
-                    <thead className="bg-slate-800/40 text-[9px] tracking-widest text-slate-500 uppercase">
+                <table className="w-full text-left text-xs text-slate-300 border-collapse">
+                    <thead className="bg-slate-800/40 text-xs tracking-widest text-slate-500 uppercase">
                         <tr>
-                            <th className="p-2.5 font-bold">Descripción</th>
-                            <th className="p-2.5 font-bold text-right border-x border-slate-800/50">Base S/.</th>
-                            <th className="p-2.5 font-bold text-right w-20">{isSimple ? 'Tasa %' : 'TEA %'}</th>
+                            <th className="p-1.5 font-bold">Descripción</th>
+                            <th className="p-1.5 font-bold text-right border-x border-slate-800/50">Base S/.</th>
+                            <th className="p-1.5 font-bold text-right w-20">{isSimple ? 'Tasa %' : 'TEA %'}</th>
                             {!isSimple && (
-                                <th className="p-2.5 font-bold text-right border-x border-slate-800/50">P.D %</th>
+                                <th className="p-1.5 font-bold text-right border-x border-slate-800/50">P.D %</th>
                             )}
                             {isFielCump || isCar || isSctr ? (
-                                <th className="p-2.5 font-bold text-right w-20">Días</th>
+                                <th className="p-1.5 font-bold text-right w-20">Días</th>
                             ) : null}
                             {isFielCump && (
-                                <th className="p-2.5 font-bold text-right w-20 border-x border-slate-800/50">Liq.</th>
+                                <th className="p-1.5 font-bold text-right w-20 border-x border-slate-800/50">Liq.</th>
                             )}
                             {isAdelanto && (
                                 <>
-                                    <th className="p-2.5 font-bold text-right w-16">Factor %</th>
-                                    <th className="p-2.5 font-bold text-right w-16">Avance %</th>
-                                    <th className="p-2.5 font-bold text-right w-16 border-x border-slate-800/50">Renov.</th>
+                                    <th className="p-1.5 font-bold text-right w-16">Factor %</th>
+                                    <th className="p-1.5 font-bold text-right w-16">Avance %</th>
+                                    <th className="p-1.5 font-bold text-right w-16 border-x border-slate-800/50">Renov.</th>
                                 </>
                             )}
-                            <th className="p-2.5 font-bold text-right text-sky-400 bg-sky-500/5">
+                            <th className="p-1.5 font-bold text-right text-sky-400 bg-sky-500/5">
                                 Parcial S/.
                             </th>
-                            {isAdelanto && <th className="p-2.5 w-8"></th>}
+                            {isAdelanto && <th className="p-1.5 w-8"></th>}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/50 bg-slate-900/20">
                         {rows.map((row, index) => (
                             <tr key={index} className="hover:bg-slate-800/30 transition-colors">
-                                <td className="p-2 min-w-[100px]">
+                                <td className="p-1 min-w-[100px]">
                                     <input
                                         type="text"
                                         value={row.descripcion ?? ''}
@@ -336,10 +363,10 @@ export function GGFijosDesagregadoEditor({
                                         className="w-full bg-transparent border-none p-1 text-xs focus:bg-slate-800 rounded focus:outline-none"
                                     />
                                 </td>
-                                <td className="p-2 text-right font-mono text-slate-500 selection:bg-sky-500/30">
+                                <td className="p-1 text-right font-mono text-slate-500 selection:bg-sky-500/30">
                                     {fmt(row.base_calculo ?? 0)}
                                 </td>
-                                <td className="p-2">
+                                <td className="p-1">
                                     <input
                                         type="number"
                                         value={row.tea_porcentaje ?? ''}
@@ -349,12 +376,12 @@ export function GGFijosDesagregadoEditor({
                                     />
                                 </td>
                                 {!isSimple && (
-                                    <td className="p-2 text-right font-mono text-slate-500 text-[10px]">
+                                    <td className="p-1 text-right font-mono text-slate-500 text-xs">
                                         {(((row.tea_porcentaje ?? 0) / 100) / 360 * 100).toFixed(6)}%
                                     </td>
                                 )}
                                 {(isFielCump || isCar || isSctr) ? (
-                                    <td className="p-2">
+                                    <td className="p-1">
                                         <input
                                             type="number"
                                             value={isFielCump ? (row.duracion_obra_dias ?? '') : (row.duracion_dias ?? '')}
@@ -367,7 +394,7 @@ export function GGFijosDesagregadoEditor({
                                     </td>
                                 ) : null}
                                 {isFielCump && (
-                                    <td className="p-2">
+                                    <td className="p-1">
                                         <input
                                             type="number"
                                             value={row.duracion_liquidacion_dias ?? ''}
@@ -378,16 +405,16 @@ export function GGFijosDesagregadoEditor({
                                 )}
                                 {isAdelanto && (
                                     <>
-                                        <td className="p-2"><input type="number" value={row.factor_porcentaje ?? ''} onChange={e => updateRow(index, 'factor_porcentaje', parseFloat(e.target.value) || 0)} className="w-full bg-slate-950 border border-slate-700/50 rounded px-1 py-1 text-right focus:border-sky-500/50 focus:outline-none" /></td>
-                                        <td className="p-2"><input type="number" value={row.avance_porcentaje ?? ''} onChange={e => updateRow(index, 'avance_porcentaje', parseFloat(e.target.value) || 0)} className="w-full bg-slate-950 border border-slate-700/50 rounded px-1 py-1 text-right focus:border-sky-500/50 focus:outline-none" /></td>
-                                        <td className="p-2"><input type="number" value={row.renovacion_dias ?? ''} onChange={e => updateRow(index, 'renovacion_dias', parseInt(e.target.value) || 0)} className="w-full bg-slate-950 border border-slate-700/50 rounded px-1 py-1 text-right focus:border-sky-500/50 focus:outline-none" /></td>
+                                        <td className="p-1"><input type="number" value={row.factor_porcentaje ?? ''} onChange={e => updateRow(index, 'factor_porcentaje', parseFloat(e.target.value) || 0)} className="w-full bg-slate-950 border border-slate-700/50 rounded px-1 py-1 text-right focus:border-sky-500/50 focus:outline-none" /></td>
+                                        <td className="p-1"><input type="number" value={row.avance_porcentaje ?? ''} onChange={e => updateRow(index, 'avance_porcentaje', parseFloat(e.target.value) || 0)} className="w-full bg-slate-950 border border-slate-700/50 rounded px-1 py-1 text-right focus:border-sky-500/50 focus:outline-none" /></td>
+                                        <td className="p-1"><input type="number" value={row.renovacion_dias ?? ''} onChange={e => updateRow(index, 'renovacion_dias', parseInt(e.target.value) || 0)} className="w-full bg-slate-950 border border-slate-700/50 rounded px-1 py-1 text-right focus:border-sky-500/50 focus:outline-none" /></td>
                                     </>
                                 )}
-                                <td className="p-2 text-right font-mono font-bold text-sky-400 bg-sky-500/5">
+                                <td className="p-1 text-right font-mono font-bold text-sky-400 bg-sky-500/5">
                                     {fmt(calcRowTotal(row))}
                                 </td>
                                 {isAdelanto && (
-                                    <td className="p-2 text-center">
+                                    <td className="p-1 text-center">
                                         <button onClick={() => removeRow(index)} className="text-slate-600 hover:text-red-400 transition-colors">
                                             <Trash2 className="w-3.5 h-3.5" />
                                         </button>
@@ -398,8 +425,8 @@ export function GGFijosDesagregadoEditor({
                     </tbody>
                     <tfoot className="bg-slate-800/20">
                         <tr>
-                            <td colSpan={isSimple ? 2 : 3} className="p-2 text-right text-[10px] font-bold text-slate-500 tracking-widest uppercase">Subtotal {tipoCalculo.replace(/_/g, ' ')}</td>
-                            <td colSpan={10} className="p-2 text-right font-mono font-black text-sky-400">S/. {fmt(globalTotal)}</td>
+                            <td colSpan={isSimple ? 2 : 3} className="p-1 text-right text-xs font-bold text-slate-500 tracking-widest uppercase">Subtotal {tipoCalculo.replace(/_/g, ' ')}</td>
+                            <td colSpan={10} className="p-1 text-right font-mono font-black text-sky-400">S/. {fmt(globalTotal)}</td>
                         </tr>
                     </tfoot>
                 </table>

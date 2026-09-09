@@ -1,7 +1,8 @@
 // components/RemuneracionesPanel.tsx
 import { Loader2, Plus, Trash2, Save, RefreshCw, Clock } from 'lucide-react';
 import React from 'react';
-import { useProjectParamsStore } from '../stores/projectParamsStore';
+import Swal from 'sweetalert2';
+import { useProjectParamsStore } from '../../presupuesto/stores/projectParamsStore';
 import type {
     RemuneracionRow} from '../stores/remuneracionesStore';
 import {
@@ -33,12 +34,30 @@ export function RemuneracionesPanel({
 
     const duracionMeses = useProjectParamsStore(s => s.getDuracionMeses());
     const rmvValue = useProjectParamsStore(s => s.getRmv());
+    const [saving, setSaving] = React.useState(false);
+
+    const handleSave = async () => {
+        if (!isDirty || saving) return;
+        setSaving(true);
+        try {
+            await onSaveRemuneracion(rows);
+        } catch (error) {
+            await Swal.fire({
+                icon: 'error',
+                title: 'No se pudo guardar',
+                text: error instanceof Error ? error.message : 'Revisa los datos e inténtalo nuevamente.',
+                confirmButtonText: 'Entendido',
+            });
+        } finally {
+            setSaving(false);
+        }
+    };
 
     if (loading) {
         return (
             <div className="flex h-full items-center justify-center bg-slate-900/50 backdrop-blur-sm">
-                <div className="flex flex-col items-center gap-3">
-                    <Loader2 className="h-10 w-10 animate-spin text-emerald-500" />
+                <div className="flex flex-col items-center gap-1.5">
+                    <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
                     <span className="text-xs font-medium tracking-widest text-slate-400 uppercase">
                         Cargando remuneraciones...
                     </span>
@@ -52,30 +71,30 @@ export function RemuneracionesPanel({
 
     return (
         <div className="flex h-full flex-col bg-slate-900">
-            <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800/80 px-4 py-3 backdrop-blur-sm">
+            <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800/80 px-2 py-1 backdrop-blur-sm">
                 <div className="flex flex-col">
-                    <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest text-slate-200 uppercase">
+                    <h2 className="flex items-center gap-1 text-xs font-bold tracking-widest text-slate-200 uppercase">
                         <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
                         Desglose de Remuneraciones
                     </h2>
-                    <p className="mt-0.5 text-[10px] font-medium tracking-tight text-slate-500 uppercase">
+                    <p className="mt-0.5 text-xs font-medium tracking-tight text-slate-500 uppercase">
                         Cálculo detallado de beneficios y leyes sociales
                     </p>
                 </div>
                 <div className="flex items-center gap-6">
                     <div className="flex flex-col items-center px-4 py-1 border-x border-slate-700/50">
-                        <span className="text-[9px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
                             <Clock className="w-2.5 h-2.5 text-sky-400" /> Tiempo Proyecto
                         </span>
-                        <span className="font-mono text-sm font-black text-sky-400">
+                        <span className="font-mono text-xs font-black text-sky-400">
                             {duracionMeses} Meses
                         </span>
                     </div>
                     <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase">
+                        <span className="text-xs font-semibold text-slate-500 uppercase">
                             Total Proyecto
                         </span>
-                        <span className="font-mono text-sm font-bold text-emerald-400" id="total-proyecto-header">
+                        <span className="font-mono text-xs font-bold text-emerald-400" id="total-proyecto-header">
                             {new Intl.NumberFormat('es-PE', {
                                 style: 'currency',
                                 currency: 'PEN',
@@ -87,8 +106,8 @@ export function RemuneracionesPanel({
 
             <div className="custom-scrollbar flex-1 overflow-auto">
                 <div className="min-w-[1400px]">
-                    <table className="w-full border-collapse text-left text-[11px]">
-                        <thead className="sticky top-0 z-10 bg-slate-800/95 text-[10px] font-bold tracking-wider text-slate-400 uppercase backdrop-blur-md">
+                    <table className="w-full border-collapse text-left text-xs">
+                        <thead className="sticky top-0 z-10 bg-slate-800/95 text-xs font-bold tracking-wider text-slate-400 uppercase backdrop-blur-md">
                             <tr>
                                 <th className="w-16 border-b border-slate-700 p-3 text-right">
                                     % Part.
@@ -144,8 +163,11 @@ export function RemuneracionesPanel({
                                     {/* % Participación */}
                                     <td className="p-0">
                                         <input
-                                            type="number"
-                                            className="w-full border-none bg-transparent p-2 text-right font-mono text-slate-300 focus:outline-none focus:bg-slate-700/30"
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                step="0.01"
+                                            className="w-full border-none bg-transparent p-1 text-right font-mono text-slate-300 focus:outline-none focus:bg-slate-700/30"
                                             value={row.participacion ?? ''}
                                             onChange={(e) =>
                                                 updateCell(
@@ -160,8 +182,10 @@ export function RemuneracionesPanel({
                                     {/* Cantidad */}
                                     <td className="p-0">
                                         <input
-                                            type="number"
-                                            className="w-full border-none bg-transparent p-2 text-right font-mono text-slate-300 focus:outline-none focus:bg-slate-700/30"
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                            className="w-full border-none bg-transparent p-1 text-right font-mono text-slate-300 focus:outline-none focus:bg-slate-700/30"
                                             value={row.cantidad ?? ''}
                                             onChange={(e) =>
                                                 updateCell(
@@ -174,7 +198,7 @@ export function RemuneracionesPanel({
                                     </td>
 
                                     {/* Cargo / Variable */}
-                                    <td className="p-2 pl-4">
+                                    <td className="p-1 pl-4">
                                         <div className="flex flex-col">
                                             <input
                                                 type="text"
@@ -194,7 +218,7 @@ export function RemuneracionesPanel({
                                                     !!(row as any).cargo_gg
                                                 }
                                             />
-                                            <span className="text-[9px] text-slate-500">
+                                            <span className="text-xs text-slate-500">
                                                 {row.gg_variable_id
                                                     ? `REF ID: ${row.gg_variable_id}`
                                                     : 'MANUAL'}
@@ -205,7 +229,7 @@ export function RemuneracionesPanel({
                                     {/* Categoría */}
                                     <td className="p-1">
                                         <select
-                                            className="w-full border-none bg-transparent p-1 text-[10px] text-slate-400 focus:outline-none focus:bg-slate-700/30"
+                                            className="w-full border-none bg-transparent p-1 text-xs text-slate-400 focus:outline-none focus:bg-slate-700/30"
                                             value={row.categoria ?? ''}
                                             onChange={(e) =>
                                                 updateCell(
@@ -224,8 +248,10 @@ export function RemuneracionesPanel({
                                     {/* Meses */}
                                     <td className="p-0">
                                         <input
-                                            type="number"
-                                            className="w-full border-none bg-transparent p-2 text-right font-mono text-slate-300 focus:outline-none focus:bg-slate-700/30"
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                            className="w-full border-none bg-transparent p-1 text-right font-mono text-slate-300 focus:outline-none focus:bg-slate-700/30"
                                             value={row.meses ?? ''}
                                             onChange={(e) =>
                                                 updateCell(
@@ -240,8 +266,10 @@ export function RemuneracionesPanel({
                                     {/* Precio Unitario */}
                                     <td className="bg-emerald-950/5 p-0">
                                         <input
-                                            type="number"
-                                            className="w-full border-none bg-transparent p-2 text-right font-mono text-emerald-400 focus:outline-none focus:bg-slate-700/30"
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                            className="w-full border-none bg-transparent p-1 text-right font-mono text-emerald-400 focus:outline-none focus:bg-slate-700/30"
                                             value={row.sueldo_basico ?? ''}
                                             onChange={(e) =>
                                                 updateCell(
@@ -253,44 +281,44 @@ export function RemuneracionesPanel({
                                         />
                                     </td>
 
-                                    <td className="bg-slate-900/30 p-2 text-right font-mono text-slate-500">
+                                    <td className="bg-slate-900/30 p-1 text-right font-mono text-slate-500">
                                         {(Number(row.snp) || 0).toFixed(2)}
                                     </td>
 
                                     {/* Asignación Familiar */}
-                                    <td className="bg-slate-900/30 p-2 text-right font-mono text-slate-500">
+                                    <td className="bg-slate-900/30 p-1 text-right font-mono text-slate-500">
                                         {(Number(row.asignacion_familiar) || 0).toFixed(2)}
                                     </td>
 
                                     {/* Essalud */}
-                                    <td className="bg-slate-900/30 p-2 text-right font-mono text-slate-500">
+                                    <td className="bg-slate-900/30 p-1 text-right font-mono text-slate-500">
                                         {(Number(row.essalud) || 0).toFixed(2)}
                                     </td>
 
                                     {/* CTS */}
-                                    <td className="bg-slate-900/30 p-2 text-right font-mono text-slate-500">
+                                    <td className="bg-slate-900/30 p-1 text-right font-mono text-slate-500">
                                         {(Number(row.cts) || 0).toFixed(2)}
                                     </td>
 
                                     {/* Vacaciones */}
-                                    <td className="bg-slate-900/30 p-2 text-right font-mono text-slate-500">
+                                    <td className="bg-slate-900/30 p-1 text-right font-mono text-slate-500">
                                         {(Number(row.vacaciones) || 0).toFixed(2)}
                                     </td>
 
                                     {/* Gratificación */}
-                                    <td className="bg-slate-900/30 p-2 text-right font-mono text-slate-500">
+                                    <td className="bg-slate-900/30 p-1 text-right font-mono text-slate-500">
                                         {(Number(row.gratificacion) || 0).toFixed(2)}
                                     </td>
 
                                     {/* Mensual Unitario */}
-                                    <td className="bg-emerald-950/10 p-2 text-right font-mono font-bold text-emerald-400">
+                                    <td className="bg-emerald-950/10 p-1 text-right font-mono font-bold text-emerald-400">
                                         {new Intl.NumberFormat('es-PE', {
                                             minimumFractionDigits: 2,
                                         }).format(row.total_mensual_unitario)}
                                     </td>
 
                                     {/* Total Proyecto */}
-                                    <td className="bg-slate-800 p-2 text-right font-mono font-bold text-slate-600 opacity-20 transition-opacity group-hover:opacity-40">
+                                    <td className="bg-slate-800 p-1 text-right font-mono font-bold text-slate-600 opacity-20 transition-opacity group-hover:opacity-40">
                                         {new Intl.NumberFormat('es-PE', {
                                             minimumFractionDigits: 2,
                                         }).format(row.total_proyecto)}
@@ -310,31 +338,31 @@ export function RemuneracionesPanel({
 
                             {/* Fila Resumen Mensual */}
                             <tr className="bg-slate-800/50 font-bold border-t-2 border-slate-700">
-                                <td colSpan={2} className="p-2 text-right text-slate-400 text-[9px] uppercase tracking-tighter">Resumen</td>
-                                <td className="p-2 pl-4 text-emerald-400 uppercase tracking-widest text-[10px]">Mensual Total</td>
+                                <td colSpan={2} className="p-1 text-right text-slate-400 text-xs uppercase tracking-tighter">Resumen</td>
+                                <td className="p-1 pl-4 text-emerald-400 uppercase tracking-widest text-xs">Mensual Total</td>
                                 <td colSpan={2}></td>
-                                <td className="p-2 text-right font-mono text-emerald-400 border-x border-slate-700/50">
+                                <td className="p-1 text-right font-mono text-emerald-400 border-x border-slate-700/50">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(mensual.pu)}
                                 </td>
-                                <td className="p-2 text-right font-mono text-slate-400 italic">
+                                <td className="p-1 text-right font-mono text-slate-400 italic">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(mensual.snp)}
                                 </td>
-                                <td className="p-2 text-right font-mono text-slate-400">
+                                <td className="p-1 text-right font-mono text-slate-400">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(mensual.af)}
                                 </td>
-                                <td className="p-2 text-right font-mono text-slate-400 italic">
+                                <td className="p-1 text-right font-mono text-slate-400 italic">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(mensual.essalud)}
                                 </td>
-                                <td className="p-2 text-right font-mono text-slate-400 italic">
+                                <td className="p-1 text-right font-mono text-slate-400 italic">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(mensual.cts)}
                                 </td>
-                                <td className="p-2 text-right font-mono text-slate-400 italic">
+                                <td className="p-1 text-right font-mono text-slate-400 italic">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(mensual.vac)}
                                 </td>
-                                <td className="p-2 text-right font-mono text-slate-400 italic">
+                                <td className="p-1 text-right font-mono text-slate-400 italic">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(mensual.gratif)}
                                 </td>
-                                <td className="p-2 text-right font-mono text-emerald-300 bg-emerald-950/20 border-l border-emerald-500/30">
+                                <td className="p-1 text-right font-mono text-emerald-300 bg-emerald-950/20 border-l border-emerald-500/30">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(mensual.total)}
                                 </td>
                                 <td className="bg-slate-800"></td>
@@ -343,32 +371,32 @@ export function RemuneracionesPanel({
 
                             {/* Fila Resumen Proyecto */}
                             <tr className="bg-slate-800/80 font-bold border-t border-slate-600">
-                                <td colSpan={2} className="p-2 text-right text-slate-400 text-[9px] uppercase tracking-tighter">Total</td>
-                                <td className="p-2 pl-4 text-emerald-500 uppercase tracking-widest text-[10px]">Proyecto Total</td>
+                                <td colSpan={2} className="p-1 text-right text-slate-400 text-xs uppercase tracking-tighter">Total</td>
+                                <td className="p-1 pl-4 text-emerald-500 uppercase tracking-widest text-xs">Proyecto Total</td>
                                 <td colSpan={2}></td>
-                                <td className="p-2 text-right font-mono text-emerald-500 border-x border-slate-700/50">
+                                <td className="p-1 text-right font-mono text-emerald-500 border-x border-slate-700/50">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(projectTotal.pu)}
                                 </td>
-                                <td className="p-2 text-right font-mono text-slate-200 italic">
+                                <td className="p-1 text-right font-mono text-slate-200 italic">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(projectTotal.snp)}
                                 </td>
-                                <td className="p-2 text-right font-mono text-slate-200">
+                                <td className="p-1 text-right font-mono text-slate-200">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(projectTotal.af)}
                                 </td>
-                                <td className="p-2 text-right font-mono text-slate-200 italic">
+                                <td className="p-1 text-right font-mono text-slate-200 italic">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(projectTotal.essalud)}
                                 </td>
-                                <td className="p-2 text-right font-mono text-slate-200 italic">
+                                <td className="p-1 text-right font-mono text-slate-200 italic">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(projectTotal.cts)}
                                 </td>
-                                <td className="p-2 text-right font-mono text-slate-200 italic">
+                                <td className="p-1 text-right font-mono text-slate-200 italic">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(projectTotal.vac)}
                                 </td>
-                                <td className="p-2 text-right font-mono text-slate-200 italic">
+                                <td className="p-1 text-right font-mono text-slate-200 italic">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(projectTotal.gratif)}
                                 </td>
                                 <td className="bg-emerald-950/30 border-l border-emerald-500/20"></td>
-                                <td className="p-2 text-right font-mono text-slate-600 opacity-20 bg-slate-700/80">
+                                <td className="p-1 text-right font-mono text-slate-600 opacity-20 bg-slate-700/80">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(projectTotal.total)}
                                 </td>
                                 <td></td>
@@ -382,38 +410,39 @@ export function RemuneracionesPanel({
                 <div className="flex items-center gap-4">
                     <button
                         onClick={() => addRow(null, projectId, 'Nuevo Cargo')}
-                        className="flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-[10px] font-bold text-slate-200 transition-all hover:bg-slate-600 hover:text-white"
+                        className="flex items-center gap-1 rounded-lg bg-slate-700 px-2 py-1 text-xs font-bold text-slate-200 transition-all hover:bg-slate-600 hover:text-white"
                     >
                         <Plus className="h-3.5 w-3.5" /> Añadir Personal
                     </button>
                     <button
                         onClick={() => setMesesAll(duracionMeses)}
-                        className="flex items-center gap-2 rounded-lg bg-sky-900/40 px-4 py-2 text-[10px] font-bold text-sky-300 transition-all hover:bg-sky-900/60 border border-sky-800/40"
-                        title="Sincronizar todos los meses al tiempo de proyecto"
+                        disabled={duracionMeses <= 0}
+                        className="flex items-center gap-1 rounded-lg bg-sky-900/40 px-2 py-1 text-xs font-bold text-sky-300 transition-all hover:bg-sky-900/60 border border-sky-800/40"
+                        title={duracionMeses > 0 ? 'Sincronizar todos los meses al plazo del proyecto' : 'Configura primero las fechas del proyecto'}
                     >
                         <RefreshCw className="h-3.5 w-3.5" /> Sincronizar Meses
                     </button>
-                    <div className="flex items-center gap-2 text-[10px] text-slate-500 italic">
+                    <div className="flex items-center gap-1 text-xs text-slate-500 italic">
                         * Cálculos basados en RMV {rmvValue} (Sincronizado)
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
                     {isDirty && (
-                        <span className="flex animate-pulse items-center gap-1.5 text-[10px] font-bold tracking-widest text-amber-500 uppercase">
+                        <span className="flex animate-pulse items-center gap-1.5 text-xs font-bold tracking-widest text-amber-500 uppercase">
                             <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
                             Cambios pendientes
                         </span>
                     )}
                     <button
-                        className={`flex items-center gap-2 rounded-lg px-6 py-2 text-xs font-bold text-white shadow-lg transition-all ${
+                        className={`flex items-center gap-1 rounded-lg px-6 py-2 text-xs font-bold text-white shadow-lg transition-all ${
                             isDirty
                                 ? 'bg-emerald-600 shadow-emerald-900/20 hover:bg-emerald-500 active:scale-95'
                                 : 'cursor-not-allowed bg-slate-700 opacity-60'
                         }`}
-                        onClick={() => onSaveRemuneracion(rows)}
-                        disabled={!isDirty || loading}
+                        onClick={() => void handleSave()}
+                        disabled={!isDirty || loading || saving}
                     >
-                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                         {loading
                             ? 'Guardando...'
                             : 'Guardar y Sincronizar con GG'}
