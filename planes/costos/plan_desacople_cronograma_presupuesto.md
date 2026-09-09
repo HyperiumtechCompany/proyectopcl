@@ -296,7 +296,7 @@ Incremental a `origin/Emes` → `deploy.sh` → probar en prod. Orden sugerido (
    `ganttDirty`. `batchUpdatePresupuestos` (espejo de solo lectura, `cronograma_general` no
    tiene columna `presupuesto`) deja de marcar dirty. `addTaskAfter`/`addChildTask` ahora sí
    marcan dirty (alta = cambio estructural).
-3. ✅ **Commit `<A3+A6>` — A3 + A6:** `store()` pasa de clear+reinsert a **upsert por id**:
+3. ✅ **Commit `5ec58b0` — A3 + A6:** `store()` pasa de clear+reinsert a **upsert por id**:
    `UPDATE` filas existentes, `INSERT` las nuevas (client_id negativo), `DELETE` **solo** los
    ids en `deleted_ids` (nuevo campo del payload). Una fila en BD ausente del payload y sin
    marcar → **sobrevive**. `useGanttTasks` acumula `deletedRealIds` (en `deleteTask` y en
@@ -320,15 +320,55 @@ Incremental a `origin/Emes` → `deploy.sh` → probar en prod. Orden sugerido (
   era del cronograma, y este método es grande y compartido con otras subsecciones — hacerlo
   con cuidado y sus propios tests. `handleSaveGantt` también podría condicionar su
   `saveBudget()` a `budgetDirty || ganttDirty` (hoy siempre lo llama).
+- **Snapshot de `presupuesto_general`**: `snapshotTable()` solo se llama para
+  `cronograma_general` (su save es el único que cambió). Cuando se haga A3 del presupuesto,
+  llamar también ahí.
+- **Guardia extra**: además del conteo, abortar si el payload borra *todas* las fechas o
+  *todas* las predecesoras existentes.
+- **`useGanttTasks` `useEffect([calendarSettings])`** hace `setDirtyIds(todas)` — solo
+  dispara si cambia la identidad de `calendarSettings` (raro), pero conviene acotarlo a las
+  filas cuyas fechas realmente cambiaron.
+- **`importMSProject.ts`**: las predecesoras importadas de MSP no llevan `refId` (resuelven
+  por `item_order` hasta que se editan). Se les puede poner `refId` = id temporal.
+- **Vista Cronograma standalone**: falta la guarda `isUsedAsPredecessorElsewhere` en su
+  `deleteTask` (Delphin ya la tiene).
 
 Verificación por PR:
-- `npm run types`, `npm run build`.
-- Backend: `php artisan test --compact` con filtro de cronograma/presupuesto.
+- `npm run types`, `npm run build`, `npx vitest run resources/js/pages/costos`.
+- Backend: `php artisan test --filter=CronogramaControllerTest` **en el servidor** (config cache local).
 - Manual en staging: los 7 casos de 5.6 + "guardar presupuesto no toca cronograma" y viceversa.
 
 ---
 
-## 11. Aislamiento
+## 11. Checklist de despliegue (Nivel A → prod)
 
-- Este plan y su código: **corrección del sistema**, va a `Emes` en commits aislados (como `f3dfa9c` del marcador FIN).
-- El refactor local de Gastos Generales / gastos-generales sigue **solo en el working tree local**, sin commit ni push. No entra en ningún PR de este plan.
+`origin/Emes` @ `5ec58b0`. Prod está en `af1c07d`.
+
+1. `git pull` en `/var/www/ingenieros.tech` (rama `Emes`) o `./deploy.sh`.
+2. `deploy.sh` corre `migrate --force` sobre la **BD central** — NO toca las BD tenant.
+   La tabla `wbs_snapshots` es tenant: correr por proyecto:
+   `php artisan tenant:migrate {projectId} 2026_09_09_000010_create_wbs_snapshots_table.php`
+   (al menos el proyecto del cliente afectado; idealmente todos los activos).
+   Sin esto, los snapshots se saltan en silencio (código defensivo con `Schema::hasTable`).
+3. `php artisan test --filter=CronogramaControllerTest` en el servidor.
+4. Verificar en Delphin del proyecto real:
+   - editar un precio y Guardar → el cronograma (fechas, predecesoras) NO cambia.
+   - agregar/borrar una partida → se persiste; al recargar no "resucita" ni desaparece de más.
+   - agregar una fila arriba de otra → las predecesoras existentes siguen apuntando a la
+     misma partida (número mostrado se recalcula).
+5. `route:cache` / `config:cache` los corre `deploy.sh`.
+
+**Cambio de comportamiento a vigilar:** `store()` ya no borra por ausencia — una fila que el
+frontend no manda **sobrevive**. Si algún flujo dependía de "mandar subconjunto = borrar el
+resto", revisar. Los flujos conocidos (`saveTasks` manda el árbol completo; `importTasks`
+calcula `deletedRealIds`) ya están cubiertos.
+
+---
+
+## 12. Aislamiento
+
+- Este plan y su código: **corrección del sistema**, en `Emes` (`f3dfa9c` FIN, `93184e8` A1/A5,
+  `c32dce3` A2/A4, `5ec58b0` A3/A6).
+- El refactor local de Gastos Generales vive en la rama **`wip/gastos-generales-adicionales`**
+  (`origin/`), aislada. No se mezcla con `Emes` ni llega al cliente. Para retomarlo:
+  `git checkout wip/gastos-generales-adicionales`.
