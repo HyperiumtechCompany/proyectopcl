@@ -214,57 +214,37 @@ Recomendado empezar por **B2**; migra a **B1** si conviene más adelante.
 
 ## 8. Diagnóstico en producción (solo lectura)
 
-Acceso: `ssh gerente@2.24.83.11 -p 2222` · app en `/var/www/ingenieros.tech` · MySQL `127.0.0.1`, credenciales en `.env`.
+Comando dedicado (ya en el repo desde el cierre de Nivel A):
 
 ```bash
 cd /var/www/ingenieros.tech
-git log --oneline -3 && git status -sb            # qué está desplegado
-
-DBU=$(grep ^DB_USERNAME .env|cut -d= -f2)
-DBN=$(grep ^DB_DATABASE .env|cut -d= -f2)
-# 1) tenant DB del proyecto del cliente
-mysql -h 127.0.0.1 -u "$DBU" -p "$DBN" -e \
- "SELECT id,nombre,database_name FROM costo_projects ORDER BY id;"
+php artisan cronograma:diagnose {projectId}          # tabla legible
+php artisan cronograma:diagnose {projectId} --json   # para pegar / archivar
 ```
 
-Con `TENANT` = database_name y `PID` = id de `presupuestos`:
-
-```sql
--- salud del árbol
-SELECT COUNT(*) filas, COUNT(DISTINCT item_order) io_distintos,
-       SUM(predecesoras IS NOT NULL) con_preds,
-       SUM(fecha_inicio IS NULL) sin_fecha, SUM(duracion_dias=0) dur_cero
-FROM cronograma_general WHERE presupuesto_id = PID;
-
--- item_order duplicados  → árbol corrupto
-SELECT item_order, COUNT(*) n FROM cronograma_general
-WHERE presupuesto_id = PID GROUP BY item_order HAVING n>1;
-
--- partidas del cronograma que ya no existen en el presupuesto  → JOIN roto
-SELECT cg.item_order, cg.partida, LEFT(cg.descripcion,45) d
-FROM cronograma_general cg
-LEFT JOIN presupuesto_general pg
-  ON cg.partida=pg.partida AND pg.presupuesto_id=PID
-WHERE cg.presupuesto_id=PID AND pg.partida IS NULL;
-
--- partidas duplicadas dentro del cronograma
-SELECT partida, COUNT(*) n FROM cronograma_general
-WHERE presupuesto_id=PID GROUP BY partida HAVING n>1;
-
--- volcado de predecesoras para revisar si los source cuadran con la descripción
-SELECT item_order, partida, LEFT(descripcion,40) d, predecesoras
-FROM cronograma_general
-WHERE presupuesto_id=PID AND predecesoras IS NOT NULL ORDER BY item_order;
-```
-
+Para saber el `projectId`:
 ```bash
-grep -n "cronograma_general" storage/logs/laravel*.log | tail -40   # errores de guardado
-crontab -l 2>/dev/null | grep -iE 'mysqldump|backup'                # ¿hay respaldos?
+php artisan tinker --execute="\App\Models\CostoProject::orderBy('id')->get(['id','nombre'])->each(fn(\$p)=>print(\"{\$p->id}\t{\$p->nombre}\n\"));"
 ```
+
+El reporte muestra: nº de filas, `item_order` distintos, con/sin predecesoras, fechas
+nulas, duración cero, **`item_order`/`partida` duplicados**, **partidas del cronograma
+sin contraparte en el presupuesto** (JOIN roto), y por cada predecesora si usa `refId`
+estable o número de fila legado, cuántos `refId` quedaron rotos y cuántos vínculos legado
+**apuntan a una partida distinta a la que dice su snapshot** (= cruzados por el bug viejo).
 
 **Lectura:**
-- `io_distintos < filas` o duplicados de `item_order`/`partida` → cronograma ya corrupto en BD.
-- Volcado de predecesoras: si los `source` todavía apuntan a partidas coherentes con la descripción esperada → recuperable re-derivando. Si ya no cuadran → re-ingresar dependencias a mano.
+- `item_order cruzados vs snapshot` > 0 → hay vínculos que apuntan mal por el incidente.
+  El `--json` lista cada uno con "source N ahora es X pero el snapshot decía Y" → esa lista
+  es la guía para re-ingresarlos.
+- `refId rotos` > 0 → el destino fue borrado; reasignar o quitar el vínculo.
+- `item_order`/`partida` duplicados → árbol corrupto por una síntesis vieja.
+
+Logs y respaldos:
+```bash
+grep -n "cronograma_general\|wbs_snapshots" storage/logs/laravel*.log | tail -40
+crontab -l 2>/dev/null | grep -iE 'mysqldump|backup'
+```
 
 ---
 
@@ -323,9 +303,11 @@ Incremental a `origin/Emes` → `deploy.sh` → probar en prod. Orden sugerido (
 
 **Follow-ups conocidos:**
 - Backfill de `refId` para vínculos legado, por proyecto y tras verificación visual (no
-  automático — congelaría el estado cruzado del cliente afectado).
+  automático — congelaría el estado cruzado del cliente afectado). Con la nueva UI: el usuario
+  abre cada predecesora en el picker y da Aplicar → se le adjunta `refId` desde el árbol
+  actual. Solo hacer esto **después** de verificar con `cronograma:diagnose` que no hay
+  cruzados, o de re-ingresar los cruzados.
 - Aviso hoja↔hoja cuando una predecesora apunta a una fila grupo/resumen.
-- Correr las migraciones tenant (`wbs_snapshots`) por proyecto en prod: `php artisan tenant:migrate {projectId}`.
 - Correr `php artisan test --filter=CronogramaControllerTest` en el servidor/CI (no se corrió local por el riesgo de config cache).
 - **A3 para `presupuesto_general` — DIFERIDO a Nivel B, no se hará en Nivel A.**
   `PresupuestoController::update('general')` sigue con clear+reinsert **+ snapshot + guarda
@@ -350,33 +332,46 @@ Verificación por PR:
 
 ## 11. Checklist de despliegue (Nivel A → prod)
 
-`origin/Emes` @ `5ec58b0`. Prod está en `af1c07d`.
+`origin/Emes` @ `6b95ec9`+. Prod está en `af1c07d`.
 
 1. `git pull` en `/var/www/ingenieros.tech` (rama `Emes`) o `./deploy.sh`.
-2. `deploy.sh` corre `migrate --force` sobre la **BD central** — NO toca las BD tenant.
-   La tabla `wbs_snapshots` es tenant: correr por proyecto:
-   `php artisan tenant:migrate {projectId} 2026_09_09_000010_create_wbs_snapshots_table.php`
-   (al menos el proyecto del cliente afectado; idealmente todos los activos).
-   Sin esto, los snapshots se saltan en silencio (código defensivo con `Schema::hasTable`).
+2. **Migración tenant `wbs_snapshots`** (deploy.sh solo migra la BD central):
+   ```
+   php artisan tenant:migrate-all --migration=2026_09_09_000010_create_wbs_snapshots_table.php
+   ```
+   (`tenant:migrate-all` sin `--migration` corre TODAS las pendientes en TODAS las BD tenant;
+   con `--pretend` muestra sin ejecutar). Sin esto los snapshots se saltan en silencio
+   (código defensivo con `Schema::hasTable`), y "Historial de guardados" sale vacío.
 3. `php artisan test --filter=CronogramaControllerTest` en el servidor.
-4. Verificar en Delphin del proyecto real:
+4. **Diagnóstico del proyecto del cliente**, ANTES de que lo use en serio:
+   ```
+   php artisan cronograma:diagnose {projectId}
+   ```
+   Si `item_order cruzados vs snapshot` > 0 → hay vínculos apuntando mal por el incidente
+   viejo; el `--json` lista cuáles. El cliente los re-ingresa (o se re-derivan con un script).
+   El código nuevo **no repara** el daño previo, solo evita que se repita.
+5. Verificar en Delphin del proyecto real:
    - editar un precio y Guardar → el cronograma (fechas, predecesoras) NO cambia.
    - agregar/borrar una partida → se persiste; al recargar no "resucita" ni desaparece de más.
    - agregar una fila arriba de otra → las predecesoras existentes siguen apuntando a la
      misma partida (número mostrado se recalcula).
-5. `route:cache` / `config:cache` los corre `deploy.sh`.
+   - Config → "Historial de guardados" muestra copias; revertir funciona.
+6. `route:cache` / `config:cache` los corre `deploy.sh`.
 
 **Cambio de comportamiento a vigilar:** `store()` ya no borra por ausencia — una fila que el
-frontend no manda **sobrevive**. Si algún flujo dependía de "mandar subconjunto = borrar el
-resto", revisar. Los flujos conocidos (`saveTasks` manda el árbol completo; `importTasks`
-calcula `deletedRealIds`) ya están cubiertos.
+frontend no manda **sobrevive**. Los flujos conocidos (`saveTasks` manda el árbol completo;
+`importTasks` calcula `deletedRealIds`) ya están cubiertos.
+
+**Limitación conocida (no regresión):** no hay bloqueo de edición concurrente en Delphin
+(dos usuarios en el mismo proyecto pueden pisarse). Era así antes; Reverb/Echo no está
+cableado a Delphin.
 
 ---
 
 ## 12. Aislamiento
 
 - Este plan y su código: **corrección del sistema**, en `Emes` (`f3dfa9c` FIN, `93184e8` A1/A5,
-  `c32dce3` A2/A4, `5ec58b0` A3/A6).
+  `c32dce3` A2/A4, `5ec58b0` A3/A6, `3d9ad59` A2/A5/A6 completos, `6b95ec9` surface 422).
 - El refactor local de Gastos Generales vive en la rama **`wip/gastos-generales-adicionales`**
   (`origin/`), aislada. No se mezcla con `Emes` ni llega al cliente. Para retomarlo:
   `git checkout wip/gastos-generales-adicionales`.

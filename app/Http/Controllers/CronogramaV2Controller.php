@@ -147,8 +147,11 @@ class CronogramaV2Controller extends Controller
                 // ── Paso 1: upsert por id, mapear client_id → id real ──────────
                 // client_id puede ser negativo (fila nueva). Se captura el id real
                 // para re-mapear parent_id y refId/target de predecesoras en el paso 2.
+                // idByIndex garantiza que el paso 2 nunca omita una fila insertada
+                // (p.ej. un bundle viejo en caché que manda id:null sin client_id).
                 $idMap = [];
-                foreach ($incomingTasks as $task) {
+                $idByIndex = [];
+                foreach ($incomingTasks as $index => $task) {
                     $clientId = (int) ($task['client_id'] ?? $task['id'] ?? 0);
 
                     $row = [
@@ -185,6 +188,7 @@ class CronogramaV2Controller extends Controller
                         $newId = DB::connection('costos_tenant')->table('cronograma_general')->insertGetId($row);
                     }
 
+                    $idByIndex[$index] = $newId;
                     if ($clientId !== 0) {
                         $idMap[$clientId] = $newId;
                     }
@@ -193,9 +197,8 @@ class CronogramaV2Controller extends Controller
                 $remap = static fn ($id) => $idMap[(int) $id] ?? null;
 
                 // ── Paso 2: resolver parent_id + predecesoras con el idMap completo ──
-                foreach ($incomingTasks as $task) {
-                    $clientId = (int) ($task['client_id'] ?? $task['id'] ?? 0);
-                    $selfId = $remap($clientId);
+                foreach ($incomingTasks as $index => $task) {
+                    $selfId = $idByIndex[$index] ?? null;
                     if ($selfId === null) {
                         continue;
                     }
