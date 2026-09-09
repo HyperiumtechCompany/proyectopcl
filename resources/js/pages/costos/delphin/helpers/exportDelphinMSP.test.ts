@@ -68,4 +68,16 @@ describe('buildDelphinMSPXml', () => {
 
         expect(successor).toContain('<Manual>1</Manual>');
     });
+
+    it('sets ManualStart/ManualFinish so MS Project keeps the real duration instead of collapsing to 1 day', () => {
+        // Manual=1 por sí solo no basta: sin <ManualStart>/<ManualFinish>, MS
+        // Project ignora las fechas manuales al abrir el archivo y muestra
+        // cada tarea con la duración placeholder de 1 día — el bug reportado
+        // en producción (todas las tareas exportadas aparecían "1 día").
+        const xml = buildDelphinMSPXml(tasks, 'Proyecto vial');
+        const successor = xml.split('<Name>Actividad sucesora</Name>')[1].split('</Task>')[0];
+
+        expect(successor).toContain('<ManualStart>2027-02-18T08:00:00</ManualStart>');
+        expect(successor).toContain('<ManualFinish>2027-02-20T17:00:00</ManualFinish>');
+    });
 });

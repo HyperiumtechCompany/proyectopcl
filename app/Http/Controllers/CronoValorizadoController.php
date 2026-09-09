@@ -623,17 +623,37 @@ class CronoValorizadoController extends Controller
     private function normalizarDistribucionMensual(array $distribucion, array $periodos, float $parcial): array
     {
         $normalizada = [];
+        $sumaMontos = 0.0;
+        $ultimaKey = null;
 
         foreach ($periodos as $periodo) {
             $key = $periodo['key'];
             $monto = round((float) ($distribucion[$key]['monto'] ?? 0), 2);
 
-            $normalizada[$key] = [
-                'monto' => $monto,
-                'porcentaje' => $parcial > 0
-                    ? round(($monto / $parcial) * 100, 6)
-                    : 0.0,
-            ];
+            $normalizada[$key] = ['monto' => $monto];
+            $sumaMontos += $monto;
+            $ultimaKey = $key;
+        }
+
+        // La distribución guardada puede quedar desalineada del $parcial actual
+        // (ej. tras el redondeo a 2 decimales de presupuesto_general.parcial
+        // introducido en 2b16949, o tras editar metrado/precio después de haber
+        // guardado el cronograma). El último período absorbe la diferencia —
+        // mismo patrón que ya usan distribucionUniforme()/
+        // distribuirPorDiasCalendario() — para que la suma vuelva a cuadrar
+        // exacto con $parcial y no dispare "desvío" en el frontend por un
+        // desfase que el usuario no generó ni puede corregir manualmente.
+        if ($ultimaKey !== null && $parcial > 0) {
+            $residuo = round($parcial - $sumaMontos, 2);
+            if ($residuo !== 0.0) {
+                $normalizada[$ultimaKey]['monto'] = round($normalizada[$ultimaKey]['monto'] + $residuo, 2);
+            }
+        }
+
+        foreach ($normalizada as $key => $valor) {
+            $normalizada[$key]['porcentaje'] = $parcial > 0
+                ? round(($valor['monto'] / $parcial) * 100, 6)
+                : 0.0;
         }
 
         return $normalizada;

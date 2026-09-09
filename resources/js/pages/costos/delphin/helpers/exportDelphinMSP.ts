@@ -2,6 +2,8 @@ import { saveAs } from 'file-saver';
 import type { GanttTask } from '../../cronogramas/v2/types/task';
 import type { GanttCalendarSettings, WeekdayKey } from '../../cronogramas/v2/types/calendar';
 
+const WEEKDAY_KEYS: WeekdayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri'];
+
 // ── Tipo → código MSPDI ───────────────────────────────────────────────────────
 // FC = Finish-to-Start  → FS = 1
 // CC = Start-to-Start   → SS = 3
@@ -16,7 +18,17 @@ function timeToMinutes(time: string): number {
 
 function workingMinutesPerDay(settings?: GanttCalendarSettings): number {
     if (!settings) return 480;
-    const enabledDay = Object.values(settings.workDays).find((day) => day.enabled);
+    // Preferir un día de semana (L-V) como referencia: en un calendario no
+    // uniforme (ej. 9h L-V, 5h sáb/dom, caso real de producción), tomar "el
+    // primer día habilitado que aparezca" es frágil — si ese primer día
+    // resultara ser sábado/domingo, todas las duraciones exportadas se
+    // convertirían usando la capacidad reducida del fin de semana en vez de
+    // la de un día laboral normal.
+    const weekday = WEEKDAY_KEYS.map((key) => settings.workDays[key]).find(
+        (day) => day?.enabled,
+    );
+    const enabledDay =
+        weekday ?? Object.values(settings.workDays).find((day) => day.enabled);
     if (!enabledDay) return 480;
     return Math.max(1, timeToMinutes(enabledDay.end) - timeToMinutes(enabledDay.start));
 }
@@ -178,9 +190,22 @@ export function buildDelphinMSPXml(
         // adelante respecto a lo que Delphin ya calculó correctamente (Delphin
         // cuenta días completos, sin fraccionar por horas). Con Manual=1, MS
         // Project usa el Start/Finish tal cual se exportan, sin recalcular.
+        //
+        // Pero Manual=1 por sí solo NO basta: al abrir el archivo, MS Project
+        // solo respeta las fechas de una tarea manual si además trae
+        // <ManualStart>/<ManualFinish> — sin ellas, colapsa la tarea a la
+        // duración placeholder de 1 día (exactamente el síntoma reportado:
+        // todas las tareas del cronograma exportado aparecían con "1 día" en
+        // MS Project, aunque Delphin tenía la duración real correcta).
         tasksXml += tag('Manual', 1);
-        if (start)  tasksXml += tag('Start', start);
-        if (finish) tasksXml += tag('Finish', finish);
+        if (start) {
+            tasksXml += tag('Start', start);
+            tasksXml += tag('ManualStart', start);
+        }
+        if (finish) {
+            tasksXml += tag('Finish', finish);
+            tasksXml += tag('ManualFinish', finish);
+        }
         tasksXml += tag('Duration', duration);
         tasksXml += tag('DurationFormat', 7); // days
         tasksXml += tag('Work', duration);
