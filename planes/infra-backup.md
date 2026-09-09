@@ -1,27 +1,29 @@
 # Backup de base de datos — PCL producción
 
-**Estado:** scripts en el repo (`scripts/backup-db.sh`, `scripts/restore-db.sh`).
-Falta: instalar el cron en el servidor (una vez). Es **prerrequisito del Nivel B**
-y de cualquier migración de esquema — hoy no hay respaldos.
+**Estado:** comandos en el repo (`php artisan db:backup` / `db:restore`, con
+wrappers `scripts/*.sh`). Falta: instalar el cron en el servidor (una vez). Es
+**prerrequisito del Nivel B** y de cualquier migración de esquema — hoy no hay respaldos.
 
 Servidor: `ingenieros.tech` · `ssh gerente@2.24.83.11 -p 2222` · app en
-`/var/www/ingenieros.tech` · MySQL `127.0.0.1`, credenciales en `.env`.
+`/var/www/ingenieros.tech`.
 
 ---
 
 ## Qué respalda
 
-`scripts/backup-db.sh` auto-descubre y vuelca:
+`php artisan db:backup` auto-descubre y vuelca:
 - `pcl_central`
 - todas las BD tenant de Costos (`costos_%`) — incluye automáticamente las nuevas
 
 Un `.sql.gz` por BD en `~/backups/mysql/<fecha>/`, con `MANIFEST.txt` y un symlink
 `latest`. Copia mensual el día 1. Retención: **14 días** de diarios, **6 meses** de
 mensuales. Log en `~/backups/mysql/backup.log`. Marcadores `LAST_RUN_OK` /
-`LAST_RUN_FAILED` para un healthcheck.
+`LAST_RUN_FAILED`.
 
-No requiere `sudo`. Las credenciales se pasan por archivo temporal `600` (nunca en
-`ps`). `mysqldump --single-transaction` → sin bloqueo de escritura.
+**Usa `config('database.connections.mysql')`** — las mismas credenciales/socket que
+usa la app (no parsea `.env` a mano; el descubrimiento de BD va por la conexión PDO
+que ya funciona). No requiere `sudo`. `mysqldump --single-transaction` → sin bloqueo
+de escritura. Si `mysqldump` no está en el `PATH`: `MYSQLDUMP_PATH=/ruta/mysqldump`.
 
 ---
 
@@ -29,22 +31,22 @@ No requiere `sudo`. Las credenciales se pasan por archivo temporal `600` (nunca 
 
 ```bash
 cd /var/www/ingenieros.tech
-git pull --ff-only origin Emes            # trae los scripts
+git pull --ff-only origin Emes
 
 # 1. Prueba manual
-bash scripts/backup-db.sh --list          # ¿qué BD detecta?
-bash scripts/backup-db.sh                 # corre el backup completo
+php artisan db:backup --list              # ¿qué BD detecta? (usa la conexión de la app)
+php artisan db:backup                     # corre el backup completo
 ls -lh ~/backups/mysql/latest/            # verifica los .sql.gz
 cat ~/backups/mysql/latest/MANIFEST.txt
 
 # 2. Cron diario 02:15 (hora del servidor)
-( crontab -l 2>/dev/null | grep -v 'scripts/backup-db.sh'
-  echo '15 2 * * * cd /var/www/ingenieros.tech && bash scripts/backup-db.sh >> $HOME/backups/mysql/cron.log 2>&1'
+( crontab -l 2>/dev/null | grep -v 'db:backup'
+  echo '15 2 * * * cd /var/www/ingenieros.tech && php artisan db:backup >> $HOME/backups/mysql/cron.log 2>&1'
 ) | crontab -
 crontab -l
 ```
 
-`deploy.sh` ya corre `scripts/backup-db.sh` **antes de las migraciones** (best-effort;
+`deploy.sh` ya corre `php artisan db:backup` **antes de las migraciones** (best-effort;
 saltable con `PCL_SKIP_DEPLOY_BACKUP=1`). También corre `tenant:migrate-all` después
 del migrate central.
 
@@ -67,10 +69,10 @@ cron. O activar snapshots del VPS en el panel de Hostinger.
 
 ```bash
 # una BD desde el último backup
-bash scripts/restore-db.sh ~/backups/mysql/latest/costos_2_20260616143745_926.sql.gz
+php artisan db:restore ~/backups/mysql/latest/costos_2_20260616143745_926.sql.gz
 
 # a una BD con otro nombre (staging)
-bash scripts/restore-db.sh ~/backups/mysql/2026-09-01/pcl_central.sql.gz pcl_central_staging
+php artisan db:restore ~/backups/mysql/2026-09-01/pcl_central.sql.gz pcl_central_staging
 ```
 
 Si la BD destino ya existe, pide confirmación escribiendo su nombre.

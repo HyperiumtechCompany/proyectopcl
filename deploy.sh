@@ -28,7 +28,7 @@ test -s public/wasm/web-ifc.wasm
 
 if [ "${PCL_SKIP_DEPLOY_BACKUP:-0}" != "1" ]; then
   echo "[BACKUP] Respaldo de BD previo a migraciones..."
-  if bash scripts/backup-db.sh; then
+  if php artisan db:backup; then
     echo "[BACKUP] OK"
   else
     echo "[BACKUP] ⚠ El respaldo FALLÓ (ver ~/backups/mysql/backup.log)."
