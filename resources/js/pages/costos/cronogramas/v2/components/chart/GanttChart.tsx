@@ -63,7 +63,12 @@ export function GanttChart({
     const projectStart = timeline.calendarSettings?.projectStart ?? null;
     const projectEnd   = timeline.calendarSettings?.projectEnd   ?? null;
     const projectStartX = projectStart ? timeline.dateToX(projectStart) : null;
-    const projectEndX   = projectEnd   ? timeline.dateToX(projectEnd)   : null;
+    // El fin del proyecto se ancla al FINAL del día projectEnd (borde derecho de
+    // su columna), igual que el extremo derecho de las barras
+    // (dateToX(fecha_fin) + dayWidth en GanttBar). Con dateToX(projectEnd) a
+    // secas el marcador caía un día antes: parecía terminar el jueves cuando el
+    // cronograma y las barras padre terminan el viernes.
+    const projectEndX   = projectEnd   ? timeline.dateToX(projectEnd) + timeline.dayWidth : null;
 
     // ── Drag state ────────────────────────────────────────────────────────────
     const [drag, setDrag] = useState<DragState | null>(null);
