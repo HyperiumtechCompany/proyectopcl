@@ -13,6 +13,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import axios from 'axios';
 import Decimal from 'decimal.js';
 import { ajustarResiduoMonetario } from '../helpers/ajustarResiduoMonetario';
+import { buildTreeItems, parentCodes } from '../helpers/buildTreeItems';
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import type {
     ItemValorizado,
@@ -46,16 +47,6 @@ const bgNivel = (n: number, isLeaf: boolean): string => {
     if (n === 2) return 'bg-slate-100 text-slate-800';
     return 'bg-slate-50 text-slate-700';
 };
-
-const parentCodes = (code: string): string[] => {
-    const parts = code.split('.').filter(Boolean);
-    return parts.slice(0, -1).map((_, idx) => parts.slice(0, idx + 1).join('.'));
-};
-
-const emptyDistribucion = (periodos: Periodo[]) =>
-    Object.fromEntries(
-        periodos.map((p) => [p.key, { monto: 0, porcentaje: 0 }]),
-    ) as ItemValorizado['distribucion'];
 
 // TIPOS
 interface FinancieroState {
@@ -538,88 +529,10 @@ const TablaValorizada: React.FC<Props> = ({
         });
     }, []);
 
-    const treeItems = useMemo<ItemValorizado[]>(() => {
-        const byCode = new Map<string, ItemValorizado>();
-
-        items.forEach((item) => {
-            const code = item.item || '';
-            if (!code) return;
-            byCode.set(code, { ...item });
-
-            parentCodes(code).forEach((parentCode) => {
-                if (!byCode.has(parentCode)) {
-                    byCode.set(parentCode, {
-                        parent_id: null,
-                        id: `group:${parentCode}`,
-                        item: parentCode,
-                        descripcion:
-                            jerarquiaPresupuesto[parentCode] ??
-                            `Partida ${parentCode}`,
-                        und: '',
-                        metrado: 0,
-                        precio: 0,
-                        parcial: 0,
-                        is_leaf: false,
-                        distribucion: emptyDistribucion(periodos),
-                    });
-                }
-            });
-        });
-
-        const codes = [...byCode.keys()].sort((a, b) =>
-            a.localeCompare(b, 'es', { numeric: true }),
-        );
-
-        const hasChildren = new Set<string>();
-        codes.forEach((code) => {
-            parentCodes(code).forEach((parentCode) => hasChildren.add(parentCode));
-        });
-
-        const leafItems = items.filter(
-            (item) => item.item && !hasChildren.has(item.item),
-        );
-
-        codes.forEach((code) => {
-            const row = byCode.get(code);
-            if (!row || !hasChildren.has(code)) return;
-
-            const descendants = leafItems.filter((item) =>
-                item.item.startsWith(`${code}.`),
-            );
-            const parcial = descendants.reduce(
-                (acc, item) => acc + (item.parcial ?? 0),
-                0,
-            );
-            const distribucion = emptyDistribucion(periodos);
-
-            descendants.forEach((item) => {
-                periodos.forEach((periodo) => {
-                    const monto = item.distribucion?.[periodo.key]?.monto ?? 0;
-                    distribucion[periodo.key].monto += monto;
-                });
-            });
-
-            periodos.forEach((periodo) => {
-                const monto = distribucion[periodo.key].monto;
-                distribucion[periodo.key] = {
-                    monto: Math.round(monto * 100) / 100,
-                    porcentaje:
-                        parcial > 0 ? (monto / parcial) * 100 : 0,
-                };
-            });
-
-            byCode.set(code, {
-                ...row,
-                parcial,
-                distribucion,
-                is_leaf: false,
-            });
-        });
-
-        return codes
-            .map((code) => byCode.get(code))
-            .filter((item): item is ItemValorizado => Boolean(item));
-    }, [items, periodos, jerarquiaPresupuesto]);
+    const treeItems = useMemo<ItemValorizado[]>(
+        () => buildTreeItems(items, periodos, jerarquiaPresupuesto),
+        [items, periodos, jerarquiaPresupuesto],
+    );
 
     const childCodes = useMemo(() => {
         const result = new Set<string>();

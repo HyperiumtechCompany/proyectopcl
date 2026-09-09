@@ -123,14 +123,9 @@ class DelphinController extends Controller
             ->where('presupuesto_id', $presupuestoId)
             ->first();
 
-        // Solo partidas hoja (con metrado): presupuesto_general también guarda el
-        // rollup en las filas de título/grupo, así que un SUM(parcial) sin filtrar
-        // cuenta el costo de cada partida una vez por cada nivel de su árbol —
-        // mismo criterio que recalculateConsolidadoSnapshot() en PresupuestoController.
-        $costoDirecto = (float) $connection->table('presupuesto_general')
-            ->where('presupuesto_id', $presupuestoId)
-            ->where('metrado', '>', 0)
-            ->sum('parcial');
+        // Fuente única: mismo número que ve el Cronograma Valorizado y cualquier
+        // otro módulo (ver CostoDatabaseService::costoDirectoOficial()).
+        $costoDirecto = $this->dbService->costoDirectoOficial($presupuestoId);
 
         $gastosGeneralesDetalle = (float) $connection->table('gg_fijos')
             ->where('presupuesto_id', $presupuestoId)

@@ -8,6 +8,7 @@ import ResumenFinanciero from './components/ResumenFinanciero';
 import TablaValorizada from './components/TablaValorizada';
 import CronogramaDesembolsos from './components/CronogramaDesembolsos';
 import { exportarExcel, exportarPDF } from './helpers/exportHelpers';
+import { buildTreeItems } from './helpers/buildTreeItems';
 import { useValorizadoLogic } from './helpers/useValorizadoLogic';
 import type { ValorizadoProps, ModoCalculo, FinDefaults } from './types';
 import CronogramaMateriales from '../materiales/CronogramaMateriales';
@@ -132,6 +133,14 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         window.location.href = url.toString();
     }, [modoCalculo]);
 
+    // Árbol jerárquico (hojas + grupos con nombre y rollup) — el MISMO que
+    // muestra TablaValorizada. El export usa esto, no la lista plana de hojas,
+    // para que Excel/PDF salgan idénticos a lo que se visualiza.
+    const treeItems = React.useMemo(
+        () => buildTreeItems(items, props.periodos, props.jerarquiaPresupuesto ?? {}),
+        [items, props.periodos, props.jerarquiaPresupuesto],
+    );
+
     const projectDataExport = React.useMemo(() => {
         const p: any = props as any;
         return p.projectData
@@ -149,7 +158,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
             ? Number(projectDataExport.duracion_dias)
             : props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0);
 
-        exportarExcel(items, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem, {
+        exportarExcel(treeItems, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem, {
             projectData: projectDataExport,
             projectId: props.project,
             totalPresupuesto: props.totalPresupuesto,
@@ -159,14 +168,14 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
             totalDias,
             finDefaults: exportFinDefaults,
         });
-    }, [items, props.periodos, props.diasPorMes, props.totalPresupuesto, resumenFinancieroDesembolso, props.project, totalesFinales, props.projectName, viewMode, totalesPorItem, projectDataExport, exportFinDefaults]);
+    }, [treeItems, props.periodos, props.diasPorMes, props.totalPresupuesto, resumenFinancieroDesembolso, props.project, totalesFinales, props.projectName, viewMode, totalesPorItem, projectDataExport, exportFinDefaults]);
 
     const handleExportPDF = useCallback(() => {
         const totalDias = Number(projectDataExport?.duracion_dias) > 0
             ? Number(projectDataExport.duracion_dias)
             : props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0);
 
-        exportarPDF(items, props.periodos, totalesFinales, props.projectName, totalesPorItem, {
+        exportarPDF(treeItems, props.periodos, totalesFinales, props.projectName, totalesPorItem, {
             projectData: projectDataExport,
             projectId: props.project,
             totalPresupuesto: props.totalPresupuesto,
@@ -176,7 +185,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
             totalDias,
             finDefaults: exportFinDefaults,
         });
-    }, [items, props.periodos, props.diasPorMes, props.totalPresupuesto, resumenFinancieroDesembolso, props.project, totalesFinales, props.projectName, totalesPorItem, projectDataExport, exportFinDefaults]);
+    }, [treeItems, props.periodos, props.diasPorMes, props.totalPresupuesto, resumenFinancieroDesembolso, props.project, totalesFinales, props.projectName, totalesPorItem, projectDataExport, exportFinDefaults]);
 
     // Reparto mensual para Desembolso: usa la valorización real (con GG/
     // Utilidad/IGV/conceptos ya sumados), no el Costo Directo puro de

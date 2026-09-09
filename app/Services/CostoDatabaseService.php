@@ -1032,6 +1032,26 @@ class CostoDatabaseService
     }
 
     /**
+     * Costo Directo oficial del presupuesto = SUMA de presupuesto_general.parcial
+     * de las partidas HOJA (metrado > 0). Fuente única para TODO el sistema:
+     * Delphin, Presupuesto, Cronograma Valorizado, exportes. presupuesto_general
+     * guarda el rollup también en las filas de título/grupo, por eso el filtro
+     * metrado > 0. `parcial` es DECIMAL(15,4) generado (metrado × precio_unitario);
+     * MySQL suma a esa precisión y aquí se redondea UNA vez a céntimos — así el
+     * número es idéntico en pantalla y en cualquier módulo que lo consuma.
+     *
+     * Debe llamarse con la conexión costos_tenant ya apuntando al tenant correcto.
+     */
+    public function costoDirectoOficial(int $presupuestoId): float
+    {
+        return round((float) DB::connection('costos_tenant')
+            ->table('presupuesto_general')
+            ->where('presupuesto_id', $presupuestoId)
+            ->where('metrado', '>', 0)
+            ->sum('parcial'), 2);
+    }
+
+    /**
      * Copia las filas actuales de $tabla (cronograma_general / presupuesto_general)
      * a wbs_snapshots antes de una reescritura masiva. Red de seguridad: el
      * cliente no tiene backups de BD. Silencioso si la migración de wbs_snapshots

@@ -79,14 +79,29 @@ class CronoValorizadoController extends Controller
             ->get()
             ->keyBy(fn ($p) => trim($p->partida ?? ''));
 
-        $jerarquiaPresupuesto = DB::connection('costos_tenant')
+        // Nombres de TODAS las partidas (hoja Y grupo) para que el valorizado
+        // muestre los mismos títulos que Delphin. presupuesto_general puede tener
+        // filas de grupo con descripcion vacía (el nombre real vive en
+        // cronograma_general tras el merge de Delphin) → se fusionan las dos
+        // fuentes y NO se filtra: una partida sin nombre igual debe listarse.
+        $descPresupuesto = DB::connection('costos_tenant')
             ->table('presupuesto_general')
             ->where('presupuesto_id', $presupuestoId)
             ->whereNull('deleted_at')
             ->orderBy('item_order')
             ->get(['partida', 'descripcion'])
-            ->mapWithKeys(fn ($p) => [trim($p->partida ?? '') => $p->descripcion ?? ''])
-            ->filter(fn ($descripcion, $partida) => $partida !== '' && $descripcion !== '');
+            ->mapWithKeys(fn ($p) => [trim($p->partida ?? '') => trim((string) ($p->descripcion ?? ''))]);
+
+        $descCronograma = DB::connection('costos_tenant')
+            ->table('cronograma_general')
+            ->where('presupuesto_id', $presupuestoId)
+            ->orderBy('item_order')
+            ->get(['partida', 'descripcion'])
+            ->mapWithKeys(fn ($c) => [trim($c->partida ?? '') => trim((string) ($c->descripcion ?? ''))]);
+
+        $jerarquiaPresupuesto = $descCronograma
+            ->merge($descPresupuesto->filter(fn ($d) => $d !== '')) // presupuesto pisa solo si tiene nombre
+            ->filter(fn ($descripcion, $partida) => $partida !== '');
 
         if ($presupuesto->isEmpty()) {
             return Inertia::render('costos/cronogramas/valorizado/CronogramaValorizado', [
@@ -166,14 +181,11 @@ class CronoValorizadoController extends Controller
 
         // ── 5. Construir la lista de items desde presupuesto_general ───────
         $allItems = [];
-        $totalPresupuesto = 0.0;
-        // El presupuesto general conserva parciales con 4 decimales. Su costo
-        // directo oficial se obtiene sumando esa precisión y redondeando una
-        // sola vez al final; sumar cada partida ya redondeada a céntimos puede
-        // introducir diferencias de S/ 0.01 frente a Presupuesto/Delphin.
-        $totalPresupuestoOficial = (float) $presupuesto->sum(
-            fn ($item) => (float) ($item->parcial ?? 0)
-        );
+        // Costo Directo oficial — MISMO número que Delphin/Presupuesto (fuente
+        // única en CostoDatabaseService::costoDirectoOficial()). El valorizado
+        // reparte en céntimos: la suma de los parciales redondeados por partida
+        // se cuadra a ESTE número más abajo (una partida absorbe el residuo).
+        $totalPresupuestoOficial = $this->dbService->costoDirectoOficial($presupuestoId);
 
         foreach ($presupuesto as $pItem) {
             $partida = trim($pItem->partida ?? '');
@@ -227,14 +239,49 @@ class CronoValorizadoController extends Controller
                 'start_date' => $fechaInicioItem,
                 'end_date' => $fechaFinItem,
             ];
-
-            $totalPresupuesto += $parcial;
         }
 
-        // Las distribuciones individuales permanecen en céntimos, mientras
-        // los cálculos financieros conservan la precisión interna oficial y
-        // solo se formatean a dos decimales al mostrarse/exportarse. El reparto
-        // mensual ajusta cualquier residuo en el último período.
+        // ── Cuadre al céntimo con el Costo Directo oficial ───────────────────
+        // Cada partida reparte round(parcial, 2). La suma de esos redondeos casi
+        // nunca es idéntica a round(Σ parcial, 2) (el número de Delphin). La
+        // diferencia (±1-2 céntimos sobre 150+ partidas) se carga a la partida
+        // de mayor monto, en su último período activo — así el TOTAL del
+        // valorizado y su reparto mensual cuadran EXACTO con el presupuesto,
+        // "ni un céntimo de más ni de menos".
+        $sumaParciales = round(array_sum(array_column($allItems, 'parcial')), 2);
+        $ajuste = round($totalPresupuestoOficial - $sumaParciales, 2);
+
+        if (abs($ajuste) >= 0.01 && ! empty($allItems)) {
+            $idxMayor = 0;
+            foreach ($allItems as $i => $it) {
+                if ($it['parcial'] > $allItems[$idxMayor]['parcial']) {
+                    $idxMayor = $i;
+                }
+            }
+
+            $allItems[$idxMayor]['parcial'] = round($allItems[$idxMayor]['parcial'] + $ajuste, 2);
+
+            // último período con monto > 0 (o el último a secas) absorbe el ajuste
+            $dist = &$allItems[$idxMayor]['distribucion'];
+            $ultimaKey = null;
+            foreach ($dist as $k => $v) {
+                if (($v['monto'] ?? 0) > 0) {
+                    $ultimaKey = $k;
+                }
+            }
+            $ultimaKey ??= array_key_last($dist);
+            if ($ultimaKey !== null) {
+                $dist[$ultimaKey]['monto'] = round(($dist[$ultimaKey]['monto'] ?? 0) + $ajuste, 2);
+                $nuevoParcial = $allItems[$idxMayor]['parcial'];
+                foreach ($dist as $k => $v) {
+                    $dist[$k]['porcentaje'] = $nuevoParcial > 0
+                        ? round((($v['monto'] ?? 0) / $nuevoParcial) * 100, 6)
+                        : 0.0;
+                }
+            }
+            unset($dist);
+        }
+
         $totalPresupuesto = $totalPresupuestoOficial;
 
         $resumen = $this->calcularResumen($allItems, $periodos, $totalPresupuesto);
@@ -971,10 +1018,7 @@ class CronoValorizadoController extends Controller
             ->where('presupuesto_id', $presupuestoId)
             ->first();
 
-        $costoDirecto = (float) $connection->table('presupuesto_general')
-            ->where('presupuesto_id', $presupuestoId)
-            ->where('metrado', '>', 0)
-            ->sum('parcial');
+        $costoDirecto = $this->dbService->costoDirectoOficial($presupuestoId);
 
         $gastosGeneralesDetalle = (float) $connection->table('gg_fijos')
             ->where('presupuesto_id', $presupuestoId)
