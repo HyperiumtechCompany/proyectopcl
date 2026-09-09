@@ -576,6 +576,9 @@ export function useGanttTasks(
                     preserveRef.current,
                 );
             });
+            // Alta de fila = cambio estructural del cronograma: debe persistirse
+            // (si no, la fila nueva "resucita" vacía al recargar).
+            setDirtyIds((prev) => new Set([...prev, newId]));
             return newId;
         },
         [calendarSettings],
@@ -624,6 +627,7 @@ export function useGanttTasks(
                     preserveRef.current,
                 );
             });
+            setDirtyIds((prev) => new Set([...prev, newId]));
             return newId;
         },
         [calendarSettings],
@@ -859,6 +863,10 @@ export function useGanttTasks(
     );
 
     // ── Actualizar el costo (presupuesto) de múltiples tareas en bloque ────
+    // Espejo de solo lectura de presupuesto_general.parcial → task.presupuesto
+    // (cronograma_general NO tiene columna presupuesto; el backend la deriva con
+    // COALESCE(pg.parcial) al leer). NO marca dirty: editar un precio no debe
+    // ensuciar el cronograma ni disparar su guardado.
     const batchUpdatePresupuestos = useCallback(
         (updates: Array<{ id: number; presupuesto: number }>) => {
             const updateMap = new Map(updates.map((u) => [u.id, u.presupuesto]));
@@ -867,11 +875,6 @@ export function useGanttTasks(
                     updateMap.has(t.id) ? { ...t, presupuesto: updateMap.get(t.id)! } : t,
                 ),
             );
-            setDirtyIds((prev) => {
-                const next = new Set(prev);
-                updates.forEach((u) => next.add(u.id));
-                return next;
-            });
         },
         [],
     );

@@ -692,7 +692,13 @@ export default function DelphinView({
     // presupuesto, con guiones) la próxima vez que se recarga la página.
     const handleSaveBudget = useCallback(async () => {
         const ac = new AbortController();
-        let ganttOk = false;
+        // Editar solo montos/cantidades/textos del presupuesto NO debe reescribir
+        // el cronograma. saveTasks() solo corre si el cronograma cambió de verdad
+        // (fechas, duración, predecesoras, o estructura: agregar/quitar/mover/
+        // indentar partidas — todas marcan ganttDirty). Sin esto, un simple cambio
+        // de precio disparaba el clear+reinsert de cronograma_general.
+        const mustSaveGantt = ganttDirty;
+        let ganttOk = !mustSaveGantt;
         let budgetOk = false;
         let acuOk = false;
 
@@ -715,7 +721,7 @@ export default function DelphinView({
 
                 try {
                     [ganttOk, budgetOk, acuOk] = await Promise.all([
-                        saveTasks(project),
+                        mustSaveGantt ? saveTasks(project) : Promise.resolve(true),
                         saveBudget(project_id_int),
                         flushPendingAcus((p) => {
                             const s = document.getElementById('dsave-status');
@@ -741,7 +747,7 @@ export default function DelphinView({
             const errMsg = !ganttOk ? 'Error al guardar el cronograma.' : !budgetOk ? 'Error al guardar las partidas.' : 'Error al guardar los ACUs.';
             await Swal.fire({ icon: 'error', title: 'Error al guardar', text: errMsg, ...swalDark });
         }
-    }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus]);
+    }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus, ganttDirty]);
 
     const handleSaveGantt = useCallback(async () => {
         const ac = new AbortController();
