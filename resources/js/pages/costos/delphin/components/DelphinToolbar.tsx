@@ -89,6 +89,10 @@ interface Props {
     incompatiblesCount?: number;
     onOpenCompatibilidad?: () => void;
 
+    // Referencias circulares en predecesoras (rompen el cálculo al exportar a MS Project)
+    circularPredecessorsCount?: number;
+    onOpenCircularPredecessors?: () => void;
+
     // Save (context-aware)
     budgetDirty: boolean;
     isSavingBudget: boolean;
@@ -397,6 +401,7 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
     onOpenSettings, onImport, onImportExcel, onImportMetrados, onOpenInsumos, onExport,
     isParentSelected, onFormulaView,
     incompatiblesCount, onOpenCompatibilidad,
+    circularPredecessorsCount, onOpenCircularPredecessors,
     budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt, onNavigateValorizado, project
 }: Props) {
     const isFormulaBudgetView = mode === 'budget' && budgetView === 'formula_polinomica';
@@ -621,6 +626,25 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                                     Resaltar ruta crítica
                                 </div>,
                                 document.body,
+                            )}
+
+                            {/* Referencias circulares — mismo aviso que dará MS Project al exportar */}
+                            {!!circularPredecessorsCount && (
+                                <>
+                                    <Divider />
+                                    <button
+                                        type="button"
+                                        title={`${circularPredecessorsCount} tarea${circularPredecessorsCount !== 1 ? 's' : ''} con predecesora circular (rompe el cálculo al exportar a MS Project)`}
+                                        onClick={onOpenCircularPredecessors}
+                                        className="relative flex shrink-0 items-center gap-1 rounded bg-red-600/80 px-2.5 py-0.5 text-[10px] font-medium text-red-100 transition-colors hover:bg-red-500"
+                                    >
+                                        <AlertTriangle size={11} />
+                                        <span className="hidden sm:inline">Ciclos</span>
+                                        <span className="ml-0.5 rounded-full bg-red-300 px-1 py-px text-[9px] leading-none font-bold text-red-900">
+                                            {circularPredecessorsCount}
+                                        </span>
+                                    </button>
+                                </>
                             )}
 
                             {/* Zoom — solo vista Gantt */}

@@ -22,6 +22,7 @@ import type { GanttTask, SchedulingMode } from '../cronogramas/v2/types/task';
 import { CHART_HEADER_H } from '../cronogramas/v2/types/timeline';
 import type { ZoomLevel } from '../cronogramas/v2/types/timeline';
 import { parseMSProjectXML } from '../cronogramas/v2/utils/importMSProject';
+import { findCircularPredecessors } from '../cronogramas/v2/utils/predecessorCycles';
 import { router } from '@inertiajs/react';
 import { AcuPanel } from '../presupuesto/components/AcuPanel';
 import { ImportExcelPresupuestoModal } from '../presupuesto/components/ImportExcelPresupuestoModal';
@@ -35,6 +36,7 @@ import { DelphinToolbar } from './components/DelphinToolbar';
 import { ImportDelphinModal } from './components/ImportDelphinModal';
 import { InsumosConsolidadosModal } from './components/InsumosConsolidadosModal';
 import { PartidasSinAcuModal } from './components/PartidasSinAcuModal';
+import { CircularPredecessorsModal } from './components/CircularPredecessorsModal';
 import { useDelphinData } from './hooks/useDelphinData';
 import { useDiccionario } from './hooks/useDiccionario';
 import { BUDGET_COLUMNS, CPM_COLUMNS, type DelphinBudgetView, type DelphinMode, type DelphinSubView, type InsumosScope, type ResumenPresupuesto } from './types';
@@ -234,6 +236,7 @@ export default function DelphinView({
     const [ganttBarLabel, setGanttBarLabel] = useState<GanttBarLabel>('descripcion');
     const [acuRefetchVersion, setAcuRefetchVersion] = useState(0);
     const [compatOpen, setCompatOpen] = useState(false);
+    const [circularOpen, setCircularOpen] = useState(false);
     const [scrollToRowId, setScrollToRowId] = useState<number | null>(null);
 
     useEffect(() => {
@@ -497,6 +500,22 @@ export default function DelphinView({
         }
         return count;
     }, [delphinRows, acuRows, groupIds]);
+
+    // ── Referencias circulares en predecesoras (mismo criterio que el export a MS Project) ──
+    const circularPredecessors = useMemo(() => findCircularPredecessors(tasks), [tasks]);
+
+    const handleSelectTaskInGantt = useCallback((rowId: number) => {
+        if (mode !== 'cpm') handleModeChange('cpm');
+        setSubView('gantt');
+        let parentId = taskById.get(rowId)?.parent_id ?? null;
+        while (parentId != null) {
+            if (!expandedIds.has(parentId)) toggleExpand(parentId);
+            parentId = taskById.get(parentId)?.parent_id ?? null;
+        }
+        selectRow(rowId);
+        setScrollToRowId(rowId);
+        setTimeout(() => setScrollToRowId(null), 400);
+    }, [mode, handleModeChange, taskById, expandedIds, toggleExpand, selectRow]);
 
     const handleSelectPartida = useCallback((rowId: number) => {
         if (mode !== 'budget') handleModeChange('budget');
@@ -946,6 +965,7 @@ export default function DelphinView({
         setInsumosOpen(true);
     }, []);
     const handleOpenCompatibilidadClick = useCallback(() => setCompatOpen(true), []);
+    const handleOpenCircularPredecessorsClick = useCallback(() => setCircularOpen(true), []);
     const handleSaveBudgetClick = useCallback(() => void handleSaveBudget(), [handleSaveBudget]);
     const handleSaveGanttClick = useCallback(() => void handleSaveGantt(), [handleSaveGantt]);
     const handleOpenExportClick = useCallback(() => setExportOpen(true), []);
@@ -999,6 +1019,9 @@ export default function DelphinView({
 
                     incompatiblesCount={incompatiblesCount}
                     onOpenCompatibilidad={handleOpenCompatibilidadClick}
+
+                    circularPredecessorsCount={circularPredecessors.length}
+                    onOpenCircularPredecessors={handleOpenCircularPredecessorsClick}
 
                     budgetDirty={budgetDirty || acuDirty}
                     isSavingBudget={isSavingBudget}
@@ -1276,6 +1299,12 @@ export default function DelphinView({
                     groupIds={groupIds}
                     onClose={() => setCompatOpen(false)}
                     onSelectPartida={handleSelectPartida}
+                />
+                <CircularPredecessorsModal
+                    open={circularOpen}
+                    issues={circularPredecessors}
+                    onClose={() => setCircularOpen(false)}
+                    onSelectTask={handleSelectTaskInGantt}
                 />
                 <input
                     ref={importInputRef}

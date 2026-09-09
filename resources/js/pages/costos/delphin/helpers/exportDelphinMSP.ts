@@ -1,6 +1,7 @@
 import { saveAs } from 'file-saver';
 import type { GanttTask } from '../../cronogramas/v2/types/task';
 import type { GanttCalendarSettings, WeekdayKey } from '../../cronogramas/v2/types/calendar';
+import { findCircularPredecessors } from '../../cronogramas/v2/utils/predecessorCycles';
 
 const WEEKDAY_KEYS: WeekdayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri'];
 
@@ -112,6 +113,28 @@ export function buildDelphinMSPXml(
     rows.forEach((r, i) => uidMap.set(r.id, i + 1));
     rows.forEach((r, i) => uidByItemOrder.set(Number(r.item_order), i + 1));
 
+    // Delphin permite (y tolera en su propio motor) que una subfila tenga como
+    // predecesora a su propia fila padre/abuela — un patrón usado en este
+    // cronograma para expresar "arranca junto con su fase" (CC). Delphin no
+    // reposiciona filas grupo por predecesoras, así que nunca produce un
+    // ciclo internamente. Pero al exportar, la fila padre SÍ es una tarea
+    // real en MS Project cuyas fechas son un rollup de sus hijos — si además
+    // uno de esos hijos la referencia como predecesora, Project detecta una
+    // referencia circular real y bloquea TODO el cálculo del archivo (efecto
+    // visible: los resúmenes/grupos colapsan a "1 día" porque su rollup ya
+    // no se puede calcular, aunque las fechas de las tareas hoja sigan bien).
+    // findCircularPredecessors() es la MISMA función que usa la UI de Delphin
+    // para avisar al usuario de esto antes de exportar — así el exportador y
+    // el aviso en pantalla nunca pueden divergir. Solo se omiten los vínculos
+    // hacia un ANCESTRO propio; los vínculos hacia otro grupo no relacionado
+    // (ej. una fase que depende de que termine otra fase anterior) sí son
+    // válidos en MS Project y se respetan.
+    const circularLinks = new Set(
+        findCircularPredecessors(rows).map(
+            (issue) => `${issue.taskId}:${issue.ancestorId}`,
+        ),
+    );
+
     const today = new Date().toISOString().split('T')[0]!;
     const outlines = outlineNumbers(rows);
     const enabledDay = calendarSettings
@@ -170,6 +193,10 @@ export function buildDelphinMSPXml(
                 uid: uidByItemOrder.get(Number(predecessor.taskId))
                     ?? uidMap.get(Number(predecessor.taskId)),
             })).filter((link): link is { predecessor: typeof row.predecesoras[number]; uid: number } => link.uid != null)
+                .filter((link) => {
+                    const predRow = rows[link.uid - 1];
+                    return !predRow || !circularLinks.has(`${row.id}:${predRow.id}`);
+                })
             : [];
 
         tasksXml += `    <Task>\n`;

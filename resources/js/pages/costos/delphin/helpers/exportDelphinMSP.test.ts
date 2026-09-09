@@ -80,4 +80,112 @@ describe('buildDelphinMSPXml', () => {
         expect(successor).toContain('<ManualStart>2027-02-18T08:00:00</ManualStart>');
         expect(successor).toContain('<ManualFinish>2027-02-20T17:00:00</ManualFinish>');
     });
+
+    it('drops a predecessor link that points to the task\'s own ancestor group to avoid a circular reference', () => {
+        // Real: Delphin permite (y tolera en su propio motor) que una subfila
+        // tenga como predecesora CC a su fila padre/abuela — un patrón usado
+        // para expresar "arranca junto con su fase". Delphin nunca reposiciona
+        // grupos por predecesoras, así que internamente no hay ciclo. Pero al
+        // exportar, la fila padre es una tarea real cuyas fechas son rollup de
+        // sus hijos — si un hijo también la referencia como predecesora, MS
+        // Project detecta un ciclo real y bloquea TODO el cálculo del archivo
+        // (síntoma real reportado: los resúmenes/grupos colapsan a "1 día"
+        // porque ya no se puede calcular su rollup).
+        const grouped: GanttTask[] = [
+            {
+                id: 10,
+                parent_id: null,
+                nivel: 1,
+                item_order: 1,
+                partida: '1',
+                descripcion: 'SEGURIDAD Y SALUD',
+                duracion_dias: 270,
+                fecha_inicio: '2026-09-01',
+                fecha_fin: '2027-05-28',
+                avance: 0,
+                predecesoras: [],
+                presupuesto: 0,
+            },
+            {
+                id: 11,
+                parent_id: 10,
+                nivel: 2,
+                item_order: 2,
+                partida: '1.1',
+                descripcion: 'CAPACITACION EN SEGURIDAD Y SALUD',
+                duracion_dias: 10,
+                fecha_inicio: '2026-09-01',
+                fecha_fin: '2026-09-10',
+                avance: 0,
+                // CC hacia su propia fila padre (item_order 1) — el patrón real.
+                predecesoras: [{ taskId: 1, tipo: 'CC', lag: 0 }],
+                presupuesto: 100,
+            },
+        ];
+
+        const xml = buildDelphinMSPXml(grouped, 'Proyecto vial');
+        const child = xml
+            .split('<Name>CAPACITACION EN SEGURIDAD Y SALUD</Name>')[1]
+            .split('</Task>')[0];
+
+        expect(child).not.toContain('<PredecessorLink>');
+        // Sin predecesoras, debe anclarse por restricción de fecha en vez de
+        // quedar sin fecha de referencia.
+        expect(child).toContain('<ConstraintType>2</ConstraintType>');
+    });
+
+    it('keeps a predecessor link to a summary task that is not an ancestor (legitimate cross-phase dependency)', () => {
+        const grouped: GanttTask[] = [
+            {
+                id: 20,
+                parent_id: null,
+                nivel: 1,
+                item_order: 1,
+                partida: '1',
+                descripcion: 'DEMOLICIONES',
+                duracion_dias: 5,
+                fecha_inicio: '2026-09-01',
+                fecha_fin: '2026-09-05',
+                avance: 0,
+                predecesoras: [],
+                presupuesto: 0,
+            },
+            {
+                id: 21,
+                parent_id: 20,
+                nivel: 2,
+                item_order: 2,
+                partida: '1.1',
+                descripcion: 'Hijo de demoliciones',
+                duracion_dias: 5,
+                fecha_inicio: '2026-09-01',
+                fecha_fin: '2026-09-05',
+                avance: 0,
+                predecesoras: [],
+                presupuesto: 0,
+            },
+            {
+                id: 22,
+                parent_id: null,
+                nivel: 1,
+                item_order: 3,
+                partida: '2',
+                descripcion: 'CORTE EN TERRENO NORMAL',
+                duracion_dias: 5,
+                fecha_inicio: '2026-09-06',
+                fecha_fin: '2026-09-10',
+                avance: 0,
+                // Referencia a "DEMOLICIONES" (grupo), pero NO es su ancestro.
+                predecesoras: [{ taskId: 1, tipo: 'FC', lag: 0 }],
+                presupuesto: 0,
+            },
+        ];
+
+        const xml = buildDelphinMSPXml(grouped, 'Proyecto vial');
+        const successor = xml
+            .split('<Name>CORTE EN TERRENO NORMAL</Name>')[1]
+            .split('</Task>')[0];
+
+        expect(successor).toContain('<PredecessorLink>');
+    });
 });
