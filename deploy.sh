@@ -26,8 +26,21 @@ test -s public/cad-workers/libredwg-parser-worker.js
 test -s public/cad-workers/mtext-renderer-worker.js
 test -s public/wasm/web-ifc.wasm
 
-echo "[DB] Ejecutando migraciones..."
+if [ "${PCL_SKIP_DEPLOY_BACKUP:-0}" != "1" ]; then
+  echo "[BACKUP] Respaldo de BD previo a migraciones..."
+  if bash scripts/backup-db.sh; then
+    echo "[BACKUP] OK"
+  else
+    echo "[BACKUP] ⚠ El respaldo FALLÓ (ver ~/backups/mysql/backup.log)."
+    echo "[BACKUP] ⚠ El deploy sigue, pero NO corras migraciones de esquema grandes sin respaldo."
+  fi
+fi
+
+echo "[DB] Ejecutando migraciones (BD central)..."
 php artisan migrate --force
+
+echo "[DB] Ejecutando migraciones de las BD tenant de Costos..."
+php artisan tenant:migrate-all || echo "[DB] ⚠ Alguna migración tenant falló — revisar arriba."
 
 echo "[DB] Reconciliando insumos huerfanos de todos los proyectos de Costos..."
 php artisan costos:reconcile-insumos --force
