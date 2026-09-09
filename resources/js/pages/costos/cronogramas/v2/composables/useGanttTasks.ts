@@ -315,6 +315,9 @@ export function useGanttTasks(
         return firstLevelGroups;
     });
     const [dirtyIds, setDirtyIds] = useState<Set<number>>(new Set());
+    // ids reales (positivos) de filas eliminadas — se envían como deleted_ids al
+    // backend, que ahora borra SOLO lo listado (no por ausencia en el payload).
+    const [deletedRealIds, setDeletedRealIds] = useState<Set<number>>(new Set());
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const didMountRef = useRef(false);
@@ -642,6 +645,14 @@ export function useGanttTasks(
                 let end = idx + 1;
                 while (end < prev.length && prev[end].nivel > prev[idx].nivel)
                     end++;
+                // ids reales del subárbol borrado → deleted_ids para el backend
+                const realIds = prev
+                    .slice(idx, end)
+                    .map((t) => t.id)
+                    .filter((tid) => tid > 0);
+                if (realIds.length) {
+                    setDeletedRealIds((d) => new Set([...d, ...realIds]));
+                }
                 return recomputeHierarchy(
                     [...prev.slice(0, idx), ...prev.slice(end)],
                     calendarSettings,
@@ -913,9 +924,11 @@ export function useGanttTasks(
                 }));
                 await axios.post(`/cronograma/v2/${project}/save`, {
                     tasks: payload,
+                    deleted_ids: [...deletedRealIds],
                     calendar_settings: calendarSettings,
                 });
                 setDirtyIds(new Set());
+                setDeletedRealIds(new Set());
                 return true;
             } catch (error) {
                 // La guardia de cordura del backend responde 422 suspicious_shrink
@@ -931,7 +944,7 @@ export function useGanttTasks(
                 setIsSaving(false);
             }
         },
-        [calendarSettings, tasks],
+        [calendarSettings, tasks, deletedRealIds],
     );
 
     // ── Importar tareas desde fuente externa (solo frontend) ─────────────────
@@ -947,6 +960,15 @@ export function useGanttTasks(
                 calendarSettings,
                 preserveRef.current,
             );
+            // Filas reales que existían y ya no están en el set importado →
+            // deben borrarse en BD (el backend ya no borra por ausencia).
+            const keptIds = new Set(recomputed.map((t) => t.id));
+            const dropped = tasksRef.current
+                .map((t) => t.id)
+                .filter((tid) => tid > 0 && !keptIds.has(tid));
+            if (dropped.length) {
+                setDeletedRealIds((d) => new Set([...d, ...dropped]));
+            }
             reserveTemporaryIds(recomputed);
             setTasks(recomputed);
             // Expandir todos los grupos por defecto

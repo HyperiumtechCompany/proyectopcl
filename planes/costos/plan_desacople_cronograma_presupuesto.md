@@ -1,8 +1,8 @@
 # Plan: desacoplar Presupuesto ↔ Cronograma y estabilizar predecesoras
 
-**Estado:** en implementación. Commit 1 hecho (A1 refId + A5 + guardia de cordura). Pendientes: A2, A3, A4, A6-snapshots.
+**Estado:** Nivel A completo en `Emes` (sin desplegar). A1, A2, A3, A4, A5, A6 hechos. Pendiente: correr Pest en servidor, desplegar, UI de snapshots, Nivel B.
 **Origen:** incidente en producción (cliente) — "moví precios en el presupuesto y se destruyó el cronograma general en Delphin; las predecesoras quedaron cruzadas / apuntando a padres e hijos en vez de a las hojas".
-**Rama de trabajo:** `Emes`. Todo lo de este plan es corrección del sistema y va aislado al repo. El refactor local de Gastos Generales **no** se sube.
+**Rama de trabajo:** `Emes`. Todo lo de este plan es corrección del sistema y va aislado al repo. El refactor local de Gastos Generales vive en la rama `wip/gastos-generales-adicionales` — **no** se mezcla con `Emes` ni llega al cliente.
 
 ---
 
@@ -286,25 +286,40 @@ Sin backup:
 
 Incremental a `origin/Emes` → `deploy.sh` → probar en prod. Orden sugerido (menor riesgo primero):
 
-1. ✅ **Commit 1 (hecho):** `A1` (`refId` + snapshot `ref` en predecesoras: `types/task.ts`,
-   `useGanttScheduler`, `useGanttCriticalPath`, `predecessorCycles`, `DiagramaRed`,
-   `GanttDependencyLines`, `PredecessorPicker`, `CellPredecesoras`, `useGanttTasks`
-   serialize/parse, `CronogramaV2Controller::store`/`rowToV2` con re-mapeo de id de filas
-   nuevas + `exportDelphinMSP`), `A5` (standalone `preservePartidaCodes: true`) y la
-   **guardia de cordura** en `store()` (rechaza 422 `suspicious_shrink` si el payload trae
-   < 25 % de las filas existentes y hay ≥ 15; se salta con `force: true`). Tests:
-   `useGanttScheduler.test.ts` (refId sobrevive renumeración) + 2 Pest en
-   `CronogramaControllerTest.php` (remap de refId, guardia). Sin migración de esquema.
-2. **A2** (separar dirty en Delphin) — que guardar presupuesto no llame `saveTasks()` salvo cambio real de cronograma.
-3. **A4** (matar columna redundante `cronograma_general.presupuesto`).
-4. **A6-snapshots** (`wbs_snapshots` + "revertir al guardado anterior") — necesita migración.
-5. **A3** (guardado por-clave + índice único + preservar ids + endpoint estructura) — migración; probar en staging antes de prod.
-6. **Nivel B** — épica aparte una vez A esté estable en producción.
+1. ✅ **Commit `93184e8` — A1 + A5 + guardia:** `refId` + snapshot `ref` en predecesoras
+   (`types/task.ts`, `useGanttScheduler`, `useGanttCriticalPath`, `predecessorCycles`,
+   `DiagramaRed`, `GanttDependencyLines`, `PredecessorPicker`, `CellPredecesoras`,
+   `useGanttTasks` serialize/parse, `CronogramaV2Controller::store`/`rowToV2` con re-mapeo
+   de id de filas nuevas + `exportDelphinMSP`). Standalone `preservePartidaCodes: true`.
+   Guardia `store()` 422 `suspicious_shrink`.
+2. ✅ **Commit `c32dce3` — A2 + A4:** `handleSaveBudget` solo llama `saveTasks()` si
+   `ganttDirty`. `batchUpdatePresupuestos` (espejo de solo lectura, `cronograma_general` no
+   tiene columna `presupuesto`) deja de marcar dirty. `addTaskAfter`/`addChildTask` ahora sí
+   marcan dirty (alta = cambio estructural).
+3. ✅ **Commit `<A3+A6>` — A3 + A6:** `store()` pasa de clear+reinsert a **upsert por id**:
+   `UPDATE` filas existentes, `INSERT` las nuevas (client_id negativo), `DELETE` **solo** los
+   ids en `deleted_ids` (nuevo campo del payload). Una fila en BD ausente del payload y sin
+   marcar → **sobrevive**. `useGanttTasks` acumula `deletedRealIds` (en `deleteTask` y en
+   `importTasks` para el caso de reemplazo). `wbs_snapshots` (migración tenant) +
+   `snapshotTable()` antes de cada reescritura (últimos 20) + endpoints
+   `GET /cronograma/v2/{p}/snapshots` y `POST .../snapshots/restore`.
+4. **Nivel B** — épica aparte una vez A esté estable en producción.
 
-**Follow-ups conocidos del commit 1:**
-- Surface del 422 `suspicious_shrink` en la UI con un botón "guardar de todos modos" (hoy solo va a `console.error` y el usuario ve "Error al guardar").
-- Backfill de `refId` para vínculos legado, por proyecto y tras verificación visual (no automático — congelaría el estado cruzado del cliente afectado).
+**Follow-ups conocidos:**
+- **UI de snapshots**: los snapshots se crean, pero no hay pantalla para listarlos/revertir.
+  Falta un modal "Historial de guardados" en Delphin/Cronograma que consuma los endpoints.
+- Surface del 422 `suspicious_shrink` en la UI con botón "guardar de todos modos" (hoy va a
+  `console.error` y el usuario ve "Error al guardar").
+- Backfill de `refId` para vínculos legado, por proyecto y tras verificación visual (no
+  automático — congelaría el estado cruzado del cliente afectado).
 - Aviso hoja↔hoja cuando una predecesora apunta a una fila grupo/resumen.
+- Correr las migraciones tenant (`wbs_snapshots`) por proyecto en prod: `php artisan tenant:migrate {projectId}`.
+- Correr `php artisan test --filter=CronogramaControllerTest` en el servidor/CI (no se corrió local por el riesgo de config cache).
+- **A3 para `presupuesto_general`**: `PresupuestoController::update('general')` sigue haciendo
+  clear+reinsert. Pasarlo a upsert por id (+ `deleted_ids`). Menor prioridad: el incidente
+  era del cronograma, y este método es grande y compartido con otras subsecciones — hacerlo
+  con cuidado y sus propios tests. `handleSaveGantt` también podría condicionar su
+  `saveBudget()` a `budgetDirty || ganttDirty` (hoy siempre lo llama).
 
 Verificación por PR:
 - `npm run types`, `npm run build`.

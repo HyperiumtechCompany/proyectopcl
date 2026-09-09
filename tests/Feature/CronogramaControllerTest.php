@@ -365,6 +365,49 @@ it('cronograma v2 save: preserves refId and remaps new-row references', function
     }
 });
 
+it('cronograma v2 save: absent rows survive, only deleted_ids are removed (A3)', function () {
+    [$user, $project, $dbName] = createCronoValorizadoTenant(1);
+
+    try {
+        app(CostoDatabaseService::class)->setTenantConnection($dbName);
+        $presupuestoId = DB::connection('costos_tenant')->table('presupuestos')->value('id');
+
+        // 3 filas extra: 01.02 (se mantiene y se edita), 01.03 (ausente del payload → sobrevive),
+        // 01.04 (en deleted_ids → se borra)
+        foreach (['01.02' => 'B', '01.03' => 'C', '01.04' => 'D'] as $partida => $desc) {
+            DB::connection('costos_tenant')->table('cronograma_general')->insert([
+                'presupuesto_id' => $presupuestoId, 'item_order' => 2, 'partida' => $partida,
+                'descripcion' => $desc, 'duracion_dias' => 1, 'nivel' => 1,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+        $ids = DB::connection('costos_tenant')->table('cronograma_general')
+            ->where('presupuesto_id', $presupuestoId)->pluck('id', 'partida');
+
+        $this->actingAs($user)
+            ->withSession(['_token' => 'test-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-token')
+            ->postJson("/cronograma/v2/{$project->id}/save", [
+                'deleted_ids' => [$ids['01.04']],
+                'tasks' => [
+                    ['client_id' => $ids['01.01'], 'id' => $ids['01.01'], 'item_order' => 1, 'partida' => '01.01', 'descripcion' => 'A', 'duracion_dias' => 1, 'nivel' => 1, 'predecesoras' => []],
+                    ['client_id' => $ids['01.02'], 'id' => $ids['01.02'], 'item_order' => 2, 'partida' => '01.02', 'descripcion' => 'B editada', 'duracion_dias' => 5, 'nivel' => 1, 'predecesoras' => []],
+                ],
+            ])
+            ->assertSuccessful();
+
+        app(CostoDatabaseService::class)->setTenantConnection($dbName);
+        $rows = DB::connection('costos_tenant')->table('cronograma_general')
+            ->where('presupuesto_id', $presupuestoId)->pluck('descripcion', 'partida');
+
+        expect($rows)->toHaveKey('01.03')                 // ausente del payload → sobrevive
+            ->and($rows)->not->toHaveKey('01.04')          // en deleted_ids → borrada
+            ->and($rows['01.02'])->toBe('B editada');      // editada por upsert
+    } finally {
+        dropCronoValorizadoTenant($dbName);
+    }
+});
+
 it('cronograma v2 save: guardrail blocks a suspicious shrink', function () {
     [$user, $project, $dbName] = createCronoValorizadoTenant(1);
 
@@ -382,7 +425,7 @@ it('cronograma v2 save: guardrail blocks a suspicious shrink', function () {
         }
         DB::connection('costos_tenant')->table('cronograma_general')->insert($rows); // 21 filas totales
 
-        // Payload con solo 2 filas → < 25% de 21 → debe abortar
+        // Payload que solo reconoce 2 de 21 filas (sin deleted_ids) → debe abortar
         $this->actingAs($user)
             ->withSession(['_token' => 'test-token'])
             ->withHeader('X-CSRF-TOKEN', 'test-token')

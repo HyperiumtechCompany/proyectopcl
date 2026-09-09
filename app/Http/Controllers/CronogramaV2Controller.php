@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
 class CronogramaV2Controller extends Controller
@@ -86,48 +87,71 @@ class CronogramaV2Controller extends Controller
 
             try {
                 // ── Guardia de cordura ────────────────────────────────────────
-                // El guardado hace clear + reinsert. Si el payload llega vacío o
-                // recortado (estado en memoria parcial, árbol a medio cargar), esto
-                // arrasaría el cronograma sin vuelta atrás. Se aborta salvo force=true.
+                // El guardado ahora es upsert por id (no clear+reinsert), pero un
+                // payload que "conoce" muy pocas filas del árbol (estado en memoria
+                // parcial, árbol a medio cargar) sigue siendo señal de algo roto.
+                // "Conoce" = filas enviadas + filas marcadas explícitamente para
+                // borrar. Se aborta salvo force=true.
                 $existingCount = DB::connection('costos_tenant')
                     ->table('cronograma_general')
                     ->where('presupuesto_id', $presupuestoId)
                     ->count();
                 $incomingCount = count($incomingTasks);
+                $knownCount = $incomingCount + count($request->input('deleted_ids', []));
 
-                if (! $force && $existingCount >= 15 && $incomingCount < $existingCount * 0.25) {
+                if (! $force && $existingCount >= 15 && $knownCount < $existingCount * 0.5) {
                     DB::connection('costos_tenant')->rollBack();
 
-                    Log::warning('cronograma_general: guardado abortado por recorte sospechoso', [
+                    Log::warning('cronograma_general: guardado abortado por payload parcial', [
                         'project' => $project,
                         'existing' => $existingCount,
                         'incoming' => $incomingCount,
+                        'known' => $knownCount,
                     ]);
 
                     return response()->json([
                         'status' => 'error',
                         'code' => 'suspicious_shrink',
-                        'message' => "El guardado traía {$incomingCount} filas frente a {$existingCount} existentes. Se canceló por seguridad; recarga la página y vuelve a intentar. Si el recorte es correcto, reenvía con force=true.",
+                        'message' => "El guardado solo reconocía {$knownCount} de {$existingCount} filas del cronograma. Se canceló por seguridad; recarga la página y vuelve a intentar. Si es correcto, reenvía con force=true.",
                     ], 422);
                 }
 
-                // Limpiar registros anteriores
-                DB::connection('costos_tenant')
-                    ->table('cronograma_general')
-                    ->where('presupuesto_id', $presupuestoId)
-                    ->delete();
+                // Snapshot antes de reescribir (el cliente no tiene backups de BD)
+                $this->snapshotTable('cronograma_general', $presupuestoId, 'cronograma_v2_save');
 
-                // ── Paso 1: insertar filas y mapear client_id → id real ────────
-                // client_id puede ser negativo (fila nueva sin persistir). Se
-                // captura el id real para re-mapear parent_id y las referencias
-                // refId/target de las predecesoras en el paso 2.
+                // ── Borrado explícito, nunca por ausencia en el payload ────────
+                // Una fila que existe en BD pero no vino en `tasks` NO se toca
+                // (antes: clear + reinsert la borraba). Solo se eliminan los ids
+                // que el frontend marca en deleted_ids.
+                $deletedIds = collect($request->input('deleted_ids', []))
+                    ->map(fn ($i) => (int) $i)
+                    ->filter(fn ($i) => $i > 0)
+                    ->all();
+
+                if (! empty($deletedIds)) {
+                    DB::connection('costos_tenant')
+                        ->table('cronograma_general')
+                        ->where('presupuesto_id', $presupuestoId)
+                        ->whereIn('id', $deletedIds)
+                        ->delete();
+                }
+
+                $existingIds = array_flip(
+                    DB::connection('costos_tenant')
+                        ->table('cronograma_general')
+                        ->where('presupuesto_id', $presupuestoId)
+                        ->pluck('id')
+                        ->all()
+                );
+
+                // ── Paso 1: upsert por id, mapear client_id → id real ──────────
+                // client_id puede ser negativo (fila nueva). Se captura el id real
+                // para re-mapear parent_id y refId/target de predecesoras en el paso 2.
                 $idMap = [];
                 foreach ($incomingTasks as $task) {
                     $clientId = (int) ($task['client_id'] ?? $task['id'] ?? 0);
-                    $explicitId = $clientId > 0 ? $clientId : null;
 
                     $row = [
-                        'presupuesto_id' => $presupuestoId,
                         'item_order' => (int) ($task['item_order'] ?? 0),
                         // Se guarda tal cual (sin zero-padding): presupuesto_general.partida
                         // tampoco se guarda con padding, y el join en fetchTasks() compara
@@ -139,18 +163,25 @@ class CronogramaV2Controller extends Controller
                         'fecha_fin' => ! empty($task['fecha_fin']) ? $task['fecha_fin'] : null,
                         'avance' => (float) ($task['avance'] ?? 0),
                         'nivel' => (int) ($task['nivel'] ?? 1),
-                        // parent_id y predecesoras se resuelven en el paso 2 (necesitan el idMap completo)
-                        'parent_id' => null,
-                        'predecesoras' => null,
-                        'created_at' => now(),
                         'updated_at' => now(),
                     ];
 
-                    if ($explicitId !== null) {
-                        $row['id'] = $explicitId;
+                    if ($clientId > 0 && isset($existingIds[$clientId])) {
+                        DB::connection('costos_tenant')->table('cronograma_general')
+                            ->where('id', $clientId)
+                            ->where('presupuesto_id', $presupuestoId)
+                            ->update($row);
+                        $newId = $clientId;
+                    } elseif ($clientId > 0) {
+                        // id positivo que ya no está en BD (raro): re-insertar con su id
+                        $row['id'] = $clientId;
+                        $row['presupuesto_id'] = $presupuestoId;
+                        $row['created_at'] = now();
                         DB::connection('costos_tenant')->table('cronograma_general')->insert($row);
-                        $newId = $explicitId;
+                        $newId = $clientId;
                     } else {
+                        $row['presupuesto_id'] = $presupuestoId;
+                        $row['created_at'] = now();
                         $newId = DB::connection('costos_tenant')->table('cronograma_general')->insertGetId($row);
                     }
 
@@ -202,6 +233,7 @@ class CronogramaV2Controller extends Controller
                     DB::connection('costos_tenant')
                         ->table('cronograma_general')
                         ->where('id', $selfId)
+                        ->where('presupuesto_id', $presupuestoId)
                         ->update([
                             'parent_id' => $parentId,
                             'predecesoras' => empty($links) ? null : json_encode($links),
@@ -375,5 +407,128 @@ class CronogramaV2Controller extends Controller
         }
 
         DB::table('cronogramas')->updateOrInsert(['project_id' => $project], $values);
+    }
+
+    /**
+     * Copia las filas actuales de $tabla a wbs_snapshots antes de una reescritura.
+     * Red de seguridad: el cliente no tiene backups de BD. Silencioso si la
+     * migración de wbs_snapshots aún no corrió en este tenant.
+     */
+    private function snapshotTable(string $tabla, int $presupuestoId, string $motivo): void
+    {
+        if (! Schema::connection('costos_tenant')->hasTable('wbs_snapshots')) {
+            return;
+        }
+
+        try {
+            $rows = DB::connection('costos_tenant')->table($tabla)
+                ->where('presupuesto_id', $presupuestoId)->get();
+
+            if ($rows->isEmpty()) {
+                return;
+            }
+
+            DB::connection('costos_tenant')->table('wbs_snapshots')->insert([
+                'presupuesto_id' => $presupuestoId,
+                'tabla' => $tabla,
+                'motivo' => $motivo,
+                'filas' => $rows->count(),
+                'payload' => json_encode($rows),
+                'user_id' => auth()->id(),
+                'created_at' => now(),
+            ]);
+
+            // Podar: conservar los últimos 20 por (presupuesto, tabla)
+            $keep = DB::connection('costos_tenant')->table('wbs_snapshots')
+                ->where('presupuesto_id', $presupuestoId)->where('tabla', $tabla)
+                ->orderByDesc('id')->limit(20)->pluck('id')->all();
+
+            if (! empty($keep)) {
+                DB::connection('costos_tenant')->table('wbs_snapshots')
+                    ->where('presupuesto_id', $presupuestoId)->where('tabla', $tabla)
+                    ->whereNotIn('id', $keep)->delete();
+            }
+        } catch (\Throwable $e) {
+            Log::warning('wbs_snapshots: no se pudo snapshotear', [
+                'tabla' => $tabla,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // GET /cronograma/v2/{project}/snapshots  → lista de snapshots del cronograma
+    // ──────────────────────────────────────────────────────────────────────────
+    public function snapshots(Request $request, string $project): JsonResponse
+    {
+        $costoProject = CostoProject::findOrFail($project);
+        app(CostoDatabaseService::class)->setTenantConnection($costoProject->database_name);
+
+        if (! Schema::connection('costos_tenant')->hasTable('wbs_snapshots')) {
+            return response()->json(['snapshots' => []]);
+        }
+
+        $presupuestoId = $this->resolvePresupuestoId();
+
+        $snapshots = DB::connection('costos_tenant')->table('wbs_snapshots')
+            ->where('presupuesto_id', $presupuestoId)
+            ->where('tabla', 'cronograma_general')
+            ->orderByDesc('id')
+            ->get(['id', 'motivo', 'filas', 'created_at']);
+
+        return response()->json(['snapshots' => $snapshots]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // POST /cronograma/v2/{project}/snapshots/restore  → revertir a un snapshot
+    // ──────────────────────────────────────────────────────────────────────────
+    public function restoreSnapshot(Request $request, string $project): JsonResponse
+    {
+        $request->validate(['snapshot_id' => 'required|integer']);
+
+        $costoProject = CostoProject::findOrFail($project);
+        app(CostoDatabaseService::class)->setTenantConnection($costoProject->database_name);
+
+        if (! Schema::connection('costos_tenant')->hasTable('wbs_snapshots')) {
+            return response()->json(['status' => 'error', 'message' => 'Snapshots no disponibles en este proyecto.'], 422);
+        }
+
+        $presupuestoId = $this->resolvePresupuestoId();
+
+        $snapshot = DB::connection('costos_tenant')->table('wbs_snapshots')
+            ->where('id', (int) $request->input('snapshot_id'))
+            ->where('presupuesto_id', $presupuestoId)
+            ->where('tabla', 'cronograma_general')
+            ->first();
+
+        if (! $snapshot) {
+            return response()->json(['status' => 'error', 'message' => 'Snapshot no encontrado.'], 404);
+        }
+
+        $rows = json_decode($snapshot->payload, true);
+        if (! is_array($rows)) {
+            return response()->json(['status' => 'error', 'message' => 'Snapshot corrupto.'], 422);
+        }
+
+        DB::connection('costos_tenant')->transaction(function () use ($rows, $presupuestoId) {
+            // Snapshot del estado actual antes de sobrescribirlo (por si el
+            // restore tampoco era lo que se quería)
+            $this->snapshotTable('cronograma_general', $presupuestoId, 'pre_restore');
+
+            DB::connection('costos_tenant')->table('cronograma_general')
+                ->where('presupuesto_id', $presupuestoId)->delete();
+
+            foreach (array_chunk($rows, 500) as $chunk) {
+                $clean = array_map(function ($r) use ($presupuestoId) {
+                    $r = (array) $r;
+                    $r['presupuesto_id'] = $presupuestoId;
+
+                    return $r;
+                }, $chunk);
+                DB::connection('costos_tenant')->table('cronograma_general')->insert($clean);
+            }
+        });
+
+        return response()->json(['status' => 'success', 'message' => 'Cronograma restaurado.', 'filas' => count($rows)]);
     }
 }
