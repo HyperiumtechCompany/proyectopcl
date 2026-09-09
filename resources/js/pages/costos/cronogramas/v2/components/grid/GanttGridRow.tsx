@@ -110,8 +110,9 @@ const GanttGridRowComponent = function GanttGridRow({
                 <div
                     className="flex shrink-0 items-center justify-center border-r border-slate-300 bg-slate-100 font-mono text-[10px] text-slate-500 select-none dark:border-slate-700/50 dark:bg-slate-900/60 dark:text-slate-600"
                     style={{ width: 32, minWidth: 32, position: 'sticky', left: 0, zIndex: 1 }}
+                    title="Nº real de la fila — el mismo número que usan las predecesoras (PRED.), no cambia al colapsar/expandir"
                 >
-                    {rowIndex + 1}
+                    {task.item_order}
                 </div>
             )}
             {columns.map((col) => {
