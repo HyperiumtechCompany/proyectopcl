@@ -250,15 +250,23 @@ crontab -l 2>/dev/null | grep -iE 'mysqldump|backup'
 
 ## 9. Recuperación del cliente afectado
 
-Sin backup:
+**Realidad:** los vínculos cruzados del incidente son vínculos **legado** (`{source: N}`,
+sin `refId` ni `ref` snapshot — el snapshot solo lo llevan los creados con la UI nueva).
+No hay backup, y si hubo un guardado estructural después del incidente el mapeo original
+se perdió. → **No hay recuperación automática de esos vínculos.**
 
-1. **Mitigación inmediata (antes de que guarde otra vez):**
-   - Exportar el cronograma actual a **MS Project XML** desde Delphin → respaldo manual.
-   - No guardar desde Delphin hasta parchear.
-   - Mover el cronograma solo desde la vista **Cronograma** standalone, verificando que los códigos de partida se vean bien antes de guardar.
-2. **Si el volcado de predecesoras (sección 8) muestra `source` coherentes:** script de re-derivación que, con el árbol actual, re-mapea cada `source` viejo a `refId` usando la descripción/código esperado.
-3. **Si ya no cuadran:** re-ingreso manual de las dependencias por parte del cliente. No hay de dónde restaurarlas.
-4. Arreglar aparte el **backup del sistema que no funciona** (fuera del alcance de este plan; abrir tarea separada).
+Pasos:
+
+1. Desplegar el Nivel A + correr `cronograma:diagnose {projectId}` (sección 8) para ver el
+   alcance: cuántas filas tienen predecesoras legado, cuántas resuelven a "algo", duplicados.
+2. **Exportar el cronograma actual a MS Project XML** desde Delphin → respaldo manual, y
+   snapshot automático al primer guardado tras el deploy (si ya se corrió `tenant:migrate-all`).
+3. El cliente revisa las predecesoras contra su cronograma de referencia (Gantt en papel /
+   PDF / el .mpp original) y **re-ingresa las que estén mal** desde el picker. Al aplicarlas
+   se les adjunta `refId` estable → a partir de ahí no se vuelven a cruzar.
+4. Una vez verificadas todas, las que quedaron legado y correctas se pueden "fijar" abriendo
+   cada una en el picker y dando Aplicar (adjunta `refId` del árbol actual).
+5. Aparte: el **backup del sistema que no funciona** — tarea separada, fuera de este plan.
 
 ---
 
