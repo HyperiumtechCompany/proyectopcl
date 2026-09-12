@@ -1,0 +1,10 @@
+[
+    { "name": "precedence", "formula": "=2+3*4", "row": {}, "cells": {}, "children": {}, "columns": {}, "expected": "14.00" },
+    { "name": "exact money rounding", "formula": "={cantidad}*{precio}", "row": { "cantidad": "3", "precio": "12.345" }, "cells": {}, "children": {}, "columns": {}, "expected": "37.04" },
+    { "name": "percentage", "formula": "=100*18%", "row": {}, "cells": {}, "children": {}, "columns": {}, "expected": "18.00" },
+    { "name": "negative half up", "formula": "=ROUND(-1.005,2)", "row": {}, "cells": {}, "children": {}, "columns": {}, "expected": "-1.01" },
+    { "name": "conditional", "formula": "=IF({cantidad}>2,10,5)", "row": { "cantidad": "3" }, "cells": {}, "children": {}, "columns": {}, "expected": "10.00" },
+    { "name": "aggregates", "formula": "=SUM(1,2,MAX(3,4),MIN(8,5))", "row": {}, "cells": {}, "children": {}, "columns": {}, "expected": "12.00" },
+    { "name": "stable references", "formula": "=CELL(\"cell-01\")+SUM_CHILDREN({importe})+SUM_COLUMN(\"sheet-01\",{importe})", "row": {}, "cells": { "cell-01": "1.25" }, "children": { "importe": "2.50" }, "columns": { "sheet-01:importe": "3.75" }, "expected": "7.50" },
+    { "name": "division by zero", "formula": "=10/0", "row": {}, "cells": {}, "children": {}, "columns": {}, "error": "DIV_ZERO" }
+]

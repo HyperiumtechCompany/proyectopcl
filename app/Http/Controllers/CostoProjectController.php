@@ -385,6 +385,10 @@ class CostoProjectController extends Controller
                 ]);
             }
 
+            if (in_array('mantenimiento', $modulesToAdd, true)) {
+                $this->dbService->runTenantMigrations($costoProject->database_name);
+            }
+
             $structuralAdded = array_intersect($modulesToAdd, ['metrado_sanitarias', 'metrado_arquitectura', 'metrado_estructura']);
             if (! empty($structuralAdded)) {
                 $this->dbService->setTenantConnection($costoProject->database_name);

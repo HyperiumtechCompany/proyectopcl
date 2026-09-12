@@ -31,6 +31,7 @@ import {
     Database,
     Play,
     LayoutDashboard,
+    Wrench,
 } from 'lucide-react';
 import React, { useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
@@ -65,7 +66,7 @@ interface PageProps {
 }
 
 // ─── Module metadata ───────────────────────────────────────────────────────────
-type ModuleGroup = 'metrado' | 'presupuesto' | 'crono' | 'etts';
+type ModuleGroup = 'metrado' | 'presupuesto' | 'mantenimiento' | 'crono' | 'etts';
 
 interface ModuleMeta {
     label: string;
@@ -110,6 +111,11 @@ const MODULE_MAP: Record<string, ModuleMeta> = {
         label: 'Presupuesto',
         group: 'presupuesto',
         icon: DollarSign,
+    },
+    mantenimiento: {
+        label: 'Mantenimiento',
+        group: 'mantenimiento',
+        icon: Wrench,
     },
     presupuesto_gg: {
         label: 'Gastos Generales',
@@ -161,11 +167,12 @@ const MODULE_MAP: Record<string, ModuleMeta> = {
 };
 
 // Orden fijo de grupos
-const GROUP_ORDER: ModuleGroup[] = ['metrado', 'presupuesto', 'crono', 'etts'];
+const GROUP_ORDER: ModuleGroup[] = ['metrado', 'presupuesto', 'mantenimiento', 'crono', 'etts'];
 
 const GROUP_CONFIG: Record<ModuleGroup, { label: string }> = {
     metrado: { label: 'Metrados' },
     presupuesto: { label: 'Presupuesto' },
+    mantenimiento: { label: 'Mantenimiento' },
     crono: { label: 'Cronogramas' },
     etts: { label: 'ETTs' },
 };
@@ -175,6 +182,7 @@ const GROUP_CONFIG: Record<ModuleGroup, { label: string }> = {
 function getIcon(module: string): string {
     const icons: Record<string, string> = {
         presupuesto: '💰',
+        mantenimiento: '🛠️',
         metrado_arquitectura: '🏛️',
         metrado_estructura: '🏗️',
         metrado_sanitarias: '🚰',
@@ -197,6 +205,7 @@ function getIcon(module: string): string {
 
 const MODULE_LABELS: Record<string, string> = {
     presupuesto: 'Presupuesto',
+    mantenimiento: 'Mantenimiento',
     metrado_arquitectura: 'Arquitectura',
     metrado_estructura: 'Estructuras',
     metrado_sanitarias: 'Sanitarias',
@@ -217,6 +226,8 @@ const MODULE_LABELS: Record<string, string> = {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 function moduleHref(project_id: number, m: string): string {
+    if (m === 'mantenimiento')
+        return `/costos/${project_id}/mantenimiento`;
     if (m === 'presupuesto')
         return `/costos/proyectos/${project_id}/presupuesto`;
     if (m === 'metrado_arquitectura')

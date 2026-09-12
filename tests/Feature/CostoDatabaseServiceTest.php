@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Mantenimiento\MaintenanceCell;
 use App\Services\CostoDatabaseService;
+use App\Services\Mantenimiento\MaintenanceEditorService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -95,6 +97,16 @@ class CostoDatabaseServiceTest extends TestCase
             'metrado_sanitarias_exterior',
             'metrado_sanitarias_cisterna',
             'metrado_sanitarias_resumen',
+            'mantenimiento_documentos',
+            'mantenimiento_hojas',
+            'mantenimiento_columnas',
+            'mantenimiento_filas',
+            'mantenimiento_celdas',
+            'mantenimiento_operaciones',
+            'mantenimiento_snapshots',
+            'mantenimiento_formula_dependencias',
+            'mantenimiento_importaciones',
+            'mantenimiento_importacion_items',
         ];
 
         foreach ($tables as $table) {
@@ -215,5 +227,32 @@ class CostoDatabaseServiceTest extends TestCase
         $this->assertNotNull($row);
         $expectedParcial = 100.50 * 25.75;
         $this->assertEquals($expectedParcial, (float) $row->parcial);
+    }
+
+    public function test_mantenimiento_editor_persists_money_as_minor_units_and_keeps_stable_ids_when_moving(): void
+    {
+        DB::connection('mysql')->statement(
+            "CREATE DATABASE IF NOT EXISTS `{$this->testDbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+        );
+        $this->dbService->runTenantMigrations($this->testDbName);
+        $this->dbService->setTenantConnection($this->testDbName);
+
+        $editor = app(MaintenanceEditorService::class);
+        $document = $editor->createDocument('Prueba monetaria');
+        $sheet = $document->sheets()->firstOrFail();
+        $moneyColumn = $sheet->columns()->where('type', 'money')->firstOrFail();
+        $firstRow = $sheet->rows()->firstOrFail();
+        $secondRow = $editor->createRow($sheet, $firstRow);
+
+        $cell = $editor->setCell($firstRow, $moneyColumn, '1.23');
+        $firstPublicId = $firstRow->public_id;
+        $secondPublicId = $secondRow->public_id;
+        $editor->move($secondRow, 'hoja_id', 'before');
+
+        $this->assertSame(123, (int) MaintenanceCell::query()->findOrFail($cell->id)->value_money_minor);
+        $this->assertSame('1.23', $editor->displayValue($cell->refresh(), $moneyColumn));
+        $this->assertSame($firstPublicId, $firstRow->refresh()->public_id);
+        $this->assertSame($secondPublicId, $secondRow->refresh()->public_id);
+        $this->assertLessThan($firstRow->sort_order, $secondRow->sort_order);
     }
 }

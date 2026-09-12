@@ -1,0 +1,11 @@
+{
+    "version": 1,
+    "regla": "importar si y solo si parcial_decimal > 0 antes de redondear",
+    "casos": [
+        { "nombre": "positivo", "parcial": "15.2300000000", "importar": true },
+        { "nombre": "cero", "parcial": "0.0000000000", "importar": false },
+        { "nombre": "nulo", "parcial": null, "importar": false },
+        { "nombre": "negativo", "parcial": "-0.0100000000", "importar": false },
+        { "nombre": "positivo_menor_a_un_centimo", "parcial": "0.0000000001", "importar": true }
+    ]
+}

@@ -56,10 +56,13 @@ const handleSystemThemeChange = (): void => applyTheme(currentAppearance);
 export function initializeTheme(): void {
     if (typeof window === 'undefined') return;
 
-    currentAppearance = 'system';
-    localStorage.setItem('appearance', 'system');
-    setCookie('appearance', 'system');
+    const stored = localStorage.getItem('appearance');
+    currentAppearance =
+        stored === 'light' || stored === 'dark' || stored === 'system'
+            ? stored
+            : 'system';
     applyTheme(currentAppearance);
+    notify();
 
     // Set up system theme change listener
     mediaQuery()?.addEventListener('change', handleSystemThemeChange);
@@ -77,17 +80,16 @@ export function useAppearance(): UseAppearanceReturn {
         [appearance],
     );
 
-    const updateAppearance = useCallback((_mode: Appearance): void => {
-        const nextMode: Appearance = 'system';
-        currentAppearance = nextMode;
+    const updateAppearance = useCallback((mode: Appearance): void => {
+        currentAppearance = mode;
 
         // Store in localStorage for client-side persistence...
-        localStorage.setItem('appearance', nextMode);
+        localStorage.setItem('appearance', mode);
 
         // Store in cookie for SSR...
-        setCookie('appearance', nextMode);
+        setCookie('appearance', mode);
 
-        applyTheme(nextMode);
+        applyTheme(mode);
         notify();
     }, []);
 

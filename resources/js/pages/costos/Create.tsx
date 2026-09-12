@@ -17,6 +17,7 @@ const MODULE_LABELS: Record<string, string> = {
     crono_valorizado: 'Cronograma Valorizado',
     crono_materiales: 'Cronograma Materiales',
     presupuesto: 'Presupuesto',
+    mantenimiento: 'Mantenimiento',
     presupuesto_gg: 'Gastos Generales',
     presupuesto_insumos: 'Insumos',
     presupuesto_remuneraciones: 'Remuneraciones',
@@ -31,6 +32,7 @@ const MODULE_ICONS: Record<string, string> = {
     metrado_comunicaciones: '📡', metrado_gas: '🔥',
     crono_general: '📅', crono_valorizado: '💰',
     crono_materiales: '📦', presupuesto: '🧾',
+    mantenimiento: '🛠️',
     presupuesto_gg: '📋', presupuesto_insumos: '🔩',
     presupuesto_remuneraciones: '👷', presupuesto_acus: '📊',
     presupuesto_indice: '📈', etts: '📝',
@@ -40,6 +42,7 @@ const MODULE_GROUPS = [
     { label: 'Metrados', prefix: 'metrado_', exact: false, color: 'blue' },
     { label: 'Cronogramas', prefix: 'crono_', exact: false, color: 'violet' },
     { label: 'Presupuesto', prefix: 'presupuesto', exact: true, color: 'emerald' },
+    { label: 'Mantenimiento', prefix: 'mantenimiento', exact: true, color: 'teal' },
     { label: 'ETTs', prefix: 'etts', exact: true, color: 'orange' },
 ];
 
@@ -47,6 +50,7 @@ const GROUP_STYLES: Record<string, { header: string; badge: string; check: strin
     blue:    { header: 'bg-blue-50 border-blue-100 dark:bg-blue-950/30 dark:border-blue-800/50', badge: 'bg-blue-600', check: 'text-blue-700 bg-blue-50 border-blue-200 dark:text-blue-300 dark:bg-blue-950/40 dark:border-blue-700', card: 'border-blue-400 bg-blue-50/80 dark:border-blue-500 dark:bg-blue-950/30' },
     violet:  { header: 'bg-violet-50 border-violet-100 dark:bg-violet-950/30 dark:border-violet-800/50', badge: 'bg-violet-600', check: 'text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-300 dark:bg-violet-950/40 dark:border-violet-700', card: 'border-violet-400 bg-violet-50/80 dark:border-violet-500 dark:bg-violet-950/30' },
     emerald: { header: 'bg-emerald-50 border-emerald-100 dark:bg-emerald-950/30 dark:border-emerald-800/50', badge: 'bg-emerald-600', check: 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-950/40 dark:border-emerald-700', card: 'border-emerald-400 bg-emerald-50/80 dark:border-emerald-500 dark:bg-emerald-950/30' },
+    teal:    { header: 'bg-teal-50 border-teal-100 dark:bg-teal-950/30 dark:border-teal-800/50', badge: 'bg-teal-600', check: 'text-teal-700 bg-teal-50 border-teal-200 dark:text-teal-300 dark:bg-teal-950/40 dark:border-teal-700', card: 'border-teal-400 bg-teal-50/80 dark:border-teal-500 dark:bg-teal-950/30' },
     orange:  { header: 'bg-orange-50 border-orange-100 dark:bg-orange-950/30 dark:border-orange-800/50', badge: 'bg-orange-600', check: 'text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-300 dark:bg-orange-950/40 dark:border-orange-700', card: 'border-orange-400 bg-orange-50/80 dark:border-orange-500 dark:bg-orange-950/30' },
 };
 

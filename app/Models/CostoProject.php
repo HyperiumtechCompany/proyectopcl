@@ -59,6 +59,7 @@ class CostoProject extends Model
         'crono_valorizado',
         'crono_materiales',
         'presupuesto',
+        'mantenimiento',
         'etts',
     ];
 

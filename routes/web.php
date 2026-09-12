@@ -32,6 +32,13 @@ use App\Http\Controllers\EttpController;
 use App\Http\Controllers\GestorProyectoController;
 use App\Http\Controllers\GestorProyectoNodoController;
 use App\Http\Controllers\InsumoProductoController;
+use App\Http\Controllers\Mantenimiento\MaintenanceDocumentController;
+use App\Http\Controllers\Mantenimiento\MaintenanceGgController;
+use App\Http\Controllers\Mantenimiento\MaintenanceImportController;
+use App\Http\Controllers\Mantenimiento\MaintenanceMatController;
+use App\Http\Controllers\Mantenimiento\MaintenanceMoController;
+use App\Http\Controllers\Mantenimiento\MaintenanceResumenController;
+use App\Http\Controllers\Mantenimiento\MaintenanceScenarioController;
 use App\Http\Controllers\MetradoArquitecturaController;
 use App\Http\Controllers\MetradoComunicacionesController;
 use App\Http\Controllers\MetradoComunicacionSpreadsheetController;
@@ -47,6 +54,7 @@ use App\Http\Controllers\PresupuestoController;
 use App\Http\Controllers\SpattPararrayoSpreadsheetController;
 use App\Http\Controllers\UbigeoController;
 use App\Http\Controllers\UserController;
+use App\Http\Middleware\EnsureMaintenanceSchema;
 use App\Http\Middleware\SetCostosDatabase;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -315,6 +323,59 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
     Route::middleware([SetCostosDatabase::class])
         ->prefix('/{costoProject}')
         ->group(function () {
+            Route::middleware([EnsureMaintenanceSchema::class])->prefix('/mantenimiento')->name('mantenimiento.')->group(function () {
+                Route::get('/', [MaintenanceDocumentController::class, 'index'])->name('index');
+                Route::post('/', [MaintenanceDocumentController::class, 'store'])->name('store');
+
+                Route::prefix('/{documentId}')->group(function () {
+                    Route::get('/', [MaintenanceDocumentController::class, 'show'])->name('show');
+                    Route::delete('/', [MaintenanceDocumentController::class, 'destroy'])->name('destroy');
+
+                    Route::get('/import/preview', [MaintenanceImportController::class, 'preview'])->name('import.preview');
+                    Route::post('/import', [MaintenanceImportController::class, 'store'])->name('import.store');
+
+                    Route::post('/escenarios', [MaintenanceScenarioController::class, 'store'])->name('escenarios.store');
+                    Route::patch('/escenarios/{scenarioId}/activar', [MaintenanceScenarioController::class, 'activate'])->name('escenarios.activate');
+
+                    Route::patch('/resumen/parametros', [MaintenanceResumenController::class, 'updateParametros'])->name('resumen.parametros.update');
+
+                    Route::prefix('/mo')->name('mo.')->group(function () {
+                        Route::post('/partidas', [MaintenanceMoController::class, 'storePartida'])->name('partidas.store');
+                        Route::patch('/partidas/{partidaId}', [MaintenanceMoController::class, 'updatePartida'])->name('partidas.update');
+                        Route::delete('/partidas/{partidaId}', [MaintenanceMoController::class, 'destroyPartida'])->name('partidas.destroy');
+                        Route::post('/series', [MaintenanceMoController::class, 'storeSeries'])->name('series.store');
+                        Route::patch('/series/{serieId}', [MaintenanceMoController::class, 'updateSeries'])->name('series.update');
+                        Route::delete('/series/{serieId}', [MaintenanceMoController::class, 'destroySeries'])->name('series.destroy');
+                        Route::put('/series/{serieId}/valores/{partidaId}', [MaintenanceMoController::class, 'setParcial'])->name('series.valores.set');
+                    });
+
+                    Route::prefix('/mat')->name('mat.')->group(function () {
+                        Route::get('/', [MaintenanceMatController::class, 'show'])->name('show');
+                        Route::post('/materiales', [MaintenanceMatController::class, 'storeMaterial'])->name('materiales.store');
+                        Route::patch('/materiales/{materialId}', [MaintenanceMatController::class, 'updateMaterial'])->name('materiales.update');
+                        Route::delete('/materiales/{materialId}', [MaintenanceMatController::class, 'destroyMaterial'])->name('materiales.destroy');
+                        Route::put('/materiales/{materialId}/cotizaciones/{slot}', [MaintenanceMatController::class, 'setCotizacion'])->name('cotizaciones.set');
+                        Route::post('/compras', [MaintenanceMatController::class, 'storeCompra'])->name('compras.store');
+                        Route::patch('/compras/{compraId}', [MaintenanceMatController::class, 'updateCompra'])->name('compras.update');
+                        Route::delete('/compras/{compraId}', [MaintenanceMatController::class, 'destroyCompra'])->name('compras.destroy');
+                        Route::put('/compras/{compraId}/valores/{materialId}', [MaintenanceMatController::class, 'setCompraValor'])->name('compras.valores.set');
+                    });
+
+                    Route::prefix('/gg')->name('gg.')->group(function () {
+                        Route::post('/plantilla', [MaintenanceGgController::class, 'seedPlantilla'])->name('plantilla.seed');
+                        Route::post('/lineas', [MaintenanceGgController::class, 'storeLinea'])->name('lineas.store');
+                        Route::patch('/lineas/{lineaId}', [MaintenanceGgController::class, 'updateLinea'])->name('lineas.update');
+                        Route::delete('/lineas/{lineaId}', [MaintenanceGgController::class, 'destroyLinea'])->name('lineas.destroy');
+                        Route::patch('/rubros', [MaintenanceGgController::class, 'renameRubro'])->name('rubros.rename');
+                        Route::delete('/rubros', [MaintenanceGgController::class, 'destroyRubro'])->name('rubros.destroy');
+                        Route::post('/pagos', [MaintenanceGgController::class, 'storePago'])->name('pagos.store');
+                        Route::patch('/pagos/{pagoId}', [MaintenanceGgController::class, 'updatePago'])->name('pagos.update');
+                        Route::delete('/pagos/{pagoId}', [MaintenanceGgController::class, 'destroyPago'])->name('pagos.destroy');
+                        Route::put('/pagos/{pagoId}/valores/{lineaId}', [MaintenanceGgController::class, 'setPagoValor'])->name('pagos.valores.set');
+                    });
+                });
+            });
+
             Route::prefix('/metrado-arquitectura')->name('metrado-arquitectura.')->group(function () {
                 Route::get('/', [MetradoArquitecturaController::class, 'index'])->name('index');
                 Route::get('/config', [MetradoArquitecturaController::class, 'getConfig'])->name('config.show');
