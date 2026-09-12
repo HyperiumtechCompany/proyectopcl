@@ -134,8 +134,11 @@ export default function GgSheet({ projectId, documentId, initial, onRevision }: 
                         {payload.rows.map((row) => {
                             if (row.tipo === 'grupo') {
                                 const isCollapsed = collapsed.has(row.grupo);
+                                // Separador grueso antes de "Variables" (no antes de "Fijos", que ya es el primer
+                                // grupo), igual que el que se usa en MO/MAT entre instituciones.
+                                const groupDivider = row.grupo === 'variable' ? '[&>td]:border-t-4 [&>td]:border-slate-400 dark:[&>td]:border-slate-500' : '';
                                 return (
-                                    <tr key={`grupo-${row.grupo}`} className="bg-slate-800 text-white dark:bg-slate-950">
+                                    <tr key={`grupo-${row.grupo}`} className={`bg-slate-800 text-white dark:bg-slate-950 ${groupDivider}`}>
                                         <td className="sticky left-0 z-10 bg-slate-800 px-1 py-1.5 font-semibold dark:bg-slate-950">
                                             <button type="button" onClick={() => toggle(row.grupo)} className="flex items-center gap-1">
                                                 {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}

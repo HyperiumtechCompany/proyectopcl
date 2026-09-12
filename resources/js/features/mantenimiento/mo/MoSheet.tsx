@@ -195,7 +195,7 @@ export default function MoSheet({ projectId, documentId, initial, imported, onRe
             )}
 
             <div className="min-h-0 flex-1 overflow-auto">
-                <table className="w-full border-separate border-spacing-0 text-xs">
+                <table className="w-full border-separate border-spacing-0 text-xs whitespace-nowrap">
                     <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500 dark:bg-slate-900 dark:text-slate-400">
                         <tr className="[&>th]:border-b [&>th]:border-slate-200 [&>th]:px-2 [&>th]:py-2 [&>th]:text-left [&>th]:font-semibold dark:[&>th]:border-slate-700">
                             <th className="sticky left-0 z-20 bg-slate-50 dark:bg-slate-900">Ítem</th>
@@ -203,7 +203,7 @@ export default function MoSheet({ projectId, documentId, initial, imported, onRe
                             <th>Und</th>
                             <th className="bg-rose-50 text-right dark:bg-rose-950/30" colSpan={3}>MO Expediente Técnico</th>
                             <th className="bg-emerald-50 text-right dark:bg-emerald-950/30" colSpan={3}>MO Cotizado</th>
-                            <th className="min-w-24 text-right">Presup.</th>
+                            <th className="min-w-28 text-right">Presup.</th>
                             {series.map((serie) => (
                                 <th key={serie.id} className="min-w-24 text-right align-top">
                                     <div className="flex items-start justify-end gap-1">
@@ -278,8 +278,12 @@ export default function MoSheet({ projectId, documentId, initial, imported, onRe
 
                                 if (row.tipo === 'ie') {
                                     const span = spanFrom(index);
+                                    // Separador grueso entre instituciones (no en la primera): antes la tabla se sentía
+                                    // como un solo bloque continuo y era difícil ver dónde terminaba una institución
+                                    // y empezaba la siguiente.
+                                    const groupDivider = index > 0 ? '[&>td]:border-t-4 [&>td]:border-slate-400 dark:[&>td]:border-slate-500' : '';
                                     return (
-                                        <tr key={row.partida_id} onContextMenu={onContextMenu} className="group bg-slate-800 text-white dark:bg-slate-950">
+                                        <tr key={row.partida_id} onContextMenu={onContextMenu} className={`group bg-slate-800 text-white dark:bg-slate-950 ${groupDivider}`}>
                                             <td className="sticky left-0 bg-slate-800 px-2 py-1.5 dark:bg-slate-950">
                                                 <button type="button" onClick={() => toggle(row.partida_id)} className="align-middle">
                                                     {collapsed.has(row.partida_id) ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
@@ -292,7 +296,19 @@ export default function MoSheet({ projectId, documentId, initial, imported, onRe
                                                 </span>
                                             </td>
                                             <td rowSpan={span} className="border-l border-slate-700 bg-slate-800/60 p-0 align-middle dark:bg-slate-900">
-                                                <MoNumberCell value={row.presupuesto ?? ''} muted={row.presupuesto_source === 'sugerido'} editable onCommit={(v) => void patch(row.partida_id, 'presupuesto', v)} />
+                                                <div className="flex items-center justify-center gap-1 py-1">
+                                                    <span className={`text-xs ${row.presupuesto_source === 'sugerido' ? 'text-slate-500' : 'text-slate-400'}`}>S/</span>
+                                                    <div className="w-20">
+                                                        <MoNumberCell
+                                                            value={row.presupuesto ?? ''}
+                                                            muted={row.presupuesto_source === 'sugerido'}
+                                                            editable
+                                                            align="left"
+                                                            decimals={2}
+                                                            onCommit={(v) => void patch(row.partida_id, 'presupuesto', v)}
+                                                        />
+                                                    </div>
+                                                </div>
                                             </td>
                                             {series.length > 0 && <td colSpan={series.length} />}
                                             <td className="bg-slate-800 px-2 text-right font-semibold tabular-nums dark:bg-slate-950" style={finalStyle}>{money(row.final)}</td>

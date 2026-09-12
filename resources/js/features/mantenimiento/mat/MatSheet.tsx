@@ -391,7 +391,7 @@ export default function MatSheet({ projectId, documentId, initial, onRevision }:
                             <tr><td className="px-4 py-10 text-center text-sm text-slate-400" colSpan={24}>Importa el presupuesto (pestaña MO) o agrega materiales / partidas manualmente.</td></tr>
                         )}
 
-                        {payload.rows.filter((row) => !row.es_material && !isHidden(row.parent_id)).map((row) => {
+                        {payload.rows.filter((row) => !row.es_material && !isHidden(row.parent_id)).map((row, index) => {
                             const delPartida = (
                                 <button type="button" onClick={() => deletePartidaRow(row)}
                                     className="opacity-0 transition group-hover:opacity-100 hover:text-rose-500" aria-label="Eliminar fila"><Trash2 size={11} /></button>
@@ -403,8 +403,10 @@ export default function MatSheet({ projectId, documentId, initial, onRevision }:
 
                             if (row.tipo === 'ie' || row.tipo === 'bloque') {
                                 const dark = row.tipo === 'ie';
+                                // Separador grueso entre instituciones (no en la primera), igual que en MO.
+                                const groupDivider = dark && index > 0 ? '[&>td]:border-t-4 [&>td]:border-slate-400 dark:[&>td]:border-slate-500' : '';
                                 return (
-                                    <tr key={row.partida_id} onContextMenu={onContextMenu} className={`group ${dark ? 'bg-slate-800 text-white dark:bg-slate-950' : 'bg-orange-50 font-semibold text-orange-900 dark:bg-orange-950/30 dark:text-orange-200'}`}>
+                                    <tr key={row.partida_id} onContextMenu={onContextMenu} className={`group ${dark ? 'bg-slate-800 text-white dark:bg-slate-950' : 'bg-orange-50 font-semibold text-orange-900 dark:bg-orange-950/30 dark:text-orange-200'} ${groupDivider}`}>
                                         <td className={`sticky left-0 z-10 px-1 ${dark ? 'bg-slate-800 dark:bg-slate-950' : 'bg-orange-50 dark:bg-orange-950/30'}`} style={{ paddingLeft: `${row.nivel * 10}px` }}>
                                             <span className="flex items-center gap-1">
                                                 {hasKids.has(row.partida_id) && <button type="button" onClick={() => toggle(row.partida_id)}>{collapsed.has(row.partida_id) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}</button>}
