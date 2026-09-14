@@ -9,12 +9,26 @@ interface Props {
     onClose: () => void;
     canDelete?: boolean;
     onDuplicate?: () => void;
+    onCopyMaterials?: () => void;
+    onPasteMaterials?: () => void;
 }
 
 const MENU_WIDTH = 208;
 
-export default function PartidaContextMenu({ x, y, onAddChild, onAddSibling, onDelete, onClose, canDelete = true, onDuplicate }: Props) {
-    const menuHeight = 116 + (onDuplicate ? 32 : 0);
+export default function PartidaContextMenu({
+    x,
+    y,
+    onAddChild,
+    onAddSibling,
+    onDelete,
+    onClose,
+    canDelete = true,
+    onDuplicate,
+    onCopyMaterials,
+    onPasteMaterials,
+}: Props) {
+    const extraItems = [onDuplicate, onCopyMaterials, onPasteMaterials].filter(Boolean).length;
+    const menuHeight = 116 + extraItems * 32;
     const ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -57,6 +71,8 @@ export default function PartidaContextMenu({ x, y, onAddChild, onAddSibling, onD
             {item('+ Agregar hijo', onAddChild)}
             {item('+ Agregar al mismo nivel', onAddSibling)}
             {onDuplicate && item('Duplicar institución', onDuplicate)}
+            {onCopyMaterials && item('Copiar materiales de esta partida', onCopyMaterials)}
+            {onPasteMaterials && item('Pegar materiales aquí', onPasteMaterials)}
             {canDelete && item('Eliminar', onDelete, true)}
         </div>
     );

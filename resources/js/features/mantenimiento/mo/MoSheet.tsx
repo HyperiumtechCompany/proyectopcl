@@ -360,7 +360,7 @@ export default function MoSheet({ projectId, documentId, initial, imported, onRe
                                                 ) : (
                                                     <span className="w-3" />
                                                 )}
-                                                <MoTextCell value={row.item ?? ''} editable className="w-16 text-xs" onCommit={(v) => void patch(row.partida_id, 'item', v || null)} />
+                                                <MoTextCell value={row.item ?? ''} editable className="w-24 text-xs" onCommit={(v) => void patch(row.partida_id, 'item', v || null)} />
                                                 {del}
                                             </span>
                                         </td>

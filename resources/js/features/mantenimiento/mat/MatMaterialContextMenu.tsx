@@ -1,4 +1,4 @@
-import { PlusCircle, Trash2 } from 'lucide-react';
+import { Copy, PlusCircle, Trash2 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 interface Props {
@@ -8,9 +8,10 @@ interface Props {
     onClose: () => void;
     onAddMaterial: () => void;
     onDelete: () => void;
+    onCopy: () => void;
 }
 
-export default function MatMaterialContextMenu({ x, y, materialName, onClose, onAddMaterial, onDelete }: Props) {
+export default function MatMaterialContextMenu({ x, y, materialName, onClose, onAddMaterial, onDelete, onCopy }: Props) {
     const ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -53,6 +54,18 @@ export default function MatMaterialContextMenu({ x, y, materialName, onClose, on
             >
                 <PlusCircle size={12} className="text-blue-500" />
                 Agregar material aquí
+            </button>
+
+            <button
+                type="button"
+                onClick={() => {
+                    onCopy();
+                    onClose();
+                }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-blue-50 dark:hover:bg-blue-950/30"
+            >
+                <Copy size={12} className="text-blue-500" />
+                Copiar material
             </button>
 
             <div className="my-1 border-t border-slate-100 dark:border-slate-800" />

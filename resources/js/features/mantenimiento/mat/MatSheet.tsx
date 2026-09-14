@@ -1,4 +1,4 @@
-import { AlertTriangle, ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, Loader2, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, ClipboardPaste, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import MoAddRowDialog from '../mo/MoAddRowDialog';
 import MoDescriptionCell from '../mo/MoDescriptionCell';
@@ -38,6 +38,20 @@ function puMinimo(value: string | null | undefined): string {
     return Number.isNaN(n) ? value : n.toFixed(3);
 }
 
+interface ClipboardMaterial {
+    descripcion: string;
+    unidad: string | null;
+    cantidad: string | null;
+    precio_unitario: string | null;
+}
+
+const toClipboardMaterial = (row: MatRow): ClipboardMaterial => ({
+    descripcion: row.descripcion,
+    unidad: row.unidad,
+    cantidad: row.et?.cantidad ?? null,
+    precio_unitario: row.et?.precio ?? null,
+});
+
 export default function MatSheet({ projectId, documentId, initial, onRevision }: Props) {
     const [payload, setPayload] = useState<MatPayload>(initial);
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -49,6 +63,11 @@ export default function MatSheet({ projectId, documentId, initial, onRevision }:
     const [menu, setMenu] = useState<{ x: number; y: number; row: MatRow } | null>(null);
     const [quickAddPartidaId, setQuickAddPartidaId] = useState<string | null>(null);
     const [materialMenu, setMaterialMenu] = useState<{ x: number; y: number; row: MatRow } | null>(null);
+    // Portapapeles de materiales: vive solo en esta pestaña (no persiste entre reloads ni entre
+    // MO/MAT) para poder copiar uno o varios materiales de una partida/institución y pegarlos en
+    // cualquier otra sin volver a escribirlos. NO se copian cotizaciones/compras — mismo criterio
+    // que "Duplicar institución" en MO: esos datos son específicos de cada institución/compra real.
+    const [clipboard, setClipboard] = useState<ClipboardMaterial[] | null>(null);
 
     const apply = (res: MatResponse) => {
         setPayload(res.mat);
@@ -171,6 +190,21 @@ export default function MatSheet({ projectId, documentId, initial, onRevision }:
         }
     };
 
+    const copyMaterial = (row: MatRow) => setClipboard([toClipboardMaterial(row)]);
+
+    const copyPartidaMaterials = (partidaId: string) => {
+        const mats = materialsByPartida.get(partidaId) ?? [];
+        if (mats.length === 0) return;
+        setClipboard(mats.map(toClipboardMaterial));
+    };
+
+    const pasteMaterials = (partidaId: string) => {
+        // addMaterialsBatch relanza el error tras avisar (para que el panel de alta rápida no se
+        // cierre solo); acá no hay panel que mantener abierto, así que solo evitamos la promesa
+        // sin atrapar.
+        if (clipboard && clipboard.length > 0) void addMaterialsBatch(partidaId, clipboard).catch(() => {});
+    };
+
     const compras = payload.compras;
     const conc = payload.totales.conciliacion;
 
@@ -290,6 +324,15 @@ export default function MatSheet({ projectId, documentId, initial, onRevision }:
                     </button>
                 )}
                 {busy && <Loader2 size={14} className="animate-spin text-blue-500" />}
+                {clipboard && (
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                        <ClipboardPaste size={13} />
+                        {clipboard.length === 1 ? '1 material copiado' : `${clipboard.length} materiales copiados`} — clic derecho en una partida para pegar
+                        <button type="button" onClick={() => setClipboard(null)} className="text-blue-400 hover:text-blue-700 dark:hover:text-blue-200" title="Cancelar copia">
+                            <X size={12} />
+                        </button>
+                    </span>
+                )}
                 <span className="ml-auto text-xs">
                     <b>EXP. TÉC.</b> {money(conc.exp_tec)} · <b>CORREGIDO</b> {money(conc.corregido)} ·{' '}
                     <span className={conc.estado === 'deficit' ? 'text-rose-600' : conc.estado === 'superavit' ? 'text-emerald-600' : ''}>
@@ -320,6 +363,8 @@ export default function MatSheet({ projectId, documentId, initial, onRevision }:
                     onAddChild={() => openAddDialog({ parentId: menu.row.partida_id, tipo: menu.row.tipo === 'ie' ? 'bloque' : 'partida' })}
                     onAddSibling={() => openAddDialog({ parentId: menu.row.parent_id ?? null, tipo: menu.row.tipo as 'ie' | 'bloque' | 'partida' })}
                     onDelete={() => deletePartidaRow(menu.row)}
+                    onCopyMaterials={menu.row.tipo === 'partida' && (materialsByPartida.get(menu.row.partida_id)?.length ?? 0) > 0 ? () => copyPartidaMaterials(menu.row.partida_id) : undefined}
+                    onPasteMaterials={menu.row.tipo === 'partida' && clipboard ? () => pasteMaterials(menu.row.partida_id) : undefined}
                 />
             )}
             {materialMenu && (
@@ -329,6 +374,7 @@ export default function MatSheet({ projectId, documentId, initial, onRevision }:
                     materialName={materialMenu.row.descripcion}
                     onClose={() => setMaterialMenu(null)}
                     onAddMaterial={() => setQuickAddPartidaId(materialMenu.row.partida_id)}
+                    onCopy={() => copyMaterial(materialMenu.row)}
                     onDelete={() => {
                         if (window.confirm(`¿Eliminar "${materialMenu.row.descripcion}"?`)) {
                             void run(() => matApi.deleteMaterial(projectId, documentId, materialMenu.row.material_id!));
@@ -349,7 +395,7 @@ export default function MatSheet({ projectId, documentId, initial, onRevision }:
                     <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500 dark:bg-slate-900 dark:text-slate-400">
                         <tr className="[&>th]:border-b [&>th]:border-slate-200 [&>th]:px-2 [&>th]:py-1.5 [&>th]:font-semibold dark:[&>th]:border-slate-700">
                             <th className="sticky left-0 z-20 bg-slate-50 text-left dark:bg-slate-900">Ítem</th>
-                            <th className="sticky left-16 z-20 min-w-48 bg-slate-50 text-left dark:bg-slate-900">Descripción (partida)</th>
+                            <th className="sticky left-24 z-20 min-w-48 bg-slate-50 text-left dark:bg-slate-900">Descripción (partida)</th>
                             <th>Und</th>
                             <th className="text-right">Met.</th>
                             <th className={`${DIVIDER} bg-rose-50 text-left dark:bg-rose-950/30`} colSpan={5}>Expediente técnico (material)</th>
@@ -369,7 +415,7 @@ export default function MatSheet({ projectId, documentId, initial, onRevision }:
                         </tr>
                         <tr className="[&>th]:border-b [&>th]:border-slate-200 [&>th]:px-2 [&>th]:py-1 [&>th]:text-right [&>th]:font-medium dark:[&>th]:border-slate-700">
                             <th className="sticky left-0 bg-slate-50 dark:bg-slate-900" />
-                            <th className="sticky left-16 bg-slate-50 dark:bg-slate-900" />
+                            <th className="sticky left-24 bg-slate-50 dark:bg-slate-900" />
                             <th /><th />
                             <th className={`${DIVIDER} text-left`}>Material</th><th>Und</th><th className="min-w-16">Cant.</th><th className="min-w-20">P.U.</th><th>P.T.</th>
                             {COT_SLOTS.map((s) => collapsedCot.has(s) ? (
@@ -413,7 +459,7 @@ export default function MatSheet({ projectId, documentId, initial, onRevision }:
                                                 {row.item}
                                             </span>
                                         </td>
-                                        <td className={`sticky left-16 z-10 px-0 ${dark ? 'bg-slate-800 dark:bg-slate-950' : 'bg-orange-50 dark:bg-orange-950/30'}`}>
+                                        <td className={`sticky left-24 z-10 px-0 ${dark ? 'bg-slate-800 dark:bg-slate-950' : 'bg-orange-50 dark:bg-orange-950/30'}`}>
                                             <span className="flex items-start gap-1">
                                                 <MoDescriptionCell value={row.descripcion} editable className={dark ? 'font-semibold text-white' : 'font-semibold'} onCommit={(v) => void structural(() => moApi.updatePartida(projectId, documentId, row.partida_id, { descripcion: v }))} />
                                                 {delPartida}
@@ -443,10 +489,10 @@ export default function MatSheet({ projectId, documentId, initial, onRevision }:
                                     <td rowSpan={span} onContextMenu={onContextMenu} className="sticky left-0 z-10 border-b border-slate-200 bg-white px-1 align-middle dark:border-slate-800 dark:bg-slate-900" style={{ paddingLeft: `${row.nivel * 10}px` }}>
                                         <span className="flex items-center gap-1">
                                             {hasKids.has(row.partida_id) && <button type="button" onClick={() => toggle(row.partida_id)}>{collapsed.has(row.partida_id) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}</button>}
-                                            <MoTextCell value={row.item ?? ''} editable className="w-16 text-xs" onCommit={(v) => void structural(() => moApi.updatePartida(projectId, documentId, row.partida_id, { item: v || null }))} />
+                                            <MoTextCell value={row.item ?? ''} editable className="w-24 text-xs" onCommit={(v) => void structural(() => moApi.updatePartida(projectId, documentId, row.partida_id, { item: v || null }))} />
                                         </span>
                                     </td>
-                                    <td rowSpan={span} onContextMenu={onContextMenu} className="group sticky left-16 z-10 border-b border-slate-200 bg-white px-0 align-middle dark:border-slate-800 dark:bg-slate-900">
+                                    <td rowSpan={span} onContextMenu={onContextMenu} className="group sticky left-24 z-10 border-b border-slate-200 bg-white px-0 align-middle dark:border-slate-800 dark:bg-slate-900">
                                         <div className="flex items-start gap-1">
                                             <MoDescriptionCell value={row.descripcion} editable onCommit={(v) => void structural(() => moApi.updatePartida(projectId, documentId, row.partida_id, { descripcion: v }))} />
                                             {delPartida}
@@ -513,7 +559,7 @@ export default function MatSheet({ projectId, documentId, initial, onRevision }:
                         {payload.rows.length > 0 && (
                             <tr className="sticky bottom-0 bg-slate-100 font-bold text-slate-800 dark:bg-slate-800 dark:text-slate-100 [&>td]:px-2 [&>td]:py-1.5">
                                 <td className="sticky left-0 bg-slate-100 dark:bg-slate-800" />
-                                <td className="sticky left-16 bg-slate-100 dark:bg-slate-800">TOTAL</td>
+                                <td className="sticky left-24 bg-slate-100 dark:bg-slate-800">TOTAL</td>
                                 <td colSpan={2} />
                                 <td colSpan={3} className={DIVIDER} /><td />
                                 <td className="text-right tabular-nums text-rose-700 dark:text-rose-300">{money(payload.totales.general.pt_et)}</td>
