@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Mantenimiento;
 use App\Http\Requests\Mantenimiento\StoreMaintenanceDocumentRequest;
 use App\Models\CostoProject;
 use App\Models\Mantenimiento\MaintenanceDocument;
+use App\Models\Ubigeo;
 use App\Services\Mantenimiento\MaintenanceGgService;
 use App\Services\Mantenimiento\MaintenanceMatService;
 use App\Services\Mantenimiento\MaintenanceMoService;
@@ -57,7 +58,23 @@ class MaintenanceDocumentController extends MaintenanceController
         $document = $this->document($documentId);
 
         return Inertia::render('costos/mantenimiento/Editor', [
-            'project' => ['id' => $costoProject->id, 'nombre' => $costoProject->nombre],
+            // Datos institucionales para el encabezado del Excel exportado (mismo patrón que
+            // CostoProjectController: URL de logo ya resuelta con asset(), nombres de ubigeo
+            // resueltos por id en vez de mandar las relaciones completas).
+            'project' => [
+                'id' => $costoProject->id,
+                'nombre' => $costoProject->nombre,
+                'codigo_cui' => $costoProject->codigo_cui,
+                'codigo_local' => $costoProject->codigo_local,
+                'codigos_modulares' => $costoProject->codigos_modulares,
+                'unidad_ejecutora' => $costoProject->unidad_ejecutora,
+                'departamento_nombre' => $costoProject->departamento_id ? Ubigeo::find($costoProject->departamento_id)?->departamento : null,
+                'provincia_nombre' => $costoProject->provincia_id ? Ubigeo::find($costoProject->provincia_id)?->provincia : null,
+                'distrito_nombre' => $costoProject->distrito_id ? Ubigeo::find($costoProject->distrito_id)?->distrito : null,
+                'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq ? asset('storage/'.$costoProject->plantilla_logo_izq) : null,
+                'plantilla_logo_der_url' => $costoProject->plantilla_logo_der ? asset('storage/'.$costoProject->plantilla_logo_der) : null,
+                'plantilla_firma_url' => $costoProject->plantilla_firma ? asset('storage/'.$costoProject->plantilla_firma) : null,
+            ],
             'document' => [
                 'id' => $document->public_id,
                 'nombre' => $document->nombre,

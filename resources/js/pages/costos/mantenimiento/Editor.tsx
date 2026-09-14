@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import { Loader2, Monitor, Moon, Sun } from 'lucide-react';
+import { Download, Loader2, Monitor, Moon, Sun } from 'lucide-react';
 import { useState } from 'react';
 import GgSheet from '@/features/mantenimiento/gg/GgSheet';
 import { ggApi } from '@/features/mantenimiento/gg/ggApi';
@@ -17,8 +17,22 @@ import { useAppearance } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 
+interface ProjectLetterheadProps {
+    id: number;
+    nombre: string;
+    codigo_cui: string | null;
+    codigo_local: string | null;
+    codigos_modulares: { inicial?: string; primaria?: string; secundaria?: string } | null;
+    unidad_ejecutora: string | null;
+    departamento_nombre: string | null;
+    provincia_nombre: string | null;
+    distrito_nombre: string | null;
+    plantilla_logo_izq_url: string | null;
+    plantilla_logo_der_url: string | null;
+}
+
 interface Props {
-    project: { id: number; nombre: string };
+    project: ProjectLetterheadProps;
     document: { id: string; nombre: string; moneda: string; revision: number };
     imported: boolean;
     presupuesto_disponible: boolean;
@@ -40,6 +54,7 @@ export default function Editor({ project, document, imported, presupuesto_dispon
     const [tab, setTab] = useState<SheetTab>('RESUMEN');
     const [revision, setRevision] = useState(document.revision);
     const [switching, setSwitching] = useState(false);
+    const [exporting, setExporting] = useState(false);
     const { appearance, updateAppearance } = useAppearance();
 
     // MO/MAT comparten el mismo árbol de partidas y las 4 pestañas comparten un mismo
@@ -87,6 +102,41 @@ export default function Editor({ project, document, imported, presupuesto_dispon
         }
     };
 
+    // Descarga siempre con datos recién pedidos al servidor (no con lo que haya en caché de cada
+    // pestaña): así el Excel nunca puede quedar desactualizado respecto a lo último guardado en
+    // MO/MAT/GG, sin importar qué pestaña estabas mirando cuando le diste a exportar.
+    const exportExcel = async () => {
+        setExporting(true);
+        try {
+            const [moRes, matRes, ggRes, resumenRes] = await Promise.all([
+                moApi.refresh(project.id, document.id),
+                matApi.refresh(project.id, document.id),
+                ggApi.refresh(project.id, document.id),
+                resumenApi.refresh(project.id, document.id),
+            ]);
+            setMoState({ payload: moRes.mo, atRevision: moRes.revision });
+            setMatState({ payload: matRes.mat, atRevision: matRes.revision });
+            setGgState({ payload: ggRes.gg, atRevision: ggRes.revision });
+            setResumenState({ payload: resumenRes.resumen, atRevision: resumenRes.revision });
+            setRevision(Math.max(moRes.revision, matRes.revision, ggRes.revision, resumenRes.revision));
+
+            const { exportMantenimientoExcel } = await import('@/features/mantenimiento/export/exportMantenimientoExcel');
+            await exportMantenimientoExcel({
+                project,
+                document,
+                mo: moRes.mo,
+                mat: matRes.mat,
+                gg: ggRes.gg,
+                resumen: resumenRes.resumen,
+            });
+        } catch (error) {
+            const data = (error as { response?: { data?: { message?: string } } }).response?.data;
+            window.alert(data?.message ?? 'No se pudo exportar el Excel.');
+        } finally {
+            setExporting(false);
+        }
+    };
+
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Costos', href: '/costos' },
         { title: project.nombre, href: `/costos/${project.id}` },
@@ -103,17 +153,29 @@ export default function Editor({ project, document, imported, presupuesto_dispon
                         <h1 className="truncate text-base font-bold">{document.nombre}</h1>
                         <p className="text-xs text-slate-500 dark:text-slate-400">{document.moneda} · revisión {revision}</p>
                     </div>
-                    <div className="inline-flex rounded border border-slate-300 p-0.5 dark:border-slate-700">
-                        {([['light', Sun], ['dark', Moon], ['system', Monitor]] as const).map(([mode, Icon]) => (
-                            <button
-                                key={mode}
-                                type="button"
-                                onClick={() => updateAppearance(mode)}
-                                className={`rounded p-1 ${appearance === mode ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-                            >
-                                <Icon size={13} />
-                            </button>
-                        ))}
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => void exportExcel()}
+                            disabled={exporting}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-medium hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                            title="Exportar RESUMEN, MO, MAT y GG a un solo archivo Excel"
+                        >
+                            {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                            {exporting ? 'Exportando…' : 'Exportar a Excel'}
+                        </button>
+                        <div className="inline-flex rounded border border-slate-300 p-0.5 dark:border-slate-700">
+                            {([['light', Sun], ['dark', Moon], ['system', Monitor]] as const).map(([mode, Icon]) => (
+                                <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => updateAppearance(mode)}
+                                    className={`rounded p-1 ${appearance === mode ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                                >
+                                    <Icon size={13} />
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </header>
 
