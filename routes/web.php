@@ -304,20 +304,25 @@ Route::middleware(['auth', 'verified'])->prefix('gestor-proyectos')->name('gesto
 Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->group(function () {
     Route::get('/', [CostoProjectController::class, 'index'])->name('index');
     Route::get('/create', [CostoProjectController::class, 'create'])->name('create');
+
+    // Plantillas de Mantenimiento: del usuario, no de un proyecto puntual — cada CostoProject
+    // tiene su propia base de tenant aislada, así que esto va fuera de SetCostosDatabase/
+    // {costoProject} para poder listarlas/borrarlas sin depender de un proyecto activo. Tiene
+    // que ir ANTES de las rutas '/{costoProject}' de abajo: esa wildcard no tiene where() que la
+    // limite a IDs numéricos, así que si esto fuera después, '/costos/plantillas-mantenimiento'
+    // primero matchearía ahí, Laravel intentaría resolver un CostoProject con ese "id", fallaría
+    // y devolvería 404 antes de llegar siquiera a este grupo (bug real, reproducido en prod).
+    Route::prefix('/plantillas-mantenimiento')->name('plantillas-mantenimiento.')->group(function () {
+        Route::get('/', [MaintenancePlantillaController::class, 'index'])->name('index');
+        Route::delete('/{plantilla}', [MaintenancePlantillaController::class, 'destroy'])->name('destroy');
+    });
+
     Route::get('/{costoProject}/edit', [CostoProjectController::class, 'edit'])->name('edit');
     Route::post('/', [CostoProjectController::class, 'store'])->name('store');
     Route::get('/{costoProject}', [CostoProjectController::class, 'show'])->name('show');
     Route::delete('/{costoProject}', [CostoProjectController::class, 'destroy'])->name('destroy');
     Route::post('/{costoProject}/migrate', [CostoProjectController::class, 'runMigration'])->name('migrate');
     Route::put('/{costoProject}', [CostoProjectController::class, 'update'])->name('update');
-
-    // Plantillas de Mantenimiento: del usuario, no de un proyecto puntual — cada CostoProject
-    // tiene su propia base de tenant aislada, así que esto va fuera de SetCostosDatabase/
-    // {costoProject} para poder listarlas/borrarlas sin depender de un proyecto activo.
-    Route::prefix('/plantillas-mantenimiento')->name('plantillas-mantenimiento.')->group(function () {
-        Route::get('/', [MaintenancePlantillaController::class, 'index'])->name('index');
-        Route::delete('/{plantilla}', [MaintenancePlantillaController::class, 'destroy'])->name('destroy');
-    });
 
     // ─── Módulos dentro de un proyecto (con middleware de BD dinámica) ────
     Route::middleware([SetCostosDatabase::class])
