@@ -334,6 +334,24 @@ class MaintenanceMoService
      */
     public function savePlantilla(MaintenanceScenario $scenario, MaintenancePartida $sourceIe, int $userId, string $nombre, ?string $descripcion): MaintenancePlantilla
     {
+        return MaintenancePlantilla::create([
+            'user_id' => $userId,
+            'nombre' => $nombre,
+            'descripcion' => $descripcion,
+            'estructura' => $this->buildPlantillaEstructura($scenario, $sourceIe),
+        ]);
+    }
+
+    /**
+     * Construye el snapshot JSON portátil de una institución (usado por savePlantilla() y por el
+     * comando `mantenimiento:plantilla-export`, que exporta a un archivo para poder llevar una
+     * plantilla de un entorno a otro — p. ej. de local a producción — sin acceso directo a la
+     * base de datos DEFAULT del otro entorno).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function buildPlantillaEstructura(MaintenanceScenario $scenario, MaintenancePartida $sourceIe): array
+    {
         if ($sourceIe->tipo !== 'ie') {
             throw ValidationException::withMessages(['partida' => 'Solo se puede guardar como plantilla una fila de institución.']);
         }
@@ -379,12 +397,7 @@ class MaintenanceMoService
             }
         }
 
-        return MaintenancePlantilla::create([
-            'user_id' => $userId,
-            'nombre' => $nombre,
-            'descripcion' => $descripcion,
-            'estructura' => $nodes,
-        ]);
+        return $nodes;
     }
 
     /** @return array<int, array{id:int,nombre:string,descripcion:?string,created_at:?string}> */
