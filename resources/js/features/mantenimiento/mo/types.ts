@@ -60,3 +60,11 @@ export interface MoResponse {
     revision: number;
     mo: MoPayload;
 }
+
+// Plantillas: viven a nivel de usuario (no de proyecto/documento), ver MaintenancePlantilla.
+export interface MoPlantilla {
+    id: number;
+    nombre: string;
+    descripcion: string | null;
+    created_at: string | null;
+}

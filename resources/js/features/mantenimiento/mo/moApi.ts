@@ -1,8 +1,9 @@
 import axios from 'axios';
 import * as importRoutes from '@/actions/App/Http/Controllers/Mantenimiento/MaintenanceImportController';
 import * as moRoutes from '@/actions/App/Http/Controllers/Mantenimiento/MaintenanceMoController';
+import * as plantillaRoutes from '@/actions/App/Http/Controllers/Mantenimiento/MaintenancePlantillaController';
 import * as scenarioRoutes from '@/actions/App/Http/Controllers/Mantenimiento/MaintenanceScenarioController';
-import type { MoResponse } from './types';
+import type { MoPlantilla, MoResponse } from './types';
 
 async function send<T>(def: { url: string; method: string }, data?: unknown): Promise<T> {
     const response = await axios.request<T>({ url: def.url, method: def.method, data });
@@ -42,6 +43,18 @@ export const moApi = {
 
     duplicateInstitucion: (projectId: number, documentId: string, partidaId: string, nombre: string) =>
         send<MoResponse>(moRoutes.duplicateInstitucion.post([projectId, documentId, partidaId]), { nombre }),
+
+    savePlantilla: (projectId: number, documentId: string, partidaId: string, nombre: string, descripcion: string | null) =>
+        send<{ plantilla: { id: number; nombre: string } }>(moRoutes.savePlantilla.post([projectId, documentId, partidaId]), { nombre, descripcion }),
+
+    applyPlantilla: (projectId: number, documentId: string, plantillaId: number, nombre: string) =>
+        send<MoResponse>(moRoutes.applyPlantilla.post([projectId, documentId, plantillaId]), { nombre }),
+
+    // Plantillas son del usuario (conexión default), no del proyecto — mismo axios/send helper,
+    // pero sin projectId/documentId en la ruta.
+    listPlantillas: () => send<{ plantillas: MoPlantilla[] }>(plantillaRoutes.index()),
+
+    deletePlantilla: (plantillaId: number) => send<{ deleted: boolean }>(plantillaRoutes.destroy.delete(plantillaId)),
 
     runImport: (projectId: number, documentId: string, sourceHash: string) =>
         send<{ revision: number; summary: Record<string, number> }>(

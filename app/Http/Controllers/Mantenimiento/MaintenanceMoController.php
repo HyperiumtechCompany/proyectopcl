@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Mantenimiento;
 
 use App\Http\Requests\Mantenimiento\DuplicateInstitucionRequest;
+use App\Http\Requests\Mantenimiento\SavePlantillaRequest;
 use App\Http\Requests\Mantenimiento\SetMoParcialRequest;
 use App\Http\Requests\Mantenimiento\StoreMoPartidaRequest;
 use App\Http\Requests\Mantenimiento\StoreMoSeriesRequest;
 use App\Http\Requests\Mantenimiento\UpdateMoPartidaRequest;
 use App\Http\Requests\Mantenimiento\UpdateMoSeriesRequest;
 use App\Models\CostoProject;
+use App\Models\Mantenimiento\MaintenancePlantilla;
 use App\Services\Mantenimiento\MaintenanceMoService;
 use App\Services\Mantenimiento\MaintenanceScenarioService;
 use Illuminate\Http\JsonResponse;
@@ -69,6 +71,29 @@ class MaintenanceMoController extends MaintenanceController
         $sourceIe = $this->partida($document, $partidaId);
 
         return response()->json($this->mo->duplicateInstitucion($document, $scenario, $sourceIe, $request->string('nombre')->toString()), 201);
+    }
+
+    public function savePlantilla(SavePlantillaRequest $request, CostoProject $costoProject, string $documentId, string $partidaId): JsonResponse
+    {
+        $this->authorizeProject($request, $costoProject);
+        $document = $this->document($documentId);
+        $scenario = $this->scenarios->activeFor($document, 'mo');
+        $sourceIe = $this->partida($document, $partidaId);
+
+        $plantilla = $this->mo->savePlantilla($scenario, $sourceIe, $request->user()->id, $request->string('nombre')->toString(), $request->input('descripcion'));
+
+        return response()->json(['plantilla' => ['id' => $plantilla->id, 'nombre' => $plantilla->nombre]], 201);
+    }
+
+    public function applyPlantilla(DuplicateInstitucionRequest $request, CostoProject $costoProject, string $documentId, int $plantillaId): JsonResponse
+    {
+        $this->authorizeProject($request, $costoProject);
+        $document = $this->document($documentId);
+        $scenario = $this->scenarios->activeFor($document, 'mo');
+        $plantilla = MaintenancePlantilla::query()->findOrFail($plantillaId);
+        abort_unless($plantilla->user_id === $request->user()->id, 403);
+
+        return response()->json($this->mo->applyPlantilla($document, $scenario, $plantilla, $request->string('nombre')->toString()), 201);
     }
 
     public function storeSeries(StoreMoSeriesRequest $request, CostoProject $costoProject, string $documentId): JsonResponse

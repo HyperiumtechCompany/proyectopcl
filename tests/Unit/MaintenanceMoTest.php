@@ -5,6 +5,7 @@ use App\Models\Mantenimiento\MaintenanceDocument;
 use App\Models\Mantenimiento\MaintenanceMoPartida;
 use App\Models\Mantenimiento\MaintenanceMoSeries;
 use App\Models\Mantenimiento\MaintenancePartida;
+use App\Models\Mantenimiento\MaintenancePlantilla;
 use App\Models\Mantenimiento\MaintenanceScenario;
 use App\Services\Mantenimiento\MaintenanceMoService;
 use App\Services\Mantenimiento\MaintenanceScenarioService;
@@ -76,6 +77,21 @@ beforeEach(function () {
     }
     foreach (['2026_09_10_000020_create_mantenimiento_editor_tables.php', '2026_09_10_000030_create_mantenimiento_recovery_tables.php', '2026_09_10_000060_create_mantenimiento_mo_domain_tables.php', '2026_09_10_000061_drop_mo_partida_adjustment_columns.php', '2026_09_10_000070_create_mantenimiento_mat_tables.php'] as $migration) {
         (require database_path('migrations/costos_tenant/'.$migration))->up();
+    }
+
+    // mantenimiento_plantillas vive en la conexión DEFAULT (no costos_tenant): una plantilla debe
+    // sobrevivir a cualquier proyecto puntual. Se crea aparte, sobre el sqlite :memory: por
+    // defecto que ya fuerza Tests\TestCase, con guard hasTable porque esa conexión NO se purga
+    // en cada test (a diferencia de costos_tenant, que sí).
+    if (! Schema::hasTable('users')) {
+        Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->timestamps();
+        });
+        DB::table('users')->insert(['id' => 1, 'created_at' => now(), 'updated_at' => now()]);
+    }
+    if (! Schema::hasTable('mantenimiento_plantillas')) {
+        (require database_path('migrations/2026_09_14_000001_create_mantenimiento_plantillas_table.php'))->up();
     }
 
     DB::connection('costos_tenant')->table('presupuestos')->insert(['id' => 1, 'nombre' => 'PG Colegios', 'moneda' => 'PEN', 'created_at' => now(), 'updated_at' => now()]);
@@ -353,4 +369,51 @@ it('duplicates an institución copying structure and values, but never presupues
     $clonedIeRow = collect($result['mo']['rows'])->firstWhere('partida_id', $clonedIe->public_id);
     expect($clonedIeRow['final'])->toBe('0.00')
         ->and($clonedIeRow['presupuesto_source'])->toBe('sugerido');
+});
+
+it('saves an institución as a reusable plantilla (user-scoped) and applies it into a new institución in another document', function () {
+    $document = moDocument();
+    importWbs($document);
+    $mo = app(MaintenanceMoService::class);
+    $scenarios = app(MaintenanceScenarioService::class);
+    $active = fn () => $scenarios->activeFor($document->refresh(), 'mo');
+
+    $ie = MaintenancePartida::query()->where('tipo', 'ie')->firstOrFail();
+    $piso = MaintenancePartida::query()->where('item', '01.01.01')->firstOrFail();
+    $mo->updatePartida($document->refresh(), $active(), $piso, ['cot_cantidad' => '94.8', 'cot_precio' => '18']);
+    $mo->updatePartida($document->refresh(), $active(), $ie, ['presupuesto' => '9999']); // no debe filtrarse a la plantilla
+
+    $plantilla = $mo->savePlantilla($active(), $ie, 1, 'Colegio tipo A', 'Estructura base de un colegio');
+
+    expect($plantilla->user_id)->toBe(1)
+        ->and($plantilla->nombre)->toBe('Colegio tipo A')
+        ->and($plantilla->estructura)->toHaveCount(3) // bloque + 2 partidas (la raíz 'ie' no se guarda como nodo)
+        ->and(MaintenancePlantilla::query()->where('user_id', 1)->count())->toBe(1);
+
+    // Aplicar en un documento NUEVO (simula un proyecto distinto): en producción cada CostoProject
+    // vive en su propia base de datos de tenant, pero el mecanismo de aplicar es el mismo — lee la
+    // plantilla de la conexión DEFAULT y escribe en la conexión costos_tenant que esté activa.
+    $otroDocumento = moDocument();
+    $scenarios->ensureDefault($otroDocumento, 'mo', 'MO');
+    $otroScenario = $scenarios->activeFor($otroDocumento->refresh(), 'mo');
+
+    $result = $mo->applyPlantilla($otroDocumento->refresh(), $otroScenario, $plantilla, 'I.E. Nueva');
+
+    expect(MaintenancePartida::query()->where('documento_id', $otroDocumento->id)->count())->toBe(4); // ie + bloque + 2 partidas
+
+    $nuevaIe = MaintenancePartida::query()->where('documento_id', $otroDocumento->id)->where('tipo', 'ie')->firstOrFail();
+    $nuevoPiso = MaintenancePartida::query()->where('documento_id', $otroDocumento->id)->where('item', '01.01.01')->firstOrFail();
+
+    expect($nuevoPiso->metrado)->toEqual($piso->metrado)
+        ->and($nuevoPiso->costos_acu)->toEqual($piso->costos_acu);
+
+    $nuevoCot = MaintenanceMoPartida::query()->where('escenario_id', $otroScenario->id)->where('partida_public_id', $nuevoPiso->public_id)->firstOrFail();
+    expect((float) $nuevoCot->cot_cantidad)->toBe(94.8)
+        ->and((float) $nuevoCot->cot_precio)->toBe(18.0);
+
+    // Presupuesto/Parciales nunca vienen de la plantilla: la institución nueva arranca limpia.
+    expect(MaintenanceMoPartida::query()->where('escenario_id', $otroScenario->id)->where('partida_public_id', $nuevaIe->public_id)->exists())->toBeFalse();
+
+    $nuevaIeRow = collect($result['mo']['rows'])->firstWhere('partida_id', $nuevaIe->public_id);
+    expect($nuevaIeRow['final'])->toBe('0.00');
 });

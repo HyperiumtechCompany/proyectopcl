@@ -11,6 +11,7 @@ use App\Models\Mantenimiento\MaintenanceMoParcial;
 use App\Models\Mantenimiento\MaintenanceMoPartida;
 use App\Models\Mantenimiento\MaintenanceMoSeries;
 use App\Models\Mantenimiento\MaintenancePartida;
+use App\Models\Mantenimiento\MaintenancePlantilla;
 use App\Models\Mantenimiento\MaintenanceScenario;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -317,6 +318,153 @@ class MaintenanceMoService
                         'partida_public_id' => $clone->public_id,
                         'cot_cantidad' => $sourceMo->cot_cantidad,
                         'cot_precio' => $sourceMo->cot_precio,
+                    ]);
+                }
+            }
+        });
+    }
+
+    /**
+     * Guarda la estructura de una institución (bloques/partidas: ítem/descripción/unidad/metrado/
+     * P.U. Expediente Técnico y Cotizado) como una plantilla reutilizable del usuario — NO del
+     * proyecto: cada CostoProject vive en su propia base de datos de tenant aislada, así que una
+     * plantilla debe guardarse en la conexión DEFAULT para poder aplicarse luego en cualquier
+     * proyecto del usuario, no solo en este documento. Es una foto fija (snapshot JSON), no un
+     * vínculo vivo a la institución origen.
+     */
+    public function savePlantilla(MaintenanceScenario $scenario, MaintenancePartida $sourceIe, int $userId, string $nombre, ?string $descripcion): MaintenancePlantilla
+    {
+        if ($sourceIe->tipo !== 'ie') {
+            throw ValidationException::withMessages(['partida' => 'Solo se puede guardar como plantilla una fila de institución.']);
+        }
+
+        $byParent = MaintenancePartida::query()
+            ->where('documento_id', $sourceIe->documento_id)
+            ->orderBy('nivel')
+            ->orderBy('sort_order')
+            ->get()
+            ->groupBy('parent_public_id');
+
+        $refByPublicId = [$sourceIe->public_id => 'root'];
+        $nodes = [];
+        $queue = [$sourceIe->public_id];
+        while ($queue !== []) {
+            $parentId = array_shift($queue);
+            foreach ($byParent->get($parentId, []) as $child) {
+                $cot = null;
+                if ($child->tipo === 'partida') {
+                    $cot = MaintenanceMoPartida::query()
+                        ->where('escenario_id', $scenario->id)
+                        ->where('partida_public_id', $child->public_id)
+                        ->first();
+                }
+                $nodes[] = [
+                    'tipo' => $child->tipo,
+                    'item' => $child->item,
+                    'item_entero' => $child->item_entero,
+                    'nivel' => $child->nivel,
+                    'descripcion' => $child->descripcion,
+                    'unidad' => $child->unidad,
+                    'metrado' => $child->metrado,
+                    'precio_unitario' => $child->precio_unitario,
+                    'parcial' => $child->parcial,
+                    'costos_acu' => $child->costos_acu,
+                    'sort_order' => $child->sort_order,
+                    'parent_ref' => $refByPublicId[$child->parent_public_id] ?? 'root',
+                    'cot_cantidad' => $cot?->cot_cantidad,
+                    'cot_precio' => $cot?->cot_precio,
+                ];
+                $refByPublicId[$child->public_id] = count($nodes) - 1;
+                $queue[] = $child->public_id;
+            }
+        }
+
+        return MaintenancePlantilla::create([
+            'user_id' => $userId,
+            'nombre' => $nombre,
+            'descripcion' => $descripcion,
+            'estructura' => $nodes,
+        ]);
+    }
+
+    /** @return array<int, array{id:int,nombre:string,descripcion:?string,created_at:?string}> */
+    public function listPlantillas(int $userId): array
+    {
+        return MaintenancePlantilla::query()
+            ->where('user_id', $userId)
+            ->latest()
+            ->get(['id', 'nombre', 'descripcion', 'created_at'])
+            ->map(fn (MaintenancePlantilla $p) => [
+                'id' => $p->id,
+                'nombre' => $p->nombre,
+                'descripcion' => $p->descripcion,
+                'created_at' => $p->created_at?->toIso8601String(),
+            ])
+            ->all();
+    }
+
+    /**
+     * Crea una institución nueva a partir de una plantilla guardada (ver savePlantilla). Mismas
+     * reglas que duplicateInstitucion: NO se aplica Presupuesto ni Parciales P.M.O, esos siempre
+     * arrancan vacíos para una institución nueva.
+     */
+    public function applyPlantilla(MaintenanceDocument $document, MaintenanceScenario $scenario, MaintenancePlantilla $plantilla, string $nombre): array
+    {
+        return $this->write($document, function () use ($document, $scenario, $plantilla, $nombre) {
+            $institucion = MaintenanceInstitution::create([
+                'documento_id' => $document->id,
+                'nombre' => $nombre,
+                'sort_order' => (int) MaintenanceInstitution::query()->where('documento_id', $document->id)->max('sort_order') + 1024,
+            ]);
+
+            $rootSortOrder = (int) MaintenancePartida::query()
+                ->where('documento_id', $document->id)
+                ->whereNull('parent_public_id')
+                ->max('sort_order');
+
+            $newRoot = MaintenancePartida::create([
+                'public_id' => (string) Str::ulid(),
+                'documento_id' => $document->id,
+                'parent_public_id' => null,
+                'institucion_id' => $institucion->id,
+                'tipo' => 'ie',
+                'item' => null,
+                'item_entero' => true,
+                'nivel' => 0,
+                'descripcion' => $nombre,
+                'sort_order' => $rootSortOrder + 1024,
+                'origen' => 'plantilla',
+            ]);
+
+            $publicIdByRef = ['root' => $newRoot->public_id];
+            foreach ($plantilla->estructura as $index => $node) {
+                $parentRef = $node['parent_ref'];
+                $clone = MaintenancePartida::create([
+                    'public_id' => (string) Str::ulid(),
+                    'documento_id' => $document->id,
+                    'parent_public_id' => $publicIdByRef[$parentRef] ?? $newRoot->public_id,
+                    'institucion_id' => $institucion->id,
+                    'tipo' => $node['tipo'],
+                    'item' => $node['item'],
+                    'item_entero' => $node['item_entero'],
+                    'nivel' => $node['nivel'],
+                    'descripcion' => $node['descripcion'],
+                    'unidad' => $node['unidad'],
+                    'metrado' => $node['metrado'],
+                    'precio_unitario' => $node['precio_unitario'],
+                    'parcial' => $node['parcial'],
+                    'costos_acu' => $node['costos_acu'],
+                    'sort_order' => $node['sort_order'],
+                    'origen' => 'plantilla',
+                ]);
+                $publicIdByRef[$index] = $clone->public_id;
+
+                if ($node['tipo'] === 'partida' && ($node['cot_cantidad'] !== null || $node['cot_precio'] !== null)) {
+                    MaintenanceMoPartida::create([
+                        'escenario_id' => $scenario->id,
+                        'partida_public_id' => $clone->public_id,
+                        'cot_cantidad' => $node['cot_cantidad'],
+                        'cot_precio' => $node['cot_precio'],
                     ]);
                 }
             }

@@ -37,6 +37,7 @@ use App\Http\Controllers\Mantenimiento\MaintenanceGgController;
 use App\Http\Controllers\Mantenimiento\MaintenanceImportController;
 use App\Http\Controllers\Mantenimiento\MaintenanceMatController;
 use App\Http\Controllers\Mantenimiento\MaintenanceMoController;
+use App\Http\Controllers\Mantenimiento\MaintenancePlantillaController;
 use App\Http\Controllers\Mantenimiento\MaintenanceResumenController;
 use App\Http\Controllers\Mantenimiento\MaintenanceScenarioController;
 use App\Http\Controllers\MetradoArquitecturaController;
@@ -310,6 +311,14 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
     Route::post('/{costoProject}/migrate', [CostoProjectController::class, 'runMigration'])->name('migrate');
     Route::put('/{costoProject}', [CostoProjectController::class, 'update'])->name('update');
 
+    // Plantillas de Mantenimiento: del usuario, no de un proyecto puntual — cada CostoProject
+    // tiene su propia base de tenant aislada, así que esto va fuera de SetCostosDatabase/
+    // {costoProject} para poder listarlas/borrarlas sin depender de un proyecto activo.
+    Route::prefix('/plantillas-mantenimiento')->name('plantillas-mantenimiento.')->group(function () {
+        Route::get('/', [MaintenancePlantillaController::class, 'index'])->name('index');
+        Route::delete('/{plantilla}', [MaintenancePlantillaController::class, 'destroy'])->name('destroy');
+    });
+
     // ─── Módulos dentro de un proyecto (con middleware de BD dinámica) ────
     Route::middleware([SetCostosDatabase::class])
         ->prefix('/{costoProject}/module')
@@ -346,6 +355,8 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
                         Route::patch('/partidas/{partidaId}', [MaintenanceMoController::class, 'updatePartida'])->name('partidas.update');
                         Route::delete('/partidas/{partidaId}', [MaintenanceMoController::class, 'destroyPartida'])->name('partidas.destroy');
                         Route::post('/partidas/{partidaId}/duplicar', [MaintenanceMoController::class, 'duplicateInstitucion'])->name('partidas.duplicate');
+                        Route::post('/partidas/{partidaId}/guardar-plantilla', [MaintenanceMoController::class, 'savePlantilla'])->name('partidas.plantilla.save');
+                        Route::post('/plantillas/{plantillaId}/aplicar', [MaintenanceMoController::class, 'applyPlantilla'])->name('plantillas.apply');
                         Route::post('/series', [MaintenanceMoController::class, 'storeSeries'])->name('series.store');
                         Route::patch('/series/{serieId}', [MaintenanceMoController::class, 'updateSeries'])->name('series.update');
                         Route::delete('/series/{serieId}', [MaintenanceMoController::class, 'destroySeries'])->name('series.destroy');

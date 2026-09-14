@@ -1,8 +1,9 @@
 import { router } from '@inertiajs/react';
-import { AlertTriangle, ChevronDown, ChevronRight, Copy, Download, Loader2, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Copy, Download, Loader2, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { money } from '../shared/format';
 import MoAddRowDialog from './MoAddRowDialog';
+import MoApplyPlantillaDialog from './MoApplyPlantillaDialog';
 import MoDescriptionCell from './MoDescriptionCell';
 import MoImportDialog from './MoImportDialog';
 import MoNumberCell from './MoNumberCell';
@@ -34,7 +35,7 @@ export default function MoSheet({ projectId, documentId, initial, imported, onRe
     const [payload, setPayload] = useState<MoPayload>(initial);
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const [busy, setBusy] = useState(false);
-    const [dialog, setDialog] = useState<'import' | 'add' | null>(null);
+    const [dialog, setDialog] = useState<'import' | 'add' | 'plantilla' | null>(null);
     const [addDefaults, setAddDefaults] = useState<{ parentId: string | null; tipo: 'ie' | 'bloque' | 'partida' } | null>(null);
     const [menu, setMenu] = useState<{ x: number; y: number; row: MoRow } | null>(null);
 
@@ -110,6 +111,25 @@ export default function MoSheet({ projectId, documentId, initial, imported, onRe
         void run(() => moApi.duplicateInstitucion(projectId, documentId, row.partida_id, nombre));
     };
 
+    // Guarda la estructura de una institución como plantilla reutilizable del usuario (no del
+    // proyecto): sirve para arrancar un documento NUEVO (u otra institución) con un avance en vez
+    // de partir de cero.
+    const saveAsPlantilla = async (row: MoRow) => {
+        const nombre = window.prompt('Nombre de la plantilla', row.descripcion)?.trim();
+        if (!nombre) return;
+        const descripcion = window.prompt('Descripción (opcional)')?.trim() || null;
+        setBusy(true);
+        try {
+            await moApi.savePlantilla(projectId, documentId, row.partida_id, nombre, descripcion);
+            window.alert(`Plantilla "${nombre}" guardada. Úsala desde "Institución desde plantilla" en cualquier documento.`);
+        } catch (error) {
+            const data = (error as { response?: { data?: { message?: string } } }).response?.data;
+            window.alert(data?.message ?? 'No se pudo guardar la plantilla.');
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const openAddDialog = (defaults: { parentId: string | null; tipo: 'ie' | 'bloque' | 'partida' } | null) => {
         setAddDefaults(defaults);
         setDialog('add');
@@ -167,6 +187,9 @@ export default function MoSheet({ projectId, documentId, initial, imported, onRe
                 <button type="button" onClick={() => setDialog('import')} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
                     <Download size={13} /> {imported ? 'Actualizar desde Presupuesto' : 'Importar desde Presupuesto'}
                 </button>
+                <button type="button" onClick={() => setDialog('plantilla')} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800" title="Crear una institución a partir de una plantilla guardada, en vez de empezar de cero">
+                    <Sparkles size={13} /> Institución desde plantilla
+                </button>
                 {busy && <Loader2 size={14} className="animate-spin text-blue-500" />}
             </div>
 
@@ -191,6 +214,14 @@ export default function MoSheet({ projectId, documentId, initial, imported, onRe
             {dialog === 'import' && (
                 <MoImportDialog projectId={projectId} documentId={documentId} onClose={() => setDialog(null)} onImported={() => router.reload()} />
             )}
+            {dialog === 'plantilla' && (
+                <MoApplyPlantillaDialog
+                    onClose={() => setDialog(null)}
+                    onSubmit={async (plantillaId, nombre) => {
+                        apply(await moApi.applyPlantilla(projectId, documentId, plantillaId, nombre));
+                    }}
+                />
+            )}
             {menu && (
                 <PartidaContextMenu
                     x={menu.x}
@@ -200,6 +231,7 @@ export default function MoSheet({ projectId, documentId, initial, imported, onRe
                     onAddSibling={() => openAddDialog({ parentId: menu.row.parent_id, tipo: menu.row.tipo })}
                     onDelete={() => deleteRow(menu.row)}
                     onDuplicate={menu.row.tipo === 'ie' ? () => duplicateInstitucion(menu.row) : undefined}
+                    onSaveAsPlantilla={menu.row.tipo === 'ie' ? () => void saveAsPlantilla(menu.row) : undefined}
                 />
             )}
 

@@ -9,6 +9,7 @@ interface Props {
     onClose: () => void;
     canDelete?: boolean;
     onDuplicate?: () => void;
+    onSaveAsPlantilla?: () => void;
     onCopyMaterials?: () => void;
     onPasteMaterials?: () => void;
 }
@@ -24,10 +25,11 @@ export default function PartidaContextMenu({
     onClose,
     canDelete = true,
     onDuplicate,
+    onSaveAsPlantilla,
     onCopyMaterials,
     onPasteMaterials,
 }: Props) {
-    const extraItems = [onDuplicate, onCopyMaterials, onPasteMaterials].filter(Boolean).length;
+    const extraItems = [onDuplicate, onSaveAsPlantilla, onCopyMaterials, onPasteMaterials].filter(Boolean).length;
     const menuHeight = 116 + extraItems * 32;
     const ref = useRef<HTMLDivElement>(null);
 
@@ -71,6 +73,7 @@ export default function PartidaContextMenu({
             {item('+ Agregar hijo', onAddChild)}
             {item('+ Agregar al mismo nivel', onAddSibling)}
             {onDuplicate && item('Duplicar institución', onDuplicate)}
+            {onSaveAsPlantilla && item('Guardar como plantilla', onSaveAsPlantilla)}
             {onCopyMaterials && item('Copiar materiales de esta partida', onCopyMaterials)}
             {onPasteMaterials && item('Pegar materiales aquí', onPasteMaterials)}
             {canDelete && item('Eliminar', onDelete, true)}
