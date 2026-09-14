@@ -8,12 +8,13 @@ interface Props {
     onDelete: () => void;
     onClose: () => void;
     canDelete?: boolean;
+    onDuplicate?: () => void;
 }
 
 const MENU_WIDTH = 208;
-const MENU_HEIGHT = 116;
 
-export default function PartidaContextMenu({ x, y, onAddChild, onAddSibling, onDelete, onClose, canDelete = true }: Props) {
+export default function PartidaContextMenu({ x, y, onAddChild, onAddSibling, onDelete, onClose, canDelete = true, onDuplicate }: Props) {
+    const menuHeight = 116 + (onDuplicate ? 32 : 0);
     const ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -45,7 +46,7 @@ export default function PartidaContextMenu({ x, y, onAddChild, onAddSibling, onD
     );
 
     const left = Math.min(x, window.innerWidth - MENU_WIDTH - 8);
-    const top = Math.min(y, window.innerHeight - MENU_HEIGHT - 8);
+    const top = Math.min(y, window.innerHeight - menuHeight - 8);
 
     return (
         <div
@@ -55,6 +56,7 @@ export default function PartidaContextMenu({ x, y, onAddChild, onAddSibling, onD
         >
             {item('+ Agregar hijo', onAddChild)}
             {item('+ Agregar al mismo nivel', onAddSibling)}
+            {onDuplicate && item('Duplicar institución', onDuplicate)}
             {canDelete && item('Eliminar', onDelete, true)}
         </div>
     );

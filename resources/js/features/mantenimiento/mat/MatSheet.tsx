@@ -17,7 +17,7 @@ interface Props {
     projectId: number;
     documentId: string;
     initial: MatPayload;
-    onRevision: (revision: number) => void;
+    onRevision: (revision: number, payload: MatPayload) => void;
 }
 
 // Línea divisoria de cada "recorte" (sección) de la hoja.
@@ -52,7 +52,7 @@ export default function MatSheet({ projectId, documentId, initial, onRevision }:
 
     const apply = (res: MatResponse) => {
         setPayload(res.mat);
-        onRevision(res.revision);
+        onRevision(res.revision, res.mat);
     };
 
     const run = async (task: () => Promise<MatResponse>) => {

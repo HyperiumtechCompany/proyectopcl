@@ -2,6 +2,7 @@
 
 use App\Models\CostoProject;
 use App\Models\Mantenimiento\MaintenanceDocument;
+use App\Models\Mantenimiento\MaintenanceMoPartida;
 use App\Models\Mantenimiento\MaintenanceMoSeries;
 use App\Models\Mantenimiento\MaintenancePartida;
 use App\Models\Mantenimiento\MaintenanceScenario;
@@ -309,4 +310,47 @@ it('computes FINAL as the sum of every P.M.O parcial and flags a mismatch agains
         ->and($ieRow['saldo'])->toBe('200.00')
         ->and($ieRow['descuadra'])->toBeTrue()
         ->and($result['mo']['totales']['descuadres'])->toBe(1);
+});
+
+it('duplicates an institución copying structure and values, but never presupuesto or parciales P.M.O', function () {
+    $document = moDocument();
+    importWbs($document);
+    $mo = app(MaintenanceMoService::class);
+    $scenarios = app(MaintenanceScenarioService::class);
+    $active = fn () => $scenarios->activeFor($document->refresh(), 'mo');
+
+    $ie = MaintenancePartida::query()->where('tipo', 'ie')->firstOrFail();
+    $piso = MaintenancePartida::query()->where('item', '01.01.01')->firstOrFail();
+    $mo->updatePartida($document->refresh(), $active(), $ie, ['presupuesto' => '5000']);
+    $mo->updatePartida($document->refresh(), $active(), $piso, ['cot_cantidad' => '94.8', 'cot_precio' => '18']);
+
+    $s1 = $mo->addSeries($document->refresh(), $active(), null, 'Adelanto');
+    $serie1 = MaintenanceMoSeries::query()->where('public_id', $s1['mo']['series'][0]['id'])->firstOrFail();
+    $mo->setParcial($document->refresh(), $serie1, $piso, '500');
+
+    $result = $mo->duplicateInstitucion($document->refresh(), $active(), $ie->refresh(), 'Copia I.E.');
+
+    expect(MaintenancePartida::query()->where('tipo', 'ie')->count())->toBe(2)
+        ->and(MaintenancePartida::query()->count())->toBe(8); // 4 originales + 4 clonadas
+
+    $clonedIe = MaintenancePartida::query()->where('tipo', 'ie')->where('descripcion', 'Copia I.E.')->firstOrFail();
+    $clonedPiso = MaintenancePartida::query()->where('institucion_id', $clonedIe->institucion_id)->where('item', '01.01.01')->firstOrFail();
+
+    expect($clonedPiso->metrado)->toEqual($piso->metrado)
+        ->and($clonedPiso->costos_acu)->toEqual($piso->costos_acu) // P.U. Expediente Técnico (mano_obra) sí se copia
+        ->and($clonedPiso->unidad)->toBe($piso->unidad);
+
+    $clonedCot = MaintenanceMoPartida::query()->where('escenario_id', $active()->id)->where('partida_public_id', $clonedPiso->public_id)->firstOrFail();
+    expect((float) $clonedCot->cot_cantidad)->toBe(94.8)
+        ->and((float) $clonedCot->cot_precio)->toBe(18.0);
+
+    // Presupuesto es la bolsa financiera propia de cada institución: nunca se copia.
+    expect(MaintenanceMoPartida::query()->where('escenario_id', $active()->id)->where('partida_public_id', $clonedIe->public_id)->exists())->toBeFalse();
+
+    // Los Parciales P.M.O (pagos ya hechos) tampoco se copian: FINAL de la institución nueva arranca en 0.
+    // Presupuesto muestra el rollup "sugerido" (igual que cualquier institución sin valor manual
+    // propio), no un valor heredado de la institución origen.
+    $clonedIeRow = collect($result['mo']['rows'])->firstWhere('partida_id', $clonedIe->public_id);
+    expect($clonedIeRow['final'])->toBe('0.00')
+        ->and($clonedIeRow['presupuesto_source'])->toBe('sugerido');
 });

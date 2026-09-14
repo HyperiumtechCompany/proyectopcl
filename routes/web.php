@@ -337,12 +337,15 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
                     Route::post('/escenarios', [MaintenanceScenarioController::class, 'store'])->name('escenarios.store');
                     Route::patch('/escenarios/{scenarioId}/activar', [MaintenanceScenarioController::class, 'activate'])->name('escenarios.activate');
 
+                    Route::get('/resumen', [MaintenanceResumenController::class, 'show'])->name('resumen.show');
                     Route::patch('/resumen/parametros', [MaintenanceResumenController::class, 'updateParametros'])->name('resumen.parametros.update');
 
                     Route::prefix('/mo')->name('mo.')->group(function () {
+                        Route::get('/', [MaintenanceMoController::class, 'show'])->name('show');
                         Route::post('/partidas', [MaintenanceMoController::class, 'storePartida'])->name('partidas.store');
                         Route::patch('/partidas/{partidaId}', [MaintenanceMoController::class, 'updatePartida'])->name('partidas.update');
                         Route::delete('/partidas/{partidaId}', [MaintenanceMoController::class, 'destroyPartida'])->name('partidas.destroy');
+                        Route::post('/partidas/{partidaId}/duplicar', [MaintenanceMoController::class, 'duplicateInstitucion'])->name('partidas.duplicate');
                         Route::post('/series', [MaintenanceMoController::class, 'storeSeries'])->name('series.store');
                         Route::patch('/series/{serieId}', [MaintenanceMoController::class, 'updateSeries'])->name('series.update');
                         Route::delete('/series/{serieId}', [MaintenanceMoController::class, 'destroySeries'])->name('series.destroy');
@@ -362,6 +365,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
                     });
 
                     Route::prefix('/gg')->name('gg.')->group(function () {
+                        Route::get('/', [MaintenanceGgController::class, 'show'])->name('show');
                         Route::post('/plantilla', [MaintenanceGgController::class, 'seedPlantilla'])->name('plantilla.seed');
                         Route::post('/lineas', [MaintenanceGgController::class, 'storeLinea'])->name('lineas.store');
                         Route::patch('/lineas/{lineaId}', [MaintenanceGgController::class, 'updateLinea'])->name('lineas.update');

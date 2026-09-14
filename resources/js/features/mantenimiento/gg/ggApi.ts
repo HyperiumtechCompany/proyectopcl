@@ -11,6 +11,8 @@ async function send<T>(def: { url: string; method: string }, data?: unknown): Pr
 type Decimal = string | null;
 
 export const ggApi = {
+    refresh: (projectId: number, documentId: string) => send<GgResponse>(ggRoutes.show.get([projectId, documentId])),
+
     seedPlantilla: (projectId: number, documentId: string) =>
         send<GgResponse>(ggRoutes.seedPlantilla.post([projectId, documentId])),
 

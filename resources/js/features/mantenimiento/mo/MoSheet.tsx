@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { AlertTriangle, ChevronDown, ChevronRight, Download, Loader2, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Copy, Download, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { money } from '../shared/format';
 import MoAddRowDialog from './MoAddRowDialog';
@@ -18,7 +18,7 @@ interface Props {
     initial: MoPayload;
     imported: boolean;
     presupuestoDisponible: boolean;
-    onRevision: (revision: number) => void;
+    onRevision: (revision: number, payload: MoPayload) => void;
 }
 
 // Final y Saldo (el resultado de la fila) quedan congelados a la derecha: los Parciales P.M.O.
@@ -40,7 +40,7 @@ export default function MoSheet({ projectId, documentId, initial, imported, onRe
 
     const apply = (res: MoResponse) => {
         setPayload(res.mo);
-        onRevision(res.revision);
+        onRevision(res.revision, res.mo);
     };
 
     const run = async (task: () => Promise<MoResponse>) => {
@@ -100,6 +100,14 @@ export default function MoSheet({ projectId, documentId, initial, imported, onRe
 
     const deleteRow = (row: MoRow) => {
         if (window.confirm(`¿Eliminar "${row.descripcion}"?`)) void run(() => moApi.deletePartida(projectId, documentId, row.partida_id));
+    };
+
+    // Clona toda la estructura de bloques/partidas de una institución (con metrados y precios)
+    // bajo una institución nueva, para no rearmarla a mano cuando varias son similares.
+    const duplicateInstitucion = (row: MoRow) => {
+        const nombre = window.prompt('Nombre de la nueva institución', `${row.descripcion} (copia)`)?.trim();
+        if (!nombre) return;
+        void run(() => moApi.duplicateInstitucion(projectId, documentId, row.partida_id, nombre));
     };
 
     const openAddDialog = (defaults: { parentId: string | null; tipo: 'ie' | 'bloque' | 'partida' } | null) => {
@@ -191,6 +199,7 @@ export default function MoSheet({ projectId, documentId, initial, imported, onRe
                     onAddChild={() => openAddDialog({ parentId: menu.row.partida_id, tipo: menu.row.tipo === 'ie' ? 'bloque' : 'partida' })}
                     onAddSibling={() => openAddDialog({ parentId: menu.row.parent_id, tipo: menu.row.tipo })}
                     onDelete={() => deleteRow(menu.row)}
+                    onDuplicate={menu.row.tipo === 'ie' ? () => duplicateInstitucion(menu.row) : undefined}
                 />
             )}
 
@@ -292,6 +301,15 @@ export default function MoSheet({ projectId, documentId, initial, imported, onRe
                                             <td className="py-1.5 pr-2 font-semibold" colSpan={8}>
                                                 <span className="flex items-start gap-2">
                                                     <MoDescriptionCell value={row.descripcion} editable className="font-semibold text-white" onCommit={(v) => void patch(row.partida_id, 'descripcion', v)} />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => duplicateInstitucion(row)}
+                                                        className="opacity-0 transition group-hover:opacity-100 hover:text-blue-300"
+                                                        aria-label="Duplicar institución"
+                                                        title="Duplicar institución (copia bloques, partidas, metrados y precios)"
+                                                    >
+                                                        <Copy size={12} />
+                                                    </button>
                                                     {del}
                                                 </span>
                                             </td>

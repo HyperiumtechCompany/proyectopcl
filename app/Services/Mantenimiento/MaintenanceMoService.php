@@ -218,6 +218,111 @@ class MaintenanceMoService
         });
     }
 
+    /**
+     * Clona una institución completa (bloques/partidas, con ítem/descripción/unidad/metrado/P.U.
+     * Expediente Técnico y Cotizado del escenario activo) bajo una institución nueva, para no
+     * tener que rearmar a mano la estructura cuando varias instituciones de un Programa son
+     * similares. NO copia Presupuesto (bolsa financiera propia de cada institución, debe partir
+     * vacía) ni los Parciales P.M.O (pagos reales ya hechos). Como MAT comparte el mismo árbol de
+     * partidas, la institución nueva aparecerá también ahí, pero sin materiales — eso queda para
+     * que el usuario los agregue con datos reales de esa institución.
+     */
+    public function duplicateInstitucion(MaintenanceDocument $document, MaintenanceScenario $scenario, MaintenancePartida $sourceIe, string $nombre): array
+    {
+        if ($sourceIe->tipo !== 'ie') {
+            throw ValidationException::withMessages(['partida' => 'Solo se puede duplicar una fila de institución.']);
+        }
+
+        return $this->write($document, function () use ($document, $scenario, $sourceIe, $nombre) {
+            $institucion = MaintenanceInstitution::create([
+                'documento_id' => $document->id,
+                'nombre' => $nombre,
+                'sort_order' => (int) MaintenanceInstitution::query()->where('documento_id', $document->id)->max('sort_order') + 1024,
+            ]);
+
+            $rootSortOrder = (int) MaintenancePartida::query()
+                ->where('documento_id', $document->id)
+                ->whereNull('parent_public_id')
+                ->max('sort_order');
+
+            $newRoot = MaintenancePartida::create([
+                'public_id' => (string) Str::ulid(),
+                'documento_id' => $document->id,
+                'parent_public_id' => null,
+                'institucion_id' => $institucion->id,
+                'tipo' => 'ie',
+                'item' => null,
+                'item_entero' => true,
+                'nivel' => 0,
+                'descripcion' => $nombre,
+                'sort_order' => $rootSortOrder + 1024,
+                'origen' => 'duplicado',
+            ]);
+
+            $idMap = [$sourceIe->public_id => $newRoot->public_id];
+
+            // Recorrido por parent_public_id (no por institucion_id): la importación de WBS deja
+            // institucion_id NULO en la propia fila 'ie' (solo lo rellena en sus descendientes),
+            // a diferencia de addPartida() que sí lo fija en la raíz — filtrar por institucion_id
+            // se quedaría sin descendientes para instituciones importadas. Caminar el árbol por
+            // padre/hijo funciona igual sin importar cómo se creó la institución.
+            $byParent = MaintenancePartida::query()
+                ->where('documento_id', $document->id)
+                ->orderBy('nivel')
+                ->orderBy('sort_order')
+                ->get()
+                ->groupBy('parent_public_id');
+
+            $descendants = [];
+            $queue = [$sourceIe->public_id];
+            while ($queue !== []) {
+                $parentId = array_shift($queue);
+                foreach ($byParent->get($parentId, []) as $child) {
+                    $descendants[] = $child;
+                    $queue[] = $child->public_id;
+                }
+            }
+
+            foreach ($descendants as $node) {
+                $clone = MaintenancePartida::create([
+                    'public_id' => (string) Str::ulid(),
+                    'documento_id' => $document->id,
+                    'parent_public_id' => $idMap[$node->parent_public_id] ?? null,
+                    'institucion_id' => $institucion->id,
+                    'tipo' => $node->tipo,
+                    'item' => $node->item,
+                    'item_entero' => $node->item_entero,
+                    'nivel' => $node->nivel,
+                    'descripcion' => $node->descripcion,
+                    'unidad' => $node->unidad,
+                    'metrado' => $node->metrado,
+                    'precio_unitario' => $node->precio_unitario,
+                    'parcial' => $node->parcial,
+                    'costos_acu' => $node->costos_acu,
+                    'sort_order' => $node->sort_order,
+                    'origen' => 'duplicado',
+                ]);
+                $idMap[$node->public_id] = $clone->public_id;
+
+                if ($node->tipo !== 'partida') {
+                    continue;
+                }
+                $sourceMo = MaintenanceMoPartida::query()
+                    ->where('escenario_id', $scenario->id)
+                    ->where('partida_public_id', $node->public_id)
+                    ->first();
+                if ($sourceMo && ($sourceMo->cot_cantidad !== null || $sourceMo->cot_precio !== null)) {
+                    MaintenanceMoPartida::create([
+                        'escenario_id' => $scenario->id,
+                        'partida_public_id' => $clone->public_id,
+                        'cot_cantidad' => $sourceMo->cot_cantidad,
+                        'cot_precio' => $sourceMo->cot_precio,
+                    ]);
+                }
+            }
+        });
+    }
+
     public function deletePartida(MaintenanceDocument $document, MaintenancePartida $partida): array
     {
         return $this->write($document, function () use ($partida) {

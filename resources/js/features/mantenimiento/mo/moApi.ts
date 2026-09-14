@@ -29,6 +29,8 @@ export interface NewPartida {
 }
 
 export const moApi = {
+    refresh: (projectId: number, documentId: string) => send<MoResponse>(moRoutes.show.get([projectId, documentId])),
+
     importPreview: (projectId: number, documentId: string) =>
         send<ImportPreview>(importRoutes.preview.get([projectId, documentId])),
 
@@ -37,6 +39,9 @@ export const moApi = {
 
     deletePartida: (projectId: number, documentId: string, partidaId: string) =>
         send<MoResponse>(moRoutes.destroyPartida.delete([projectId, documentId, partidaId])),
+
+    duplicateInstitucion: (projectId: number, documentId: string, partidaId: string, nombre: string) =>
+        send<MoResponse>(moRoutes.duplicateInstitucion.post([projectId, documentId, partidaId]), { nombre }),
 
     runImport: (projectId: number, documentId: string, sourceHash: string) =>
         send<{ revision: number; summary: Record<string, number> }>(

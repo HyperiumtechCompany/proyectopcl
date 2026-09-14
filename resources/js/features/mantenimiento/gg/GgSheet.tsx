@@ -13,7 +13,7 @@ interface Props {
     projectId: number;
     documentId: string;
     initial: GgPayload;
-    onRevision: (revision: number) => void;
+    onRevision: (revision: number, payload: GgPayload) => void;
 }
 
 const DIVIDER = 'border-l-2 border-slate-300 dark:border-slate-700';
@@ -34,7 +34,7 @@ export default function GgSheet({ projectId, documentId, initial, onRevision }: 
 
     const apply = (res: GgResponse) => {
         setPayload(res.gg);
-        onRevision(res.revision);
+        onRevision(res.revision, res.gg);
     };
 
     const run = async (task: () => Promise<GgResponse>) => {

@@ -22,6 +22,16 @@ class MaintenanceGgController extends MaintenanceController
         private readonly MaintenanceScenarioService $scenarios,
     ) {}
 
+    // Refresco liviano al entrar a la pestaña GG (mismo motivo que MaintenanceMoController::show).
+    public function show(Request $request, CostoProject $costoProject, string $documentId): JsonResponse
+    {
+        $this->authorizeProject($request, $costoProject);
+        $document = $this->document($documentId);
+        $scenario = $this->scenarios->activeFor($document, 'gg');
+
+        return response()->json(['revision' => (int) $document->revision, 'gg' => $this->gg->payload($document, $scenario)]);
+    }
+
     public function seedPlantilla(Request $request, CostoProject $costoProject, string $documentId): JsonResponse
     {
         $this->authorizeProject($request, $costoProject);

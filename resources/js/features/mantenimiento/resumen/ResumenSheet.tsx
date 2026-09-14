@@ -9,7 +9,7 @@ interface Props {
     projectId: number;
     documentId: string;
     initial: ResumenPayload;
-    onRevision: (revision: number) => void;
+    onRevision: (revision: number, payload: ResumenPayload) => void;
 }
 
 type DeepPartial<T> = T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
@@ -34,7 +34,7 @@ export default function ResumenSheet({ projectId, documentId, initial, onRevisio
 
     const apply = (res: ResumenResponse) => {
         setPayload(res.resumen);
-        onRevision(res.revision);
+        onRevision(res.revision, res.resumen);
     };
 
     const run = async (task: () => Promise<ResumenResponse>) => {

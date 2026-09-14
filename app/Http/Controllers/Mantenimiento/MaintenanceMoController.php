@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Mantenimiento;
 
+use App\Http\Requests\Mantenimiento\DuplicateInstitucionRequest;
 use App\Http\Requests\Mantenimiento\SetMoParcialRequest;
 use App\Http\Requests\Mantenimiento\StoreMoPartidaRequest;
 use App\Http\Requests\Mantenimiento\StoreMoSeriesRequest;
@@ -19,6 +20,18 @@ class MaintenanceMoController extends MaintenanceController
         private readonly MaintenanceMoService $mo,
         private readonly MaintenanceScenarioService $scenarios,
     ) {}
+
+    // Refresco liviano al entrar a la pestaña MO: el árbol de partidas se comparte con MAT, así
+    // que un cambio estructural hecho desde MAT (o Duplicar institución) no se refleja en MO
+    // hasta que se vuelve a pedir el payload — evita depender de un reload de página completa.
+    public function show(Request $request, CostoProject $costoProject, string $documentId): JsonResponse
+    {
+        $this->authorizeProject($request, $costoProject);
+        $document = $this->document($documentId);
+        $scenario = $this->scenarios->activeFor($document, 'mo');
+
+        return response()->json(['revision' => (int) $document->revision, 'mo' => $this->mo->payload($document, $scenario)]);
+    }
 
     public function updatePartida(UpdateMoPartidaRequest $request, CostoProject $costoProject, string $documentId, string $partidaId): JsonResponse
     {
@@ -46,6 +59,16 @@ class MaintenanceMoController extends MaintenanceController
         $document = $this->document($documentId);
 
         return response()->json($this->mo->deletePartida($document, $this->partida($document, $partidaId)));
+    }
+
+    public function duplicateInstitucion(DuplicateInstitucionRequest $request, CostoProject $costoProject, string $documentId, string $partidaId): JsonResponse
+    {
+        $this->authorizeProject($request, $costoProject);
+        $document = $this->document($documentId);
+        $scenario = $this->scenarios->activeFor($document, 'mo');
+        $sourceIe = $this->partida($document, $partidaId);
+
+        return response()->json($this->mo->duplicateInstitucion($document, $scenario, $sourceIe, $request->string('nombre')->toString()), 201);
     }
 
     public function storeSeries(StoreMoSeriesRequest $request, CostoProject $costoProject, string $documentId): JsonResponse

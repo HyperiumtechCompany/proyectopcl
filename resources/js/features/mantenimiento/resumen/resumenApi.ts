@@ -10,6 +10,8 @@ async function send<T>(def: { url: string; method: string }, data?: unknown): Pr
 }
 
 export const resumenApi = {
+    refresh: (projectId: number, documentId: string) => send<ResumenResponse>(resumenRoutes.show.get([projectId, documentId])),
+
     updateParametros: (projectId: number, documentId: string, data: DeepPartial<ResumenParametros>) =>
         send<ResumenResponse>(resumenRoutes.updateParametros.patch([projectId, documentId]), data),
 };
