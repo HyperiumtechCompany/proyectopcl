@@ -7,27 +7,33 @@ import type {
 // UTILIDADES
 
 /**
- * Retorna true si el periodo.key cae dentro del rango [startDate, endDate]
- * de la tarea. Soporta tanto claves "YYYY-MM" como "YYYY-MM-DD".
+ * Retorna true si el periodo (identificado por su key, y opcionalmente su
+ * fin real) cae dentro del rango [startDate, endDate] de la tarea. Soporta
+ * tanto claves "YYYY-MM" (modo calendario) como "YYYY-MM-DD" (modo 30 días).
  */
 const periodoEnRango = (
     periodoKey: string,
     startDate:  string | null | undefined,
     endDate:    string | null | undefined,
+    periodoEnd?: string | null,
 ): boolean => {
     if (!startDate || !endDate) return true; // Sin fechas → no bloquear
 
     // Normalizar clave a fecha comparable
     const keyDate = periodoKey.length === 7 ? `${periodoKey}-01` : periodoKey;
 
-    // Fin del período
-    const keyEnd = periodoKey.length === 7
-        ? `${periodoKey}-31`
-        : (() => {
-            const d = new Date(keyDate);
-            d.setDate(d.getDate() + 29);
-            return d.toISOString().slice(0, 10);
-        })();
+    // Fin del período: usa el 'end' real del periodo cuando está disponible
+    // (los periodos de modo 30 días tienen duración variable — el primero es
+    // un tramo corto hasta fin de mes); si no, cae al viejo supuesto +29 días
+    // solo por compatibilidad con periodos guardados antes de que existiera 'end'.
+    const keyEnd = periodoEnd
+        ?? (periodoKey.length === 7
+            ? `${periodoKey}-31`
+            : (() => {
+                const d = new Date(keyDate);
+                d.setDate(d.getDate() + 29);
+                return d.toISOString().slice(0, 10);
+            })());
 
     return keyDate <= endDate && keyEnd >= startDate;
 };
@@ -58,7 +64,7 @@ const redistribuirGauss = (
 ): Record<string, DistribucionMes> => {
     const nuevaDist = { ...item.distribucion };
     const periodosActivos = periodos.filter(p =>
-        periodoEnRango(p.key, item.start_date, item.end_date)
+        periodoEnRango(p.key, item.start_date, item.end_date, p.end)
     );
 
     if (periodosActivos.length === 0 || item.parcial <= 0) return nuevaDist;
@@ -89,7 +95,7 @@ const redistribuirGauss = (
 
     // Poner a 0 los períodos fuera de rango
     periodos.forEach(p => {
-        if (!periodoEnRango(p.key, item.start_date, item.end_date)) {
+        if (!periodoEnRango(p.key, item.start_date, item.end_date, p.end)) {
             nuevaDist[p.key] = { monto: 0, porcentaje: 0 };
         }
     });
@@ -136,10 +142,12 @@ export const useValorizadoLogic = (
         periodoKey: string,
         nuevoMonto: number,
     ) => {
+        const periodoEnd = periodos.find(p => p.key === periodoKey)?.end;
+
         setItems(prev => prev.map(item => {
             if (item.id !== itemId) return item;
 
-            if (!periodoEnRango(periodoKey, item.start_date, item.end_date)) return item;
+            if (!periodoEnRango(periodoKey, item.start_date, item.end_date, periodoEnd)) return item;
 
             const monto     = Math.max(0, nuevoMonto);
             const nuevaDist = { ...item.distribucion };
@@ -149,14 +157,14 @@ export const useValorizadoLogic = (
             };
             return { ...item, distribucion: nuevaDist };
         }));
-    }, []);
+    }, [periodos]);
 
     const redistribuirItem = useCallback((itemId: number | string) => {
         setItems(prev => prev.map(item => {
             if (item.id !== itemId) return item;
 
             const periodosActivos = periodos.filter(p =>
-                periodoEnRango(p.key, item.start_date, item.end_date)
+                periodoEnRango(p.key, item.start_date, item.end_date, p.end)
             );
             const numMeses = periodosActivos.length;
             if (numMeses === 0 || item.parcial <= 0) return item;
@@ -303,7 +311,10 @@ export const useValorizadoLogic = (
     const isPeriodoBloqueado = useCallback((
         item:       ItemValorizado,
         periodoKey: string,
-    ): boolean => !periodoEnRango(periodoKey, item.start_date, item.end_date), []);
+    ): boolean => {
+        const periodoEnd = periodos.find(p => p.key === periodoKey)?.end;
+        return !periodoEnRango(periodoKey, item.start_date, item.end_date, periodoEnd);
+    }, [periodos]);
 
     return {
         // Estado

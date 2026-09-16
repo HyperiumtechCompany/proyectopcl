@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\CostoProject;
 use App\Services\CostoDatabaseService;
+use App\Services\CronogramaEstadoService;
+use App\Services\CronogramaPeriodosService;
+use App\Services\PresupuestoJerarquiaService;
 use Carbon\Carbon;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -17,8 +19,6 @@ use Inertia\Inertia;
 
 class CronoValorizadoController extends Controller
 {
-    private const MAX_PERIODOS = 30;
-
     // ─────────────────────────────────────────────────────────────────────────
     // CONSTANTES de modo de cálculo
     // ─────────────────────────────────────────────────────────────────────────
@@ -26,7 +26,12 @@ class CronoValorizadoController extends Controller
 
     const MODO_30_DIAS = '30dias';     // Bloques exactos de 30 días (Regla de Inicialización)
 
-    public function __construct(private readonly CostoDatabaseService $dbService) {}
+    public function __construct(
+        private readonly CostoDatabaseService $dbService,
+        private readonly CronogramaPeriodosService $periodosService,
+        private readonly PresupuestoJerarquiaService $jerarquiaService,
+        private readonly CronogramaEstadoService $estadoService,
+    ) {}
 
     // ─────────────────────────────────────────────────────────────────────────
     // INDEX — Cruza Cronograma General + presupuesto_general para calcular el valorizado
@@ -61,13 +66,7 @@ class CronoValorizadoController extends Controller
                 ? Storage::url($costoProject->plantilla_logo_der)
                 : null,
         ];
-        $calendarConfigJson = DB::table('cronogramas')
-            ->where('project_id', (string) $projectId)
-            ->value('config_json');
-        $calendarConfig = $calendarConfigJson ? json_decode($calendarConfigJson, true) : [];
-        $calendarSettings = is_array($calendarConfig['calendar_settings'] ?? null)
-            ? $calendarConfig['calendar_settings']
-            : null;
+        $calendarSettings = $this->periodosService->fetchCalendarSettings($projectId);
 
         // ── 1. Leer presupuesto_general (TODAS las partidas con metrado > 0) ──
         $presupuesto = DB::connection('costos_tenant')
@@ -84,24 +83,7 @@ class CronoValorizadoController extends Controller
         // filas de grupo con descripcion vacía (el nombre real vive en
         // cronograma_general tras el merge de Delphin) → se fusionan las dos
         // fuentes y NO se filtra: una partida sin nombre igual debe listarse.
-        $descPresupuesto = DB::connection('costos_tenant')
-            ->table('presupuesto_general')
-            ->where('presupuesto_id', $presupuestoId)
-            ->whereNull('deleted_at')
-            ->orderBy('item_order')
-            ->get(['partida', 'descripcion'])
-            ->mapWithKeys(fn ($p) => [trim($p->partida ?? '') => trim((string) ($p->descripcion ?? ''))]);
-
-        $descCronograma = DB::connection('costos_tenant')
-            ->table('cronograma_general')
-            ->where('presupuesto_id', $presupuestoId)
-            ->orderBy('item_order')
-            ->get(['partida', 'descripcion'])
-            ->mapWithKeys(fn ($c) => [trim($c->partida ?? '') => trim((string) ($c->descripcion ?? ''))]);
-
-        $jerarquiaPresupuesto = $descCronograma
-            ->merge($descPresupuesto->filter(fn ($d) => $d !== '')) // presupuesto pisa solo si tiene nombre
-            ->filter(fn ($descripcion, $partida) => $partida !== '');
+        $jerarquiaPresupuesto = $this->jerarquiaService->resolve($presupuestoId);
 
         if ($presupuesto->isEmpty()) {
             return Inertia::render('costos/cronogramas/valorizado/CronogramaValorizado', [
@@ -120,6 +102,7 @@ class CronoValorizadoController extends Controller
                 'materialesResumen' => $this->materialesResumenVacio(),
                 'projectData' => $projectData,
                 'finDefaults' => $finDefaults,
+                'estado' => $this->estadoService->resumen($presupuestoId),
             ]);
         }
 
@@ -136,31 +119,22 @@ class CronoValorizadoController extends Controller
             fn ($c) => ! empty($c->fecha_inicio) && ! empty($c->fecha_fin)
         );
 
-        if (! empty($calendarSettings['projectStart']) && ! empty($calendarSettings['projectEnd'])) {
-            $rangoInicio = Carbon::parse($calendarSettings['projectStart'])->startOfDay();
-            $rangoFin = Carbon::parse($calendarSettings['projectEnd'])->startOfDay();
-        } elseif ($fechasProgramadas->isNotEmpty()) {
-            $rangoInicio = Carbon::parse($fechasProgramadas->min('fecha_inicio'))->startOfDay();
-            $rangoFin = Carbon::parse($fechasProgramadas->max('fecha_fin'))->startOfDay();
-        } else {
-            $rangoInicio = $costoProject->fecha_inicio
-                ? Carbon::parse($costoProject->fecha_inicio)->startOfDay()
-                : now()->startOfDay();
-            $rangoFin = $costoProject->fecha_fin
-                ? Carbon::parse($costoProject->fecha_fin)->startOfDay()
-                : $rangoInicio->copy()->addMonths(5);
-        }
-        $inicio = $rangoInicio->copy()->startOfMonth();
-        $fin = $rangoFin->copy()->endOfMonth();
+        [$rangoInicio, $rangoFin] = $this->periodosService->resolveRango($costoProject, $calendarSettings, $fechasProgramadas);
+
         $projectData['fecha_inicio'] = $rangoInicio->toDateString();
         $projectData['fecha_fin'] = $rangoFin->toDateString();
         $projectData['duracion_dias'] = $rangoInicio->diffInDays($rangoFin) + 1;
 
-        $periodos = $modoCalculo === self::MODO_30_DIAS
-            ? $this->generarPeriodos30Dias($inicio->toDateString(), $fin->toDateString())
-            : $this->generarPeriodosCalendario($inicio, $fin);
+        if ($modoCalculo === self::MODO_30_DIAS) {
+            // Fecha real de inicio en campo — independiente de projectStart/
+            // projectEnd (que sigue alimentando SOLO el modo calendario). Si
+            // aún no se configuró, cae al inicio programado como valor inicial.
+            $projectData['fecha_inicio_real_campo'] = ! empty($calendarSettings['fechaInicioRealCampo'])
+                ? Carbon::parse($calendarSettings['fechaInicioRealCampo'])->toDateString()
+                : $rangoInicio->toDateString();
+        }
 
-        $this->validarLimitePeriodos($periodos);
+        $periodos = $this->periodosService->generarPeriodos($modoCalculo, $rangoInicio, $rangoFin, $calendarSettings);
         $clavesPeriodos = array_column($periodos, 'key');
 
         // ── 3. Días por mes ──
@@ -314,6 +288,7 @@ class CronoValorizadoController extends Controller
             'materialesResumen' => $materialesResumen,
             'projectData' => $projectData,
             'finDefaults' => $finDefaults,
+            'estado' => $this->estadoService->resumen($presupuestoId),
         ]);
     }
 
@@ -369,6 +344,26 @@ class CronoValorizadoController extends Controller
                 DB::connection('costos_tenant')->table('cronograma_valorizado')->insert($chunk);
             }
 
+            // "Monto del Contrato Original" (Costo Directo + GG + Utilidad +
+            // IGV) ya calculado en el cliente (calcularResumenFinanciero.ts,
+            // el mismo que usa el Cronograma de Desembolsos) — se persiste
+            // acá para que CONTROL AVAN. FISICO y R.F.C. lo lean sin
+            // recalcular esa fórmula en PHP. Opcional: si el front no lo
+            // manda (versión vieja de la página, o guardado sin recalcular
+            // resumen financiero), no se toca lo que ya hubiera guardado.
+            $resumenFinanciero = $request->input('resumen_financiero');
+            if (is_array($resumenFinanciero) && isset($resumenFinanciero['total'])) {
+                DB::connection('costos_tenant')->table('resumen_financiero_valorizado')->updateOrInsert(
+                    ['presupuesto_id' => $presupuestoId],
+                    [
+                        'monto_contrato' => round((float) $resumenFinanciero['total'], 2),
+                        'distribucion_mensual' => json_encode($resumenFinanciero['distribucionMensual'] ?? []),
+                        'updated_at' => now(),
+                        'created_at' => now(),
+                    ]
+                );
+            }
+
             DB::connection('costos_tenant')->commit();
 
             return response()->json([
@@ -410,61 +405,47 @@ class CronoValorizadoController extends Controller
         ]);
     }
 
-    // =========================================================================
-    // GENERADORES DE PERÍODOS
-    // =========================================================================
-
-    /**
-     * REGLA DE EJECUCIÓN: Cortes al último día de cada mes calendario.
-     */
-    private function generarPeriodosCalendario($inicio, $fin): array
+    // ─────────────────────────────────────────────────────────────────────────
+    // GUARDA/ACTUALIZA la fecha real de inicio de ejecución en campo — solo
+    // afecta el modo 30 días; el modo calendario sigue leyendo
+    // calendar_settings.projectStart/projectEnd sin cambios.
+    // ─────────────────────────────────────────────────────────────────────────
+    public function saveInicioRealCampo(Request $request): JsonResponse
     {
-        if ($inicio instanceof CarbonImmutable) {
-            $inicio = Carbon::createFromImmutable($inicio);
-        }
-        if ($fin instanceof CarbonImmutable) {
-            $fin = Carbon::createFromImmutable($fin);
-        }
+        $validated = $request->validate([
+            'project_id' => 'required',
+            'fecha_inicio_real_campo' => 'required|date_format:Y-m-d',
+        ]);
 
-        $periodos = [];
-        $mesNum = 1;
-        $cursor = $inicio->copy()->startOfMonth();
+        // 'cronogramas' (config_json/calendar_settings) vive en la BD central,
+        // NO en la BD tenant del proyecto — misma tabla que ya usan
+        // CronogramaV2Controller::fetchCalendarSettings/saveCalendarSettings y
+        // el propio index() de este controlador (ambos con DB::table() sin
+        // ->connection('costos_tenant')). SetCostosDatabase ya validó dueño
+        // y existencia del proyecto antes de llegar aquí.
+        $projectId = (string) $validated['project_id'];
+        $existing = DB::table('cronogramas')
+            ->where('project_id', $projectId)
+            ->value('config_json');
 
-        while ($cursor->lte($fin)) {
-            $periodos[] = [
-                'label' => "MES {$mesNum}",
-                'labelCal' => ucfirst($cursor->translatedFormat('M Y')),
-                'key' => $cursor->format('Y-m'),
-            ];
-            $cursor->addMonth();
-            $mesNum++;
-        }
+        $config = $existing ? json_decode($existing, true) : [];
+        $config = is_array($config) ? $config : [];
+        $config['calendar_settings'] = is_array($config['calendar_settings'] ?? null)
+            ? $config['calendar_settings']
+            : [];
+        $config['calendar_settings']['fechaInicioRealCampo'] = $validated['fecha_inicio_real_campo'];
 
-        return $periodos;
-    }
-
-    /**
-     * REGLA DE INICIALIZACIÓN: Bloques exactos de 30 días.
-     */
-    private function generarPeriodos30Dias(string $startDate, string $endDate): array
-    {
-        $periodos = [];
-        $mesNum = 1;
-        $cursor = Carbon::parse($startDate);
-        $fin = Carbon::parse($endDate);
-
-        while ($cursor->lte($fin)) {
-            $finBloque = $cursor->copy()->addDays(29);
-            $periodos[] = [
-                'label' => "PER {$mesNum}",
-                'labelCal' => $cursor->format('d/m').'–'.$finBloque->format('d/m/Y'),
-                'key' => $cursor->format('Y-m-d'),
-            ];
-            $cursor->addDays(30);
-            $mesNum++;
+        $values = ['config_json' => json_encode($config), 'updated_at' => now()];
+        if ($existing === null) {
+            $values['created_at'] = now();
         }
 
-        return $periodos;
+        DB::table('cronogramas')->updateOrInsert(['project_id' => $projectId], $values);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Fecha de inicio real en campo guardada.',
+        ]);
     }
 
     // =========================================================================
@@ -610,7 +591,10 @@ class CronoValorizadoController extends Controller
         $diasPorPeriodo = [];
         foreach ($periodos as $p) {
             $pInicio = Carbon::parse($p['key']);
-            $pFin = $pInicio->copy()->addDays(29);
+            // 'end' viene de generarPeriodos30Dias (tramos de duración variable:
+            // el primero es un stub hasta fin de mes). Fallback a +29 solo por
+            // compatibilidad con periodos antiguos guardados sin 'end'.
+            $pFin = isset($p['end']) ? Carbon::parse($p['end']) : $pInicio->copy()->addDays(29);
 
             $solapeInicio = $inicio->gt($pInicio) ? $inicio : $pInicio;
             $solapeFin = $fin->lt($pFin) ? $fin : $pFin;
@@ -911,13 +895,6 @@ class CronoValorizadoController extends Controller
             ->where('presupuesto_id', $presupuestoId)
             ->get(['partida', 'fecha_inicio', 'fecha_fin'])
             ->keyBy(fn ($r) => trim($r->partida ?? ''));
-    }
-
-    private function validarLimitePeriodos(array $periodos): void
-    {
-        if (count($periodos) > self::MAX_PERIODOS) {
-            abort(422, 'El cronograma valorizado admite como máximo '.self::MAX_PERIODOS.' periodos.');
-        }
     }
 
     private function calcularDiasPorMes(string $startDate, string $endDate, array $clavesPeriodos): array

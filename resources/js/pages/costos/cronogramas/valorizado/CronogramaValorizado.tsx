@@ -1,18 +1,19 @@
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
+import { ArrowLeft } from 'lucide-react';
 import React, { useState, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import AppLayout from '@/layouts/app-layout';
+import CronogramaNavTabs from '../components/CronogramaNavTabs';
+import CronogramaMateriales from '../materiales/CronogramaMateriales';
+import CronogramaDesembolsos from './components/CronogramaDesembolsos';
 import HeaderValorizado from './components/HeaderValorizado';
 import ResumenFinanciero from './components/ResumenFinanciero';
 import TablaValorizada from './components/TablaValorizada';
-import CronogramaDesembolsos from './components/CronogramaDesembolsos';
-import { exportarExcel, exportarPDF } from './helpers/exportHelpers';
 import { buildTreeItems } from './helpers/buildTreeItems';
+import { exportarExcel, exportarPDF } from './helpers/exportHelpers';
 import { useValorizadoLogic } from './helpers/useValorizadoLogic';
 import type { ValorizadoProps, ModoCalculo, FinDefaults } from './types';
-import CronogramaMateriales from '../materiales/CronogramaMateriales';
-import { ArrowLeft } from 'lucide-react';
 
 // TOAST
 interface ToastItem { id: number; text: string; type: 'success' | 'error' | 'info' }
@@ -43,6 +44,10 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
     const [estaGuardadoUI, setEstaGuardadoUI] = useState(props.estaGuardado ?? false);
     const [modoCalculo, setModoCalculo] = useState<ModoCalculo>(props.modoCalculo ?? 'calendario');
     const [mostrarDesembolso, setMostrarDesembolso] = useState(false);
+    const [fechaInicioCampo, setFechaInicioCampo] = useState<string>(
+        (props.projectData as any)?.fecha_inicio_real_campo ?? ''
+    );
+    const [savingInicioCampo, setSavingInicioCampo] = useState(false);
     const [vistaActual, setVistaActual] = useState<'valorizado' | 'materiales'>('valorizado');
     const [exportFinDefaults, setExportFinDefaults] = useState<FinDefaults>(props.finDefaults ?? {});
     // "Presupuesto Total" real (Costo Directo + GG/Utilidad/IGV + Componentes
@@ -98,6 +103,11 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                     ),
                     parent_id: i.parent_id ?? null,
                 })),
+                // Monto del Contrato Original (Costo Directo + GG + Utilidad
+                // + IGV) ya calculado por TablaValorizada — lo necesitan
+                // CONTROL AVAN. FISICO y R.F.C., que son de solo lectura en
+                // el servidor y no pueden recalcular esta fórmula por su cuenta.
+                resumen_financiero: resumenFinancieroDesembolso,
             });
             setEstaGuardadoUI(true);
             showToast('✅ Cronograma valorizado guardado correctamente.', 'success');
@@ -106,7 +116,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         } finally {
             setSaving(false);
         }
-    }, [props.project, props.periodos, modoCalculo, items, showToast]);
+    }, [props.project, props.periodos, modoCalculo, items, showToast, resumenFinancieroDesembolso]);
 
     // ELIMINAR 
     const handleDelete = useCallback(async () => {
@@ -124,7 +134,25 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         }
     }, [props.project, showToast]);
 
-    // TOGGLE MODO CÁLCULO 
+    // GUARDAR FECHA REAL DE INICIO EN CAMPO (solo modo 30 días)
+    const handleGuardarInicioCampo = useCallback(async () => {
+        if (!fechaInicioCampo) { showToast('⚠ Selecciona la fecha de inicio en campo.', 'info'); return; }
+        setSavingInicioCampo(true);
+        try {
+            await axios.post('/module/crono_valorizado/inicio-real-campo', {
+                project_id: props.project,
+                fecha_inicio_real_campo: fechaInicioCampo,
+            });
+            showToast('✅ Inicio en campo guardado. Recalculando periodos…', 'success');
+            setTimeout(() => window.location.reload(), 900);
+        } catch (err: any) {
+            showToast(`❌ Error: ${err?.response?.data?.message ?? err.message}`, 'error');
+        } finally {
+            setSavingInicioCampo(false);
+        }
+    }, [props.project, fechaInicioCampo, showToast]);
+
+    // TOGGLE MODO CÁLCULO
     const handleToggleModo = useCallback(() => {
         const nuevoModo: ModoCalculo = modoCalculo === 'calendario' ? '30dias' : 'calendario';
         setModoCalculo(nuevoModo);
@@ -233,6 +261,9 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
             <Head title={`Valorizado — ${props.projectName}`} />
 
             <div className="p-4 md:p-6 bg-slate-50 min-h-screen">
+                {!props.sinGantt && vistaActual === 'valorizado' && (
+                    <CronogramaNavTabs project={props.project} modoCalculo={modoCalculo} active="valorizado" estado={props.estado} />
+                )}
                 <div className="max-w-[1900px] mx-auto">
 
                     {/* Sin Gantt */}
@@ -284,6 +315,26 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-2">
+                                            {modoCalculo === '30dias' && (
+                                                <div className="flex items-center gap-1.5">
+                                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                                                        Inicio real en campo
+                                                    </label>
+                                                    <input
+                                                        type="date"
+                                                        value={fechaInicioCampo}
+                                                        onChange={e => setFechaInicioCampo(e.target.value)}
+                                                        className="px-2 py-1.5 text-xs font-semibold rounded-lg border border-violet-300 bg-white text-slate-700"
+                                                    />
+                                                    <button
+                                                        onClick={handleGuardarInicioCampo}
+                                                        disabled={savingInicioCampo}
+                                                        className="px-3 py-1.5 text-xs font-black rounded-lg border border-violet-300 bg-violet-50 hover:bg-violet-100 text-violet-700 transition-all disabled:opacity-50"
+                                                    >
+                                                        {savingInicioCampo ? 'Guardando…' : 'Guardar'}
+                                                    </button>
+                                                </div>
+                                            )}
                                             <button
                                                 onClick={handleToggleModo}
                                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-all"

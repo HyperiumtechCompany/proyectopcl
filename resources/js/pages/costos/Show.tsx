@@ -62,6 +62,7 @@ interface ProjectDetail {
 
 interface PageProps {
     project: ProjectDetail;
+    flash?: { success?: string | null; error?: string | null };
     [key: string]: unknown;
 }
 
@@ -384,7 +385,7 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function Show() {
-    const { project } = usePage<PageProps>().props;
+    const { project, flash } = usePage<PageProps>().props;
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [migrating, setMigrating] = useState(false);
 
@@ -623,6 +624,16 @@ export default function Show() {
                                         : 'Ejecutar Migraciones'}
                                 </button>
                             </div>
+                            {flash?.success && (
+                                <p role="status" className="mt-3 text-xs text-green-700 dark:text-green-400">
+                                    {flash.success}
+                                </p>
+                            )}
+                            {flash?.error && (
+                                <p role="alert" className="mt-3 text-xs text-red-700 dark:text-red-400">
+                                    {flash.error}
+                                </p>
+                            )}
                         </div>
                     </div>
                 </section>

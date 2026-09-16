@@ -1,7 +1,13 @@
+import type { CronogramaEstado } from '../../components/CronogramaNavTabs';
+
 export interface Periodo {
     label:    string;
     labelCal: string;
     key:      string;
+    // Fin real del periodo (YYYY-MM-DD). En modo 30 días los periodos tienen
+    // duración variable (el primero es un tramo corto hasta fin de mes) — sin
+    // este campo no se puede saber dónde termina cada uno.
+    end?:     string;
 }
 
 export interface DistribucionMes {
@@ -121,4 +127,5 @@ export interface ValorizadoProps {
      materiales?: any[];           // Datos de materiales
     materialesResumen?: any;
     finDefaults?: FinDefaults;
+    estado?: CronogramaEstado;
 }

@@ -8,7 +8,6 @@ use App\Models\Ubigeo;
 use App\Services\CostoDatabaseService;
 use App\Services\ProjectQuotaService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -443,28 +442,16 @@ class CostoProjectController extends Controller
         $this->authorizeProject($costoProject);
 
         try {
-            $this->dbService->setTenantConnection($costoProject->database_name);
+            $this->dbService->runTenantMigrations($costoProject->database_name);
 
-            $exitCode = Artisan::call('migrate', [
-                '--database' => 'costos_tenant',
-                '--path' => 'database/migrations/costos_tenant',
-                '--force' => true,
-            ]);
-
-            $output = Artisan::output();
-
-            if ($exitCode === 0) {
-                return back()->with('success', 'Migraciones ejecutadas correctamente. '.$output);
-            } else {
-                return back()->with('error', 'Error al ejecutar migraciones: '.$output);
-            }
+            return back()->with('success', 'Base de datos del proyecto actualizada correctamente.');
         } catch (\Exception $e) {
             Log::error('Error running tenant migration', [
                 'project_id' => $costoProject->id,
                 'error' => $e->getMessage(),
             ]);
 
-            return back()->with('error', 'Error: '.$e->getMessage());
+            return back()->with('error', $e->getMessage());
         }
     }
 

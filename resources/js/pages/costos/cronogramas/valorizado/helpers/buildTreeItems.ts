@@ -1,10 +1,7 @@
+import { parentCodes, compararCodigosWbs } from '@/lib/partidaTree';
 import type { ItemValorizado, Periodo } from '../types';
 
-/** Códigos de todos los ancestros de una partida ("1.2.3" → ["1","1.2"]). */
-export const parentCodes = (code: string): string[] => {
-    const parts = code.split('.').filter(Boolean);
-    return parts.slice(0, -1).map((_, idx) => parts.slice(0, idx + 1).join('.'));
-};
+export { parentCodes };
 
 const emptyDistribucion = (periodos: Periodo[]) =>
     Object.fromEntries(
@@ -52,9 +49,7 @@ export function buildTreeItems(
         });
     });
 
-    const codes = [...byCode.keys()].sort((a, b) =>
-        a.localeCompare(b, 'es', { numeric: true }),
-    );
+    const codes = [...byCode.keys()].sort(compararCodigosWbs);
 
     const hasChildren = new Set<string>();
     codes.forEach((code) => {

@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use RuntimeException;
 
 class CostoDatabaseService
 {
@@ -108,14 +109,24 @@ class CostoDatabaseService
         // Verify connection works before running migrations
         DB::connection('costos_tenant')->getPdo();
 
-        Artisan::call('migrate', [
+        $exitCode = Artisan::call('migrate', [
             '--database' => 'costos_tenant',
             '--path' => 'database/migrations/costos_tenant',
             '--force' => true,
         ]);
+        $output = Artisan::output();
+
+        if ($exitCode !== 0) {
+            Log::error("CostoDatabaseService: Tenant migrations failed on [{$databaseName}]", [
+                'exit_code' => $exitCode,
+                'output' => $output,
+            ]);
+
+            throw new RuntimeException('No se pudieron aplicar las migraciones del proyecto. Revisa los registros del servidor.');
+        }
 
         Log::info("CostoDatabaseService: Ran tenant migrations on [{$databaseName}]", [
-            'output' => Artisan::output(),
+            'output' => $output,
         ]);
     }
 
