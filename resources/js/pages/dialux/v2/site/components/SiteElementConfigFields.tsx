@@ -4,6 +4,7 @@ import type {
     GateVariant,
     PoleConfig,
     RampConfig,
+    RampFlight,
     SiteElement,
     SiteElementConfig,
     StairConfig,
@@ -44,6 +45,20 @@ function Num({
             />
         </label>
     );
+}
+
+const FLIGHT_DIRECTIONS: { value: RampFlight['direction']; label: string }[] =
+    [
+        { value: 'north', label: 'Norte' },
+        { value: 'south', label: 'Sur' },
+        { value: 'east', label: 'Este' },
+        { value: 'west', label: 'Oeste' },
+    ];
+
+let flightCounter = 0;
+function newFlightId(): string {
+    flightCounter += 1;
+    return `flight-${Date.now()}-${flightCounter}`;
 }
 
 const GATE_VARIANTS: { value: GateVariant; label: string }[] = [
@@ -133,6 +148,33 @@ export function SiteElementConfigFields({
                     min={0}
                     onChange={(widthM) => set({ ...g, widthM })}
                 />
+                <label className={field}>
+                    Cerco asociado
+                    <select
+                        className={input}
+                        value={g.fenceId ?? ''}
+                        onChange={(e) =>
+                            set({
+                                ...g,
+                                fenceId: e.target.value || undefined,
+                            })
+                        }
+                    >
+                        <option value="">Ninguno (posición propia)</option>
+                        {(editor.siteData?.elements ?? [])
+                            .filter((el) => el.type === 'fence')
+                            .map((el) => (
+                                <option key={el.id} value={el.id}>
+                                    {el.label}
+                                </option>
+                            ))}
+                    </select>
+                    <span className="mt-0.5 block text-[10px] text-slate-400">
+                        En 3D, el portón queda pegado sobre la línea de ese
+                        cerco, con su misma altura y cota — el dibujo 2D no
+                        cambia.
+                    </span>
+                </label>
             </div>
         );
     }
@@ -306,6 +348,8 @@ export function SiteElementConfigFields({
 
     if (cfg.kind === 'ramp') {
         const r = cfg as RampConfig;
+        const shape = r.shape ?? 'straight';
+        const flights = r.flights ?? [];
         const runM =
             Math.hypot(
                 (element.vertices[1]?.x ?? 0) - (element.vertices[0]?.x ?? 0),
@@ -313,6 +357,33 @@ export function SiteElementConfigFields({
             ) * editor.terrainScaleM || 1;
         const slopePct =
             (Math.abs(r.toElevationM - r.fromElevationM) / runM) * 100;
+
+        const updateFlight = (index: number, patch: Partial<RampFlight>) =>
+            set({
+                ...r,
+                flights: flights.map((f, i) =>
+                    i === index ? { ...f, ...patch } : f,
+                ),
+            });
+        const addFlight = () =>
+            set({
+                ...r,
+                flights: [
+                    ...flights,
+                    {
+                        id: newFlightId(),
+                        direction:
+                            flights[flights.length - 1]?.direction ?? 'north',
+                        lengthM: 6,
+                        riseM: 1.5,
+                        landingLengthM: 0,
+                        turnAfterDeg: flights.length > 0 ? 180 : 0,
+                    },
+                ],
+            });
+        const removeFlight = (index: number) =>
+            set({ ...r, flights: flights.filter((_, i) => i !== index) });
+
         return (
             <div className="grid gap-2 rounded-lg border border-slate-200 p-2 dark:border-white/10">
                 <div className="grid grid-cols-2 gap-1">
@@ -335,18 +406,177 @@ export function SiteElementConfigFields({
                     min={0}
                     onChange={(widthM) => set({ ...r, widthM })}
                 />
-                <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-500">Pendiente</span>
-                    <strong
-                        className={
-                            slopePct > 12
-                                ? 'text-amber-600 dark:text-amber-400'
-                                : ''
+                <label className={field}>
+                    Estructura
+                    <select
+                        className={input}
+                        value={shape}
+                        onChange={(e) =>
+                            set({
+                                ...r,
+                                shape: e.target.value as RampConfig['shape'],
+                            })
                         }
                     >
-                        {slopePct.toFixed(1)}%
-                    </strong>
-                </div>
+                        <option value="straight">
+                            Recta (un tramo o varios con giros)
+                        </option>
+                        <option value="spiral">Helicoidal (espiral)</option>
+                    </select>
+                </label>
+
+                {shape === 'straight' && (
+                    <div className="grid gap-2">
+                        <p className="text-[10px] text-slate-400">
+                            Sin tramos: la rampa clásica de un solo tramo sobre
+                            el polígono dibujado. Con tramos: cada uno sube
+                            `Δcota` en su propia longitud y puede girar antes
+                            del siguiente — arma un zigzag entre dos niveles.
+                        </p>
+                        {flights.map((flight, index) => (
+                            <div
+                                key={flight.id}
+                                className="grid gap-1 rounded-md border border-slate-200 p-1.5 dark:border-white/10"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-semibold text-slate-500">
+                                        Tramo {index + 1}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => removeFlight(index)}
+                                        className="text-[10px] text-red-500 hover:underline"
+                                    >
+                                        Quitar
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-1">
+                                    <label className={field}>
+                                        Dirección inicial
+                                        <select
+                                            className={input}
+                                            value={flight.direction}
+                                            onChange={(e) =>
+                                                updateFlight(index, {
+                                                    direction: e.target
+                                                        .value as RampFlight['direction'],
+                                                })
+                                            }
+                                        >
+                                            {FLIGHT_DIRECTIONS.map((d) => (
+                                                <option
+                                                    key={d.value}
+                                                    value={d.value}
+                                                >
+                                                    {d.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    <Num
+                                        label="Giro tras el tramo (°)"
+                                        value={flight.turnAfterDeg ?? 0}
+                                        step={15}
+                                        onChange={(turnAfterDeg) =>
+                                            updateFlight(index, {
+                                                turnAfterDeg,
+                                            })
+                                        }
+                                    />
+                                </div>
+                                <div className="grid grid-cols-3 gap-1">
+                                    <Num
+                                        label="Longitud (m)"
+                                        value={flight.lengthM}
+                                        min={0.5}
+                                        onChange={(lengthM) =>
+                                            updateFlight(index, { lengthM })
+                                        }
+                                    />
+                                    <Num
+                                        label="Sube/baja (m)"
+                                        value={flight.riseM}
+                                        onChange={(riseM) =>
+                                            updateFlight(index, { riseM })
+                                        }
+                                    />
+                                    <Num
+                                        label="Descanso (m)"
+                                        value={flight.landingLengthM ?? 0}
+                                        min={0}
+                                        onChange={(landingLengthM) =>
+                                            updateFlight(index, {
+                                                landingLengthM,
+                                            })
+                                        }
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                        <button
+                            type="button"
+                            onClick={addFlight}
+                            className="rounded-md border border-dashed border-slate-300 py-1 text-[11px] text-slate-500 hover:border-cyan-500 hover:text-cyan-600 dark:border-slate-700"
+                        >
+                            + Agregar tramo
+                        </button>
+                    </div>
+                )}
+
+                {shape === 'spiral' && (
+                    <div className="grid gap-2">
+                        <p className="text-[10px] text-slate-400">
+                            Gira alrededor del centro del polígono dibujado
+                            mientras sube de la cota origen a la destino — el
+                            radio lo da el tamaño de ese polígono.
+                        </p>
+                        <div className="grid grid-cols-2 gap-1">
+                            <Num
+                                label="Vueltas"
+                                value={r.turns ?? 1}
+                                step={0.25}
+                                min={0.25}
+                                onChange={(turns) => set({ ...r, turns })}
+                            />
+                            <Num
+                                label="Ángulo inicial (°)"
+                                value={r.startAngleDeg ?? 0}
+                                step={15}
+                                onChange={(startAngleDeg) =>
+                                    set({ ...r, startAngleDeg })
+                                }
+                            />
+                        </div>
+                        <label className="flex items-center gap-2 text-[11px] text-slate-500">
+                            <input
+                                type="checkbox"
+                                checked={r.clockwise !== false}
+                                onChange={(e) =>
+                                    set({
+                                        ...r,
+                                        clockwise: e.target.checked,
+                                    })
+                                }
+                            />
+                            Sentido horario (visto en planta)
+                        </label>
+                    </div>
+                )}
+
+                {shape === 'straight' && flights.length === 0 && (
+                    <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-500">Pendiente</span>
+                        <strong
+                            className={
+                                slopePct > 12
+                                    ? 'text-amber-600 dark:text-amber-400'
+                                    : ''
+                            }
+                        >
+                            {slopePct.toFixed(1)}%
+                        </strong>
+                    </div>
+                )}
             </div>
         );
     }

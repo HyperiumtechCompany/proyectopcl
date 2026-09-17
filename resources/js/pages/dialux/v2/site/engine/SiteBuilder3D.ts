@@ -15,7 +15,13 @@ import { House3DBuilder } from '@/pages/dialux/engine/House3DBuilder';
 import type { Scene as EditorScene } from '@/pages/dialux/hooks/useEditorStore';
 import type { EdgeCalculation } from '../../electrical-network/domain/calculations';
 import { deriveFeederStatus, feederStatusColor } from '../domain/feederSync';
-import { boundingBox } from '../domain/geometry';
+import {
+    boundingBox,
+    closestPointOnPolygon,
+    outwardMiterDirections,
+    pointInPolygon,
+} from '../domain/geometry';
+import { buildSpiralRampPolyline, buildStraightRampLayout } from '../domain/rampLayout';
 import {
     hasTerrainData,
     sampleGroundElevation,
@@ -121,6 +127,8 @@ export class SiteBuilder3D {
      */
     private originX = 0;
     private originZ = 0;
+    /** Elementos del emplazamiento por id — para que un objeto pueda referenciar a otro (ej. portón → cerco al que queda pegado). */
+    private elementsById = new Map<string, SiteElement>();
 
     constructor(scene: Scene, camera?: ArcRotateCamera) {
         this.scene = scene;
@@ -177,6 +185,9 @@ export class SiteBuilder3D {
     ) {
         this.disposeContent();
         const scaleM = siteData.terrainScaleM || 1;
+        this.elementsById = new Map(
+            siteData.elements.map((element) => [element.id, element]),
+        );
         // Un tipo se oculta solo si una capa que lo contiene está oculta; un
         // tipo sin capa (proyectos previos a añadirlo) se muestra igual.
         const hiddenTypes = new Set(
@@ -539,17 +550,44 @@ export class SiteBuilder3D {
         const angleDeg = Math.min(89, Math.max(1, cfg?.taludAngleDeg ?? 75));
         const tanAngle = Math.tan((angleDeg * Math.PI) / 180);
 
-        const bottomRing = element.vertices.map((v) => {
-            const groundAbs = this.terrainModeled
+        // Otras plataformas del emplazamiento — si un vértice de ESTA cae
+        // sobre el borde de una plataforma VECINA (el caso normal: se
+        // dibujan una junto a otra, compartiendo el borde), el talud baja
+        // hasta la cota de esa vecina en vez de hasta el terreno natural o el
+        // datum global. Sin esto, una plataforma alta con vecinas a cotas
+        // intermedias hundía su talud muy por debajo de donde debía apoyarse
+        // — el "hueco"/salto visible entre plataformas que reportó el
+        // usuario (2026-09-17). No requiere que el usuario vuelva a dibujar
+        // nada: se recalcula solo a partir de los polígonos ya existentes.
+        const neighborPlatforms = [...this.elementsById.values()].filter(
+            (el) => el.type === 'terrace_platform' && el.id !== element.id,
+        );
+        const groundAbsAt = (v: Point2D): number => {
+            const neighbor = neighborPlatforms.find((other) =>
+                pointInPolygon(v, other.vertices),
+            );
+            if (neighbor) return neighbor.baseElevationM ?? 0;
+            return this.terrainModeled
                 ? sampleGroundElevation(this.terrainPoints, v.x, v.y)
                 : this.elevationDatum;
+        };
+
+        // Dirección "hacia afuera" de CADA vértice, respetando sus dos lados
+        // vecinos (funciona con huellas cóncavas — una en L, con un patio,
+        // con un retranqueo). Reemplaza un desplazamiento radial desde el
+        // centroide: en una huella cóncava ese método podía mover un vértice
+        // hacia el lado equivocado y cruzar el resto del polígono, dejando
+        // una malla que se autointerseca (el "hueco"/tajo oscuro que reportó
+        // el usuario, 2026-09-17).
+        const outwardDirs = outwardMiterDirections(element.vertices);
+
+        const bottomRing = element.vertices.map((v, i) => {
+            const groundAbs = groundAbsAt(v);
             const dh = platformYAbs - groundAbs;
-            const dx = v.x - center.x;
-            const dy = v.y - center.y;
-            const len = Math.hypot(dx, dy) || 1;
             const spread = Math.abs(dh) / tanAngle;
-            const bx = v.x + (dx / len) * spread;
-            const by = v.y + (dy / len) * spread;
+            const dir = outwardDirs[i];
+            const bx = v.x + dir.x * spread;
+            const by = v.y + dir.y * spread;
             return new Vector3(
                 (bx - center.x) * scaleM,
                 groundAbs - platformYAbs,
@@ -610,11 +648,28 @@ export class SiteBuilder3D {
         };
     }
 
-    /** Rampa: losa inclinada de `fromElevationM` a `toElevationM` (cotas absolutas). */
+    /** Rampa: un solo tramo recto (clásico), varios tramos con giros, o helicoidal — según `RampConfig.shape`/`flights`. */
     private buildRamp(element: SiteElement, scaleM: number) {
+        const c = rampCfg(element);
+        if (c?.shape === 'spiral') {
+            this.buildSpiralRamp(element, scaleM, c);
+            return;
+        }
+        if (c?.flights && c.flights.length > 0) {
+            this.buildFlightRamp(element, scaleM, c);
+            return;
+        }
+        this.buildSingleRampSlab(element, scaleM, c);
+    }
+
+    /** Comportamiento clásico: una losa inclinada sobre el polígono dibujado, de `fromElevationM` a `toElevationM`. */
+    private buildSingleRampSlab(
+        element: SiteElement,
+        scaleM: number,
+        c: RampConfig | undefined,
+    ) {
         const { node, localVertices } = this.anchorNode(element, scaleM);
         node.position.y = 0; // rampa/escalera usan cotas absolutas en su config
-        const c = rampCfg(element);
         const from = c
             ? this.rel(c.fromElevationM)
             : this.groundAt(centroid(element.vertices));
@@ -638,6 +693,124 @@ export class SiteBuilder3D {
         );
         slab.receiveShadows = true;
         slab.parent = node;
+    }
+
+    /** Rampa de varios tramos rectos con giros (zigzag) — conecta varias cotas en un solo elemento. */
+    private buildFlightRamp(
+        element: SiteElement,
+        scaleM: number,
+        c: RampConfig,
+    ) {
+        const node = new TransformNode(`site_${element.id}`, this.scene);
+        this.elementNodes.set(element.id, node);
+        const center = centroid(element.vertices);
+        node.position.set(
+            this.wx(center.x, scaleM),
+            this.rel(c.fromElevationM),
+            this.wz(center.y, scaleM),
+        );
+        node.rotation.y = (-(element.rotation ?? 0) * Math.PI) / 180;
+
+        const mat = this.matFor(
+            element.style.fillColor,
+            element.style.opacity ?? 1,
+        );
+        const segments = buildStraightRampLayout(c);
+        segments.forEach((seg) => {
+            const dx = seg.endLocal.x - seg.startLocal.x;
+            const dz = seg.endLocal.z - seg.startLocal.z;
+            const length = Math.max(0.1, Math.hypot(dx, dz));
+            const midX = (seg.startLocal.x + seg.endLocal.x) / 2;
+            const midY = (seg.startY + seg.endY) / 2;
+            const midZ = (seg.startLocal.z + seg.endLocal.z) / 2;
+
+            // `lookAt` orienta la profundidad (Z local) hacia el destino real
+            // (incluida la subida en Y) — evita tener que derivar a mano el
+            // signo de una rotación Y+Z combinada. Posición + `lookAt` ANTES
+            // de asignar `parent` (mismo orden que `buildPole`, más abajo en
+            // este archivo): sin padre todavía, "local" y "mundo" coinciden,
+            // así que los valores en metros locales del tramo (`seg.*Local`)
+            // se pueden usar directo como si fueran mundo.
+            const slab = MeshBuilder.CreateBox(
+                `site_ramp_${element.id}_${seg.id}`,
+                { width: seg.widthM, height: 0.15, depth: length },
+                this.scene,
+            );
+            slab.position.set(midX, midY, midZ);
+            slab.lookAt(
+                new Vector3(seg.endLocal.x, seg.endY, seg.endLocal.z),
+            );
+            slab.material = mat;
+            slab.receiveShadows = true;
+            slab.parent = node;
+            this.shadowGen?.addShadowCaster(slab);
+        });
+    }
+
+    /** Rampa helicoidal: cinta que gira `turns` vueltas mientras sube/baja de `fromElevationM` a `toElevationM`. */
+    private buildSpiralRamp(
+        element: SiteElement,
+        scaleM: number,
+        c: RampConfig,
+    ) {
+        const node = new TransformNode(`site_${element.id}`, this.scene);
+        this.elementNodes.set(element.id, node);
+        const center = centroid(element.vertices);
+        node.position.set(
+            this.wx(center.x, scaleM),
+            this.rel(c.fromElevationM),
+            this.wz(center.y, scaleM),
+        );
+        node.rotation.y = (-(element.rotation ?? 0) * Math.PI) / 180;
+
+        const bounds = boundingBox(element.vertices);
+        const footprintRadiusM =
+            (Math.min(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) *
+                scaleM) /
+            2;
+        const widthM = Math.max(0.5, c.widthM || 3);
+        const points = buildSpiralRampPolyline(
+            c,
+            Math.max(1, footprintRadiusM),
+        );
+        if (points.length < 2) return;
+
+        const innerPath: Vector3[] = [];
+        const outerPath: Vector3[] = [];
+        for (let i = 0; i < points.length; i++) {
+            const p = points[i];
+            const next = points[Math.min(i + 1, points.length - 1)];
+            const tangent = Math.atan2(next.z - p.z, next.x - p.x);
+            const nx = Math.sin(tangent);
+            const nz = -Math.cos(tangent);
+            innerPath.push(
+                new Vector3(
+                    p.x - (nx * widthM) / 2,
+                    p.y,
+                    p.z - (nz * widthM) / 2,
+                ),
+            );
+            outerPath.push(
+                new Vector3(
+                    p.x + (nx * widthM) / 2,
+                    p.y,
+                    p.z + (nz * widthM) / 2,
+                ),
+            );
+        }
+
+        const ribbon = MeshBuilder.CreateRibbon(
+            `site_ramp_spiral_${element.id}`,
+            { pathArray: [innerPath, outerPath], sideOrientation: Mesh.DOUBLESIDE },
+            this.scene,
+        );
+        ribbon.material = this.matFor(
+            element.style.fillColor,
+            element.style.opacity ?? 1,
+        );
+        ribbon.receiveShadows = true;
+        this.shadowGen?.addShadowCaster(ribbon);
+        ribbon.parent = node;
     }
 
     /** Escalera exterior: peldaños entre `fromElevationM` y `toElevationM`. */
@@ -867,6 +1040,35 @@ export class SiteBuilder3D {
     private buildGate(element: SiteElement, scaleM: number) {
         const { node } = this.anchorNode(element, scaleM);
         const cfg = gateCfg(element);
+        const fence = cfg?.fenceId
+            ? this.elementsById.get(cfg.fenceId)
+            : undefined;
+        const fenceMatch =
+            fence?.type === 'fence'
+                ? closestPointOnPolygon(
+                      centroid(element.vertices),
+                      fence.vertices,
+                  )
+                : undefined;
+        if (fence && fenceMatch) {
+            // Pegado al cerco vinculado: mismo punto sobre su línea, misma
+            // cota y misma altura — en vez de la posición/altura propias del
+            // portón (que en 2D puede no coincidir exacto con el cerco).
+            // `bearingDeg` usa la MISMA fórmula que `anchorNode` para
+            // `element.rotation` (0°=arriba en pantalla, horario positivo,
+            // ver el handle de rotación en `SiteCanvas2D.tsx`) para no tener
+            // que derivar a mano el signo de la rotación Y de Babylon.
+            const bearingDeg =
+                (Math.atan2(fenceMatch.tangent.x, -fenceMatch.tangent.y) *
+                    180) /
+                Math.PI;
+            node.position.set(
+                this.wx(fenceMatch.point.x, scaleM),
+                this.groundAt(fenceMatch.point) + (fence.baseElevationM ?? 0),
+                this.wz(fenceMatch.point.y, scaleM),
+            );
+            node.rotation.y = (-bearingDeg * Math.PI) / 180;
+        }
         const bounds = boundingBox(element.vertices);
         const spanX = Math.max(1.2, (bounds.maxX - bounds.minX) * scaleM);
         const spanZ = Math.max(1.2, (bounds.maxY - bounds.minY) * scaleM);
@@ -879,7 +1081,10 @@ export class SiteBuilder3D {
                 : cfg?.state === 'ajar'
                   ? cfg?.openAngleDeg || 35
                   : (cfg?.openAngleDeg ?? 0);
-        const height = element.heightM ?? (variant === 'barrier' ? 1 : 2.2);
+        const height =
+            fence?.heightM ??
+            element.heightM ??
+            (variant === 'barrier' ? 1 : 2.2);
         const post = 0.18;
         const metal = this.matFor('#6b7280', 1, 0.3);
         const leafMat = this.matFor(element.style.fillColor, 1, 0.2);

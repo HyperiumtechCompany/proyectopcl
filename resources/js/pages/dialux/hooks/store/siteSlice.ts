@@ -24,6 +24,14 @@ export interface SiteSlice {
         vertexIndex: number,
         position: Point2D,
     ) => void;
+    /** Inserta un vértice nuevo en `afterIndex + 1` (para partir un tramo/lado en dos). */
+    insertSiteVertex: (
+        elementId: string,
+        afterIndex: number,
+        position: Point2D,
+    ) => void;
+    /** Quita un vértice — no baja de 3 (mínimo para que siga siendo un polígono válido). */
+    removeSiteVertex: (elementId: string, vertexIndex: number) => void;
     addFeederPath: (
         path: Omit<FeederPath, 'id' | 'calculatedLengthM'> & {
             calculatedLengthM?: number;
@@ -186,6 +194,56 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
                             }
                             vertices[vertexIndex] = position;
                             return { ...item, vertices };
+                        }),
+                    },
+                },
+            };
+        }),
+    insertSiteVertex: (elementId, afterIndex, position) =>
+        set((state) => {
+            if (!state.project?.site) return state;
+            return {
+                project: {
+                    ...state.project,
+                    site: {
+                        ...state.project.site,
+                        elements: state.project.site.elements.map((item) => {
+                            if (item.id !== elementId) return item;
+                            const vertices = [...item.vertices];
+                            const index = Math.min(
+                                Math.max(afterIndex + 1, 0),
+                                vertices.length,
+                            );
+                            vertices.splice(index, 0, position);
+                            return { ...item, vertices };
+                        }),
+                    },
+                },
+            };
+        }),
+    removeSiteVertex: (elementId, vertexIndex) =>
+        set((state) => {
+            if (!state.project?.site) return state;
+            return {
+                project: {
+                    ...state.project,
+                    site: {
+                        ...state.project.site,
+                        elements: state.project.site.elements.map((item) => {
+                            if (item.id !== elementId) return item;
+                            if (item.vertices.length <= 3) return item;
+                            if (
+                                vertexIndex < 0 ||
+                                vertexIndex >= item.vertices.length
+                            ) {
+                                return item;
+                            }
+                            return {
+                                ...item,
+                                vertices: item.vertices.filter(
+                                    (_, i) => i !== vertexIndex,
+                                ),
+                            };
                         }),
                     },
                 },

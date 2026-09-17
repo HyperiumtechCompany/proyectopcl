@@ -78,3 +78,54 @@ export function elevationRange(points: ElevationPoint[]): [number, number] {
     }
     return [lo, hi];
 }
+
+/** Rango [min, max] de `baseElevationM` de todos los elementos que lo tienen — para colorear por cota en 2D. */
+export function elementElevationRange(elements: SiteElement[]): [number, number] {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const el of elements) {
+        if (el.visible === false) continue;
+        if (typeof el.baseElevationM !== 'number') continue;
+        if (el.baseElevationM < lo) lo = el.baseElevationM;
+        if (el.baseElevationM > hi) hi = el.baseElevationM;
+    }
+    if (!Number.isFinite(lo)) return [0, 0];
+    return [lo, hi];
+}
+
+function lerpHex(a: string, b: string, t: number): string {
+    const pa = parseInt(a.slice(1), 16);
+    const pb = parseInt(b.slice(1), 16);
+    const ar = (pa >> 16) & 255;
+    const ag = (pa >> 8) & 255;
+    const ab = pa & 255;
+    const br = (pb >> 16) & 255;
+    const bg = (pb >> 8) & 255;
+    const bb = pb & 255;
+    const r = Math.round(ar + (br - ar) * t);
+    const g = Math.round(ag + (bg - ag) * t);
+    const bch = Math.round(ab + (bb - ab) * t);
+    return `#${[r, g, bch].map((n) => n.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Azulado (más bajo) → arena (nivel medio, color por defecto de plataforma) → verde oliva (más alto). */
+const HYPSOMETRIC_STOPS: [number, string][] = [
+    [0, '#5b82a6'],
+    [0.5, '#c9a876'],
+    [1, '#7a9c5c'],
+];
+
+/**
+ * Color hipsométrico para la cota `z` dentro de `[lo, hi]` — da una señal
+ * visual de "más abajo / más arriba" en el editor 2D, donde de otro modo
+ * todas las plataformas se ven iguales (mismo color fijo) sin importar su
+ * cota. Sin rango real (lo≈hi) devuelve el color neutro del stop medio.
+ */
+export function elevationColor(z: number, [lo, hi]: [number, number]): string {
+    if (hi - lo < 0.05) return HYPSOMETRIC_STOPS[1][1];
+    const t = Math.min(1, Math.max(0, (z - lo) / (hi - lo)));
+    if (t <= 0.5) {
+        return lerpHex(HYPSOMETRIC_STOPS[0][1], HYPSOMETRIC_STOPS[1][1], t / 0.5);
+    }
+    return lerpHex(HYPSOMETRIC_STOPS[1][1], HYPSOMETRIC_STOPS[2][1], (t - 0.5) / 0.5);
+}

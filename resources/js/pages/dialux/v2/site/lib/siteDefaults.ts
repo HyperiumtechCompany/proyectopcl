@@ -50,6 +50,7 @@ export function defaultConfigFor(
                 fromElevationM: 0,
                 toElevationM: 1,
                 widthM: 1.5,
+                shape: 'straight',
             };
         case 'stair':
             return {
@@ -148,7 +149,6 @@ export const SITE_ELEMENT_DEFAULTS: Record<
         style: {
             fillColor: '#c9a876',
             strokeColor: '#92400e',
-            opacity: 0.7,
         },
     },
     court: {

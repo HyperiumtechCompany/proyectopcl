@@ -7,6 +7,10 @@ import {
 import { createCanvasTransforms } from '@/pages/dialux/geometry/coordinateTransform';
 import { deriveFeederStatus, feederStatusColor } from '../domain/feederSync';
 import { snapToGrid } from '../domain/geometry';
+import {
+    elementElevationRange,
+    elevationColor,
+} from '../domain/terrainSurface';
 import type { Point2D, SiteData, SiteElement } from '../domain/types';
 import { useSiteCadPlan } from '../hooks/useSiteCadPlan';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
@@ -324,6 +328,11 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
             0,
         ) > 120;
 
+    // Rango de cotas de todos los elementos — colorea las "Plataformas de
+    // terreno" según su cota, ya que su color de relleno es fijo por
+    // defecto y de otro modo se ven todas iguales sin importar la cota.
+    const platformElevationRange = elementElevationRange(siteData.elements);
+
     const legacyPlan =
         !cadPlanActive &&
         cadStatus !== 'loading' &&
@@ -549,6 +558,18 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                             element.visible !== false &&
                             isLayerVisible(siteData, element),
                     )
+                    // El SVG dibuja en orden de array (lo último dibujado
+                    // queda arriba) — sin esto, un objeto seleccionado creado
+                    // temprano podía quedar tapado por otros dibujados
+                    // después. El seleccionado siempre va al final, sin tocar
+                    // el orden relativo del resto.
+                    .sort((a, b) =>
+                        a.id === editor.selectedElementId
+                            ? 1
+                            : b.id === editor.selectedElementId
+                              ? -1
+                              : 0,
+                    )
                     .map((element) => {
                         const selected =
                             editor.selectedElementId === element.id;
@@ -759,11 +780,19 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                             );
                         }
 
+                        const fillColor =
+                            element.type === 'terrace_platform'
+                                ? elevationColor(
+                                      element.baseElevationM ?? 0,
+                                      platformElevationRange,
+                                  )
+                                : element.style.fillColor;
+
                         return (
                             <g key={element.id}>
                                 <polygon
                                     points={points(element.vertices)}
-                                    fill={element.style.fillColor}
+                                    fill={fillColor}
                                     fillOpacity={element.style.opacity ?? 1}
                                     stroke={
                                         selected
@@ -801,6 +830,56 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                 {selected &&
                                     editor.activeTool === 'select' &&
                                     !element.locked &&
+                                    element.vertices.length > 1 &&
+                                    element.vertices.map((vertex, index) => {
+                                        // Punto medio con el SIGUIENTE vértice
+                                        // (el polígono se dibuja cerrado, así
+                                        // que el último también forma lado con
+                                        // el primero) — clic para insertar un
+                                        // vértice nuevo ahí y poder darle más
+                                        // forma al objeto ya dibujado.
+                                        const next =
+                                            element.vertices[
+                                                (index + 1) %
+                                                    element.vertices.length
+                                            ];
+                                        const midWorld = {
+                                            x: (vertex.x + next.x) / 2,
+                                            y: (vertex.y + next.y) / 2,
+                                        };
+                                        const m = toScreen(midWorld);
+                                        return (
+                                            <circle
+                                                key={`mid-${index}`}
+                                                cx={m.x}
+                                                cy={m.y}
+                                                r={DOT_R}
+                                                className="cursor-copy fill-white stroke-amber-500 stroke-2 opacity-70 hover:opacity-100 dark:fill-slate-900"
+                                                onPointerDown={(event) => {
+                                                    event.stopPropagation();
+                                                    event.currentTarget.ownerSVGElement?.setPointerCapture(
+                                                        event.pointerId,
+                                                    );
+                                                    const newIndex =
+                                                        index + 1;
+                                                    editor.insertSiteVertex(
+                                                        element.id,
+                                                        index,
+                                                        midWorld,
+                                                    );
+                                                    vertexDragRef.current = {
+                                                        elementId: element.id,
+                                                        vertexIndex: newIndex,
+                                                        pointerId:
+                                                            event.pointerId,
+                                                    };
+                                                }}
+                                            />
+                                        );
+                                    })}
+                                {selected &&
+                                    editor.activeTool === 'select' &&
+                                    !element.locked &&
                                     element.vertices.map((vertex, index) => {
                                         const s = toScreen(vertex);
                                         return (
@@ -821,6 +900,19 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                                         pointerId:
                                                             event.pointerId,
                                                     };
+                                                }}
+                                                onDoubleClick={(event) => {
+                                                    event.stopPropagation();
+                                                    if (
+                                                        element.vertices
+                                                            .length <= 3
+                                                    ) {
+                                                        return;
+                                                    }
+                                                    editor.removeSiteVertex(
+                                                        element.id,
+                                                        index,
+                                                    );
                                                 }}
                                             />
                                         );

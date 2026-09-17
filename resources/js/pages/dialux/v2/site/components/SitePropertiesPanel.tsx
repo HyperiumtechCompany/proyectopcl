@@ -1,10 +1,20 @@
-import { Copy, Eye, EyeOff, Lock, Trash2, Unlock } from 'lucide-react';
+import {
+    Copy,
+    Eye,
+    EyeOff,
+    Layers,
+    Lock,
+    Settings2,
+    Trash2,
+    Unlock,
+} from 'lucide-react';
 import { useState } from 'react';
 import { polygonArea, polygonPerimeter } from '../domain/geometry';
 import type { SiteElement } from '../domain/types';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 import { SiteElementConfigFields } from './SiteElementConfigFields';
 import { POINT_ELEMENT_TYPES } from './SiteElementSymbol';
+import { SiteObjectsPanel } from './SiteObjectsPanel';
 
 interface ModuleOption {
     id: number;
@@ -19,36 +29,77 @@ interface Props {
 const inputClass =
     'mt-1 h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white';
 
+type SidebarTab = 'objects' | 'properties';
+
 export function SitePropertiesPanel({ editor, modules }: Props) {
     const element = editor.siteData?.elements.find(
         (item) => item.id === editor.selectedElementId,
     );
+    const [tab, setTab] = useState<SidebarTab>('properties');
 
     return (
         <aside className="flex min-h-0 w-full flex-col overflow-y-auto border-t border-slate-200 bg-white xl:w-72 xl:border-t-0 xl:border-l dark:border-white/10 dark:bg-[#101218]">
-            <div className="shrink-0 border-b border-slate-200 p-4 dark:border-white/10">
-                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Propiedades
-                </h2>
-                <p className="text-[11px] text-slate-500">
-                    {element
-                        ? 'Elemento del emplazamiento'
-                        : 'Selecciona un elemento del plano'}
-                </p>
+            <div className="flex shrink-0 items-stretch border-b border-slate-200 dark:border-white/10">
+                {(
+                    [
+                        { id: 'objects', label: 'Objetos', icon: Layers },
+                        {
+                            id: 'properties',
+                            label: 'Propiedades',
+                            icon: Settings2,
+                        },
+                    ] as const
+                ).map(({ id, label, icon: Icon }) => (
+                    <button
+                        key={id}
+                        type="button"
+                        onClick={() => setTab(id)}
+                        className={`flex min-h-9 flex-1 items-center justify-center gap-1.5 text-[11px] font-semibold ${
+                            tab === id
+                                ? 'border-b-2 border-amber-500 text-amber-700 dark:text-amber-400'
+                                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+                        }`}
+                    >
+                        <Icon className="h-3.5 w-3.5" />
+                        {label}
+                    </button>
+                ))}
             </div>
-            {editor.calibrationPoints.length === 2 && (
-                <CalibrationPanel editor={editor} />
-            )}
-            {element && (
-                <ElementProperties
-                    key={element.id}
-                    element={element}
+            {tab === 'objects' && (
+                <SiteObjectsPanel
                     editor={editor}
-                    modules={modules}
+                    onSelect={() => setTab('properties')}
                 />
             )}
-            {!element && <ImportedPlanPanel editor={editor} />}
-            {!element && (editor.siteData?.feederPaths.length ?? 0) > 0 && (
+            {tab === 'properties' && (
+                <>
+                    <div className="shrink-0 border-b border-slate-200 p-4 dark:border-white/10">
+                        <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                            Propiedades
+                        </h2>
+                        <p className="text-[11px] text-slate-500">
+                            {element
+                                ? 'Elemento del emplazamiento'
+                                : 'Selecciona un elemento del plano'}
+                        </p>
+                    </div>
+                    {editor.calibrationPoints.length === 2 && (
+                        <CalibrationPanel editor={editor} />
+                    )}
+                    {element && (
+                        <ElementProperties
+                            key={element.id}
+                            element={element}
+                            editor={editor}
+                            modules={modules}
+                        />
+                    )}
+                    {!element && <ImportedPlanPanel editor={editor} />}
+                </>
+            )}
+            {tab === 'properties' &&
+                !element &&
+                (editor.siteData?.feederPaths.length ?? 0) > 0 && (
                 <div className="p-4">
                     <p className="mb-2 text-[10px] font-bold tracking-wide text-slate-400 uppercase">
                         Alimentadores trazados
@@ -252,6 +303,12 @@ function ElementProperties({
                                         plano”.
                                     </p>
                                 )}
+                                <p className="mt-1 text-[10px] text-slate-400">
+                                    {element.vertices.length} vértices — clic
+                                    en el punto claro de un lado para agregar
+                                    uno nuevo ahí; doble clic en un vértice
+                                    para quitarlo.
+                                </p>
                             </div>
                         )}
 

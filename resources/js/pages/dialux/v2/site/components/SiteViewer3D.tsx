@@ -126,13 +126,21 @@ export function SiteViewer3D({
     }, [isActive]);
 
     useEffect(() => {
+        // `sync()` reconstruye TODA la escena (dispose + rebuild de cada
+        // elemento) — con la pestaña 2D al frente esto se ejecutaba en cada
+        // cambio de `siteData` (ej. cada frame de un arrastre de vértice) sin
+        // que nada se viera, solo gastando CPU en el hilo principal y
+        // pudiendo trabar la propia interacción 2D. Con la 3D en segundo
+        // plano nadie la está viendo, así que se difiere: al volver a
+        // activarla, este mismo efecto corre con el `siteData` más reciente.
+        if (!isActive) return;
         builderRef.current?.sync(
             siteData,
             moduleScenes,
             feederCalculations,
             showInteriors,
         );
-    }, [siteData, moduleScenes, feederCalculations, showInteriors]);
+    }, [siteData, moduleScenes, feederCalculations, showInteriors, isActive]);
 
     const setView = (view: keyof typeof VIEWS) => {
         const cam = cameraRef.current;

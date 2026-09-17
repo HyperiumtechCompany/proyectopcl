@@ -60,6 +60,11 @@ export interface GateConfig {
     state: GateState;
     openAngleDeg: number; // 0 = cerrado, 90 = abierto (batientes/barrera)
     widthM: number;
+    /** `SiteElement.id` de un cerco (`type:'fence'`) al que este portón queda
+     * pegado en 3D: mismo punto sobre la línea del cerco, misma cota y misma
+     * altura, en vez de la posición/altura propias del portón. El polígono
+     * dibujado en 2D no cambia — este ajuste es solo para el render 3D. */
+    fenceId?: string;
 }
 
 export interface PoleConfig {
@@ -101,11 +106,36 @@ export interface StairConfig {
     run: 'straight' | 'L' | 'U';
 }
 
+/** Un tramo recto de una rampa multi-nivel: dirección inicial + giro opcional al final. */
+export interface RampFlight {
+    id: string;
+    direction: 'north' | 'south' | 'east' | 'west';
+    lengthM: number;
+    riseM: number; // cuánto sube (+) o baja (-) este tramo, en metros
+    landingLengthM?: number; // descanso plano al final del tramo (0 = sin descanso)
+    turnAfterDeg?: number; // giro (°) antes de iniciar el siguiente tramo (ej. 180 = vuelta en U)
+}
+
+export type RampShape = 'straight' | 'spiral';
+
 export interface RampConfig {
     kind: 'ramp';
     fromElevationM: number;
     toElevationM: number;
     widthM: number;
+    /** 'straight' (default) = un solo tramo (comportamiento clásico) o varios
+     * tramos rectos con giros (`flights`); 'spiral' = rampa helicoidal. */
+    shape?: RampShape;
+    /** Tramos rectos con giros — solo si `shape` es 'straight'. Vacío/ausente
+     * conserva el comportamiento clásico: una losa inclinada sobre el
+     * polígono dibujado. */
+    flights?: RampFlight[];
+    /** Vueltas completas — solo si `shape` es 'spiral'. */
+    turns?: number;
+    /** Sentido de giro visto en planta — solo si `shape` es 'spiral'. */
+    clockwise?: boolean;
+    /** Ángulo inicial (°) del primer tramo de la espiral. */
+    startAngleDeg?: number;
 }
 
 export interface TerracePlatformConfig {

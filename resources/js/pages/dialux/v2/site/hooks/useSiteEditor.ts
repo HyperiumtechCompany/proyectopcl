@@ -52,6 +52,8 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         (state) => state.duplicateSiteElement,
     );
     const moveSiteVertex = useEditorStore((state) => state.moveSiteVertex);
+    const insertSiteVertex = useEditorStore((state) => state.insertSiteVertex);
+    const removeSiteVertex = useEditorStore((state) => state.removeSiteVertex);
     const addFeederPath = useEditorStore((state) => state.addFeederPath);
     const updateFeederPath = useEditorStore((state) => state.updateFeederPath);
     const removeFeederPath = useEditorStore((state) => state.removeFeederPath);
@@ -434,6 +436,8 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         removeSiteElement,
         duplicateSiteElement,
         moveSiteVertex,
+        insertSiteVertex,
+        removeSiteVertex,
         addFeederPath,
         updateFeederPath,
         removeFeederPath,
