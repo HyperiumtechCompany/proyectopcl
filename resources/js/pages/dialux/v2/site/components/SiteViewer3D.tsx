@@ -5,20 +5,26 @@ import {
     Scene,
     Vector3,
 } from '@babylonjs/core';
-import { Box, Layers, Maximize, SquareStack } from 'lucide-react';
+import { Box, Layers, Maximize, Moon, Sun, SquareStack, Zap } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { EdgeCalculation } from '../../electrical-network/domain/calculations';
+import type { LightingSummary } from '../domain/exteriorLighting';
 import type { SiteData } from '../domain/types';
 import { SiteBuilder3D, type SiteModuleScene } from '../engine/SiteBuilder3D';
+import type { LuminairePhotometry } from '../lib/luminaireCatalog';
 
 interface Props {
     siteData: SiteData;
     moduleScenes?: SiteModuleScene[];
     feederCalculations?: EdgeCalculation[];
+    /** Fotometría (IES/LDT) de los productos usados por los postes, del catálogo compartido con v1. */
+    luminairePhotometry?: Map<number, LuminairePhotometry>;
     onReady?: () => void;
     /** `false` cuando la pestaña 2D está al frente: se pausa el render loop. */
     isActive?: boolean;
 }
+
+const NO_PHOTOMETRY = new Map<number, LuminairePhotometry>();
 
 const VIEWS = {
     perspective: { alpha: -Math.PI / 3, beta: Math.PI / 3 },
@@ -38,6 +44,7 @@ export function SiteViewer3D({
     siteData,
     moduleScenes = [],
     feederCalculations = [],
+    luminairePhotometry = NO_PHOTOMETRY,
     onReady,
     isActive = true,
 }: Props) {
@@ -47,6 +54,9 @@ export function SiteViewer3D({
     const builderRef = useRef<SiteBuilder3D | null>(null);
     const isActiveRef = useRef(isActive);
     const [showInteriors, setShowInteriors] = useState(false);
+    const [night, setNight] = useState(false);
+    const [luxMap, setLuxMap] = useState(false);
+    const [summary, setSummary] = useState<LightingSummary | null>(null);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -134,13 +144,32 @@ export function SiteViewer3D({
         // plano nadie la está viendo, así que se difiere: al volver a
         // activarla, este mismo efecto corre con el `siteData` más reciente.
         if (!isActive) return;
-        builderRef.current?.sync(
+        const builder = builderRef.current;
+        builder?.sync(
             siteData,
             moduleScenes,
             feederCalculations,
             showInteriors,
+            luminairePhotometry,
         );
-    }, [siteData, moduleScenes, feederCalculations, showInteriors, isActive]);
+        // El resumen de iluminancia sale de la escena recién construida.
+        queueMicrotask(() => setSummary(builder?.getLightingSummary() ?? null));
+    }, [
+        siteData,
+        moduleScenes,
+        feederCalculations,
+        showInteriors,
+        luminairePhotometry,
+        isActive,
+    ]);
+
+    // Día / Noche y mapa de lux: el builder conserva estos modos entre reconstrucciones.
+    useEffect(() => {
+        builderRef.current?.setNightMode(night);
+    }, [night]);
+    useEffect(() => {
+        builderRef.current?.setLuxMap(luxMap);
+    }, [luxMap]);
 
     const setView = (view: keyof typeof VIEWS) => {
         const cam = cameraRef.current;
@@ -200,6 +229,65 @@ export function SiteViewer3D({
                 <Box className="h-3.5 w-3.5" />
                 Mostrar interiores
             </label>
+
+            <div className="absolute top-14 right-3 flex flex-col items-end gap-1">
+                <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white/90 text-[10px] font-semibold shadow dark:border-white/10 dark:bg-slate-900/90">
+                    <button
+                        type="button"
+                        onClick={() => setNight(false)}
+                        className={`flex items-center gap-1 px-2 py-1.5 ${!night ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' : 'text-slate-500'}`}
+                    >
+                        <Sun className="h-3.5 w-3.5" /> Día
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setNight(true)}
+                        className={`flex items-center gap-1 px-2 py-1.5 ${night ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300' : 'text-slate-500'}`}
+                    >
+                        <Moon className="h-3.5 w-3.5" /> Noche
+                    </button>
+                </div>
+                <label
+                    title="Pinta sobre el suelo la iluminancia (lux) que dan las luminarias de los postes — modelo simplificado."
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-[10px] font-semibold text-slate-600 shadow dark:border-white/10 dark:bg-slate-900/90 dark:text-slate-300"
+                >
+                    <input
+                        type="checkbox"
+                        checked={luxMap}
+                        onChange={(event) => setLuxMap(event.target.checked)}
+                    />
+                    <Zap className="h-3.5 w-3.5" />
+                    Mapa de lux
+                </label>
+            </div>
+
+            {summary && (
+                <div className="absolute bottom-3 left-3 max-w-xs rounded-lg border border-slate-200 bg-white/92 p-2 text-[10px] text-slate-700 shadow dark:border-white/10 dark:bg-slate-900/92 dark:text-slate-200">
+                    <p className="mb-1 font-bold tracking-wide uppercase">
+                        Alumbrado exterior
+                    </p>
+                    <p>
+                        {summary.luminaires} luminarias ·{' '}
+                        {Math.round(summary.fluxLm).toLocaleString('es-PE')} lm
+                        en total
+                    </p>
+                    <p>
+                        E prom {summary.avgLux.toFixed(1)} lx · mín{' '}
+                        {summary.minLux.toFixed(1)} · máx{' '}
+                        {summary.maxLux.toFixed(0)}
+                    </p>
+                    <p>
+                        Uniformidad U0 = {summary.uniformity.toFixed(2)} ·{' '}
+                        {Math.round(summary.areaM2).toLocaleString('es-PE')} m²
+                        analizados
+                    </p>
+                    <p className="mt-1 text-[9px] text-slate-400">
+                        Modelo simplificado (lm + ángulo de haz, sin archivo
+                        IES/LDT ni obstáculos). No hay norma de iluminancia
+                        exterior cargada: no se valida cumplimiento.
+                    </p>
+                </div>
+            )}
 
             <div className="pointer-events-none absolute right-3 bottom-3 space-y-0.5 text-right font-mono text-[9px] text-slate-500 dark:text-slate-500">
                 <div>{'Arrastrar -> orbitar'}</div>

@@ -93,6 +93,34 @@ describe('site/domain/geometry', () => {
         expect(closing?.point).toEqual({ x: 0, y: 5 });
     });
 
+    it('un trazado abierto no considera el lado que "cierra" del último al primer punto', () => {
+        const path = [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 10, y: 10 },
+        ];
+        // (2, 6) está más cerca del lado de cierre (10,10)→(0,0) que de los reales.
+        const closed = closestPointOnPolygon({ x: 2, y: 6 }, path, true);
+        const open = closestPointOnPolygon({ x: 2, y: 6 }, path, false);
+        expect(closed?.point.x).toBeCloseTo(4, 6);
+        expect(open?.point).toEqual({ x: 2, y: 0 });
+    });
+
+    it('informa el lado, la posición sobre él y la distancia (para abrir un vano de portón)', () => {
+        const path = [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 10, y: 10 },
+        ];
+        const hit = closestPointOnPolygon({ x: 4, y: -3 }, path, false);
+        expect(hit?.edgeIndex).toBe(0);
+        expect(hit?.t).toBeCloseTo(0.4, 6);
+        expect(hit?.distance).toBeCloseTo(3, 6);
+        const second = closestPointOnPolygon({ x: 13, y: 5 }, path, false);
+        expect(second?.edgeIndex).toBe(1);
+        expect(second?.t).toBeCloseTo(0.5, 6);
+    });
+
     it('desplaza las esquinas de un cuadrado en diagonal (inglete de 90°), sin importar el sentido de giro', () => {
         const square = [
             { x: 0, y: 0 },

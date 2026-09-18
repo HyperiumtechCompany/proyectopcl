@@ -1,4 +1,5 @@
 import { useSiteEditor } from '../hooks/useSiteEditor';
+import { useSiteKeyboard } from '../hooks/useSiteKeyboard';
 import { SiteCanvas2D } from './SiteCanvas2D';
 import { SiteContourImportDialog } from './SiteContourImportDialog';
 import { SitePalette } from './SitePalette';
@@ -27,6 +28,7 @@ export function SiteEditor2D({
     isActive = true,
 }: Props) {
     const editor = useSiteEditor(projectId, generalModuleId);
+    useSiteKeyboard(editor, isActive);
 
     return (
         <div className="flex h-full min-h-0 flex-col">

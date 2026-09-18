@@ -5,8 +5,14 @@ import {
     type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { createCanvasTransforms } from '@/pages/dialux/geometry/coordinateTransform';
+import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import { deriveFeederStatus, feederStatusColor } from '../domain/feederSync';
 import { snapToGrid } from '../domain/geometry';
+import {
+    buildStraightRampLayout,
+    stairAsRampConfig,
+} from '../domain/rampLayout';
+import { stairStepCount } from '../domain/siteNorms';
 import {
     elementElevationRange,
     elevationColor,
@@ -14,6 +20,7 @@ import {
 import type { Point2D, SiteData, SiteElement } from '../domain/types';
 import { useSiteCadPlan } from '../hooks/useSiteCadPlan';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
+import { SITE_ELEMENT_DEFAULTS } from '../lib/siteDefaults';
 import { POINT_ELEMENT_TYPES, SiteElementSymbol } from './SiteElementSymbol';
 
 interface Props {
@@ -62,6 +69,9 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
     const {
         containerRef: cadContainerRef,
         status: cadStatus,
+        deferredBytes,
+        loadVector,
+        abandonVector,
         getView,
         getViewState,
         zoomAtScreen,
@@ -96,6 +106,7 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
               pointerId: number;
               startWorld: Point2D;
               originVertices: Point2D[];
+              groupOrigins: Record<string, Point2D[]>;
           }
         | undefined
     >(undefined);
@@ -111,6 +122,40 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
         | undefined
     >(undefined);
     const refitStampRef = useRef<number | null>(null);
+    /** Selección por recuadro (Mayús/Ctrl + arrastrar sobre el fondo). Coordenadas en px del contenedor. */
+    const marqueeRef = useRef<
+        { pointerId: number; x0: number; y0: number } | undefined
+    >(undefined);
+    const [marquee, setMarquee] = useState<{
+        x0: number;
+        y0: number;
+        x1: number;
+        y1: number;
+    } | null>(null);
+    /** Un arrastre (vértice, objeto, giro, plano) = UN paso de Ctrl+Z, no uno por cada movimiento del puntero. */
+    const gestureOpenRef = useRef(false);
+    const beginDragGesture = () => {
+        if (gestureOpenRef.current) return;
+        gestureOpenRef.current = true;
+        useEditorStore.getState().beginHistoryGesture();
+    };
+    const endDragGesture = () => {
+        if (!gestureOpenRef.current) return;
+        gestureOpenRef.current = false;
+        useEditorStore.getState().endHistoryGesture();
+    };
+    useEffect(
+        () => () => {
+            // Si el editor se desmonta a mitad de un arrastre, no dejar el gesto abierto (bloquearía el historial).
+             
+            if (gestureOpenRef.current) {
+                 
+                gestureOpenRef.current = false;
+                useEditorStore.getState().endHistoryGesture();
+            }
+        },
+        [],
+    );
 
     // ── Tamaño del contenedor (y avisar al motor para que ajuste su canvas) ──
     useEffect(() => {
@@ -171,17 +216,26 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
         : null;
     // Sin plano CAD: transformación afín propia. El `fallbackView` (estado) solo
     // acumula el pan/zoom del usuario; el encuadre inicial se deriva del tamaño.
+    // El encuadre inicial ajusta al plano importado (si hay): sus coordenadas
+    // no tienen por qué caber en el lienzo por defecto de 2000×1200 — sin
+    // esto el emplazamiento salía diminuto en una esquina (sin plano CAD
+    // vivo, p. ej. mientras se abre o si es demasiado pesado).
+    const plan = editor.importedPlan;
+    const fitW = plan ? plan.widthUnits : baseWidth;
+    const fitH = plan ? plan.heightUnits : baseHeight;
+    const fitX = plan ? plan.x : 0;
+    const fitY = plan ? plan.y : 0;
     const fb: FallbackView =
         fallbackView ??
-        (size.w > 0
+        (size.w > 0 && fitW > 0 && fitH > 0
             ? (() => {
                   const s =
-                      Math.min(size.w / baseWidth, size.h / baseHeight, 1) *
+                      Math.min(size.w / fitW, size.h / fitH, plan ? Infinity : 1) *
                           0.9 || 0.5;
                   return {
                       scale: s,
-                      tx: (size.w - baseWidth * s) / 2,
-                      ty: (size.h - baseHeight * s) / 2,
+                      tx: (size.w - fitW * s) / 2 - fitX * s,
+                      ty: (size.h - fitH * s) / 2 - fitY * s,
                   };
               })()
             : { scale: 0.5, tx: 0, ty: 0 });
@@ -335,7 +389,6 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
 
     const legacyPlan =
         !cadPlanActive &&
-        cadStatus !== 'loading' &&
         siteData.importedPlan?.visible
             ? siteData.importedPlan
             : null;
@@ -386,6 +439,19 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                 onPointerDown={(event) => {
                     if (event.target !== event.currentTarget) return;
                     const panButton = event.button === 1 || event.button === 2;
+                    if (
+                        event.button === 0 &&
+                        !toolPlaces &&
+                        (event.shiftKey || event.ctrlKey || event.metaKey)
+                    ) {
+                        const r = wrapRef.current?.getBoundingClientRect();
+                        const x = event.clientX - (r?.left ?? 0);
+                        const y = event.clientY - (r?.top ?? 0);
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                        marqueeRef.current = { pointerId: event.pointerId, x0: x, y0: y };
+                        setMarquee({ x0: x, y0: y, x1: x, y1: y });
+                        return;
+                    }
                     if (event.button === 0 && toolPlaces) {
                         handleWorldClick(toWorld(event.clientX, event.clientY));
                         return;
@@ -396,6 +462,17 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                     if (isDrawTool) editor.finishDrawing();
                 }}
                 onPointerMove={(event) => {
+                    const mq = marqueeRef.current;
+                    if (mq && mq.pointerId === event.pointerId) {
+                        const r = wrapRef.current?.getBoundingClientRect();
+                        setMarquee({
+                            x0: mq.x0,
+                            y0: mq.y0,
+                            x1: event.clientX - (r?.left ?? 0),
+                            y1: event.clientY - (r?.top ?? 0),
+                        });
+                        return;
+                    }
                     if (isDrawTool && editor.pendingVertices.length > 0) {
                         setDrawCursor(toWorld(event.clientX, event.clientY));
                     }
@@ -435,12 +512,7 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                         const now = toWorld(event.clientX, event.clientY);
                         const dx = now.x - eDrag.startWorld.x;
                         const dy = now.y - eDrag.startWorld.y;
-                        editor.updateSiteElement(eDrag.elementId, {
-                            vertices: eDrag.originVertices.map((vertex) => ({
-                                x: vertex.x + dx,
-                                y: vertex.y + dy,
-                            })),
-                        });
+                        editor.moveSiteElements(eDrag.groupOrigins, dx, dy);
                         return;
                     }
 
@@ -474,6 +546,61 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                     }
                 }}
                 onPointerUp={(event) => {
+                    endDragGesture();
+                    const mqUp = marqueeRef.current;
+                    if (mqUp && mqUp.pointerId === event.pointerId) {
+                        const r = wrapRef.current?.getBoundingClientRect();
+                        const x = event.clientX - (r?.left ?? 0);
+                        const y = event.clientY - (r?.top ?? 0);
+                        const c1 = toWorld(
+                            (r?.left ?? 0) + Math.min(mqUp.x0, x),
+                            (r?.top ?? 0) + Math.min(mqUp.y0, y),
+                        );
+                        const c2 = toWorld(
+                            (r?.left ?? 0) + Math.max(mqUp.x0, x),
+                            (r?.top ?? 0) + Math.max(mqUp.y0, y),
+                        );
+                        const minX = Math.min(c1.x, c2.x);
+                        const maxX = Math.max(c1.x, c2.x);
+                        const minY = Math.min(c1.y, c2.y);
+                        const maxY = Math.max(c1.y, c2.y);
+                        const tiny =
+                            Math.abs(x - mqUp.x0) < 4 &&
+                            Math.abs(y - mqUp.y0) < 4;
+                        if (!tiny) {
+                            editor.selectElements(
+                                siteData.elements
+                                    .filter((el) => {
+                                        if (
+                                            el.visible === false ||
+                                            el.locked ||
+                                            !isLayerVisible(siteData, el)
+                                        ) {
+                                            return false;
+                                        }
+                                        const xs = el.vertices.map((v) => v.x);
+                                        const ys = el.vertices.map((v) => v.y);
+                                        return (
+                                            Math.min(...xs) <= maxX &&
+                                            Math.max(...xs) >= minX &&
+                                            Math.min(...ys) <= maxY &&
+                                            Math.max(...ys) >= minY
+                                        );
+                                    })
+                                    .map((el) => el.id),
+                            );
+                        }
+                        try {
+                            event.currentTarget.releasePointerCapture(
+                                event.pointerId,
+                            );
+                        } catch {
+                            /* noop */
+                        }
+                        marqueeRef.current = undefined;
+                        setMarquee(null);
+                        return;
+                    }
                     if (rotateDragRef.current?.pointerId === event.pointerId) {
                         rotateDragRef.current = undefined;
                         return;
@@ -503,6 +630,9 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                     panRef.current = undefined;
                 }}
                 onPointerCancel={() => {
+                    endDragGesture();
+                    marqueeRef.current = undefined;
+                    setMarquee(null);
                     dragRef.current = undefined;
                     vertexDragRef.current = undefined;
                     planDragRef.current = undefined;
@@ -537,7 +667,8 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                             event.currentTarget.ownerSVGElement?.setPointerCapture(
                                 event.pointerId,
                             );
-                            planDragRef.current = {
+                            beginDragGesture();
+planDragRef.current = {
                                 pointerId: event.pointerId,
                                 startWorld: toWorld(
                                     event.clientX,
@@ -563,16 +694,16 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                     // temprano podía quedar tapado por otros dibujados
                     // después. El seleccionado siempre va al final, sin tocar
                     // el orden relativo del resto.
-                    .sort((a, b) =>
-                        a.id === editor.selectedElementId
-                            ? 1
-                            : b.id === editor.selectedElementId
-                              ? -1
-                              : 0,
-                    )
+                    .sort((a, b) => {
+                        const sa = editor.selectedElementIds.includes(a.id);
+                        const sb = editor.selectedElementIds.includes(b.id);
+                        return sa === sb ? 0 : sa ? 1 : -1;
+                    })
                     .map((element) => {
-                        const selected =
-                            editor.selectedElementId === element.id;
+                        const selected = editor.selectedElementIds.includes(element.id);
+                        // Con varios seleccionados no hay vértices ni giro (se mueven en bloque).
+                        const selectedSingle =
+                            selected && editor.selectedElementIds.length === 1;
                         const centroid = element.vertices.reduce(
                             (acc, v) => ({
                                 x: acc.x + v.x / element.vertices.length,
@@ -588,10 +719,33 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                         ) => {
                             if (!canDrag) return;
                             event.stopPropagation();
-                            editor.selectElement(element.id);
+                            // Mayús / Ctrl + clic: agrega o quita del grupo, sin arrastrar.
+                            if (
+                                event.shiftKey ||
+                                event.ctrlKey ||
+                                event.metaKey
+                            ) {
+                                editor.toggleElementSelection(element.id);
+                                return;
+                            }
+                            // Si ya forma parte de un grupo, se arrastra TODO el grupo.
+                            const inGroup =
+                                selected &&
+                                editor.selectedElementIds.length > 1;
+                            if (!inGroup) editor.selectElement(element.id);
                             event.currentTarget.ownerSVGElement?.setPointerCapture(
                                 event.pointerId,
                             );
+                            beginDragGesture();
+                            const movingIds = inGroup
+                                ? editor.selectedElementIds
+                                : [element.id];
+                            const groupOrigins: Record<string, Point2D[]> = {};
+                            for (const item of siteData.elements) {
+                                if (movingIds.includes(item.id) && !item.locked) {
+                                    groupOrigins[item.id] = item.vertices;
+                                }
+                            }
                             dragRef.current = {
                                 elementId: element.id,
                                 pointerId: event.pointerId,
@@ -600,6 +754,7 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                     event.clientY,
                                 ),
                                 originVertices: element.vertices,
+                                groupOrigins,
                             };
                         };
 
@@ -677,7 +832,7 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
 
                         if (POINT_ELEMENT_TYPES.has(element.type)) {
                             const rot = element.rotation ?? 0;
-                            const showRotate = selected && canDrag;
+                            const showRotate = selectedSingle && canDrag;
                             return (
                                 <g key={element.id}>
                                     <SiteElementSymbol
@@ -742,7 +897,8 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                                     event.currentTarget.ownerSVGElement?.setPointerCapture(
                                                         event.pointerId,
                                                     );
-                                                    rotateDragRef.current = {
+                                                    beginDragGesture();
+rotateDragRef.current = {
                                                         elementId: element.id,
                                                         pointerId:
                                                             event.pointerId,
@@ -788,11 +944,118 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                   )
                                 : element.style.fillColor;
 
+                        const openPath =
+                            element.type === 'fence' &&
+                            element.config?.kind === 'fence' &&
+                            element.config.closed === false;
+                        const Shape = openPath ? 'polyline' : 'polygon';
+
+                        // Rampa con tramos: dibuja en planta cada tramo y cada
+                        // descanso (la vuelta en U con su descanso ancho), no
+                        // solo el polígono de referencia.
+                        const rampCfg =
+                            element.type === 'ramp' &&
+                            element.config?.kind === 'ramp'
+                                ? element.config
+                                : undefined;
+                        const planOf = (lx: number, lz: number): Point2D => ({
+                            x: centroid.x + lx / editor.terrainScaleM,
+                            y: centroid.y - lz / editor.terrainScaleM,
+                        });
+                        const stairCfgNow =
+                            element.type === 'stair' &&
+                            element.config?.kind === 'stair'
+                                ? element.config
+                                : undefined;
+                        let stairDirection: 'east' | 'south' = 'east';
+                        if (stairCfgNow && element.vertices.length >= 3) {
+                            const xsS = element.vertices.map((v) => v.x);
+                            const ysS = element.vertices.map((v) => v.y);
+                            stairDirection =
+                                Math.max(...xsS) - Math.min(...xsS) >=
+                                Math.max(...ysS) - Math.min(...ysS)
+                                    ? 'east'
+                                    : 'south';
+                        }
+                        const stairLike = stairCfgNow
+                            ? stairAsRampConfig(stairCfgNow, stairDirection)
+                            : undefined;
+                        const pathCfg = rampCfg ?? stairLike;
+                        const isStairPath = stairLike !== undefined;
+                        const stairTotal = stairCfgNow
+                            ? stairCfgNow.toElevationM - stairCfgNow.fromElevationM
+                            : 0;
+                        const stairRiserM =
+                            Math.abs(stairTotal) > 1e-6
+                                ? Math.abs(stairTotal) / stairStepCount(stairTotal)
+                                : 0.175;
+                        const rampSegs =
+                            pathCfg &&
+                            pathCfg.shape !== 'spiral' &&
+                            (pathCfg.flights?.length ?? 0) > 0
+                                ? buildStraightRampLayout(pathCfg)
+                                : [];
+                        const rampParts = rampSegs.map((seg) => {
+                            const dx = seg.endLocal.x - seg.startLocal.x;
+                            const dz = seg.endLocal.z - seg.startLocal.z;
+                            const len = Math.hypot(dx, dz) || 1;
+                            const ux = dx / len;
+                            const uz = dz / len;
+                            const mx = (seg.startLocal.x + seg.endLocal.x) / 2;
+                            const mz = (seg.startLocal.z + seg.endLocal.z) / 2;
+                            const hw = seg.widthM / 2;
+                            const corners = [
+                                [-1, -1],
+                                [1, -1],
+                                [1, 1],
+                                [-1, 1],
+                            ].map(([p, q]) =>
+                                planOf(
+                                    mx + ux * (len / 2) * p + -uz * hw * q,
+                                    mz + uz * (len / 2) * p + ux * hw * q,
+                                ),
+                            );
+                            // Flecha en el sentido de avance (de INICIO a FIN)
+                            // + desnivel y pendiente del tramo.
+                            const s0 = toScreen(planOf(seg.startLocal.x, seg.startLocal.z));
+                            const s1 = toScreen(planOf(seg.endLocal.x, seg.endLocal.z));
+                            const sd = Math.hypot(s1.x - s0.x, s1.y - s0.y) || 1;
+                            const dxs = (s1.x - s0.x) / sd;
+                            const dys = (s1.y - s0.y) / sd;
+                            const head = {
+                                x: s0.x + (s1.x - s0.x) * 0.62,
+                                y: s0.y + (s1.y - s0.y) * 0.62,
+                            };
+                            const rise = seg.endY - seg.startY;
+                            return {
+                                id: seg.id,
+                                kind: seg.kind,
+                                role: seg.role,
+                                points: points(corners),
+                                s0,
+                                s1,
+                                arrow: `${head.x + dxs * 7},${head.y + dys * 7} ${head.x - dxs * 4 - dys * 5},${head.y - dys * 4 + dxs * 5} ${head.x - dxs * 4 + dys * 5},${head.y - dys * 4 - dxs * 5}`,
+                                label:
+                                    seg.kind === 'flight'
+                                        ? `${rise >= 0 ? '▲ sube' : '▼ baja'} ${Math.abs(rise).toFixed(2)} m · ${isStairPath ? Math.round(Math.abs(rise) / stairRiserM) + ' peldaños' : ((Math.abs(rise) / len) * 100).toFixed(1) + '%'}`
+                                        : seg.role === 'arrival'
+                                          ? 'descanso de llegada'
+                                          : 'descanso',
+                                mid: { x: (s0.x + s1.x) / 2, y: (s0.y + s1.y) / 2 },
+                                startCota: (pathCfg?.fromElevationM ?? 0) + seg.startY,
+                                endCota: (pathCfg?.fromElevationM ?? 0) + seg.endY,
+                            };
+                        });
+                        const rampFlightsOnly = rampParts.filter((part) => part.kind === 'flight');
+                        const rampStart = rampFlightsOnly[0];
+                        // El FIN es el extremo del último elemento (incluido el descanso de llegada).
+                        const rampEnd = rampParts[rampParts.length - 1];
+
                         return (
                             <g key={element.id}>
-                                <polygon
+                                <Shape
                                     points={points(element.vertices)}
-                                    fill={fillColor}
+                                    fill={openPath ? 'none' : fillColor}
                                     fillOpacity={element.style.opacity ?? 1}
                                     stroke={
                                         selected
@@ -816,6 +1079,52 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                     }
                                     onPointerDown={startElementDrag}
                                 />
+                                {rampParts.map((part) => (
+                                    <g key={part.id} style={{ pointerEvents: 'none' }}>
+                                        <polygon
+                                            points={part.points}
+                                            fill={part.kind === 'landing' ? '#57534e' : '#a8a29e'}
+                                            fillOpacity={0.65}
+                                            stroke="#292524"
+                                            strokeWidth={1}
+                                        />
+                                        {part.kind === 'flight' && (
+                                            <>
+                                                <line
+                                                    x1={part.s0.x}
+                                                    y1={part.s0.y}
+                                                    x2={part.s1.x}
+                                                    y2={part.s1.y}
+                                                    stroke="#fef3c7"
+                                                    strokeWidth={1.2}
+                                                    strokeDasharray="4 3"
+                                                />
+                                                <polygon points={part.arrow} fill="#fef3c7" stroke="#292524" strokeWidth={0.6} />
+                                            </>
+                                        )}
+                                        <text
+                                            x={part.mid.x}
+                                            y={part.mid.y - 3}
+                                            textAnchor="middle"
+                                            fontSize={LABEL_PX - 3}
+                                            className="fill-slate-900 font-semibold"
+                                        >
+                                            {part.label}
+                                        </text>
+                                    </g>
+                                ))}
+                                {rampStart && rampEnd && (
+                                    <g style={{ pointerEvents: 'none' }}>
+                                        <circle cx={rampStart.s0.x} cy={rampStart.s0.y} r={5} fill="#16a34a" stroke="white" strokeWidth={1.5} />
+                                        <text x={rampStart.s0.x + 8} y={rampStart.s0.y - 6} fontSize={LABEL_PX - 2} className="fill-green-800 font-bold">
+                                            INICIO {rampStart.startCota.toFixed(2)} m
+                                        </text>
+                                        <circle cx={rampEnd.s1.x} cy={rampEnd.s1.y} r={5} fill="#dc2626" stroke="white" strokeWidth={1.5} />
+                                        <text x={rampEnd.s1.x + 8} y={rampEnd.s1.y + 14} fontSize={LABEL_PX - 2} className="fill-red-800 font-bold">
+                                            FIN {rampEnd.endCota.toFixed(2)} m
+                                        </text>
+                                    </g>
+                                )}
                                 <text
                                     x={labelPos.x}
                                     y={labelPos.y}
@@ -827,11 +1136,17 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                     {element.type === 'terrace_platform' &&
                                         `  ▲ ${(element.baseElevationM ?? 0).toFixed(2)} m`}
                                 </text>
-                                {selected &&
+                                {selectedSingle &&
                                     editor.activeTool === 'select' &&
                                     !element.locked &&
                                     element.vertices.length > 1 &&
                                     element.vertices.map((vertex, index) => {
+                                        if (
+                                            openPath &&
+                                            index === element.vertices.length - 1
+                                        ) {
+                                            return null;
+                                        }
                                         // Punto medio con el SIGUIENTE vértice
                                         // (el polígono se dibuja cerrado, así
                                         // que el último también forma lado con
@@ -867,7 +1182,8 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                                         index,
                                                         midWorld,
                                                     );
-                                                    vertexDragRef.current = {
+                                                    beginDragGesture();
+vertexDragRef.current = {
                                                         elementId: element.id,
                                                         vertexIndex: newIndex,
                                                         pointerId:
@@ -877,7 +1193,7 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                             />
                                         );
                                     })}
-                                {selected &&
+                                {selectedSingle &&
                                     editor.activeTool === 'select' &&
                                     !element.locked &&
                                     element.vertices.map((vertex, index) => {
@@ -894,7 +1210,8 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                                                     event.currentTarget.ownerSVGElement?.setPointerCapture(
                                                         event.pointerId,
                                                     );
-                                                    vertexDragRef.current = {
+                                                    beginDragGesture();
+vertexDragRef.current = {
                                                         elementId: element.id,
                                                         vertexIndex: index,
                                                         pointerId:
@@ -921,6 +1238,18 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                         );
                     })}
 
+                {marquee && (
+                    <rect
+                        x={Math.min(marquee.x0, marquee.x1)}
+                        y={Math.min(marquee.y0, marquee.y1)}
+                        width={Math.abs(marquee.x1 - marquee.x0)}
+                        height={Math.abs(marquee.y1 - marquee.y0)}
+                        className="fill-cyan-400/15 stroke-cyan-500"
+                        strokeWidth={1}
+                        strokeDasharray="4 3"
+                        style={{ pointerEvents: 'none' }}
+                    />
+                )}
                 {siteData.feederPaths.map((path) => {
                     const status = deriveFeederStatus(
                         path.networkEdgeId,
@@ -1028,9 +1357,45 @@ export function SiteCanvas2D({ editor, isActive = true }: Props) {
                 )}
             </svg>
 
+            {editor.activeTool !== 'select' && editor.activeTool !== 'pan' && (
+                <div className="pointer-events-none absolute bottom-2 left-2 z-10 rounded bg-slate-900/85 px-2 py-1 text-[10px] font-medium text-white">
+                    Herramienta activa:{' '}
+                    {editor.activeTool === 'calibrate_plan'
+                        ? 'Calibrar plano'
+                        : editor.activeTool === 'draw_feeder'
+                          ? 'Trazar alimentador'
+                          : editor.activeTool === 'measure'
+                            ? 'Medir'
+                            : (SITE_ELEMENT_DEFAULTS[editor.pendingType]?.label ??
+                              editor.activeTool)}{' '}
+                    — clic para crear varios · Esc para terminar
+                </div>
+            )}
+            {cadStatus === 'deferred' && (
+                <div className="absolute top-2 right-2 z-10 flex items-center gap-2 rounded-lg border border-slate-200 bg-white/95 px-2.5 py-1.5 text-[10px] text-slate-600 shadow dark:border-white/10 dark:bg-slate-900/95 dark:text-slate-300">
+                    <span>
+                        Plano CAD pesado ({(deferredBytes / 1_000_000).toFixed(1)}{' '}
+                        MB): se muestra la imagen.
+                    </span>
+                    <button
+                        type="button"
+                        onClick={loadVector}
+                        className="rounded bg-amber-500 px-2 py-0.5 font-semibold text-white hover:bg-amber-600"
+                    >
+                        Cargar vectorial
+                    </button>
+                </div>
+            )}
             {cadStatus === 'loading' && (
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-slate-400">
-                    Abriendo plano CAD…
+                <div className="absolute top-2 right-2 z-10 flex items-center gap-2 rounded-lg border border-slate-200 bg-white/95 px-2.5 py-1.5 text-[10px] text-slate-600 shadow dark:border-white/10 dark:bg-slate-900/95 dark:text-slate-300">
+                    <span>Abriendo plano CAD… puede tardar.</span>
+                    <button
+                        type="button"
+                        onClick={abandonVector}
+                        className="rounded border border-slate-300 px-2 py-0.5 font-semibold hover:bg-slate-100 dark:border-white/20 dark:hover:bg-white/10"
+                    >
+                        Usar imagen
+                    </button>
                 </div>
             )}
             {cadStatus === 'error' && (

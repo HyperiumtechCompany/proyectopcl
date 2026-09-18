@@ -73,14 +73,19 @@ function sublabelFor(element: SiteElement): string {
  */
 export function SiteObjectsPanel({ editor, onSelect }: Props) {
     const elements = editor.siteData?.elements ?? [];
-    const selectedId = editor.selectedElementId;
-    const select = (id: string) => {
+    const selectedIds = editor.selectedElementIds;
+    const select = (id: string, additive = false) => {
+        // Mayús/Ctrl + clic en la lista: agrega o quita del grupo (sin saltar a Propiedades).
+        if (additive) {
+            editor.toggleElementSelection(id);
+            return;
+        }
         editor.selectElement(id);
         onSelect?.(id);
     };
     const remove = (id: string) => {
         editor.removeSiteElement(id);
-        if (selectedId === id) editor.selectElement(null);
+        if (selectedIds.includes(id)) editor.selectElements(selectedIds.filter((x) => x !== id));
     };
 
     const other = elements.filter((el) => !KNOWN_TYPES.has(el.type));
@@ -105,7 +110,7 @@ export function SiteObjectsPanel({ editor, onSelect }: Props) {
                     title={group.title}
                     icon={group.icon}
                     items={elements.filter((el) => group.types.includes(el.type))}
-                    selectedId={selectedId}
+                    selectedIds={selectedIds}
                     onSelect={select}
                     onDelete={remove}
                 />
@@ -114,7 +119,7 @@ export function SiteObjectsPanel({ editor, onSelect }: Props) {
                 title="Otros"
                 icon={Layers}
                 items={other}
-                selectedId={selectedId}
+                selectedIds={selectedIds}
                 onSelect={select}
                 onDelete={remove}
             />
@@ -126,15 +131,15 @@ function ObjectGroup({
     title,
     icon: Icon,
     items,
-    selectedId,
+    selectedIds,
     onSelect,
     onDelete,
 }: {
     title: string;
     icon: IconType;
     items: SiteElement[];
-    selectedId: string | null;
-    onSelect: (id: string) => void;
+    selectedIds: string[];
+    onSelect: (id: string, additive?: boolean) => void;
     onDelete: (id: string) => void;
 }) {
     if (items.length === 0) return null;
@@ -155,11 +160,13 @@ function ObjectGroup({
             </summary>
             <div className="space-y-0.5 border-t border-slate-200 p-1 dark:border-white/10">
                 {items.map((item) => {
-                    const isSelected = selectedId === item.id;
+                    const isSelected = selectedIds.includes(item.id);
                     return (
                         <div
                             key={item.id}
-                            onClick={() => onSelect(item.id)}
+                            onClick={(event) =>
+                                onSelect(item.id, event.shiftKey || event.ctrlKey || event.metaKey)
+                            }
                             className={`group/item flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 ${
                                 isSelected
                                     ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-300'

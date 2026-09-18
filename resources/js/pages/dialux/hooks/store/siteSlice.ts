@@ -32,6 +32,15 @@ export interface SiteSlice {
     ) => void;
     /** Quita un vértice — no baja de 3 (mínimo para que siga siendo un polígono válido). */
     removeSiteVertex: (elementId: string, vertexIndex: number) => void;
+    /** Agrega varios elementos en UN solo cambio (un paso de deshacer). Devuelve sus ids, en orden. */
+    addSiteElements: (elements: Array<Omit<SiteElement, 'id'>>) => string[];
+    /** Desplaza varios elementos: `origins` = vértices de partida por id; `dx, dy` en unidades de plano. */
+    moveSiteElements: (
+        origins: Record<string, Point2D[]>,
+        dx: number,
+        dy: number,
+    ) => void;
+    removeSiteElements: (ids: string[]) => void;
     addFeederPath: (
         path: Omit<FeederPath, 'id' | 'calculatedLengthM'> & {
             calculatedLengthM?: number;
@@ -245,6 +254,68 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
                                 ),
                             };
                         }),
+                    },
+                },
+            };
+        }),
+    addSiteElements: (elements) => {
+        const ids = elements.map(() => uuidv4());
+        set((state) => {
+            if (!state.project) return state;
+            const site = state.project.site ?? defaultSiteData();
+            return {
+                project: {
+                    ...state.project,
+                    site: {
+                        ...site,
+                        elements: [
+                            ...site.elements,
+                            ...elements.map((element, index) => ({
+                                ...element,
+                                id: ids[index],
+                            })),
+                        ],
+                    },
+                },
+            };
+        });
+        return ids;
+    },
+    moveSiteElements: (origins, dx, dy) =>
+        set((state) => {
+            if (!state.project?.site) return state;
+            return {
+                project: {
+                    ...state.project,
+                    site: {
+                        ...state.project.site,
+                        elements: state.project.site.elements.map((item) => {
+                            const origin = origins[item.id];
+                            if (!origin) return item;
+                            return {
+                                ...item,
+                                vertices: origin.map((vertex) => ({
+                                    x: vertex.x + dx,
+                                    y: vertex.y + dy,
+                                })),
+                            };
+                        }),
+                    },
+                },
+            };
+        }),
+    removeSiteElements: (ids) =>
+        set((state) => {
+            if (!state.project?.site) return state;
+            const drop = new Set(ids);
+            return {
+                project: {
+                    ...state.project,
+                    site: {
+                        ...state.project.site,
+                        elements: state.project.site.elements.filter(
+                            (item) => !drop.has(item.id),
+                        ),
                     },
                 },
             };

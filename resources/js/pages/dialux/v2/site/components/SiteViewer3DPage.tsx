@@ -1,4 +1,5 @@
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
+import { useLuminairePhotometry } from '../hooks/useLuminaireCatalog';
 import { useNetworkSnapshotForSite } from '../hooks/useNetworkSnapshotForSite';
 import { SiteViewer3D } from './SiteViewer3D';
 
@@ -18,6 +19,16 @@ interface Props {
 export function SiteViewer3DPage({ projectId, isActive = true }: Props) {
     const siteData = useEditorStore((state) => state.project?.site);
     const { moduleScenes, calculations } = useNetworkSnapshotForSite(projectId);
+    // Fotometría real de las luminarias del catálogo usadas por los postes.
+    const luminairePhotometry = useLuminairePhotometry(
+        (siteData?.elements ?? []).flatMap((element) =>
+            element.type === 'pole' &&
+            element.config?.kind === 'pole' &&
+            element.config.productId
+                ? [element.config.productId]
+                : [],
+        ),
+    );
 
     if (!siteData) {
         return (
@@ -32,6 +43,7 @@ export function SiteViewer3DPage({ projectId, isActive = true }: Props) {
             siteData={siteData}
             moduleScenes={moduleScenes}
             feederCalculations={calculations}
+            luminairePhotometry={luminairePhotometry}
             isActive={isActive}
         />
     );

@@ -14,6 +14,7 @@ import type { SiteElement } from '../domain/types';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 import { SiteElementConfigFields } from './SiteElementConfigFields';
 import { POINT_ELEMENT_TYPES } from './SiteElementSymbol';
+import { RepeatSection, SiteGroupPanel } from './SiteGroupPanel';
 import { SiteObjectsPanel } from './SiteObjectsPanel';
 
 interface ModuleOption {
@@ -36,6 +37,7 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
         (item) => item.id === editor.selectedElementId,
     );
     const [tab, setTab] = useState<SidebarTab>('properties');
+    const isGroup = editor.selectedElementIds.length > 1;
 
     return (
         <aside className="flex min-h-0 w-full flex-col overflow-y-auto border-t border-slate-200 bg-white xl:w-72 xl:border-t-0 xl:border-l dark:border-white/10 dark:bg-[#101218]">
@@ -78,21 +80,29 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                             Propiedades
                         </h2>
                         <p className="text-[11px] text-slate-500">
-                            {element
-                                ? 'Elemento del emplazamiento'
-                                : 'Selecciona un elemento del plano'}
+                            {isGroup
+                                ? 'Selección múltiple'
+                                : element
+                                  ? 'Elemento del emplazamiento'
+                                  : 'Selecciona un elemento del plano'}
                         </p>
                     </div>
                     {editor.calibrationPoints.length === 2 && (
                         <CalibrationPanel editor={editor} />
                     )}
-                    {element && (
-                        <ElementProperties
-                            key={element.id}
-                            element={element}
-                            editor={editor}
-                            modules={modules}
-                        />
+                    {isGroup && <SiteGroupPanel editor={editor} />}
+                    {element && !isGroup && (
+                        <>
+                            <ElementProperties
+                                key={element.id}
+                                element={element}
+                                editor={editor}
+                                modules={modules}
+                            />
+                            <div className="shrink-0 border-t border-slate-200 p-3 dark:border-white/10">
+                                <RepeatSection editor={editor} />
+                            </div>
+                        </>
                     )}
                     {!element && <ImportedPlanPanel editor={editor} />}
                 </>

@@ -41,7 +41,14 @@ export default function DialuxV2Module({
     );
     const resetHistory = useEditorStore((state) => state.resetHistory);
     const set3DView = useEditorStore((state) => state.set3DView);
-    const [ready, setReady] = useState(false);
+    // "Listo" es POR módulo+vista: al cambiar de módulo (misma instancia de
+    // página en Inertia) el store aún trae el proyecto del módulo anterior
+    // hasta que corre el efecto de carga — sin esta clave, el árbol pesado
+    // (editor, motor CAD, Babylon) se montaba con datos viejos y se
+    // reconstruía una segunda vez al llegar los nuevos.
+    const readyKey = `${module.id}:${initialView}`;
+    const [readyFor, setReadyFor] = useState<string | null>(null);
+    const ready = readyFor === readyKey;
     const actions = useModuleActions({
         projectId: project.id,
         modules,
@@ -69,7 +76,7 @@ export default function DialuxV2Module({
         void ensureStandardDataLoaded('en_1838');
         let mounted = true;
         queueMicrotask(() => {
-            if (mounted) setReady(true);
+            if (mounted) setReadyFor(`${module.id}:${initialView}`);
         });
 
         return () => {
@@ -86,6 +93,13 @@ export default function DialuxV2Module({
     const [generalView, setGeneralView] = useState<'2d' | '3d'>(
         initialView === '3d' ? '3d' : '2d',
     );
+    // El visor 3D (motor Babylon + contexto WebGL) se monta la primera vez
+    // que se abre su pestaña, no al entrar al módulo: entrar al Módulo
+    // General ya no paga ese costo si solo se trabaja en 2D. Una vez
+    // montado se mantiene (no se destruye al alternar pestañas).
+    const [visited3d, setVisited3d] = useState(initialView === '3d');
+    if (generalView === '3d' && !visited3d) setVisited3d(true);
+
     useEffect(() => {
         if (module.kind !== 'general' || typeof window === 'undefined') return;
         set3DView(generalView === '3d');
@@ -104,8 +118,6 @@ export default function DialuxV2Module({
             href: `/dialux-v2/projects/${project.id}/modules/${module.id}`,
         },
     ];
-
-    if (!ready) return null;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -130,7 +142,11 @@ export default function DialuxV2Module({
                             </div>
                         )}
                         <div className="relative min-h-0 flex-1 overflow-hidden">
-                            {module.kind === 'general' ? (
+                            {!ready ? (
+                                <div className="flex h-full items-center justify-center text-xs text-slate-400">
+                                    Cargando módulo…
+                                </div>
+                            ) : module.kind === 'general' ? (
                                 <>
                                     <div
                                         className="absolute inset-0"
@@ -165,10 +181,12 @@ export default function DialuxV2Module({
                                                     : 'none',
                                         }}
                                     >
-                                        <SiteViewer3DPage
-                                            projectId={project.id}
-                                            isActive={generalView === '3d'}
-                                        />
+                                        {visited3d && (
+                                            <SiteViewer3DPage
+                                                projectId={project.id}
+                                                isActive={generalView === '3d'}
+                                            />
+                                        )}
                                     </div>
                                 </>
                             ) : (

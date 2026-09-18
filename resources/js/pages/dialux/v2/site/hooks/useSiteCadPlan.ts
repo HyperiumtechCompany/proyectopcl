@@ -36,7 +36,18 @@ import { SITE_PLAN_SOURCE_SCENE_ID } from '../lib/planImport';
  */
 
 export type SiteCadPlanStatus =
-    'idle' | 'loading' | 'ready' | 'missing' | 'error';
+    | 'idle'
+    | 'loading'
+    | 'ready'
+    | 'missing'
+    | 'error'
+    /** Plano demasiado pesado para abrirse solo: se muestra la imagen y el usuario decide cargar el vectorial. */
+    | 'deferred';
+
+/** Sobre este tamaño el DWG NO se abre automáticamente: el motor lo procesa en el hilo principal y congela el editor (medido: 5 s por mensaje del worker, >30 min sin terminar con "PLANTA GENERAL.dwg"). */
+const AUTO_OPEN_MAX_BYTES = 1_500_000;
+/** Tope de espera al abrir: pasado esto se abandona y se vuelve a la imagen. */
+const OPEN_TIMEOUT_MS = 90_000;
 
 interface CadViewLike {
     zoom?: number;
@@ -62,33 +73,29 @@ export function useSiteCadPlan(
     const engine = useMlightcadEngine();
     const containerRef = useRef<HTMLDivElement>(null);
     const [status, setStatus] = useState<SiteCadPlanStatus>('idle');
+    const [deferredBytes, setDeferredBytes] = useState(0);
+    /** El usuario pidió cargar el vectorial aunque sea pesado. */
+    const [forceLoad, setForceLoad] = useState(false);
+    /** Sube al abandonar una carga en curso: su resultado tardío se ignora. */
+    const abortRef = useRef(0);
 
     const initedRef = useRef(false);
     const openedForRef = useRef<number | null>(null);
     const serverMissingRef = useRef(false);
 
-    // 1. Inicializar el motor UNA vez (montar el visor en el contenedor).
+    // Abrir el DWG (y reabrirlo cuando cambia `importedAt`). El motor se
+    // inicializa AQUÍ, justo antes de abrir — no al montar: con un plano
+    // pesado que no se va a abrir, ni siquiera se crea el visor (fuentes,
+    // workers, DXF en blanco).
     useEffect(() => {
-        const container = containerRef.current;
-        if (!container || initedRef.current) return;
-        initedRef.current = true;
-        void engine.initViewer(container).catch((error) => {
-            console.warn('[site-plan] initViewer fallo.', error);
-            setStatus('error');
-        });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // 2. Abrir el DWG (y reabrirlo cuando cambia `importedAt`).
-    useEffect(() => {
-        if (!initedRef.current) return;
         if (importedAt !== undefined && openedForRef.current === importedAt) {
             return;
         }
 
         let cancelled = false;
+        const ticket = ++abortRef.current;
+        const stale = () => cancelled || abortRef.current !== ticket;
         void (async () => {
-            setStatus('loading');
             try {
                 let stored = await loadDialuxPlan(
                     String(projectId),
@@ -102,7 +109,7 @@ export function useSiteCadPlan(
                     );
                     if (!stored) serverMissingRef.current = true;
                 }
-                if (cancelled) return;
+                if (stale()) return;
 
                 if (!stored) {
                     // Proyecto importado antes de que se guardara el original:
@@ -111,10 +118,42 @@ export function useSiteCadPlan(
                     return;
                 }
 
-                const opened = await engine.openFile(
-                    storedDialuxPlanToFile(stored),
-                );
-                if (cancelled) return;
+                const file = storedDialuxPlanToFile(stored);
+                if (file.size > AUTO_OPEN_MAX_BYTES && !forceLoad) {
+                    setDeferredBytes(file.size);
+                    setStatus('deferred');
+                    return;
+                }
+
+                setStatus('loading');
+                const container = containerRef.current;
+                if (!container) {
+                    setStatus('error');
+                    return;
+                }
+                if (!initedRef.current) {
+                    initedRef.current = true;
+                    await engine.initViewer(container);
+                    if (stale()) return;
+                }
+
+                const opened = await Promise.race([
+                    engine.openFile(file),
+                    new Promise<'timeout'>((resolve) =>
+                        window.setTimeout(
+                            () => resolve('timeout'),
+                            OPEN_TIMEOUT_MS,
+                        ),
+                    ),
+                ]);
+                if (stale()) return;
+                if (opened === 'timeout') {
+                    console.warn(
+                        '[site-plan] El plano CAD tardó demasiado; se usa la imagen.',
+                    );
+                    setStatus('error');
+                    return;
+                }
                 openedForRef.current = importedAt ?? Date.now();
                 if (opened) {
                     engine.setViewOrigin?.();
@@ -122,7 +161,7 @@ export function useSiteCadPlan(
                 }
                 setStatus(opened ? 'ready' : 'error');
             } catch (error) {
-                if (cancelled) return;
+                if (stale()) return;
                 console.warn(
                     '[site-plan] No se pudo abrir el plano CAD del emplazamiento.',
                     error,
@@ -135,7 +174,17 @@ export function useSiteCadPlan(
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [importedAt, projectId, generalModuleId]);
+    }, [importedAt, projectId, generalModuleId, forceLoad]);
+
+    /** Carga el plano vectorial aunque sea pesado (acción explícita del usuario). */
+    const loadVector = useCallback(() => setForceLoad(true), []);
+
+    /** Abandona la carga en curso y vuelve a la imagen del plano. */
+    const abandonVector = useCallback(() => {
+        abortRef.current += 1;
+        setForceLoad(false);
+        setStatus('deferred');
+    }, []);
 
     // 3. Soltar el motor al DESMONTAR (no en cada render).
     useEffect(() => {
@@ -235,6 +284,9 @@ export function useSiteCadPlan(
     return {
         containerRef,
         status,
+        deferredBytes,
+        loadVector,
+        abandonVector,
         getView,
         getViewState,
         zoomAtScreen,

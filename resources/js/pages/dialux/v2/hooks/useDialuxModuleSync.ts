@@ -47,26 +47,35 @@ export function useDialuxModuleSync(
 ): void {
     const project = useEditorStore((state) => state.project);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const skipNextSaveRef = useRef(true);
     const latestProjectRef = useRef<Project | null>(null);
 
     useEffect(() => {
         latestProjectRef.current = project;
     }, [project]);
 
+    // Proyecto tal como se cargó del servidor: no se re-guarda (era un PATCH
+    // completo + JSON.stringify de todo el módulo en CADA cambio de módulo,
+    // sin haber editado nada).
+    const baselineRef = useRef<Project | null>(null);
+
     useEffect(() => {
-        skipNextSaveRef.current = true;
+        baselineRef.current = null;
     }, [moduleId]);
 
     useEffect(() => {
         if (!ready || !project) return;
-        if (skipNextSaveRef.current) {
-            skipNextSaveRef.current = false;
+        // Tras cambiar de módulo el store aún puede traer el proyecto del
+        // anterior por un render — nunca guardarlo bajo el id del nuevo.
+        if (project.moduleId !== String(moduleId)) return;
+        if (baselineRef.current === null) {
+            baselineRef.current = project;
             return;
         }
+        if (project === baselineRef.current) return;
 
         if (timerRef.current) clearTimeout(timerRef.current);
         timerRef.current = setTimeout(() => {
+            timerRef.current = null;
             void persistModule(projectId, moduleId, project);
         }, AUTOSAVE_DEBOUNCE_MS);
 
@@ -79,6 +88,7 @@ export function useDialuxModuleSync(
         () => () => {
             if (timerRef.current && latestProjectRef.current) {
                 clearTimeout(timerRef.current);
+                timerRef.current = null;
                 void persistModule(
                     projectId,
                     moduleId,

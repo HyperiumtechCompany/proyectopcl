@@ -57,6 +57,12 @@ export interface ClosestPolygonPoint {
     point: Point2D;
     /** Vector del lado sobre el que cae `point` (sin normalizar) — de A a B. */
     tangent: Point2D;
+    /** Índice del lado (de `vertices[i]` a `vertices[i+1]`). */
+    edgeIndex: number;
+    /** Posición del punto sobre ese lado, 0 (en A) a 1 (en B). */
+    t: number;
+    /** Distancia del punto consultado al perímetro, en las mismas unidades. */
+    distance: number;
 }
 
 /**
@@ -68,10 +74,12 @@ export interface ClosestPolygonPoint {
 export function closestPointOnPolygon(
     point: Point2D,
     vertices: Point2D[],
+    closed = true,
 ): ClosestPolygonPoint | undefined {
     if (vertices.length < 2) return undefined;
     let best: (ClosestPolygonPoint & { distSq: number }) | undefined;
-    for (let i = 0; i < vertices.length; i++) {
+    const edges = closed ? vertices.length : vertices.length - 1;
+    for (let i = 0; i < edges; i++) {
         const a = vertices[i];
         const b = vertices[(i + 1) % vertices.length];
         const dx = b.x - a.x;
@@ -91,12 +99,21 @@ export function closestPointOnPolygon(
             best = {
                 point: { x: px, y: py },
                 tangent: { x: dx, y: dy },
+                edgeIndex: i,
+                t,
+                distance: 0,
                 distSq,
             };
         }
     }
     if (!best) return undefined;
-    return { point: best.point, tangent: best.tangent };
+    return {
+        point: best.point,
+        tangent: best.tangent,
+        edgeIndex: best.edgeIndex,
+        t: best.t,
+        distance: Math.sqrt(best.distSq),
+    };
 }
 
 function edgeOutwardNormal(a: Point2D, b: Point2D, ccw: boolean): Point2D {

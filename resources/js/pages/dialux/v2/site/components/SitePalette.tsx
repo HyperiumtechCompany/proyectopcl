@@ -331,7 +331,7 @@ export function SitePalette({ editor }: Props) {
                     editor={editor}
                     type="pole"
                     icon={MapPin}
-                    label="Poste exterior"
+                    label="Poste de alumbrado"
                 />
                 <FeederTool editor={editor} />
             </PaletteGroup>

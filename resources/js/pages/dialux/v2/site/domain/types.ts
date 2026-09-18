@@ -73,6 +73,21 @@ export interface PoleConfig {
     armLengthM: number; // 0 = sin brazo (proyector sobre el fuste)
     armDirectionDeg: number; // hacia dónde apunta el brazo
     fixtures: number; // nº de luminarias en la cabeza
+    /** Flujo luminoso de CADA luminaria (lm). 7000 por defecto. */
+    lumens?: number;
+    /** Ángulo (°) al que la intensidad cae al 50 % del máximo (distribución cos^n). 60 por defecto. */
+    beamAngleDeg?: number;
+    /** Factor de mantenimiento (0-1) que multiplica el aporte. 0.8 por defecto. */
+    maintenanceFactor?: number;
+    /** Potencia de cada luminaria (W) — informativo (eficacia = lm/W). */
+    wattage?: number;
+    /**
+     * Producto del catálogo de luminarias COMPARTIDO con el editor de
+     * interiores (v1): su fotometría IES/LDT entra al cálculo. Si falta, se
+     * usa el modelo genérico (lm + ángulo de haz). Con producto, `lumens` y
+     * `wattage` ausentes toman los de su ficha.
+     */
+    productId?: number;
 }
 
 export interface TransformerConfig {
@@ -92,10 +107,29 @@ export interface TgConfig {
     heightM: number;
 }
 
+export type FenceKind = 'wall' | 'grille';
+export type FenceConform = 'stepped' | 'sloped' | 'flat';
+
 export interface FenceConfig {
     kind: 'fence';
-    slope: 'flat' | 'ramp'; // 'ramp' = sube linealmente del inicio al fin (ladera)
-    endElevationM: number; // cota del extremo final si slope === 'ramp'
+    /** Campos previos (perfil lineal), ya sin efecto en 3D — se conservan por compatibilidad con proyectos guardados. */
+    slope: 'flat' | 'ramp';
+    endElevationM: number;
+    /** 'wall' = muro ciego; 'grille' = reja (zócalo + postes + barandas). Por defecto 'wall'. */
+    fenceKind?: FenceKind;
+    /**
+     * Cómo se adapta al terreno/plataformas (por defecto 'stepped'):
+     * 'stepped' = paneles horizontales que escalonan; 'sloped' = cada panel
+     * sigue la pendiente entre sus extremos; 'flat' = comportamiento previo
+     * (bloque a cota fija, sin seguir el terreno).
+     */
+    conform?: FenceConform;
+    /** Espesor del muro en metros (0.2 por defecto). */
+    thicknessM?: number;
+    /** Largo de cada panel entre postes, en metros (2.5 por defecto) — los escalones ocurren entre paneles. */
+    panelLengthM?: number;
+    /** `true` = perímetro cerrado (el último vértice vuelve al primero). Ausente en cercos previos = cerrado, como se dibujaban. Los nuevos nacen abiertos. */
+    closed?: boolean;
 }
 
 export interface StairConfig {
@@ -103,7 +137,18 @@ export interface StairConfig {
     fromElevationM: number;
     toElevationM: number;
     widthM: number;
+    /**
+     * Forma de la escalera: 'straight' = recta (los tramos en línea, con
+     * descanso plano entre ellos si pasan del máximo de peldaños); 'L' =
+     * giro de 90° en el descanso; 'U' = vuelta de 180° (tramos paralelos).
+     */
     run: 'straight' | 'L' | 'U';
+    /** Fondo (m) del descanso plano que conecta con la plataforma siguiente (1.20 por defecto; 0 lo quita). */
+    arrivalLandingM?: number;
+    /** Máximo de peldaños seguidos antes de un descanso (18 por defecto). */
+    maxStepsPerFlight?: number;
+    /** Recorrido al revés en planta (INICIO ↔ FIN), sin cambiar las cotas. */
+    reversed?: boolean;
 }
 
 /** Un tramo recto de una rampa multi-nivel: dirección inicial + giro opcional al final. */
@@ -136,6 +181,19 @@ export interface RampConfig {
     clockwise?: boolean;
     /** Ángulo inicial (°) del primer tramo de la espiral. */
     startAngleDeg?: number;
+    /**
+     * Recorre el mismo trazado en planta al revés: el INICIO (cota origen)
+     * pasa al extremo donde antes estaba el FIN, y el FIN al del INICIO. Las
+     * cotas no cambian — sirve para que la rampa suba desde la plataforma
+     * baja hacia la pared de la alta sin redibujar los tramos.
+     */
+    reversed?: boolean;
+    /**
+     * Fondo (m) del descanso plano que cierra la rampa y la conecta con la
+     * plataforma/piso siguiente (A.120 Art. 6 d: mín. 1.50 m). 1.50 por
+     * defecto; 0 lo quita. Solo aplica cuando la rampa tiene `flights`.
+     */
+    arrivalLandingM?: number;
 }
 
 export interface TerracePlatformConfig {

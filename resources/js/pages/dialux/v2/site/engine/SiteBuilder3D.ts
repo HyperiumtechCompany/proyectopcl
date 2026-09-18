@@ -1,19 +1,32 @@
 import {
     Color3,
+    Color4,
     DirectionalLight,
     HemisphericLight,
     Mesh,
     MeshBuilder,
+    PointLight,
     ShadowGenerator,
     StandardMaterial,
     TransformNode,
     Vector3,
+    VertexBuffer,
+    VertexData,
     type ArcRotateCamera,
     type Scene,
 } from '@babylonjs/core';
 import { House3DBuilder } from '@/pages/dialux/engine/House3DBuilder';
 import type { Scene as EditorScene } from '@/pages/dialux/hooks/useEditorStore';
 import type { EdgeCalculation } from '../../electrical-network/domain/calculations';
+import {
+    computeLuxGrid,
+    DEFAULT_LUMINAIRE,
+    luxColor,
+    summarizeLux,
+    type LightingSummary,
+    type LuxGridSpec,
+    type LuminaireSource,
+} from '../domain/exteriorLighting';
 import { deriveFeederStatus, feederStatusColor } from '../domain/feederSync';
 import {
     boundingBox,
@@ -21,7 +34,12 @@ import {
     outwardMiterDirections,
     pointInPolygon,
 } from '../domain/geometry';
-import { buildSpiralRampPolyline, buildStraightRampLayout } from '../domain/rampLayout';
+import {
+    buildSpiralRampPolyline,
+    buildStraightRampLayout,
+    stairAsRampConfig,
+} from '../domain/rampLayout';
+import { RAMP_NORM, stairStepCount } from '../domain/siteNorms';
 import {
     hasTerrainData,
     sampleGroundElevation,
@@ -30,6 +48,7 @@ import {
 } from '../domain/terrainSurface';
 import type {
     FeederPath,
+    FenceConfig,
     GateConfig,
     PoleConfig,
     Point2D,
@@ -41,9 +60,26 @@ import type {
     TgConfig,
     TransformerConfig,
 } from '../domain/types';
+import type { LuminairePhotometry } from '../lib/luminaireCatalog';
+
+/** Un portón sin cerco asignado se pega al cerco más cercano si está a esta distancia (m) o menos. */
+const GATE_SNAP_M = 3;
+
+/** Tipos que definen el terreno/niveles — nunca "se apoyan" en una plataforma. */
+const NO_PLATFORM_REST = new Set<SiteElement['type']>([
+    'terrain',
+    'terrace_platform',
+    'contour',
+    'spot_elevation',
+    'ramp',
+    'stair',
+]);
 
 function gateCfg(el: SiteElement): GateConfig | undefined {
     return el.config?.kind === 'gate' ? el.config : undefined;
+}
+function fenceCfg(el: SiteElement): FenceConfig | undefined {
+    return el.config?.kind === 'fence' ? el.config : undefined;
 }
 function poleCfg(el: SiteElement): PoleConfig | undefined {
     return el.config?.kind === 'pole' ? el.config : undefined;
@@ -129,6 +165,35 @@ export class SiteBuilder3D {
     private originZ = 0;
     /** Elementos del emplazamiento por id — para que un objeto pueda referenciar a otro (ej. portón → cerco al que queda pegado). */
     private elementsById = new Map<string, SiteElement>();
+    /** Plataformas de terreno — para que un objeto colocado encima se apoye en su superficie sin tener que teclear la cota. */
+    private platforms: SiteElement[] = [];
+    /** Metros por unidad de plano de la última `sync` — para medir distancias reales en helpers de suelo. */
+    private scaleM = 1;
+    /** Cerco al que queda pegado cada portón (id del portón → cerco): el vinculado a mano o, si no hay, el más cercano dentro de `GATE_SNAP_M`. */
+    private gateFence = new Map<string, SiteElement>();
+    // ── Alumbrado exterior / modo noche ──
+    private ambient: HemisphericLight | null = null;
+    private sun: DirectionalLight | null = null;
+    private nightMode = false;
+    private luxMapOn = false;
+    private lampHeads: Array<{
+        head: Mesh;
+        pole: TransformNode;
+        /** Flujo fijado a mano en el poste; ausente = el de la ficha del producto (o el genérico). */
+        lumens: number | undefined;
+        productId: number | undefined;
+        beamDeg: number;
+        maintenance: number;
+    }> = [];
+    /** Fotometría (matriz IES/LDT) de los productos usados por los postes; llega de forma asíncrona. */
+    private photometry = new Map<number, LuminairePhotometry>();
+    private lampMat: StandardMaterial | null = null;
+    private luxMesh: Mesh | null = null;
+    private nightLights: PointLight[] = [];
+    private lightingSummary: LightingSummary | null = null;
+    private luxSources: LuminaireSource[] = [];
+    private luxSpec: LuxGridSpec | null = null;
+    private luxValues: Float32Array | null = null;
 
     constructor(scene: Scene, camera?: ArcRotateCamera) {
         this.scene = scene;
@@ -154,6 +219,8 @@ export class SiteBuilder3D {
         sun.diffuse = new Color3(1.0, 0.97, 0.9);
         sun.position = new Vector3(40, 60, 40);
 
+        this.ambient = ambient;
+        this.sun = sun;
         this.shadowGen = new ShadowGenerator(1024, sun);
         this.shadowGen.useBlurExponentialShadowMap = true;
         this.shadowGen.blurKernel = 16;
@@ -168,6 +235,7 @@ export class SiteBuilder3D {
         const mat = new StandardMaterial(`site_mat_${key}`, this.scene);
         mat.diffuseColor = hexToColor3(hex);
         mat.specularColor = new Color3(specular, specular, specular);
+        mat.maxSimultaneousLights = 12; // por defecto 4: las luminarias del modo noche no se verían
         if (alpha < 1) {
             mat.alpha = alpha;
             mat.backFaceCulling = false;
@@ -182,11 +250,21 @@ export class SiteBuilder3D {
         moduleScenes: SiteModuleScene[] = [],
         feederCalculations: EdgeCalculation[] = [],
         showInteriors = false,
+        photometry: Map<number, LuminairePhotometry> = new Map(),
     ) {
+        this.photometry = photometry;
         this.disposeContent();
         const scaleM = siteData.terrainScaleM || 1;
+        this.scaleM = scaleM;
         this.elementsById = new Map(
             siteData.elements.map((element) => [element.id, element]),
+        );
+        this.gateFence = this.computeGateFences(siteData.elements);
+        this.platforms = siteData.elements.filter(
+            (element) =>
+                element.type === 'terrace_platform' &&
+                element.visible !== false &&
+                element.vertices.length >= 3,
         );
         // Un tipo se oculta solo si una capa que lo contiene está oculta; un
         // tipo sin capa (proyectos previos a añadirlo) se muestra igual.
@@ -257,6 +335,7 @@ export class SiteBuilder3D {
         }
 
         this.frameCamera(siteData, scaleM);
+        this.finalizeLighting(siteData);
 
         const t = this.camera
             ? this.camera.target.asArray().map((n) => Math.round(n))
@@ -324,7 +403,7 @@ export class SiteBuilder3D {
                 );
                 return;
             case 'fence':
-                this.buildExtrudedMass(element, scaleM, element.heightM ?? 3);
+                this.buildFence(element, scaleM);
                 return;
             case 'tg_location':
                 this.buildCabinet(element, scaleM);
@@ -347,6 +426,365 @@ export class SiteBuilder3D {
             ? sampleGroundElevation(this.terrainPoints, center.x, center.y) -
                   this.elevationDatum
             : 0;
+    }
+
+    private computeGateFences(elements: SiteElement[]): Map<string, SiteElement> {
+        const result = new Map<string, SiteElement>();
+        const fences = elements.filter(
+            (el) =>
+                el.type === 'fence' &&
+                el.visible !== false &&
+                el.vertices.length >= 2,
+        );
+        for (const gate of elements) {
+            if (gate.type !== 'gate' || gate.visible === false) continue;
+            const linkId = gateCfg(gate)?.fenceId;
+            if (linkId === 'none') continue;
+            const explicit = linkId
+                ? fences.find((f) => f.id === linkId)
+                : undefined;
+            if (explicit) {
+                result.set(gate.id, explicit);
+                continue;
+            }
+            const c = centroid(gate.vertices);
+            let best: SiteElement | undefined;
+            let bestDist = GATE_SNAP_M;
+            for (const fence of fences) {
+                const hit = closestPointOnPolygon(
+                    c,
+                    fence.vertices,
+                    fenceCfg(fence)?.closed ?? true,
+                );
+                if (!hit) continue;
+                const d = hit.distance * this.scaleM;
+                if (d <= bestDist) {
+                    bestDist = d;
+                    best = fence;
+                }
+            }
+            if (best) result.set(gate.id, best);
+        }
+        return result;
+    }
+
+    /** Cota absoluta del suelo bajo un punto: la plataforma más alta que lo contiene; si no hay, terreno modelado o el datum. */
+    private groundTopAbs(point: Point2D): number {
+        // Suelo continuo: encima de una plataforma, su cota; fuera de ella,
+        // el talud que baja desde su borde con su ángulo (misma pendiente
+        // que dibuja `buildTerracePlatform`), nunca por debajo del terreno
+        // natural / datum. Así un cerco sobre el talud SUBE o BAJA con él en
+        // vez de saltar de la cota de la plataforma al datum.
+        let h = this.terrainModeled
+            ? sampleGroundElevation(this.terrainPoints, point.x, point.y)
+            : this.elevationDatum;
+        for (const platform of this.platforms) {
+            const top = platform.baseElevationM ?? 0;
+            if (top <= h) continue;
+            if (pointInPolygon(point, platform.vertices)) {
+                h = top;
+                continue;
+            }
+            const near = closestPointOnPolygon(point, platform.vertices);
+            if (!near) continue;
+            const angle = Math.min(
+                89,
+                Math.max(
+                    1,
+                    terracePlatformCfg(platform)?.taludAngleDeg ?? 75,
+                ),
+            );
+            const talud =
+                top -
+                near.distance * this.scaleM * Math.tan((angle * Math.PI) / 180);
+            if (talud > h) h = talud;
+        }
+        return h;
+    }
+
+    /** Aberturas de portones vinculados a un cerco: por lado, tramo [desde, hasta] en metros a saltar. */
+    private fenceOpenings(
+        fence: SiteElement,
+        closed: boolean,
+    ): Map<number, Array<[number, number]>> {
+        const openings = new Map<number, Array<[number, number]>>();
+        for (const el of this.elementsById.values()) {
+            if (el.type !== 'gate' || el.visible === false) continue;
+            const g = gateCfg(el);
+            if (this.gateFence.get(el.id)?.id !== fence.id) continue;
+            const near = closestPointOnPolygon(
+                centroid(el.vertices),
+                fence.vertices,
+                closed,
+            );
+            if (!near) continue;
+            const a = fence.vertices[near.edgeIndex];
+            const b = fence.vertices[(near.edgeIndex + 1) % fence.vertices.length];
+            const edgeM = Math.hypot(b.x - a.x, b.y - a.y) * this.scaleM;
+            const half = Math.max(0.5, g?.widthM || 4) / 2;
+            const center = near.t * edgeM;
+            const list = openings.get(near.edgeIndex) ?? [];
+            list.push([Math.max(0, center - half), Math.min(edgeM, center + half)]);
+            openings.set(near.edgeIndex, list);
+        }
+        return openings;
+    }
+
+    /**
+     * Cerco/muro que SIGUE el trazado y se adapta al suelo (plataformas,
+     * terreno). Antes se extruía el polígono entero como un bloque de altura
+     * fija apoyado en la cota de UN solo punto (el centroide) — sobre
+     * plataformas a distintas cotas quedaba al aire en unas y enterrado en
+     * otras. Ahora se parte en paneles (`panelLengthM`) y cada uno toma su
+     * cota del suelo bajo él:
+     *  - 'stepped': panel horizontal; su base baja hasta el punto más bajo
+     *    del suelo bajo el panel (hace de muro de contención) y su corona
+     *    sube hasta el más alto + altura del cerco → escalones entre paneles.
+     *  - 'sloped': cada panel sigue la pendiente entre sus extremos.
+     *  - 'flat': comportamiento previo (bloque a cota fija).
+     * La cota base propia del elemento solo se usa en 'flat' (en los otros
+     * modos el suelo ya define dónde apoya).
+     */
+    private buildFence(element: SiteElement, scaleM: number) {
+        const cfg = fenceCfg(element);
+        const conform = cfg?.conform ?? 'stepped';
+        if (conform === 'flat') {
+            this.buildExtrudedMass(element, scaleM, element.heightM ?? 3);
+            return;
+        }
+        const { node, center } = this.anchorNode(element, scaleM);
+        node.position.y = 0;
+        // El suelo se muestrea con los vértices tal cual: un giro del nodo
+        // desalinearía la cota respecto del lugar real.
+        node.rotation.y = 0;
+        const height = element.heightM ?? 3;
+        const thickness = Math.max(0.05, cfg?.thicknessM ?? 0.2);
+        const panelLen = Math.max(0.5, cfg?.panelLengthM ?? 2.5);
+        const grille = cfg?.fenceKind === 'grille';
+        const closed = cfg?.closed ?? true;
+        const verts = element.vertices;
+        const edges = closed ? verts.length : verts.length - 1;
+        const wallMat = this.matFor(
+            element.style.fillColor,
+            element.style.opacity ?? 1,
+        );
+        const glassMat = this.matFor(element.style.strokeColor, 0.35, 0.1);
+        const local = (p: Point2D) => ({
+            x: (p.x - center.x) * scaleM,
+            z: -(p.y - center.y) * scaleM,
+        });
+
+        // Todos los paneles de un mismo material se fusionan en UN mesh al
+        // final (un cerco de 400 m pasaba de ~160-320 meshes con su sombra
+        // a 1-2).
+        const byMaterial = new Map<StandardMaterial, Mesh[]>();
+
+        // Caja de un panel orientada de A a B; `shear` inclina las caras (metros de subida A→B).
+        const addBox = (
+            name: string,
+            a: Point2D,
+            b: Point2D,
+            width: number,
+            boxHeight: number,
+            centerY: number,
+            shear: number,
+            mat: StandardMaterial,
+        ) => {
+            const la = local(a);
+            const lb = local(b);
+            const length = Math.max(
+                0.05,
+                Math.hypot(lb.x - la.x, lb.z - la.z),
+            );
+            const mesh = MeshBuilder.CreateBox(
+                name,
+                { width, height: boxHeight, depth: length },
+                this.scene,
+            );
+            if (shear !== 0) {
+                const positions = mesh.getVerticesData(
+                    VertexBuffer.PositionKind,
+                );
+                const indices = mesh.getIndices();
+                if (positions && indices) {
+                    const slope = shear / length;
+                    for (let i = 0; i < positions.length; i += 3) {
+                        positions[i + 1] += slope * positions[i + 2];
+                    }
+                    mesh.setVerticesData(VertexBuffer.PositionKind, positions);
+                    const normals: number[] = [];
+                    VertexData.ComputeNormals(positions, indices, normals);
+                    mesh.setVerticesData(VertexBuffer.NormalKind, normals);
+                }
+            }
+            // Posición + lookAt sin padre (local == mundo, mismo orden que
+            // `buildPole`/`buildFlightRamp`); al fusionar, esas coordenadas
+            // (locales al nodo del cerco) quedan horneadas en el mesh final,
+            // que sí se cuelga del nodo.
+            mesh.position.set(
+                (la.x + lb.x) / 2,
+                this.rel(centerY),
+                (la.z + lb.z) / 2,
+            );
+            mesh.lookAt(new Vector3(lb.x, this.rel(centerY), lb.z));
+            mesh.material = mat;
+            const list = byMaterial.get(mat) ?? [];
+            list.push(mesh);
+            byMaterial.set(mat, list);
+        };
+
+        /** Cota del suelo en 5 puntos de un tramo (extremos + 3 intermedios): detecta escalones que caen entre muestras. */
+        const sampleGround = (a: Point2D, b: Point2D): number[] =>
+            [0, 0.25, 0.5, 0.75, 1].map((t) =>
+                this.groundTopAbs({
+                    x: a.x + (b.x - a.x) * t,
+                    y: a.y + (b.y - a.y) * t,
+                }),
+            );
+
+        const STEP_TOL_M = 0.35;
+        const MIN_PANEL_M = 0.3;
+        let panelIndex = 0;
+
+        /** Panel de `u0` a `u1` metros sobre el lado `v0→v1`; se parte en dos si el suelo cambia demasiado dentro de él (sigue el escalón/talud en vez de hacer un bloque alto). */
+        const emitPanel = (
+            v0: Point2D,
+            v1: Point2D,
+            edgeM: number,
+            u0: number,
+            u1: number,
+        ) => {
+            const t0 = u0 / edgeM;
+            const t1 = u1 / edgeM;
+            const a = {
+                x: v0.x + (v1.x - v0.x) * t0,
+                y: v0.y + (v1.y - v0.y) * t0,
+            };
+            const b = {
+                x: v0.x + (v1.x - v0.x) * t1,
+                y: v0.y + (v1.y - v0.y) * t1,
+            };
+            const g = sampleGround(a, b);
+            const hi = Math.max(...g);
+            const lo = Math.min(...g);
+            // Desviación respecto de una recta A→B (para 'sloped').
+            const deviation = Math.max(
+                ...g.map((z, k) => Math.abs(z - (g[0] + (g[4] - g[0]) * (k / 4)))),
+            );
+            const needsSplit =
+                (conform === 'stepped' ? hi - lo : deviation) > STEP_TOL_M;
+            if (needsSplit && u1 - u0 > MIN_PANEL_M * 2) {
+                const mid = (u0 + u1) / 2;
+                emitPanel(v0, v1, edgeM, u0, mid);
+                emitPanel(v0, v1, edgeM, mid, u1);
+                return;
+            }
+            const id = `${element.id}_${panelIndex++}`;
+            if (conform === 'sloped') {
+                addBox(
+                    `site_fence_${id}`,
+                    a,
+                    b,
+                    thickness,
+                    height,
+                    (g[0] + g[4]) / 2 + height / 2,
+                    g[4] - g[0],
+                    wallMat,
+                );
+                return;
+            }
+            if (!grille) {
+                const h = hi + height - lo;
+                addBox(
+                    `site_fence_${id}`,
+                    a,
+                    b,
+                    thickness,
+                    h,
+                    lo + h / 2,
+                    0,
+                    wallMat,
+                );
+                return;
+            }
+            // Reja: zócalo sólido (contención si hay desnivel; mín. 0.4 m) + paño translúcido.
+            const plinth = hi - lo + 0.4;
+            addBox(
+                `site_fence_base_${id}`,
+                a,
+                b,
+                thickness,
+                plinth,
+                lo + plinth / 2,
+                0,
+                wallMat,
+            );
+            const panelH = Math.max(0.2, height - 0.4);
+            addBox(
+                `site_fence_panel_${id}`,
+                a,
+                b,
+                thickness * 0.4,
+                panelH,
+                hi + 0.4 + panelH / 2,
+                0,
+                glassMat,
+            );
+        };
+
+        const openings = this.fenceOpenings(element, closed);
+        for (let e = 0; e < edges; e++) {
+            const v0 = verts[e];
+            const v1 = verts[(e + 1) % verts.length];
+            const edgeM = Math.hypot(v1.x - v0.x, v1.y - v0.y) * scaleM;
+            if (edgeM < 1e-6) continue;
+            // Tramos del lado que SÍ llevan cerco: el lado menos las
+            // aberturas de sus portones (el ingreso queda libre).
+            const gaps = [...(openings.get(e) ?? [])].sort(
+                (p, q) => p[0] - q[0],
+            );
+            const runs: Array<[number, number]> = [];
+            let cursor = 0;
+            for (const [g0, g1] of gaps) {
+                if (g0 > cursor) runs.push([cursor, g0]);
+                cursor = Math.max(cursor, g1);
+            }
+            if (cursor < edgeM) runs.push([cursor, edgeM]);
+            for (const [u0, u1] of runs) {
+                if (u1 - u0 < 0.05) continue;
+                const n = Math.max(1, Math.ceil((u1 - u0) / panelLen));
+                for (let i = 0; i < n; i++) {
+                    emitPanel(
+                        v0,
+                        v1,
+                        edgeM,
+                        u0 + ((u1 - u0) * i) / n,
+                        u0 + ((u1 - u0) * (i + 1)) / n,
+                    );
+                }
+            }
+        }
+
+        byMaterial.forEach((meshes, mat) => {
+            const merged = Mesh.MergeMeshes(meshes, true, true);
+            if (!merged) return;
+            merged.name = `site_fence_${element.id}`;
+            merged.material = mat;
+            merged.receiveShadows = true;
+            merged.parent = node;
+            this.shadowGen?.addShadowCaster(merged);
+        });
+    }
+
+    /** Cota absoluta de la plataforma más alta que contiene el punto (undefined si ninguna). */
+    private platformTopAt(point: Point2D): number | undefined {
+        let top: number | undefined;
+        for (const platform of this.platforms) {
+            if (!pointInPolygon(point, platform.vertices)) continue;
+            const z = platform.baseElevationM ?? 0;
+            if (top === undefined || z > top) top = z;
+        }
+        return top;
     }
 
     /** Cota absoluta (m) → altura relativa al datum del mundo 3D. */
@@ -377,9 +815,18 @@ export class SiteBuilder3D {
         // Y = cota del terreno natural bajo el centroide + `baseElevationM`
         // (offset en metros reales: 0 = apoyado en el suelo; +7 = plataforma
         // de aulas; −1 = estacionamiento hundido).
+        // Sin cota propia (0/ausente) y con el centro sobre una plataforma:
+        // se apoya en la superficie de ESA plataforma (construir sobre ella).
+        // Con cota propia distinta de 0 no se toca — respeta lo ya dibujado.
+        const platformTop =
+            !element.baseElevationM && !NO_PLATFORM_REST.has(element.type)
+                ? this.platformTopAt(center)
+                : undefined;
         node.position.set(
             this.wx(center.x, scaleM),
-            this.groundAt(center) + (element.baseElevationM ?? 0),
+            platformTop !== undefined
+                ? this.rel(platformTop)
+                : this.groundAt(center) + (element.baseElevationM ?? 0),
             this.wz(center.y, scaleM),
         );
         // `rotation` en grados horarios sobre pantalla. Como el plano se
@@ -529,22 +976,6 @@ export class SiteBuilder3D {
         // Cota absoluta, no relativa al terreno bajo el centroide.
         node.position.y = this.rel(platformYAbs);
 
-        const cap = MeshBuilder.CreatePolygon(
-            `site_terrace_cap_${element.id}`,
-            {
-                shape: localVertices,
-                depth: 0.15,
-                sideOrientation: Mesh.DOUBLESIDE,
-            },
-            this.scene,
-        );
-        cap.material = this.matFor(
-            element.style.fillColor,
-            element.style.opacity ?? 1,
-        );
-        cap.receiveShadows = true;
-        cap.parent = node;
-
         if (element.vertices.length < 3) return;
         const cfg = terracePlatformCfg(element);
         const angleDeg = Math.min(89, Math.max(1, cfg?.taludAngleDeg ?? 75));
@@ -594,6 +1025,26 @@ export class SiteBuilder3D {
                 -(by - center.y) * scaleM,
             );
         });
+        // Relleno SÓLIDO: la tapa se extruye hacia abajo hasta la cota más
+        // baja de su talud (antes era una losa de 15 cm sobre una cáscara
+        // vacía — se veía hueca). Siempre opaca: una plataforma es terreno
+        // sobre el que se construye, no un plano translúcido (las ya
+        // dibujadas con opacidad 70 % guardada también salen sólidas en 3D).
+        let lowestY = 0;
+        for (const p of bottomRing) if (p.y < lowestY) lowestY = p.y;
+        const cap = MeshBuilder.CreatePolygon(
+            `site_terrace_cap_${element.id}`,
+            {
+                shape: localVertices,
+                depth: Math.max(0.15, -lowestY),
+                sideOrientation: Mesh.DOUBLESIDE,
+            },
+            this.scene,
+        );
+        cap.material = this.matFor(element.style.fillColor, 1);
+        cap.receiveShadows = true;
+        cap.parent = node;
+
         const topRing = [...localVertices, localVertices[0]];
         bottomRing.push(bottomRing[0]);
 
@@ -700,6 +1151,8 @@ export class SiteBuilder3D {
         element: SiteElement,
         scaleM: number,
         c: RampConfig,
+        /** Si viene, los tramos se dibujan con peldaños de esta contrahuella en vez de losa inclinada (escalera). */
+        stepped?: { riserM: number },
     ) {
         const node = new TransformNode(`site_${element.id}`, this.scene);
         this.elementNodes.set(element.id, node);
@@ -716,6 +1169,46 @@ export class SiteBuilder3D {
             element.style.opacity ?? 1,
         );
         const segments = buildStraightRampLayout(c);
+        const fillMat = this.matFor('#a8a29e', 1, 0.05);
+        const curbMat = this.matFor('#78716c', 1, 0.05);
+        const railMat = this.matFor('#6b7280', 1, 0.3);
+        const panelMat = this.matFor('#94a3b8', 0.3, 0.1);
+        // Base del relleno: el nivel más bajo que conecta la rampa (menos 0.3 m de empotre).
+        const baseLocalY =
+            Math.min(c.fromElevationM, c.toElevationM) - 0.3 - c.fromElevationM;
+        const railH = RAMP_NORM.handrailHeightM;
+        const CURB_H = 0.3; // borde resistente (A.120, figura 3)
+
+        /** Caja entre dos puntos 3D (posición + lookAt sin padre → local == mundo; luego se cuelga del nodo). */
+        const boxBetween = (
+            name: string,
+            p0: { x: number; y: number; z: number },
+            p1: { x: number; y: number; z: number },
+            width: number,
+            height: number,
+            mat: StandardMaterial,
+            parent: TransformNode,
+        ) => {
+            const len = Math.max(
+                0.05,
+                Math.hypot(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z),
+            );
+            const mesh = MeshBuilder.CreateBox(
+                name,
+                { width, height, depth: len },
+                this.scene,
+            );
+            mesh.position.set(
+                (p0.x + p1.x) / 2,
+                (p0.y + p1.y) / 2,
+                (p0.z + p1.z) / 2,
+            );
+            mesh.lookAt(new Vector3(p1.x, p1.y, p1.z));
+            mesh.material = mat;
+            mesh.parent = parent;
+            return mesh;
+        };
+
         segments.forEach((seg) => {
             const dx = seg.endLocal.x - seg.startLocal.x;
             const dz = seg.endLocal.z - seg.startLocal.z;
@@ -723,27 +1216,170 @@ export class SiteBuilder3D {
             const midX = (seg.startLocal.x + seg.endLocal.x) / 2;
             const midY = (seg.startY + seg.endY) / 2;
             const midZ = (seg.startLocal.z + seg.endLocal.z) / 2;
+            const ux = dx / length;
+            const uz = dz / length;
+            const px = -uz; // perpendicular en planta
+            const pz = ux;
+            const half = seg.widthM / 2;
 
-            // `lookAt` orienta la profundidad (Z local) hacia el destino real
-            // (incluida la subida en Y) — evita tener que derivar a mano el
-            // signo de una rotación Y+Z combinada. Posición + `lookAt` ANTES
-            // de asignar `parent` (mismo orden que `buildPole`, más abajo en
-            // este archivo): sin padre todavía, "local" y "mundo" coinciden,
-            // así que los valores en metros locales del tramo (`seg.*Local`)
-            // se pueden usar directo como si fueran mundo.
+            if (stepped && seg.kind === 'flight') {
+                // Peldaños macizos hasta el nivel inferior (escalera cerrada, sin huecos).
+                const rise = seg.endY - seg.startY;
+                const n = Math.max(1, Math.round(Math.abs(rise) / stepped.riserM));
+                const tread = length / n;
+                for (let k = 0; k < n; k++) {
+                    const top = seg.startY + (rise / n) * (k + 1);
+                    const h = Math.max(0.05, top - baseLocalY);
+                    const step = MeshBuilder.CreateBox(
+                        `site_stair_${element.id}_${seg.id}_${k}`,
+                        { width: seg.widthM, height: h, depth: tread },
+                        this.scene,
+                    );
+                    const along = -length / 2 + tread * (k + 0.5);
+                    step.position.set(
+                        midX + ux * along,
+                        baseLocalY + h / 2,
+                        midZ + uz * along,
+                    );
+                    step.lookAt(
+                        new Vector3(
+                            step.position.x + ux,
+                            step.position.y,
+                            step.position.z + uz,
+                        ),
+                    );
+                    step.material = mat;
+                    step.receiveShadows = true;
+                    step.parent = node;
+                }
+            } else {
+            // Losa (cara de rodadura), inclinada según el tramo.
             const slab = MeshBuilder.CreateBox(
                 `site_ramp_${element.id}_${seg.id}`,
                 { width: seg.widthM, height: 0.15, depth: length },
                 this.scene,
             );
             slab.position.set(midX, midY, midZ);
-            slab.lookAt(
-                new Vector3(seg.endLocal.x, seg.endY, seg.endLocal.z),
-            );
+            slab.lookAt(new Vector3(seg.endLocal.x, seg.endY, seg.endLocal.z));
             slab.material = mat;
             slab.receiveShadows = true;
             slab.parent = node;
             this.shadowGen?.addShadowCaster(slab);
+
+            // Relleno sólido bajo la losa, hasta el nivel inferior (cuña: la
+            // cara de abajo es plana, la de arriba sigue la pendiente) — antes
+            // los tramos quedaban en el aire, como triángulos flotantes.
+            const topStart = seg.startY - 0.075;
+            const topEnd = seg.endY - 0.075;
+            const fill = MeshBuilder.CreateBox(
+                `site_ramp_fill_${element.id}_${seg.id}`,
+                { width: seg.widthM, height: 1, depth: length },
+                this.scene,
+            );
+            const positions = fill.getVerticesData(VertexBuffer.PositionKind);
+            const indices = fill.getIndices();
+            if (positions && indices) {
+                for (let i = 0; i < positions.length; i += 3) {
+                    const t = (positions[i + 2] + length / 2) / length;
+                    positions[i + 1] =
+                        positions[i + 1] > 0
+                            ? Math.max(
+                                  baseLocalY + 0.05,
+                                  topStart + (topEnd - topStart) * t,
+                              )
+                            : baseLocalY;
+                }
+                fill.setVerticesData(VertexBuffer.PositionKind, positions);
+                const normals: number[] = [];
+                VertexData.ComputeNormals(positions, indices, normals);
+                fill.setVerticesData(VertexBuffer.NormalKind, normals);
+            }
+            fill.position.set(midX, 0, midZ);
+            fill.lookAt(new Vector3(seg.endLocal.x, 0, seg.endLocal.z));
+            fill.material = fillMat;
+            fill.receiveShadows = true;
+            fill.parent = node;
+
+            }
+
+            // Bordes laterales: bordillo de 0.30 m + baranda (pasamanos +
+            // paño) a cada lado, siguiendo la pendiente.
+            for (const side of [-1, 1]) {
+                // Descanso de esquina: por ese lado sale el tramo siguiente.
+                if (
+                    seg.kind === 'landing' &&
+                    seg.role === 'corner' &&
+                    side === seg.openSide
+                ) {
+                    continue;
+                }
+                const off = (half - 0.05) * side;
+                const p0 = {
+                    x: seg.startLocal.x + px * off,
+                    y: seg.startY,
+                    z: seg.startLocal.z + pz * off,
+                };
+                const p1 = {
+                    x: seg.endLocal.x + px * off,
+                    y: seg.endY,
+                    z: seg.endLocal.z + pz * off,
+                };
+                const lift = (dy: number) => [
+                    { ...p0, y: p0.y + dy },
+                    { ...p1, y: p1.y + dy },
+                ];
+                const curbOn = !stepped || seg.kind === 'landing';
+                const stepLift = stepped && seg.kind === 'flight' ? stepped.riserM : 0;
+                if (curbOn) {
+                    const [c0, c1] = lift(CURB_H / 2 + 0.075);
+                    boxBetween(`site_ramp_curb_${element.id}_${seg.id}_${side}`, c0, c1, 0.1, CURB_H, curbMat, node);
+                }
+                const [h0, h1] = lift(railH + stepLift);
+                boxBetween(`site_ramp_hr_${element.id}_${seg.id}_${side}`, h0, h1, 0.05, 0.05, railMat, node);
+                const glassBase = curbOn ? CURB_H : 0.05;
+                const glassH = Math.max(0.1, railH - glassBase - 0.1);
+                const [g0, g1] = lift(stepLift + glassBase + glassH / 2);
+                boxBetween(`site_ramp_gl_${element.id}_${seg.id}_${side}`, g0, g1, 0.02, glassH, panelMat, node);
+            }
+            // Descanso: baranda también en el borde del fondo (perpendicular al avance).
+            if (
+                seg.kind === 'landing' &&
+                (seg.role === 'turn' || seg.role === 'corner')
+            ) {
+                const off = length / 2;
+                const q0 = {
+                    x: midX + ux * off - px * (half - 0.05),
+                    y: seg.endY + railH,
+                    z: midZ + uz * off - pz * (half - 0.05),
+                };
+                const q1 = {
+                    x: midX + ux * off + px * (half - 0.05),
+                    y: seg.endY + railH,
+                    z: midZ + uz * off + pz * (half - 0.05),
+                };
+                boxBetween(`site_ramp_hrb_${element.id}_${seg.id}`, q0, q1, 0.05, 0.05, railMat, node);
+                const cy = seg.endY + CURB_H / 2 + 0.075;
+                boxBetween(
+                    `site_ramp_curbb_${element.id}_${seg.id}`,
+                    { ...q0, y: cy },
+                    { ...q1, y: cy },
+                    0.1,
+                    CURB_H,
+                    curbMat,
+                    node,
+                );
+                const gyH = Math.max(0.1, railH - CURB_H - 0.1);
+                const gy = seg.endY + CURB_H + gyH / 2;
+                boxBetween(
+                    `site_ramp_glb_${element.id}_${seg.id}`,
+                    { ...q0, y: gy },
+                    { ...q1, y: gy },
+                    0.02,
+                    gyH,
+                    panelMat,
+                    node,
+                );
+            }
         });
     }
 
@@ -814,46 +1450,28 @@ export class SiteBuilder3D {
     }
 
     /** Escalera exterior: peldaños entre `fromElevationM` y `toElevationM`. */
+    /** Escalera exterior: tramos de peldaños macizos con descansos (vuelta en U cada N peldaños) y descanso de llegada a la plataforma siguiente. */
     private buildStair(element: SiteElement, scaleM: number) {
-        const { node } = this.anchorNode(element, scaleM);
-        node.position.y = 0; // cotas absolutas en su config
-        const c = stairCfg(element);
-        const from = c
-            ? this.rel(c.fromElevationM)
-            : this.groundAt(centroid(element.vertices));
-        const to = c ? this.rel(c.toElevationM) : from + 1;
-        const width = c?.widthM ?? this.longAxis(element, scaleM).crossM;
-        const { alongX, run } = this.longAxis(element, scaleM);
-        const rise = Math.abs(to - from);
-        const steps = Math.max(1, Math.round(rise / 0.18));
-        const stepRise = (to - from) / steps;
-        const stepRun = run / steps;
-        const mat = this.matFor(
-            element.style.fillColor,
-            element.style.opacity ?? 1,
+        const c: StairConfig = stairCfg(element) ?? {
+            kind: 'stair',
+            fromElevationM: 0,
+            toElevationM: 1,
+            widthM: 1.2,
+            run: 'straight',
+        };
+        const { alongX } = this.longAxis(element, scaleM);
+        const total = c.toElevationM - c.fromElevationM;
+        this.buildFlightRamp(
+            element,
+            scaleM,
+            stairAsRampConfig(c, alongX ? 'east' : 'south'),
+            {
+                riserM:
+                    Math.abs(total) > 1e-6
+                        ? Math.abs(total) / stairStepCount(total)
+                        : 0.175,
+            },
         );
-        for (let i = 0; i < steps; i++) {
-            const h = from + stepRise * (i + 1);
-            const box = MeshBuilder.CreateBox(
-                `site_stair_${element.id}_${i}`,
-                {
-                    width: alongX ? stepRun : width,
-                    height: Math.max(0.02, Math.abs(h - from)),
-                    depth: alongX ? width : stepRun,
-                },
-                this.scene,
-            );
-            const along = -run / 2 + stepRun * (i + 0.5);
-            box.position.set(
-                alongX ? along : 0,
-                (from + h) / 2,
-                alongX ? 0 : along,
-            );
-            box.material = mat;
-            box.receiveShadows = true;
-            this.shadowGen?.addShadowCaster(box);
-            box.parent = node;
-        }
     }
 
     /** Piscina: caja hundida con un plano de agua translúcido al ras del terreno. */
@@ -1040,14 +1658,13 @@ export class SiteBuilder3D {
     private buildGate(element: SiteElement, scaleM: number) {
         const { node } = this.anchorNode(element, scaleM);
         const cfg = gateCfg(element);
-        const fence = cfg?.fenceId
-            ? this.elementsById.get(cfg.fenceId)
-            : undefined;
+        const fence = this.gateFence.get(element.id);
         const fenceMatch =
             fence?.type === 'fence'
                 ? closestPointOnPolygon(
                       centroid(element.vertices),
                       fence.vertices,
+                      fenceCfg(fence)?.closed ?? true,
                   )
                 : undefined;
         if (fence && fenceMatch) {
@@ -1064,15 +1681,23 @@ export class SiteBuilder3D {
                 Math.PI;
             node.position.set(
                 this.wx(fenceMatch.point.x, scaleM),
-                this.groundAt(fenceMatch.point) + (fence.baseElevationM ?? 0),
+                (fenceCfg(fence)?.conform ?? 'stepped') === 'flat'
+                    ? this.groundAt(fenceMatch.point) +
+                          (fence.baseElevationM ?? 0)
+                    : this.rel(this.groundTopAbs(fenceMatch.point)),
                 this.wz(fenceMatch.point.y, scaleM),
             );
-            node.rotation.y = (-bearingDeg * Math.PI) / 180;
+            // El vano del portón corre por su eje local X (este-oeste, rumbo
+            // 90° a rotación 0). Para que quede A LO LARGO del cerco hay que
+            // girarlo (rumbo del cerco − 90°); girarlo el rumbo completo lo
+            // dejaba atravesado al cerco (bug reportado 2026-09-18).
+            node.rotation.y = (-(bearingDeg - 90) * Math.PI) / 180;
         }
         const bounds = boundingBox(element.vertices);
         const spanX = Math.max(1.2, (bounds.maxX - bounds.minX) * scaleM);
         const spanZ = Math.max(1.2, (bounds.maxY - bounds.minY) * scaleM);
-        const horizontal = spanX >= spanZ;
+        // Pegado a un cerco, el vano siempre va por el eje X local (ya alineado arriba).
+        const horizontal = fenceMatch ? true : spanX >= spanZ;
         const span = cfg?.widthM ?? (horizontal ? spanX : spanZ);
         const variant = cfg?.variant ?? 'swing';
         const openDeg =
@@ -1239,8 +1864,17 @@ export class SiteBuilder3D {
                 this.scene,
             );
             head.position.set(hx, shaftHeight - (armLen > 0 ? 0.1 : 0), hz);
-            head.material = this.matFor(element.style.fillColor, 1, 0.1);
+            head.material = this.getLampMaterial();
             head.parent = node;
+            this.lampHeads.push({
+                head,
+                pole: node,
+                lumens: cfg?.lumens,
+                productId: cfg?.productId,
+                beamDeg: cfg?.beamAngleDeg ?? DEFAULT_LUMINAIRE.beamDeg,
+                maintenance:
+                    cfg?.maintenanceFactor ?? DEFAULT_LUMINAIRE.maintenance,
+            });
         }
     }
 
@@ -1306,7 +1940,234 @@ export class SiteBuilder3D {
     }
 
     /** Elimina todo lo construido (elementos, alimentadores, interiores de módulos hijos) — no toca cámara/luces. */
+    private getLampMaterial(): StandardMaterial {
+        if (!this.lampMat) {
+            const mat = new StandardMaterial('site_lamp_mat', this.scene);
+            mat.diffuseColor = new Color3(1, 0.97, 0.85);
+            mat.specularColor = new Color3(0.2, 0.2, 0.2);
+            mat.emissiveColor = this.nightMode
+                ? new Color3(1, 0.93, 0.65)
+                : Color3.Black();
+            this.lampMat = mat;
+        }
+        return this.lampMat;
+    }
+
+    /** Día / Noche: cambia el cielo y las luces globales, enciende las luminarias y sus luces puntuales. */
+    setNightMode(on: boolean) {
+        this.nightMode = on;
+        this.applyDayNight();
+    }
+
+    /** Muestra/oculta el mapa de iluminancia (lux) sobre el suelo. */
+    setLuxMap(on: boolean) {
+        this.luxMapOn = on;
+        this.buildLuxMesh();
+    }
+
+    getLightingSummary(): LightingSummary | null {
+        return this.lightingSummary;
+    }
+
+    private applyDayNight() {
+        const night = this.nightMode;
+        if (this.ambient) this.ambient.intensity = night ? 0.14 : 0.6;
+        if (this.sun) this.sun.intensity = night ? 0.06 : 1.1;
+        this.scene.clearColor = night
+            ? new Color4(0.02, 0.04, 0.09, 1)
+            : new Color4(0.68, 0.78, 0.88, 1);
+        if (this.lampMat) {
+            this.lampMat.emissiveColor = night
+                ? new Color3(1, 0.93, 0.65)
+                : Color3.Black();
+        }
+        this.nightLights.forEach((light) => light.setEnabled(night));
+    }
+
+    /**
+     * Tras construir el emplazamiento: toma la posición REAL de cada cabeza de
+     * luminaria (ya con la rotación del poste aplicada), calcula la malla de
+     * iluminancia y su resumen, y (re)crea luces puntuales (máx. 8) y el mapa.
+     */
+    private finalizeLighting(siteData: SiteData) {
+        this.disposeLighting();
+        if (this.lampHeads.length === 0) {
+            this.applyDayNight();
+            return;
+        }
+        const sources: LuminaireSource[] = this.lampHeads.map((lamp) => {
+            lamp.head.computeWorldMatrix(true);
+            lamp.pole.computeWorldMatrix(true);
+            const p = lamp.head.getAbsolutePosition();
+            const pole = lamp.pole.getAbsolutePosition();
+            const product =
+                lamp.productId !== undefined
+                    ? this.photometry.get(lamp.productId)
+                    : undefined;
+            const lumens =
+                lamp.lumens ??
+                product?.totalLumens ??
+                product?.web?.reference_lumens ??
+                DEFAULT_LUMINAIRE.lumens;
+            // C0 apunta hacia donde apunta el brazo (de la base del poste a la cabeza).
+            const dxp = p.x - pole.x;
+            const dzp = p.z - pole.z;
+            const reference = product?.web?.reference_lumens ?? 0;
+            return {
+                x: p.x,
+                y: p.y,
+                z: p.z,
+                lumens,
+                beamDeg: lamp.beamDeg,
+                maintenance: lamp.maintenance,
+                photometry: product?.web
+                    ? {
+                          web: product.web,
+                          scale: reference > 0 ? lumens / reference : 1,
+                          orientationRad:
+                              Math.hypot(dxp, dzp) > 0.05
+                                  ? Math.atan2(dxp, dzp)
+                                  : 0,
+                      }
+                    : undefined,
+            };
+        });
+        this.luxSources = sources;
+
+        // Malla: caja de las luminarias + 25 m, celda ≥ 1 m y ≤ ~150 celdas por lado.
+        const R = 25;
+        const xs = sources.map((src) => src.x);
+        const zs = sources.map((src) => src.z);
+        const minX = Math.min(...xs) - R;
+        const minZ = Math.min(...zs) - R;
+        const spanX = Math.max(...xs) + R - minX;
+        const spanZ = Math.max(...zs) + R - minZ;
+        const cell = Math.max(1, Math.ceil(Math.max(spanX, spanZ) / 150));
+        const spec: LuxGridSpec = {
+            minX,
+            minZ,
+            cell,
+            cols: Math.ceil(spanX / cell),
+            rows: Math.ceil(spanZ / cell),
+        };
+        const groundY = (x: number, z: number) =>
+            this.rel(
+                this.groundTopAbs({
+                    x: (x + this.originX) / this.scaleM,
+                    y: -(z + this.originZ) / this.scaleM,
+                }),
+            );
+        const values = computeLuxGrid(sources, spec, groundY);
+        this.luxSpec = spec;
+        this.luxValues = values;
+
+        // Área analizada: el/los "Terreno / Lote" dibujados; si no hay, 15 m alrededor de cada luminaria.
+        const terrains = siteData.elements.filter(
+            (el) =>
+                el.type === 'terrain' &&
+                el.visible !== false &&
+                el.vertices.length >= 3,
+        );
+        const include = (i: number, j: number) => {
+            const x = spec.minX + i * spec.cell;
+            const z = spec.minZ + j * spec.cell;
+            if (terrains.length > 0) {
+                const p = {
+                    x: (x + this.originX) / this.scaleM,
+                    y: -(z + this.originZ) / this.scaleM,
+                };
+                return terrains.some((t) => pointInPolygon(p, t.vertices));
+            }
+            return sources.some((src) => Math.hypot(src.x - x, src.z - z) <= 15);
+        };
+        this.lightingSummary = summarizeLux(values, spec, include, sources);
+
+        sources.slice(0, 8).forEach((src, index) => {
+            const light = new PointLight(
+                `site_night_light_${index}`,
+                new Vector3(src.x, src.y - 0.3, src.z),
+                this.scene,
+            );
+            light.diffuse = new Color3(1, 0.92, 0.7);
+            light.specular = new Color3(0.3, 0.28, 0.2);
+            light.intensity = 0.9;
+            light.range = 30;
+            light.setEnabled(this.nightMode);
+            this.nightLights.push(light);
+        });
+
+        this.applyDayNight();
+        this.buildLuxMesh();
+    }
+
+    /** Malla de colores (un color por vértice, sigue el terreno/plataformas) con la iluminancia calculada. */
+    private buildLuxMesh() {
+        this.luxMesh?.dispose(false, true);
+        this.luxMesh = null;
+        if (!this.luxMapOn || !this.luxSpec || !this.luxValues) return;
+        const spec = this.luxSpec;
+        const values = this.luxValues;
+        const stride = spec.cols + 1;
+        const positions: number[] = [];
+        const colors: number[] = [];
+        const normals: number[] = [];
+        for (let j = 0; j <= spec.rows; j++) {
+            for (let i = 0; i <= spec.cols; i++) {
+                const x = spec.minX + i * spec.cell;
+                const z = spec.minZ + j * spec.cell;
+                const y =
+                    this.rel(
+                        this.groundTopAbs({
+                            x: (x + this.originX) / this.scaleM,
+                            y: -(z + this.originZ) / this.scaleM,
+                        }),
+                    ) + 0.06;
+                positions.push(x, y, z);
+                normals.push(0, 1, 0);
+                colors.push(...luxColor(values[j * stride + i]));
+            }
+        }
+        const indices: number[] = [];
+        for (let j = 0; j < spec.rows; j++) {
+            for (let i = 0; i < spec.cols; i++) {
+                const a = j * stride + i;
+                const b = a + 1;
+                const c = a + stride;
+                const d = c + 1;
+                indices.push(a, c, b, b, c, d);
+            }
+        }
+        const mesh = new Mesh('site_lux_map', this.scene);
+        const data = new VertexData();
+        data.positions = positions;
+        data.indices = indices;
+        data.normals = normals;
+        data.colors = colors;
+        data.applyToMesh(mesh);
+        mesh.hasVertexAlpha = true;
+        mesh.isPickable = false;
+        const mat = new StandardMaterial('site_lux_mat', this.scene);
+        mat.disableLighting = true;
+        mat.emissiveColor = Color3.White();
+        mat.backFaceCulling = false;
+        mesh.material = mat;
+        this.luxMesh = mesh;
+    }
+
+    private disposeLighting() {
+        this.luxMesh?.dispose(false, true);
+        this.luxMesh = null;
+        this.nightLights.forEach((light) => light.dispose());
+        this.nightLights = [];
+        this.luxSources = [];
+        this.luxSpec = null;
+        this.luxValues = null;
+        this.lightingSummary = null;
+    }
+
     private disposeContent() {
+        this.disposeLighting();
+        this.lampHeads = [];
         this.elementNodes.forEach((node) => node.dispose());
         this.elementNodes.clear();
         this.feederMeshes.forEach((mesh) => mesh.dispose());
@@ -1317,6 +2178,8 @@ export class SiteBuilder3D {
 
     dispose() {
         this.disposeContent();
+        this.lampMat?.dispose();
+        this.lampMat = null;
         this.matCache.forEach((mat) => mat.dispose());
         this.matCache.clear();
         this.shadowGen?.dispose();

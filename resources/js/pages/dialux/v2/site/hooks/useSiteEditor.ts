@@ -10,7 +10,12 @@ import {
     sampleGroundElevation,
     terrainElevationPoints,
 } from '../domain/terrainSurface';
-import type { Point2D, SiteElementType, SiteTool } from '../domain/types';
+import type {
+    Point2D,
+    SiteElement,
+    SiteElementType,
+    SiteTool,
+} from '../domain/types';
 import { sitePlanImageUrl } from '../lib/planImport';
 import { defaultConfigFor, SITE_ELEMENT_DEFAULTS } from '../lib/siteDefaults';
 import { useNetworkSnapshotForSite } from './useNetworkSnapshotForSite';
@@ -32,6 +37,9 @@ const POLYGON_TYPES = new Set<SiteElementType>([
     'terrace_platform',
 ]);
 
+/** Portapapeles del emplazamiento (Ctrl+C / Ctrl+V): vive en el módulo para sobrevivir a re-montajes del editor. */
+let siteClipboard: { elements: SiteElement[]; pastes: number } | null = null;
+
 /** Tipos que se colocan con un solo clic (equipo puntual, tamaño fijo por defecto). */
 const POINT_SIZE_M = 4;
 
@@ -50,6 +58,11 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
     );
     const duplicateSiteElement = useEditorStore(
         (state) => state.duplicateSiteElement,
+    );
+    const addSiteElements = useEditorStore((state) => state.addSiteElements);
+    const moveSiteElements = useEditorStore((state) => state.moveSiteElements);
+    const removeSiteElements = useEditorStore(
+        (state) => state.removeSiteElements,
     );
     const moveSiteVertex = useEditorStore((state) => state.moveSiteVertex);
     const insertSiteVertex = useEditorStore((state) => state.insertSiteVertex);
@@ -81,9 +94,12 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
     const [pendingNetworkEdgeId, setPendingNetworkEdgeId] = useState<
         string | null
     >(null);
-    const [selectedElementId, setSelectedElementId] = useState<string | null>(
-        null,
-    );
+    // Selección múltiple: `selectedElementId` es el ÚLTIMO seleccionado (el que muestra el panel de propiedades cuando hay uno solo).
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const selectedElementId =
+        selectedIds.length > 0 ? selectedIds[selectedIds.length - 1] : null;
+    const setSelectedElementId = (id: string | null) =>
+        setSelectedIds(id ? [id] : []);
     const [pendingVertices, setPendingVertices] = useState<Point2D[]>([]);
     const [calibrationPoints, setCalibrationPoints] = useState<Point2D[]>([]);
     const [planImportOpen, setPlanImportOpen] = useState(false);
@@ -146,6 +162,123 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         setPendingNetworkEdgeId(null);
     };
 
+    /** Quita el último punto ya colocado mientras se dibuja (Ctrl+Z / Retroceso durante el trazo). */
+    const removeLastVertex = () => {
+        setPendingVertices((current) => current.slice(0, -1));
+    };
+
+    const selectedElements = (): SiteElement[] =>
+        (siteData?.elements ?? []).filter((item) =>
+            selectedIds.includes(item.id),
+        );
+
+    /** Copia la selección (uno o varios objetos) al portapapeles. */
+    const copySelectedElement = (): boolean => {
+        const sources = selectedElements();
+        if (sources.length === 0) return false;
+        siteClipboard = { elements: structuredClone(sources), pastes: 0 };
+        return true;
+    };
+
+    /**
+     * Crea copias de `sources` desplazadas `dx, dy` (unidades de plano) en UN
+     * paso de deshacer. Un portón copiado junto con su cerco queda vinculado
+     * al cerco NUEVO, no al original.
+     */
+    const cloneElements = (
+        sources: SiteElement[],
+        dx: number,
+        dy: number,
+    ): string[] => {
+        const history = useEditorStore.getState();
+        history.beginHistoryGesture();
+        const drafts = sources.map((source) => {
+            const { id, ...rest } = structuredClone(source);
+            void id;
+            return {
+                ...rest,
+                label: `${rest.label} (copia)`,
+                vertices: rest.vertices.map((vertex) => ({
+                    x: vertex.x + dx,
+                    y: vertex.y + dy,
+                })),
+                locked: false,
+            };
+        });
+        const ids = addSiteElements(drafts);
+        sources.forEach((source, index) => {
+            const cfg = source.config;
+            if (cfg?.kind !== 'gate' || !cfg.fenceId) return;
+            const fenceIndex = sources.findIndex((s2) => s2.id === cfg.fenceId);
+            if (fenceIndex < 0) return;
+            updateSiteElement(ids[index], {
+                config: { ...cfg, fenceId: ids[fenceIndex] },
+            });
+        });
+        history.endHistoryGesture();
+        return ids;
+    };
+
+    /** Pega el portapapeles desplazado 3 m por cada pegado seguido (para que no caiga encima). */
+    const pasteElement = (): boolean => {
+        if (!siteClipboard || siteClipboard.elements.length === 0) return false;
+        siteClipboard.pastes += 1;
+        const offset = (3 * siteClipboard.pastes) / terrainScaleM;
+        setSelectedIds(cloneElements(siteClipboard.elements, offset, offset));
+        return true;
+    };
+
+    /** Repite la selección `count` veces cada `spacingM` metros hacia el rumbo `bearingDeg` (0° = arriba en pantalla, horario) — p. ej. una hilera de postes. */
+    const repeatSelected = (
+        count: number,
+        spacingM: number,
+        bearingDeg: number,
+    ): number => {
+        const sources = selectedElements();
+        if (sources.length === 0 || count < 1 || spacingM <= 0) return 0;
+        const rad = (bearingDeg * Math.PI) / 180;
+        const ux = Math.sin(rad);
+        const uy = -Math.cos(rad);
+        const history = useEditorStore.getState();
+        history.beginHistoryGesture();
+        const created: string[] = [];
+        for (let k = 1; k <= Math.min(200, Math.floor(count)); k++) {
+            const step = (spacingM * k) / terrainScaleM;
+            created.push(...cloneElements(sources, ux * step, uy * step));
+        }
+        history.endHistoryGesture();
+        setSelectedIds(created);
+        return created.length;
+    };
+
+    const toggleElementSelection = (id: string) =>
+        setSelectedIds((current) =>
+            current.includes(id)
+                ? current.filter((item) => item !== id)
+                : [...current, id],
+        );
+    const selectElements = (ids: string[]) => setSelectedIds(ids);
+    /** Selecciona todo lo visible y no bloqueado (respeta las capas ocultas). */
+    const selectAllElements = () => {
+        const layers = siteData?.layers ?? [];
+        setSelectedIds(
+            (siteData?.elements ?? [])
+                .filter((el) => {
+                    if (el.visible === false || el.locked) return false;
+                    const layer = layers.find((l) => l.types.includes(el.type));
+                    return !layer || layer.visible;
+                })
+                .map((el) => el.id),
+        );
+    };
+    const deleteSelected = (): number => {
+        if (selectedIds.length === 0) return 0;
+        const count = selectedIds.length;
+        removeSiteElements(selectedIds);
+        setSelectedIds([]);
+        return count;
+    };
+
     const finishDrawing = () => {
         if (activeTool === 'draw_contour') {
             if (pendingVertices.length < 2) {
@@ -163,7 +296,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
             });
             setPendingVertices([]);
             setSelectedElementId(id);
-            setActiveToolState('select');
+            // La herramienta sigue activa: se pueden crear más; Esc termina.
             return;
         }
         if (activeTool === 'draw_feeder') {
@@ -184,7 +317,8 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
             setActiveToolState('select');
             return;
         }
-        if (pendingVertices.length < 3) {
+        // Un cerco es un tramo: con 2 puntos ya es válido.
+        if (pendingVertices.length < (pendingType === 'fence' ? 2 : 3)) {
             cancelDrawing();
             return;
         }
@@ -200,7 +334,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         });
         setPendingVertices([]);
         setSelectedElementId(id);
-        setActiveToolState('select');
+        // La herramienta sigue activa: se pueden crear más; Esc termina.
     };
 
     /** Coloca un equipo puntual (TG, transformador, poste, portón) con un solo clic. */
@@ -223,7 +357,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
             visible: true,
         });
         setSelectedElementId(id);
-        setActiveToolState('select');
+        // La herramienta sigue activa: se pueden colocar más; Esc termina.
     };
 
     // ── Curvas de nivel extraídas del plano CAD ──────────────────────────
@@ -416,12 +550,22 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         pendingType,
         pendingNetworkEdgeId,
         selectedElementId,
+        selectedElementIds: selectedIds,
         selectElement: setSelectedElementId,
+        toggleElementSelection,
+        selectElements,
+        selectAllElements,
+        deleteSelected,
+        repeatSelected,
+        moveSiteElements,
         drawing: pendingVertices.length > 0,
         pendingVertices,
         addVertex,
         finishDrawing,
         cancelDrawing,
+        removeLastVertex,
+        copySelectedElement,
+        pasteElement,
         placePoint,
         isPolygonType,
         snapEnabled,

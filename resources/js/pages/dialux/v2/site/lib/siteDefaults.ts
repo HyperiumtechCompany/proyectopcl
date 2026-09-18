@@ -25,6 +25,10 @@ export function defaultConfigFor(
                 armLengthM: 1.5,
                 armDirectionDeg: 0,
                 fixtures: 1,
+                lumens: 3000,
+                beamAngleDeg: 60,
+                maintenanceFactor: 0.8,
+                wattage: 60,
             };
         case 'transformer':
             return {
@@ -43,7 +47,16 @@ export function defaultConfigFor(
                 heightM: 2,
             };
         case 'fence':
-            return { kind: 'fence', slope: 'flat', endElevationM: 0 };
+            return {
+                kind: 'fence',
+                slope: 'flat',
+                endElevationM: 0,
+                fenceKind: 'wall',
+                conform: 'stepped',
+                thicknessM: 0.2,
+                panelLengthM: 2.5,
+                closed: false,
+            };
         case 'ramp':
             return {
                 kind: 'ramp',
