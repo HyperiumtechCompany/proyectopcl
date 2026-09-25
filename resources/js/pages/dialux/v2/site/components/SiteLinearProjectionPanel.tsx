@@ -1,6 +1,6 @@
 import { Minus, Plus, Target, Wand2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { findActivity } from '../domain/siteLightingNorms';
+import { findActivity, isInteriorCatalog } from '../domain/siteLightingNorms';
 import type {
     LinearArrangement,
     LinearPreviewMetrics,
@@ -8,6 +8,7 @@ import type {
 import {
     DEFAULT_LINEAR_SPACING_TO_HEIGHT,
     MIN_AXIS_FILL,
+    adjustLinearLayout,
     evaluateLinearPoles,
     linearPolePositions,
     suggestLinearPoles,
@@ -15,6 +16,9 @@ import {
 import type { PoleConfig, SiteElement } from '../domain/types';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 import {
+    applyProjectionAdjust,
+    EMPTY_PROJECTION_ADJUST,
+    isProjectionAdjusted,
     loadSitePhotometry,
     siteLightProductIds,
     useSiteLightingCalculation,
@@ -22,6 +26,7 @@ import {
 } from '../hooks/useSiteLightingCalculation';
 import { defaultConfigFor } from '../lib/siteDefaults';
 import { LinearPoleSettings } from './LinearPoleSettings';
+import { ProjectionNudge } from './ProjectionNudge';
 import { activeRegions, useNormCatalogs } from './SiteNormPanels';
 import { fmt, NumField } from './SiteProjectionPanel';
 
@@ -58,13 +63,16 @@ export function SiteLinearProjectionPanel({
     const lighting = useSiteLightingCalculation(editor.siteData);
     const regions = activeRegions(editor.siteData);
     useNormCatalogs(regions);
-    const normLux = regions
-        .map(
-            (region) =>
-                findActivity(region, element.normReq?.activities[region])
-                    ?.illuminanceLux,
-        )
-        .find((lux): lux is number => typeof lux === 'number' && lux > 0);
+    // Primera región (Exterior va primero) con actividad elegida y Ēm > 0.
+    const normRegion = regions.find(
+        (region) =>
+            (findActivity(region, element.normReq?.activities[region])
+                ?.illuminanceLux ?? 0) > 0,
+    );
+    const normLux = normRegion
+        ? findActivity(normRegion, element.normReq?.activities[normRegion])
+              ?.illuminanceLux
+        : undefined;
     const pedestrian = PEDESTRIAN.has(element.type);
 
     const [targetLux, setTargetLux] = useState<number | null>(null);
@@ -102,7 +110,10 @@ export function SiteLinearProjectionPanel({
     const chosenArrangement = suggestion?.arrangement ?? 'single';
     const step = chosenArrangement === 'opposite' ? 2 : 1;
     const count = manualCount ?? suggestion?.count ?? 1;
-    const layout = suggestion
+    // Ajuste manual (arrastre / flechas) sobre la disposición propuesta; cada
+    // brazo se reorienta hacia la vía desde su posición final.
+    const adjust = useSiteLightingStore((s) => s.projectionAdjust);
+    const baseLayout = suggestion
         ? linearPolePositions({
               axis: suggestion.axis,
               arrangement: chosenArrangement,
@@ -110,12 +121,29 @@ export function SiteLinearProjectionPanel({
               scaleM,
               side,
               placement,
+              sides: suggestion.sides,
           })
         : null;
+    const layout =
+        baseLayout && suggestion
+            ? adjustLinearLayout(
+                  baseLayout,
+                  suggestion.axis,
+                  applyProjectionAdjust(baseLayout.positions, adjust),
+                  scaleM,
+                  suggestion.sides,
+              )
+            : null;
     const configs = (layout?.armDirectionsDeg ?? []).map((deg) => ({
         ...pole,
         armDirectionDeg: deg,
     }));
+
+    // Otra disposición: los postes movidos a mano ya no corresponden.
+    useEffect(() => {
+        const current = useSiteLightingStore.getState().projectionAdjust;
+        setStore({ projectionAdjust: { offset: current.offset, overrides: {} } });
+    }, [element.id, count, chosenArrangement, side, placement, setStore]);
 
     useEffect(() => {
         setStore({
@@ -125,8 +153,15 @@ export function SiteLinearProjectionPanel({
         });
         // `layout` se recalcula en cada render; basta con sus entradas.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [site, element.id, count, chosenArrangement, side, placement, pole.heightM, spacingToHeight, setStore]);
-    useEffect(() => () => setStore({ projectionPreview: null }), [setStore]);
+    }, [site, element.id, count, chosenArrangement, side, placement, pole.heightM, spacingToHeight, adjust, setStore]);
+    useEffect(
+        () => () =>
+            setStore({
+                projectionPreview: null,
+                projectionAdjust: EMPTY_PROJECTION_ADJUST,
+            }),
+        [setStore],
+    );
 
     useEffect(() => {
         if (!site || !layout) return;
@@ -147,7 +182,7 @@ export function SiteLinearProjectionPanel({
             window.clearTimeout(timer);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [site, element.id, count, chosenArrangement, side, placement, pole, spacingToHeight]);
+    }, [site, element.id, count, chosenArrangement, side, placement, pole, spacingToHeight, adjust]);
 
     /** Menor cantidad (desde la regla de separación) que alcanza el Ēm objetivo. */
     const fitToTarget = () => {
@@ -166,6 +201,7 @@ export function SiteLinearProjectionPanel({
                         scaleM,
                         side,
                         placement,
+                        sides: suggestion.sides,
                     });
                     const result = evaluateLinearPoles({ site, areaId: element.id, layout: trial, pole, photometry });
                     if (result && result.avgLux >= target) {
@@ -182,7 +218,20 @@ export function SiteLinearProjectionPanel({
 
     const place = () => {
         if (!layout) return;
-        editor.placeProjectedLuminaires(element.id, layout.positions, pole, configs);
+        editor.placeProjectedLuminaires(element.id, layout.positions, pole, configs, {
+            mode: 'linear',
+            count: layout.positions.length,
+            arrangement: chosenArrangement,
+            spacingM: layout.spacingM,
+            placement,
+            side,
+            mountingHeightM: pole.heightM,
+            armLengthM: pole.armLengthM,
+            lumensEach: pole.lumens ?? null,
+            spacingToHeight,
+            targetLux: target,
+            adjusted: isProjectionAdjusted(adjust),
+        });
         setMessage(`Colocados ${layout.positions.length} postes; recalculando…`);
         window.setTimeout(() => lighting.run(), 60);
     };
@@ -222,12 +271,13 @@ export function SiteLinearProjectionPanel({
                     Auto
                 </button>
             </div>
-            {normLux && targetLux === null && (
+            {normLux && targetLux === null && normRegion && isInteriorCatalog(normRegion) && (
                 <p className="text-[9px] leading-snug text-amber-700 dark:text-amber-300">
                     Ēm tomado de la actividad elegida en un catálogo de
                     iluminación de interiores / lugares de trabajo (EN 12464-1,
                     IES, RNE EM.010). El sistema aún no tiene un catálogo de
-                    alumbrado vial/exterior (EN 13201, EN 12464-2): verifica su
+                    alumbrado vial/exterior de esa región: elige la actividad de
+                    la región "Exterior" (EN 12464-2 / EN 13201-2) o verifica su
                     aplicabilidad a este espacio.
                 </p>
             )}
@@ -244,7 +294,7 @@ export function SiteLinearProjectionPanel({
             <div className="flex items-center gap-2 rounded-md bg-white px-2 py-1.5 dark:bg-slate-900">
                 <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
-                        A lo largo ({fmt(suggestion.axis.lengthM)} m × {fmt(suggestion.axis.widthM)} m)
+                        A lo largo ({fmt(suggestion.runLengthM)} m × {fmt(suggestion.ruleWidthM)} m{suggestion.sides ? ', siguiendo sus bordes' : ''})
                     </p>
                     <p className="text-[10px] text-slate-500">
                         {fmt(layout.spacingM)} m entre postes · {fmt(layout.spacingM / 2)} m a
@@ -315,7 +365,7 @@ export function SiteLinearProjectionPanel({
                 ))}
             </div>
 
-            {suggestion.axisFill < MIN_AXIS_FILL && (
+            {!suggestion.sides && suggestion.axisFill < MIN_AXIS_FILL && (
                 <p className="rounded-md bg-amber-100 px-2 py-1 text-[10px] text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
                     Este espacio no es recto (en L, en U o curvo: ocupa el{' '}
                     {fmt(suggestion.axisFill * 100, 0)} % de su rectángulo): el eje
@@ -356,6 +406,8 @@ export function SiteLinearProjectionPanel({
             {message && (
                 <p className="text-[10px] text-emerald-700 dark:text-emerald-300">{message}</p>
             )}
+
+            <ProjectionNudge scaleM={scaleM} />
 
             <LinearPoleSettings
                 pole={pole}

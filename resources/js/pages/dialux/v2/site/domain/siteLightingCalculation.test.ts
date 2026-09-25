@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { LuminairePhotometry } from '../lib/luminaireCatalog';
 import {
     calculateSiteLighting,
+    clipPolygonToRect,
     siteLuminaires,
 } from './siteLightingCalculation';
 import type { SiteData, SiteElement } from './types';
@@ -244,3 +245,94 @@ describe('calculateSiteLighting · alcance de cada luminaria (auditoría Fase 6)
         expect(result.warnings.some((w) => w.includes('por debajo de esta superficie'))).toBe(true);
     });
 });
+
+describe('calculateSiteLighting · plataformas y terreno (mapa de lux adaptable)', () => {
+    // Terreno 40×20 a cota 0 con una plataforma de 20×20 a +3 m en su mitad izquierda.
+    const terrain = () => ({
+        ...square('terreno', 'terrain', 0, 0, 20),
+        vertices: [
+            { x: 0, y: 0 },
+            { x: 40, y: 0 },
+            { x: 40, y: 20 },
+            { x: 0, y: 20 },
+        ],
+    });
+    const platform = () =>
+        square('plataforma', 'terrace_platform', 0, 0, 20, { baseElevationM: 3 });
+
+    it('la plataforma es dueña de sus puntos: el terreno no los repite a otra cota', () => {
+        const { areas } = calculateSiteLighting(
+            site([terrain(), platform(), pole('p1', 30, 10), pole('p2', 10, 10)]),
+            NO_PHOTOMETRY,
+        );
+        const t = areas.find((a) => a.elementId === 'terreno')!;
+        const pl = areas.find((a) => a.elementId === 'plataforma')!;
+        expect(pl.baseElevationM).toBe(3);
+        // El terreno se calcula a SU cota (0), no a la de la plataforma de su centroide.
+        expect(t.patches.every((patch) => patch.baseElevationM === 0)).toBe(true);
+        // Ningún punto del terreno cae sobre la plataforma (x < 20 m).
+        for (const patch of t.patches) {
+            const r = patch.result;
+            r.grid_values.forEach((value, index) => {
+                if (value === null) return;
+                const col = index % r.grid_cols;
+                const x = (r.grid_origin_x ?? 0) + (col + 0.5) * (r.grid_cell_width ?? 0);
+                expect(x).toBeGreaterThan(20);
+            });
+        }
+    });
+
+    it('una zona sobre dos cotas se calcula en parches, cada uno a su cota', () => {
+        const zone = {
+            ...square('zona', 'custom_zone', 0, 0, 20),
+            vertices: [
+                { x: 10, y: 0 },
+                { x: 30, y: 0 },
+                { x: 30, y: 20 },
+                { x: 10, y: 20 },
+            ],
+        };
+        const result = calculateSiteLighting(
+            site([platform(), zone, pole('p1', 20, 10)]),
+            NO_PHOTOMETRY,
+            new Set(['zona']),
+        );
+        const area = result.areas[0];
+        const elevations = new Set(area.patches.map((patch) => patch.baseElevationM));
+        expect(elevations.has(0)).toBe(true);
+        expect(elevations.has(3)).toBe(false); // la parte sobre la plataforma es de la plataforma
+        expect(area.result.avg_lux).toBeGreaterThan(0);
+    });
+
+    it('un terreno plano sin otras superficies sigue siendo UN solo parche', () => {
+        const [area] = calculateSiteLighting(
+            site([square('patio', 'custom_zone', 0, 0, 20), pole('p1', 10, 10)]),
+            NO_PHOTOMETRY,
+        ).areas;
+        expect(area.patches).toHaveLength(1);
+        expect(area.result.grid_values).toBe(area.patches[0].result.grid_values);
+    });
+});
+
+describe('clipPolygonToRect', () => {
+    it('recorta un polígono cóncavo (L) a un rectángulo', () => {
+        const l = [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 10, y: 2 },
+            { x: 2, y: 2 },
+            { x: 2, y: 10 },
+            { x: 0, y: 10 },
+        ];
+        const clipped = clipPolygonToRect(l, { minX: 0, maxX: 5, minY: 0, maxY: 5 });
+        let twice = 0;
+        for (let i = 0; i < clipped.length; i++) {
+            const a = clipped[i];
+            const b = clipped[(i + 1) % clipped.length];
+            twice += a.x * b.y - b.x * a.y;
+        }
+        // 5×2 + 2×3 = 16 m²
+        expect(Math.abs(twice) / 2).toBeCloseTo(16, 9);
+    });
+});
+

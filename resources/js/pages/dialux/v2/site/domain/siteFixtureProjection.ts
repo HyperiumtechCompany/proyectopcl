@@ -487,16 +487,15 @@ export function evaluatePoleGrid(input: {
     columns: number;
     pole: PoleConfig;
     photometry: ReadonlyMap<number, LuminairePhotometry>;
+    /** Posiciones ya ajustadas a mano (ausente = la grilla filas × columnas). */
+    positions?: Point2D[];
 }): { metrics: ProjectionPreviewMetrics; positions: Point2D[] } | null {
     const area = areaById(input.site, input.areaId);
     if (!area || area.vertices.length < 3) return null;
     const { widthM, lengthM } = areaMetres(input.site, area);
-    const positions = projectionGridPositions(
-        input.site,
-        input.areaId,
-        input.rows,
-        input.columns,
-    );
+    const positions =
+        input.positions ??
+        projectionGridPositions(input.site, input.areaId, input.rows, input.columns);
     const trial: SiteData = {
         ...input.site,
         elements: [

@@ -1,6 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react';
 import {
     AlertTriangle,
+    FileDown,
     Network,
     Save,
     TableProperties,
@@ -23,6 +24,7 @@ import { ElectricalPalette } from './electrical-network/components/ElectricalPal
 import { ElectricalPropertiesPanel } from './electrical-network/components/ElectricalPropertiesPanel';
 import { ElectricalTreeView } from './electrical-network/components/ElectricalTreeView';
 import { SectionOptimizerPanel } from './electrical-network/components/SectionOptimizerPanel';
+import { SingleLineDiagramDialog } from './electrical-network/components/SingleLineDiagramDialog';
 import { SiteOutputsCtTable } from './electrical-network/components/SiteOutputsCtTable';
 import { VoltageDropAlertPanel } from './electrical-network/components/VoltageDropAlertPanel';
 import type { ModuleCtCircuit } from './electrical-network/domain/ctTableRows';
@@ -31,6 +33,7 @@ import {
     sitePhaseLoads,
 } from './electrical-network/domain/phaseBalance';
 import { calculateShortCircuits } from './electrical-network/domain/shortCircuit';
+import { buildSingleLineDiagram } from './electrical-network/domain/singleLineDiagram';
 import type {
     ElectricalNetworkSnapshot,
     ModuleElectricalPort,
@@ -95,6 +98,7 @@ export default function ElectricalNetworkPage({
     const [workspaceView, setWorkspaceView] = useState<'diagram' | 'ct'>(
         'diagram',
     );
+    const [singleLineOpen, setSingleLineOpen] = useState(false);
     const panelFeederGeometry = useMemo(
         () =>
             Object.fromEntries(
@@ -593,7 +597,30 @@ export default function ElectricalNetworkPage({
                         <TableProperties className="h-4 w-4" />
                         Tabla CT global
                     </button>
+                    <button
+                        type="button"
+                        onClick={() => setSingleLineOpen(true)}
+                        className="ml-auto flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+                        title="Diagrama unifilar exportable a DXF / PDF"
+                    >
+                        <FileDown className="h-4 w-4" />
+                        Unifilar
+                    </button>
                 </nav>
+                {singleLineOpen && (
+                    <SingleLineDiagramDialog
+                        projectName={project.name}
+                        onClose={() => setSingleLineOpen(false)}
+                        diagram={buildSingleLineDiagram({
+                            network: editor.snapshot.data,
+                            calculations: editor.calculations,
+                            ports,
+                            shortCircuits,
+                            siteOutputRows: editor.siteOutputRows,
+                            projectName: project.name,
+                        })}
+                    />
+                )}
                 {workspaceView === 'ct' ? (
                     <div className="flex min-h-0 flex-1 flex-col">
                         <ElectricalCtTable

@@ -76,9 +76,30 @@ export interface LinearSuggestion {
     axisFill: number;
     /** Ancho usado para la regla W/h (el declarado de la rampa/escalera si existe). */
     ruleWidthM: number;
+    /** Bordes reales (null si no se detectaron los dos extremos: se usa el eje recto). */
+    sides: LinearSides | null;
+    /** Largo del recorrido usado para la separación (m). */
+    runLengthM: number;
 }
 
 export const MIN_AXIS_FILL = 0.8;
+
+/**
+ * Los dos BORDES LARGOS reales del espacio (en metros), separados por sus dos
+ * extremos: lo que permite proyectar postes que SIGUEN la vereda/calle aunque
+ * sea en L, en U o curva (el eje recto del rectángulo mínimo no lo hace).
+ */
+export interface LinearSides {
+    /** Polígono en metros. */
+    polygon: Point2D[];
+    /** Borde A y borde B como polilíneas (metros), de un extremo al otro. */
+    chains: [Point2D[], Point2D[]];
+    lengths: [number, number];
+    /** Ancho efectivo 2·Área/Perímetro (≈ ancho de un corredor largo). */
+    widthM: number;
+    /** +1 si el polígono tiene área con signo positiva (define la normal exterior). */
+    orientation: 1 | -1;
+}
 
 export interface LinearLayout {
     positions: Point2D[];
@@ -149,6 +170,141 @@ export function linearAxisOf(element: SiteElement, scaleM: number): LinearAxis |
     return best;
 }
 
+const polylineLength = (points: Point2D[]) =>
+    points.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - points[i].x, p.y - points[i].y), 0);
+
+/**
+ * Detecta los dos extremos del espacio (lados cortos, ≤ 1,6 × ancho
+ * efectivo, con los puntos medios más alejados entre sí) y devuelve los dos
+ * bordes largos que quedan entre ellos. En un rectángulo: los dos lados
+ * largos. `null` si no hay dos extremos reconocibles.
+ */
+export function linearSidesOf(element: SiteElement, scaleM: number): LinearSides | null {
+    const raw = element.vertices.map((v) => ({ x: v.x * scaleM, y: v.y * scaleM }));
+    const polygon = raw.filter((p, i) => {
+        const next = raw[(i + 1) % raw.length];
+        return Math.hypot(next.x - p.x, next.y - p.y) > 1e-6;
+    });
+    const n = polygon.length;
+    if (n < 4) return null;
+    let twice = 0;
+    for (let i = 0; i < n; i++) {
+        const a = polygon[i];
+        const b = polygon[(i + 1) % n];
+        twice += a.x * b.y - b.x * a.y;
+    }
+    const area = Math.abs(twice) / 2;
+    const edgeLength = (i: number) => {
+        const a = polygon[i];
+        const b = polygon[(i + 1) % n];
+        return Math.hypot(b.x - a.x, b.y - a.y);
+    };
+    const perimeter = polygon.reduce((sum, _, i) => sum + edgeLength(i), 0);
+    if (!(area > 0) || !(perimeter > 0)) return null;
+    const widthM = (2 * area) / perimeter;
+    const mid = (i: number) => ({
+        x: (polygon[i].x + polygon[(i + 1) % n].x) / 2,
+        y: (polygon[i].y + polygon[(i + 1) % n].y) / 2,
+    });
+    const candidates = polygon.map((_, i) => i).filter((i) => edgeLength(i) <= 1.6 * widthM);
+    let best: [number, number] | null = null;
+    let bestDistance = -1;
+    for (let a = 0; a < candidates.length; a++) {
+        for (let b = a + 1; b < candidates.length; b++) {
+            const pa = mid(candidates[a]);
+            const pb = mid(candidates[b]);
+            const d = Math.hypot(pa.x - pb.x, pa.y - pb.y);
+            if (d > bestDistance) {
+                bestDistance = d;
+                best = [candidates[a], candidates[b]];
+            }
+        }
+    }
+    if (!best) return null;
+    const [i, j] = best;
+    // Borde A: del final del extremo i al inicio del extremo j; B: el resto.
+    const walk = (from: number, to: number) => {
+        const chain: Point2D[] = [];
+        for (let k = from; ; k = (k + 1) % n) {
+            chain.push(polygon[k]);
+            if (k === to) break;
+        }
+        return chain;
+    };
+    const chainA = walk((i + 1) % n, j);
+    const chainB = walk((j + 1) % n, i);
+    if (chainA.length < 2 || chainB.length < 2) return null;
+    return {
+        polygon,
+        chains: [chainA, chainB],
+        lengths: [polylineLength(chainA), polylineLength(chainB)],
+        widthM,
+        orientation: twice > 0 ? 1 : -1,
+    };
+}
+
+/** Punto a `distance` m a lo largo de una polilínea + normal EXTERIOR del tramo donde cae. */
+function pointOnSide(
+    chain: Point2D[],
+    distance: number,
+    orientation: 1 | -1,
+): { point: Point2D; outward: Point2D } {
+    let left = Math.max(0, distance);
+    for (let k = 0; k < chain.length - 1; k++) {
+        const a = chain[k];
+        const b = chain[k + 1];
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        if (len <= 1e-9) continue;
+        if (left <= len || k === chain.length - 2) {
+            const t = Math.min(1, left / len);
+            const dx = (b.x - a.x) / len;
+            const dy = (b.y - a.y) / len;
+            // Polígono de área con signo positiva: la normal exterior de a→b es (dy, −dx).
+            const outward = orientation === 1 ? { x: dy, y: -dx } : { x: -dy, y: dx };
+            return { point: { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, outward };
+        }
+        left -= len;
+    }
+    return { point: chain[chain.length - 1], outward: { x: 0, y: 0 } };
+}
+
+const armDeg = (direction: Point2D) => (Math.atan2(direction.x, direction.y) * 180) / Math.PI;
+
+/**
+ * Brazo de un poste en `point` (PLANO) hacia el espacio: si el poste está
+ * fuera, apunta al borde más cercano; si está dentro, hacia el interior.
+ */
+export function armTowardSpaceDeg(polygonM: Point2D[], point: Point2D, scaleM: number): number {
+    const p = { x: point.x * scaleM, y: point.y * scaleM };
+    let twice = 0;
+    for (let i = 0; i < polygonM.length; i++) {
+        const a = polygonM[i];
+        const b = polygonM[(i + 1) % polygonM.length];
+        twice += a.x * b.y - b.x * a.y;
+    }
+    let best = { d: Infinity, q: p, inward: { x: 0, y: 1 } };
+    for (let i = 0; i < polygonM.length; i++) {
+        const a = polygonM[i];
+        const b = polygonM[(i + 1) % polygonM.length];
+        const len2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+        if (len2 <= 1e-12) continue;
+        const t = Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / len2));
+        const q = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+        const d = Math.hypot(p.x - q.x, p.y - q.y);
+        if (d < best.d) {
+            const len = Math.sqrt(len2);
+            const dx = (b.x - a.x) / len;
+            const dy = (b.y - a.y) / len;
+            best = { d, q, inward: twice > 0 ? { x: -dy, y: dx } : { x: dy, y: -dx } };
+        }
+    }
+    if (best.d < 1e-6) return armDeg(best.inward);
+    const toEdge = { x: best.q.x - p.x, y: best.q.y - p.y };
+    // Dentro del espacio el vector al borde apunta hacia afuera: se invierte.
+    const inside = toEdge.x * best.inward.x + toEdge.y * best.inward.y < 0;
+    return armDeg(inside ? { x: -toEdge.x, y: -toEdge.y } : toEdge);
+}
+
 /** Disposición de referencia por W/h (ver cabecera). */
 export function arrangementFor(type: SiteElementType, widthToHeight: number): LinearArrangement {
     if (PEDESTRIAN_TYPES.has(type)) return 'single';
@@ -192,7 +348,12 @@ export function suggestLinearPoles(input: {
         element.config?.kind === 'ramp' || element.config?.kind === 'stair'
             ? element.config.widthM
             : undefined;
-    const ruleWidthM = declaredWidth && declaredWidth > 0 ? declaredWidth : axis.widthM;
+    const sides = linearSidesOf(element, scaleM);
+    const ruleWidthM =
+        declaredWidth && declaredWidth > 0 ? declaredWidth : (sides?.widthM ?? axis.widthM);
+    // Largo real del recorrido: la media de los dos bordes (en L o curva, el
+    // largo del rectángulo mínimo no es el recorrido).
+    const runLengthM = sides ? (sides.lengths[0] + sides.lengths[1]) / 2 : axis.lengthM;
     const widthToHeight = ruleWidthM / h;
     const axisFill =
         axis.lengthM * axis.widthM > 0
@@ -202,7 +363,7 @@ export function suggestLinearPoles(input: {
     const maxSpacingM = h * (input.spacingToHeight ?? DEFAULT_LINEAR_SPACING_TO_HEIGHT);
     // Separación medida entre postes CONSECUTIVOS a lo largo del eje; en la
     // pareada cada "posición" lleva 2 postes enfrentados.
-    const positionsBySpacing = Math.max(1, Math.ceil(axis.lengthM / maxSpacingM));
+    const positionsBySpacing = Math.max(1, Math.ceil(runLengthM / maxSpacingM));
     const perPosition = arrangement === 'opposite' ? 2 : 1;
     const minimum = element.type === 'ramp' || element.type === 'stair' ? 2 : 1;
     const bySpacing = Math.max(minimum, positionsBySpacing * perPosition);
@@ -234,6 +395,8 @@ export function suggestLinearPoles(input: {
         widthToHeight,
         axisFill,
         ruleWidthM,
+        sides,
+        runLengthM,
     };
 }
 
@@ -250,9 +413,12 @@ export function linearPolePositions(input: {
     side?: 0 | 1;
     /** 'outside' (por defecto) = junto al borde, por fuera; 'inside' = dentro del espacio. */
     placement?: 'outside' | 'inside';
+    /** Bordes reales del espacio: si están, los postes SIGUEN esos bordes. */
+    sides?: LinearSides | null;
 }): LinearLayout {
     const { axis, arrangement, scaleM } = input;
     const count = Math.max(1, Math.round(input.count));
+    if (input.sides) return layoutAlongSides({ ...input, sides: input.sides, count });
     const positionsAlong = arrangement === 'opposite' ? Math.ceil(count / 2) : count;
     const step = axis.lengthM / positionsAlong;
     const offset =
@@ -284,6 +450,58 @@ export function linearPolePositions(input: {
         }
     }
     return { positions, armDirectionsDeg, spacingM: step };
+}
+
+/**
+ * Postes a lo largo de los BORDES reales: reparto ½-1-1-½ sobre la longitud de
+ * cada borde, a `EDGE_OFFSET_M` fuera (o dentro) del tramo donde cae cada uno,
+ * con el brazo hacia el espacio. Unilateral = un borde; pareada = ambos en la
+ * misma posición; tresbolillo = alterna bordes.
+ */
+function layoutAlongSides(input: {
+    arrangement: LinearArrangement;
+    count: number;
+    scaleM: number;
+    side?: 0 | 1;
+    placement?: 'outside' | 'inside';
+    sides: LinearSides;
+}): LinearLayout {
+    const { sides, arrangement, count, scaleM } = input;
+    const offset = input.placement === 'inside' ? -EDGE_OFFSET_M : EDGE_OFFSET_M;
+    const positions: Point2D[] = [];
+    const armDirectionsDeg: number[] = [];
+    const push = (sideIndex: 0 | 1, fraction: number) => {
+        const { point, outward } = pointOnSide(
+            sides.chains[sideIndex],
+            fraction * sides.lengths[sideIndex],
+            sides.orientation,
+        );
+        positions.push({
+            x: (point.x + outward.x * offset) / scaleM,
+            y: (point.y + outward.y * offset) / scaleM,
+        });
+        armDirectionsDeg.push(armDeg({ x: -outward.x, y: -outward.y }));
+    };
+    const along = arrangement === 'opposite' ? Math.ceil(count / 2) : count;
+    for (let i = 0; i < along; i++) {
+        const fraction = (i + 0.5) / along;
+        if (arrangement === 'single') {
+            push(input.side ?? 0, fraction);
+        } else if (arrangement === 'staggered') {
+            // El borde B corre en sentido contrario: se invierte la fracción
+            // para que los postes alternen a lo largo del recorrido.
+            if (i % 2 === 0) push(0, fraction);
+            else push(1, 1 - fraction);
+        } else {
+            push(0, fraction);
+            if (positions.length < count) push(1, 1 - fraction);
+        }
+    }
+    const usedLength =
+        arrangement === 'single'
+            ? sides.lengths[input.side ?? 0]
+            : (sides.lengths[0] + sides.lengths[1]) / 2;
+    return { positions, armDirectionsDeg, spacingM: usedLength / along };
 }
 
 export interface LinearPreviewMetrics {
@@ -338,3 +556,36 @@ export function evaluateLinearPoles(input: {
         warnings: calculation.warnings,
     };
 }
+
+/**
+ * Rumbo del brazo (convención `armDirectionDeg`) de un poste en `point`
+ * (coordenadas de PLANO) hacia el eje de la vía: sirve cuando el usuario
+ * movió el poste (incluso al otro lado) después de proyectar.
+ */
+export function armTowardAxisDeg(axis: LinearAxis, point: Point2D, scaleM: number): number {
+    const across =
+        (point.x * scaleM - axis.center.x) * axis.across.x +
+        (point.y * scaleM - axis.center.y) * axis.across.y;
+    const s = across >= 0 ? 1 : -1;
+    return (Math.atan2(-axis.across.x * s, -axis.across.y * s) * 180) / Math.PI;
+}
+
+/** Aplica posiciones ajustadas a mano y reorienta cada brazo hacia la vía. */
+export function adjustLinearLayout(
+    layout: LinearLayout,
+    axis: LinearAxis,
+    positions: Point2D[],
+    scaleM: number,
+    sides?: LinearSides | null,
+): LinearLayout {
+    return {
+        ...layout,
+        positions,
+        armDirectionsDeg: positions.map((point) =>
+            sides
+                ? armTowardSpaceDeg(sides.polygon, point, scaleM)
+                : armTowardAxisDeg(axis, point, scaleM),
+        ),
+    };
+}
+

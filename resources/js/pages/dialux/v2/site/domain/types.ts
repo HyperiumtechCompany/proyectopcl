@@ -540,7 +540,8 @@ export type SiteElementConfig =
     | TerracePlatformConfig;
 
 /** Región normativa que el cliente elige para verificar la iluminación de sus espacios (v1: EN 12464-1, IES HB-10, RNE EM.010). */
-export type SiteNormRegion = 'europe' | 'usa' | 'peru';
+/** `exterior` = catálogo propio de alumbrado exterior (EN 12464-2 / EN 13201-2, `exteriorNormCatalog.ts`). */
+export type SiteNormRegion = 'exterior' | 'europe' | 'usa' | 'peru';
 
 /** Actividad elegida por el cliente para un espacio, por región: clave `categoría › título` del catálogo normativo de v1. */
 export interface SiteNormRequirement {
@@ -632,6 +633,12 @@ export interface SiteCircuit {
     wastePct?: number;
     /** Salida del TG asociada cuando uno de los extremos es un tablero general. */
     tgOutputId?: string;
+    /**
+     * Fase de la salida 1Φ (solo el cable que sale del tablero). Ausente = se
+     * reparte R/S/T por orden de salida (comportamiento anterior). La fija el
+     * auto-circuitado (balance de fases).
+     */
+    phase?: 'R' | 'S' | 'T';
     /**
      * Cuando un extremo es un bloque de módulo (`building_block`): tablero del
      * módulo que este cable alimenta (`ModuleElectricalPort.panelId`). Ausente

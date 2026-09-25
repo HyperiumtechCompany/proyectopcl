@@ -13,7 +13,10 @@ function rgba(lux: number): string {
  * Falsos colores de la iluminancia calculada con el motor V1 sobre la planta
  * 2D (como la vista de isolíneas/falsos colores de DIALux): una celda por
  * punto de la malla de cada superficie de cálculo, con la MISMA escala de
- * color que el mapa de lux del 3D (`luxColor`). No captura clics.
+ * color que el mapa de lux del 3D (`luxColor`). Dibuja cada PARCHE de la
+ * superficie (terreno con desnivel, zona sobre varias plataformas); los
+ * puntos que son de otra superficie vienen en `null` y no se repiten. No
+ * captura clics.
  */
 export function IsoluxLayer({
     calculation,
@@ -37,15 +40,17 @@ export function IsoluxLayer({
 
     return (
         <g className="pointer-events-none" aria-hidden>
-            {areas.map((area) => {
-                const r = area.result;
+            {areas.flatMap((area) =>
+                area.patches.map((patch, patchIndex) => ({ area, patch, patchIndex })),
+            ).map(({ area, patch, patchIndex }) => {
+                const r = patch.result;
                 const ox = r.grid_origin_x ?? 0;
                 const oy = r.grid_origin_y ?? 0;
                 const cw = r.grid_cell_width ?? 0;
                 const ch = r.grid_cell_height ?? 0;
                 if (cw <= 0 || ch <= 0) return null;
                 return (
-                    <g key={area.elementId}>
+                    <g key={`${area.elementId}:${patchIndex}`}>
                         {r.grid_values.map((value, index) => {
                             if (value === null) return null;
                             const row = Math.floor(index / r.grid_cols);

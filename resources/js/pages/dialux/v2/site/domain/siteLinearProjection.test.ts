@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { LuminairePhotometry } from '../lib/luminaireCatalog';
 import {
     arrangementFor,
+    armTowardSpaceDeg,
     EDGE_OFFSET_M,
     evaluateLinearPoles,
     linearAxisOf,
@@ -219,4 +220,80 @@ describe('proyección lineal de postes (calles, pasadizos, rampas, escaleras)', 
         expect(suggestion.ruleWidthM).toBe(1.2);
         expect(suggestion.widthToHeight).toBeCloseTo(0.3, 9);
     });
+
+    it('vereda en L (captura del usuario): los postes SIGUEN el borde real, fuera a 0,5 m, brazo hacia la vereda', () => {
+        // Franja horizontal 60 × 4 m con una pata hacia abajo de 4 × 16 m a la izquierda.
+        const lShape: SiteElement = {
+            id: 'L',
+            type: 'sidewalk',
+            label: 'Vereda',
+            vertices: [
+                { x: 0, y: 0 },
+                { x: 60, y: 0 },
+                { x: 60, y: 4 },
+                { x: 4, y: 4 },
+                { x: 4, y: 20 },
+                { x: 0, y: 20 },
+            ],
+            style: { fillColor: '#000', strokeColor: '#000' },
+        };
+        const suggestion = suggestLinearPoles({
+            site: site([lShape]),
+            areaId: 'L',
+            targetLux: 7.5,
+            lumensEach: 2500,
+            maintenanceFactor: 0.8,
+            mountingHeightM: 4,
+        })!;
+        expect(suggestion.sides).not.toBeNull();
+        // Recorrido real ≈ media de los dos bordes (80 y 72 m), no la diagonal del rectángulo.
+        expect(suggestion.runLengthM).toBeCloseTo(76, 6);
+        expect(suggestion.ruleWidthM).toBeCloseTo((2 * (60 * 4 + 4 * 16)) / 160, 6);
+        for (const side of [0, 1] as const) {
+            const layout = linearPolePositions({
+                axis: suggestion.axis,
+                arrangement: 'single',
+                count: suggestion.count,
+                scaleM: 1,
+                side,
+                sides: suggestion.sides,
+            });
+            layout.positions.forEach((p, index) => {
+                // Distancia al contorno del polígono = 0,5 m y FUERA de la vereda.
+                const poly = lShape.vertices;
+                let d = Infinity;
+                for (let i = 0; i < poly.length; i++) {
+                    const a = poly[i];
+                    const b = poly[(i + 1) % poly.length];
+                    const len2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+                    const t = Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / len2));
+                    d = Math.min(d, Math.hypot(p.x - (a.x + (b.x - a.x) * t), p.y - (a.y + (b.y - a.y) * t)));
+                }
+                expect(d).toBeGreaterThan(EDGE_OFFSET_M - 1e-6);
+                expect(d).toBeLessThan(EDGE_OFFSET_M * Math.SQRT2 + 1e-6); // cerca de una esquina, a lo sumo en diagonal
+                const inside = p.x > 0 && p.y > 0 && (p.y < 4 ? p.x < 60 : p.x < 4);
+                expect(inside).toBe(false);
+                // Brazo hacia la vereda: un paso de 0,6 m en su dirección acerca el poste al contorno.
+                const a = (layout.armDirectionsDeg[index] * Math.PI) / 180;
+                const q = { x: p.x + Math.sin(a) * 0.6, y: p.y + Math.cos(a) * 0.6 };
+                const qInside = q.x > 0 && q.y > 0 && (q.y < 4 ? q.x < 60 : q.x < 4);
+                expect(qInside).toBe(true);
+            });
+        }
+    });
+
+    it('un poste movido al otro lado de la vereda en L reorienta su brazo hacia ella', () => {
+        const polygon = [
+            { x: 0, y: 0 },
+            { x: 60, y: 0 },
+            { x: 60, y: 4 },
+            { x: 0, y: 4 },
+        ];
+        const below = armTowardSpaceDeg(polygon, { x: 30, y: 4.5 }, 1);
+        const above = armTowardSpaceDeg(polygon, { x: 30, y: -0.5 }, 1);
+        // (sin a, cos a): debajo → apunta hacia −y; arriba → hacia +y.
+        expect(Math.cos((below * Math.PI) / 180)).toBeCloseTo(-1, 9);
+        expect(Math.cos((above * Math.PI) / 180)).toBeCloseTo(1, 9);
+    });
 });
+

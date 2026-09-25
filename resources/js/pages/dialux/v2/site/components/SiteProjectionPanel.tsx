@@ -13,7 +13,7 @@ import {
     suggestProjectionGrid,
     type ProjectionPreviewMetrics,
 } from '../domain/siteFixtureProjection';
-import { findActivity } from '../domain/siteLightingNorms';
+import { findActivity, isInteriorCatalog } from '../domain/siteLightingNorms';
 import {
     applyRoofRule,
     canopyRoofGeometry,
@@ -22,6 +22,9 @@ import {
 import type { CanopyLights, PoleConfig, SiteElement } from '../domain/types';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 import {
+    applyProjectionAdjust,
+    EMPTY_PROJECTION_ADJUST,
+    isProjectionAdjusted,
     loadSitePhotometry,
     siteLightProductIds,
     useSiteLightingCalculation,
@@ -29,6 +32,7 @@ import {
 } from '../hooks/useSiteLightingCalculation';
 import { defaultConfigFor } from '../lib/siteDefaults';
 import { LightProductSelect } from './LightProductSelect';
+import { ProjectionNudge } from './ProjectionNudge';
 import { activeRegions, useNormCatalogs } from './SiteNormPanels';
 
 export const input =
@@ -149,13 +153,16 @@ export function SiteProjectionPanel({
     const lighting = useSiteLightingCalculation(editor.siteData);
     const regions = activeRegions(editor.siteData);
     useNormCatalogs(regions);
-    const normLux = regions
-        .map(
-            (region) =>
-                findActivity(region, element.normReq?.activities[region])
-                    ?.illuminanceLux,
-        )
-        .find((lux): lux is number => typeof lux === 'number' && lux > 0);
+    // Primera región (Exterior va primero) con actividad elegida y Ēm > 0.
+    const normRegion = regions.find(
+        (region) =>
+            (findActivity(region, element.normReq?.activities[region])
+                ?.illuminanceLux ?? 0) > 0,
+    );
+    const normLux = normRegion
+        ? findActivity(normRegion, element.normReq?.activities[normRegion])
+              ?.illuminanceLux
+        : undefined;
 
     const isCanopy = element.type === 'canopy';
     const [targetLux, setTargetLux] = useState<number | null>(null);
@@ -224,23 +231,44 @@ export function SiteProjectionPanel({
         ? Math.max(1, (roof?.eaveM ?? 3) - 0.15)
         : pole.heightM;
 
+    // Ajuste manual (arrastre / flechas): no aplica a techados (sus
+    // luminarias van bajo la cubierta, con la regla de cumbrera).
+    const adjust = useSiteLightingStore((s) => s.projectionAdjust);
+    const basePositions = site
+        ? projectionGridPositions(site, element.id, rows, columns)
+        : [];
+    const positions = isCanopy
+        ? basePositions
+        : applyProjectionAdjust(basePositions, adjust);
+    // Otra grilla: los postes movidos a mano ya no corresponden (se conserva
+    // el desplazamiento del conjunto).
+    useEffect(() => {
+        const current = useSiteLightingStore.getState().projectionAdjust;
+        setStore({ projectionAdjust: { offset: current.offset, overrides: {} } });
+    }, [element.id, rows, columns, setStore]);
+
     // Luminarias "fantasma" sobre el plano mientras se ajusta.
     useEffect(() => {
+        if (!site) {
+            setStore({ projectionPreview: null });
+            return;
+        }
+        const base = projectionGridPositions(site, element.id, rows, columns);
         setStore({
-            projectionPreview: site
-                ? {
-                      areaId: element.id,
-                      positions: projectionGridPositions(
-                          site,
-                          element.id,
-                          rows,
-                          columns,
-                      ),
-                  }
-                : null,
+            projectionPreview: {
+                areaId: element.id,
+                positions: isCanopy ? base : applyProjectionAdjust(base, adjust),
+            },
         });
-    }, [site, element.id, rows, columns, setStore]);
-    useEffect(() => () => setStore({ projectionPreview: null }), [setStore]);
+    }, [site, element.id, rows, columns, adjust, isCanopy, setStore]);
+    useEffect(
+        () => () =>
+            setStore({
+                projectionPreview: null,
+                projectionAdjust: EMPTY_PROJECTION_ADJUST,
+            }),
+        [setStore],
+    );
 
     // Ēm/Emín/U0 en vivo con el motor V1 (solo esta superficie).
     useEffect(() => {
@@ -270,6 +298,10 @@ export function SiteProjectionPanel({
                               columns,
                               pole,
                               photometry,
+                              positions: applyProjectionAdjust(
+                                  projectionGridPositions(site, element.id, rows, columns),
+                                  adjust,
+                              ),
                           })?.metrics ?? null),
                 );
             });
@@ -278,7 +310,7 @@ export function SiteProjectionPanel({
             cancelled = true;
             window.clearTimeout(timer);
         };
-    }, [site, element.id, rows, columns, pole, lights, isCanopy]);
+    }, [site, element.id, rows, columns, pole, lights, isCanopy, adjust]);
 
     /** Itera con el motor V1 hasta el Ēm objetivo con la menor cantidad. */
     const fitToTarget = () => {
@@ -328,11 +360,17 @@ export function SiteProjectionPanel({
                 },
             });
         } else {
-            editor.placeProjectedLuminaires(
-                element.id,
-                projectionGridPositions(site, element.id, rows, columns),
-                pole,
-            );
+            editor.placeProjectedLuminaires(element.id, positions, pole, undefined, {
+                mode: 'grid',
+                count,
+                rows,
+                columns,
+                mountingHeightM: pole.heightM,
+                lumensEach: pole.lumens ?? null,
+                spacingToHeight,
+                targetLux: target,
+                adjusted: isProjectionAdjusted(adjust),
+            });
         }
         setMessage(
             `Colocadas ${columns} × ${rows} = ${count} luminarias; recalculando…`,
@@ -364,12 +402,13 @@ export function SiteProjectionPanel({
                     Auto
                 </button>
             </div>
-            {normLux && targetLux === null && (
+            {normLux && targetLux === null && normRegion && isInteriorCatalog(normRegion) && (
                 <p className="text-[9px] leading-snug text-amber-700 dark:text-amber-300">
                     Ēm tomado de la actividad elegida en un catálogo de
                     iluminación de interiores / lugares de trabajo (EN 12464-1,
                     IES, RNE EM.010). El sistema aún no tiene un catálogo de
-                    alumbrado vial/exterior (EN 13201, EN 12464-2): verifica su
+                    alumbrado vial/exterior de esa región: elige la actividad de
+                    la región "Exterior" (EN 12464-2 / EN 13201-2) o verifica su
                     aplicabilidad a este espacio.
                 </p>
             )}
@@ -403,6 +442,7 @@ export function SiteProjectionPanel({
                     />
                 </>
             )}
+            {!isCanopy && <ProjectionNudge scaleM={scaleM} />}
 
             <div
                 className={`rounded-md px-2 py-1.5 text-[10px] ${

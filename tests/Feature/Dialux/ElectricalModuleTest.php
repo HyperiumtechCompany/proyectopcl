@@ -41,7 +41,8 @@ test('the electrical workspace renders with catalogs and normative requirements'
         ->where('electrical', null)
         ->has('catalogs.outletRules', 12)
         ->has('catalogs.outletTypes', 9)
-        ->has('catalogs.conductors', 11)
+        // 11 THW-90 + 17 N2XOH (migración 2026_09_25_000001).
+        ->has('catalogs.conductors', 28)
         ->has('catalogs.circuitDefaults', 12)
         ->has('normativeRequirements', 295));
 });

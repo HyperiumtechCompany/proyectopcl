@@ -101,6 +101,26 @@ class DialuxElectricalCatalogSeeder extends Seeder
                 $conductor,
             );
         }
+        // N2XOH (conductor por defecto de la red v2): columna N2X0H de la
+        // Tabla A del Excel de origen (planes/Dialux/plan_caida_tension.md
+        // §1.4), la misma que usa el motor CT de la V1. Referencial, editable.
+        // Pares [sección, ampacidad]: una clave float de PHP se truncaría a entero.
+        $n2xoh = [
+            [2.5, 38], [4, 55], [6, 68], [10, 95], [16, 125], [25, 160], [35, 195],
+            [50, 230], [70, 275], [95, 330], [120, 380], [150, 410], [185, 450],
+            [240, 525], [300, 600], [400, 680], [500, 700],
+        ];
+        foreach ($n2xoh as [$section, $ampacity]) {
+            DialuxConductor::query()->updateOrCreate(
+                [
+                    'user_id' => null,
+                    'material' => 'cobre',
+                    'section_mm2' => (float) $section,
+                    'insulation' => 'N2XOH',
+                ],
+                ['ampacity_a' => $ampacity],
+            );
+        }
     }
 
     /**

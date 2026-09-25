@@ -60,6 +60,7 @@ import {
     ProjectionPreviewLayer,
     SiteAttachedLightsLayer,
 } from './SiteAttachedLightsLayer';
+import { AutoCircuitPreviewLayer } from './SiteAutoCircuitPanel';
 import {
     POINT_ELEMENT_TYPES,
     pointSymbolIntrinsicSize,
@@ -2261,10 +2262,12 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                     scaleM={editor.terrainScaleM || 1}
                     toScreen={toScreen}
                 />
+                <AutoCircuitPreviewLayer toScreen={toScreen} />
                 {projectionPreview && (
                     <ProjectionPreviewLayer
                         positions={projectionPreview.positions}
                         toScreen={toScreen}
+                        toWorld={toWorld}
                     />
                 )}
                 {lighting?.calculation && lighting.showIsolux && (

@@ -484,6 +484,18 @@ export interface DialuxAmbientDetail {
         lumens: number | null;
         powerWatts: number | null;
     }>;
+    /**
+     * Espacio EXTERIOR (Planta general, v2): sin recinto. El PDF usa estos
+     * textos en lugar de "local / recinto / altura interior". Ausente = ambiente
+     * interior de la V1 (sin cambios).
+     */
+    exterior?: {
+        spaceType: string;
+        /** Cómo se proyectaron las luminarias (disposición, cantidad, separación, ajuste manual). */
+        projection: string;
+        /** Dónde se calcula (plano, cota, malla). */
+        surface: string;
+    } | null;
 }
 
 /**
@@ -534,7 +546,9 @@ export type DialuxFormalPageKind =
     | 'emergency-cover'
     | 'emergency-compliance-table'
     | 'glossary'
-    | 'placeholder';
+    | 'placeholder'
+    /** Sección genérica del Módulo General (notas + gráficos + tablas), D2. */
+    | 'site-section';
 
 export type DialuxFormalSectionId =
     | 'cover'

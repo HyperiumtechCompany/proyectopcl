@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Requests\Dialux\FormalExportRequest;
 use App\Models\Dialux\DialuxModule;
 use App\Models\Dialux\DialuxProject;
 use App\Models\User;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Support\Facades\Validator;
 
 beforeEach(function () {
     $this->withoutMiddleware(ValidateCsrfToken::class);
@@ -2640,4 +2642,105 @@ test('accepts document.luminaires.*.reportData.ugrTableComputed (Fase 15, Parte 
 
     $response->assertOk();
     $response->assertHeader('content-type', 'application/pdf');
+});
+
+/** Página genérica `site-section` (informe de la Planta General, D2). */
+function siteSectionPayload(int $dialuxProjectId): array
+{
+    $payload = minimalValidFormalDocumentPayload($dialuxProjectId);
+    $payload['document']['pages'][] = [
+        'id' => 'page-areas',
+        'kind' => 'site-section',
+        'sectionId' => 'lighting-results',
+        'pageNumber' => 4,
+        'title' => 'Superficies de cálculo',
+        'subtitle' => null,
+        'assetIds' => ['site-areas', 'site-summary', 'site-isolux-svg'],
+        'notes' => ['Comparación numérica, no declaración de cumplimiento.'],
+    ];
+    $payload['document']['assets'][] = [
+        'id' => 'site-areas',
+        'title' => 'Superficies de cálculo',
+        'purpose' => 'technical-appendix',
+        'kind' => 'structured',
+        'mimeType' => 'application/json',
+        'data' => [
+            'type' => 'table',
+            'columns' => [['key' => 'name', 'label' => 'Superficie'], ['key' => 'em', 'label' => 'Em lx']],
+            'rows' => [['name' => 'Cancha', 'em' => '152,4'], ['name' => 'Vereda', 'em' => '11,0']],
+        ],
+    ];
+    $payload['document']['assets'][] = [
+        'id' => 'site-summary',
+        'title' => 'Resumen',
+        'purpose' => 'project-summary',
+        'kind' => 'structured',
+        'mimeType' => 'application/json',
+        'data' => ['type' => 'summary', 'items' => [['label' => 'Postes', 'value' => '12']]],
+    ];
+    $payload['document']['assets'][] = [
+        'id' => 'site-isolux-svg',
+        'title' => 'Falsos colores',
+        'purpose' => 'isolux',
+        'kind' => 'vector',
+        'mimeType' => 'image/svg+xml',
+        'svg' => '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><rect width="200" height="100" fill="#fde047"/></svg>',
+        'width' => 200,
+        'height' => 100,
+    ];
+
+    return $payload;
+}
+
+test('the general module report exports a pdf with generic site-section pages', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+    $module = DialuxModule::factory()->for($project, 'project')->create();
+
+    $this->actingAs($user)
+        ->postJson(route('dialux-v2.modules.formal-export', [$project, $module]), siteSectionPayload($project->id))
+        ->assertSuccessful()
+        ->assertHeader('content-type', 'application/pdf');
+});
+
+test('validated site-section tables keep their columns and rows', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $validated = Validator::make(siteSectionPayload($project->id), (new FormalExportRequest)->rules())->validated();
+    $table = collect($validated['document']['assets'])->firstWhere('id', 'site-areas');
+
+    expect($table['data']['columns'])->toHaveCount(2)
+        ->and($table['data']['rows'][0])->toBe(['name' => 'Cancha', 'em' => '152,4']);
+});
+
+test('validated ambient details keep the exterior space block of the general module', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+    $payload = minimalValidFormalDocumentPayload($project->id);
+    $payload['document']['ambientDetails'][] = [
+        'ambientId' => 'site-vereda',
+        'roomId' => 'vereda',
+        'roomName' => 'Planta general (exterior)',
+        'ambientName' => 'Vereda',
+        'area' => 120,
+        'targetLux' => 7.5,
+        'fixtureCount' => 3,
+        'lumensRequired' => 900,
+        'fixtureLumens' => 2000,
+        'exactQuantity' => 0.45,
+        'roundedQuantity' => 3,
+        'coverage' => 'Excesivo',
+        'complianceLabel' => '≥ norma (P3)',
+        'luminaires' => [],
+        'exterior' => [
+            'spaceType' => 'Vereda / pasadizo',
+            'projection' => 'Proyección lineal unilateral: 3 postes de 4 m cada 13,3 m, fuera del borde, sin brazo',
+            'surface' => 'A nivel del suelo (cota 0.00 m), malla de 0.50 m',
+        ],
+    ];
+
+    $validated = Validator::make($payload, (new FormalExportRequest)->rules())->validated();
+
+    expect($validated['document']['ambientDetails'][0]['exterior'])->toBe($payload['document']['ambientDetails'][0]['exterior']);
 });

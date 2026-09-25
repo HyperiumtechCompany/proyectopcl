@@ -80,6 +80,10 @@ export interface SiteNetworkLive {
     /** Por `SiteCircuit.id`: solo cables que son alimentadores en la red. */
     feeds: Record<string, SiteCircuitFeed>;
     conflicts: SiteBridgeConflict[];
+    /** Sistema de la red (ausente sin red cargada). */
+    settings?: ElectricalNetworkData['settings'];
+    /** Caída (%) acumulada hasta cada tablero de la planta (por `SiteElement.id`). */
+    upstreamPercent: (panelElementId: string) => number;
 }
 
 /**
@@ -94,7 +98,13 @@ export function deriveSiteNetworkLive(
     conductors: ConductorCatalog[],
 ): SiteNetworkLive {
     if (!network) {
-        return { calculations: [], outputRows: [], feeds: {}, conflicts: [] };
+        return {
+            calculations: [],
+            outputRows: [],
+            feeds: {},
+            conflicts: [],
+            upstreamPercent: () => 0,
+        };
     }
     const bridged = applySiteToNetwork(network, site, { ports });
     const { calculations, outputRows } = calculateNetworkWithSite(
@@ -121,5 +131,26 @@ export function deriveSiteNetworkLive(
             calculation: calculationByEdge.get(edge.id),
         };
     }
-    return { calculations, outputRows, feeds, conflicts: bridged.conflicts };
+    const upstreamPercent = (panelElementId: string) => {
+        const node = bridged.data.nodes.find(
+            (item) =>
+                item.siteElementId === panelElementId &&
+                item.type !== 'service' &&
+                item.type !== 'meter',
+        );
+        const incoming = node
+            ? bridged.data.edges.find((edge) => edge.targetNodeId === node.id)
+            : undefined;
+        return incoming
+            ? (calculationByEdge.get(incoming.id)?.accumulatedVoltageDropPercent ?? 0)
+            : 0;
+    };
+    return {
+        calculations,
+        outputRows,
+        feeds,
+        conflicts: bridged.conflicts,
+        settings: bridged.data.settings,
+        upstreamPercent,
+    };
 }

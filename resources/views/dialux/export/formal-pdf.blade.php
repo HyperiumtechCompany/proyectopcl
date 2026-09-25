@@ -1407,6 +1407,37 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                     @elseif ($page['kind'] === 'ambient-summary' && !empty($page['ambientDetail']))
                         @php $detail = $page['ambientDetail']; @endphp
 
+                        @if (!empty($detail['exterior']))
+                        {{-- Espacio exterior (Planta general): no hay recinto; se informa
+                             el espacio, cómo se proyectaron las luminarias y dónde se calcula. --}}
+                        <div class="detail-block-title" style="margin-bottom:3mm;">Informaci&oacute;n principal del espacio exterior</div>
+                        <table class="metric-grid" style="width:100%; margin-bottom:5mm;">
+                            <tr>
+                                <td class="metric-label" style="width:32%">Tipo de espacio</td>
+                                <td class="metric-value" style="white-space:normal; text-align:left; width:68%;">{{ $detail['exterior']['spaceType'] }}</td>
+                            </tr>
+                            <tr>
+                                <td class="metric-label">&Aacute;rea del espacio</td>
+                                <td class="metric-value" style="white-space:normal; text-align:left; width:68%;">{{ $formatNumber($detail['area'] ?? null, 2, ' m²') }}</td>
+                            </tr>
+                            <tr>
+                                <td class="metric-label">Proyecci&oacute;n de luminarias</td>
+                                <td class="metric-value" style="white-space:normal; text-align:left; width:68%;">{{ $detail['exterior']['projection'] }}</td>
+                            </tr>
+                            <tr>
+                                <td class="metric-label">Superficie de c&aacute;lculo</td>
+                                <td class="metric-value" style="white-space:normal; text-align:left; width:68%;">{{ $detail['exterior']['surface'] }}</td>
+                            </tr>
+                            <tr>
+                                <td class="metric-label">Reflexiones</td>
+                                <td class="metric-value" style="white-space:normal; text-align:left; width:68%;">Cielo abierto: sin techo ni paredes (no aplica)</td>
+                            </tr>
+                            <tr>
+                                <td class="metric-label">Factor de mantenimiento</td>
+                                <td class="metric-value" style="white-space:normal; text-align:left; width:68%;">Aplicado al flujo de cada luminaria</td>
+                            </tr>
+                        </table>
+                        @else
                         {{-- Información principal del local (sin imagen — va en Plano de situación) --}}
                         <div class="detail-block-title" style="margin-bottom:3mm;">Informaci&oacute;n principal del local</div>
                         <table class="metric-grid" style="width:100%; margin-bottom:5mm;">
@@ -1447,6 +1478,7 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                                 <td class="metric-value">{{ $formatNumber($detail['marginalZone'] ?? null, 3, ' m') }}</td>
                             </tr>
                         </table>
+                        @endif
 
                         {{-- Tabla de resultados luminotécnicos --}}
                         {!! $renderAmbientResultsTable($detail) !!}
@@ -1576,9 +1608,14 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                             <tbody>
                                 <tr>
                                     <td class="calculation-properties">
-                                        <strong>Plano &uacute;til ({{ $detail['ambientName'] }})</strong><br>
-                                        <span class="calculation-context">Recinto:
-                                            {{ $detail['roomName'] ?? 'Sin recinto' }}</span><br>
+                                        <strong>{{ !empty($detail['exterior']) ? 'Superficie de cálculo' : 'Plano útil' }} ({{ $detail['ambientName'] }})</strong><br>
+                                        <span class="calculation-context">
+                                            @if (!empty($detail['exterior']))
+                                                Espacio: {{ $detail['exterior']['spaceType'] }} &middot; {{ $detail['exterior']['surface'] }}
+                                            @else
+                                                Recinto: {{ $detail['roomName'] ?? 'Sin recinto' }}
+                                            @endif
+                                        </span><br>
                                         <span class="calculation-context">
                                             Iluminancia perpendicular (Adaptativamente)<br>
                                             Altura: {{ $formatNumber($detail['usefulPlaneHeight'] ?? null, 3, ' m') }},
@@ -1733,6 +1770,50 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                             @endforeach
                         </table>
 
+                        {{-- Sección genérica (Módulo General / planta exterior, D2):
+                             notas + gráficos + tablas en el orden de sus assets. --}}
+                    @elseif ($page['kind'] === 'site-section')
+                        @foreach ($page['notes'] ?? [] as $note)
+                            <p style="margin:0 0 2mm 0; font-size:8pt;">{{ $note }}</p>
+                        @endforeach
+                        @foreach ($pageAssets as $siteAsset)
+                            @php $siteData = $siteAsset['data'] ?? null; @endphp
+                            @if (($siteAsset['kind'] ?? null) === 'structured' && is_array($siteData) && ($siteData['type'] ?? null) === 'table')
+                                <p class="summary-title" style="margin:3mm 0 1mm 0;">{{ $siteAsset['title'] ?? '' }}</p>
+                                <table class="luminaire-table">
+                                    <thead>
+                                        <tr>
+                                            @foreach ($siteData['columns'] ?? [] as $column)
+                                                <th>{{ $column['label'] ?? '' }}</th>
+                                            @endforeach
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @forelse ($siteData['rows'] ?? [] as $row)
+                                            <tr>
+                                                @foreach ($siteData['columns'] ?? [] as $column)
+                                                    <td>{{ $row[$column['key'] ?? ''] ?? '' }}</td>
+                                                @endforeach
+                                            </tr>
+                                        @empty
+                                            <tr><td colspan="{{ max(1, count($siteData['columns'] ?? [])) }}">Sin datos.</td></tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            @elseif (($siteAsset['kind'] ?? null) === 'structured' && is_array($siteData) && ($siteData['type'] ?? null) === 'summary')
+                                <p class="summary-title" style="margin:3mm 0 1mm 0;">{{ $siteAsset['title'] ?? '' }}</p>
+                                <table class="metric-grid">
+                                    @foreach ($siteData['items'] ?? [] as $item)
+                                        <tr>
+                                            <td class="metric-label">{{ $item['label'] ?? '' }}</td>
+                                            <td class="metric-value">{{ $item['value'] ?? '' }}</td>
+                                        </tr>
+                                    @endforeach
+                                </table>
+                            @else
+                                {!! $renderAsset($siteAsset, 255, 120, false) !!}
+                            @endif
+                        @endforeach
                         {{-- Fallback para tipos no reconocidos --}}
                     @else
                         <div class="placeholder-box">

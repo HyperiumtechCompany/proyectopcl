@@ -25,7 +25,45 @@ interface SiteLightingStore {
     focusedAreaId: string | null;
     /** Luminarias "fantasma" de la proyección en curso (coordenadas de plano). */
     projectionPreview: { areaId: string; positions: Point2D[] } | null;
+    /**
+     * Ajuste manual de la proyección en curso (coordenadas de plano):
+     * desplazamiento de TODO el conjunto + posiciones movidas a mano por
+     * índice. Lo aplican los paneles (vista previa, Ēm en vivo y "Colocar").
+     */
+    projectionAdjust: ProjectionAdjust;
     set: (patch: Partial<Omit<SiteLightingStore, 'set'>>) => void;
+}
+
+export interface ProjectionAdjust {
+    offset: Point2D;
+    overrides: Record<number, Point2D>;
+}
+
+export const EMPTY_PROJECTION_ADJUST: ProjectionAdjust = {
+    offset: { x: 0, y: 0 },
+    overrides: {},
+};
+
+/** Posiciones propuestas + ajuste manual (un poste movido a mano ignora el desplazamiento). */
+export function applyProjectionAdjust(
+    base: Point2D[],
+    adjust: ProjectionAdjust,
+): Point2D[] {
+    return base.map(
+        (point, index) =>
+            adjust.overrides[index] ?? {
+                x: point.x + adjust.offset.x,
+                y: point.y + adjust.offset.y,
+            },
+    );
+}
+
+export function isProjectionAdjusted(adjust: ProjectionAdjust): boolean {
+    return (
+        adjust.offset.x !== 0 ||
+        adjust.offset.y !== 0 ||
+        Object.keys(adjust.overrides).length > 0
+    );
 }
 
 export const useSiteLightingStore = create<SiteLightingStore>((set) => ({
@@ -35,6 +73,7 @@ export const useSiteLightingStore = create<SiteLightingStore>((set) => ({
     showIsolux: true,
     focusedAreaId: null,
     projectionPreview: null,
+    projectionAdjust: EMPTY_PROJECTION_ADJUST,
     set: (patch) => set(patch),
 }));
 

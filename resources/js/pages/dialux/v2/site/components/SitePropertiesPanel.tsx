@@ -21,6 +21,7 @@ import type { Point2D, SiteCircuit, SiteElement } from '../domain/types';
 import { resolveWireEndpoints } from '../domain/wireAnchors';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 import { defaultConfigFor } from '../lib/siteDefaults';
+import { SiteAutoCircuitPanel } from './SiteAutoCircuitPanel';
 import { SiteElementConfigFields } from './SiteElementConfigFields';
 import { POINT_ELEMENT_TYPES } from './SiteElementSymbol';
 import { SiteFeederRoutePanel } from './SiteFeederRoutePanel';
@@ -1022,6 +1023,15 @@ function ElementProperties({
 
                         {NORM_AREA_TYPES.has(element.type) && (
                             <SiteNormRequirementFields
+                                element={element}
+                                editor={editor}
+                            />
+                        )}
+
+                        {(element.type === 'tg_location' ||
+                            element.type === 'sub_panel') && (
+                            <SiteAutoCircuitPanel
+                                key={element.id}
                                 element={element}
                                 editor={editor}
                             />

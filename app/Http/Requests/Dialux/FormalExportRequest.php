@@ -89,7 +89,7 @@ class FormalExportRequest extends FormRequest
             // relaja nada para ese caso.
             'document.pages' => ['required', 'array', 'min:1', 'max:800'],
             'document.pages.*.id' => ['required', 'string', 'max:160'],
-            'document.pages.*.kind' => ['required', 'string', 'in:cover,preliminary-observations,toc,luminaire-list,product-sheet,terrain-cad,terrain-drawn,terrain-architectural,ambient-list,calculation-object-list,ambient-summary,ambient-results,ambient-detail,ambient-plan,ambient-luminaires,ambient-products,ambient-calculation-object,ambient-useful-plane,room-ambient-list,room-luminaires,room-calculation-object,level-luminaire-list,lighting-scene-comparison,emergency-cover,emergency-compliance-table,glossary,placeholder'],
+            'document.pages.*.kind' => ['required', 'string', 'in:cover,preliminary-observations,toc,luminaire-list,product-sheet,terrain-cad,terrain-drawn,terrain-architectural,ambient-list,calculation-object-list,ambient-summary,ambient-results,ambient-detail,ambient-plan,ambient-luminaires,ambient-products,ambient-calculation-object,ambient-useful-plane,room-ambient-list,room-luminaires,room-calculation-object,level-luminaire-list,lighting-scene-comparison,emergency-cover,emergency-compliance-table,glossary,placeholder,site-section'],
             'document.pages.*.sectionId' => ['required', 'string'],
             'document.pages.*.pageNumber' => ['required', 'integer', 'min:1'],
             'document.pages.*.title' => ['required', 'string', 'max:255'],
@@ -313,6 +313,12 @@ class FormalExportRequest extends FormRequest
             'document.ambientDetails.*.luminaires.*.roomName' => ['nullable', 'string', 'max:255'],
             'document.ambientDetails.*.luminaires.*.ambientName' => ['nullable', 'string', 'max:255'],
             'document.ambientDetails.*.luminaires.*.quantity' => ['required', 'integer', 'min:1'],
+            // Espacio exterior de la Planta general (v2): textos que reemplazan
+            // "local / recinto" en el PDF.
+            'document.ambientDetails.*.exterior' => ['nullable', 'array'],
+            'document.ambientDetails.*.exterior.spaceType' => ['required_with:document.ambientDetails.*.exterior', 'string', 'max:120'],
+            'document.ambientDetails.*.exterior.projection' => ['required_with:document.ambientDetails.*.exterior', 'string', 'max:500'],
+            'document.ambientDetails.*.exterior.surface' => ['required_with:document.ambientDetails.*.exterior', 'string', 'max:255'],
             'document.ambientDetails.*.fixturePositions' => ['nullable', 'array', 'max:1000'],
             'document.ambientDetails.*.fixturePositions.*.id' => ['required', 'string', 'max:160'],
             'document.ambientDetails.*.fixturePositions.*.name' => ['required', 'string', 'max:255'],
@@ -351,6 +357,12 @@ class FormalExportRequest extends FormRequest
             'document.assets.*.data.items' => ['nullable', 'array'],
             'document.assets.*.data.items.*.label' => ['nullable', 'string'],
             'document.assets.*.data.items.*.value' => ['nullable', 'string'],
+            // Tablas genéricas (páginas `site-section` del Módulo General, D2).
+            'document.assets.*.data.columns' => ['nullable', 'array', 'max:20'],
+            'document.assets.*.data.columns.*.key' => ['required', 'string', 'max:60'],
+            'document.assets.*.data.columns.*.label' => ['required', 'string', 'max:120'],
+            'document.assets.*.data.rows' => ['nullable', 'array', 'max:2000'],
+            'document.assets.*.data.rows.*' => ['array'],
         ];
     }
 }

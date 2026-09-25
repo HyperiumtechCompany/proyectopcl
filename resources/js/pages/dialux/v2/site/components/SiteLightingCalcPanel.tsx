@@ -4,6 +4,7 @@ import {
     checkAgainstNorm,
     SITE_NORM_REGIONS,
 } from '../domain/siteLightingNorms';
+import { siteQuantityCheck } from '../domain/siteQuantityCheck';
 import type { SiteData } from '../domain/types';
 import type { SiteLightingCalculationState } from '../hooks/useSiteLightingCalculation';
 import { activeRegions, useNormCatalogs } from './SiteNormPanels';
@@ -21,6 +22,12 @@ const TYPE_LABEL: Record<string, string> = {
     ramp: 'Rampa (cota media)',
     stair: 'Escalera (cota media)',
 };
+
+const COVERAGE = {
+    optimal: { label: 'Óptimo', className: 'text-emerald-700 dark:text-emerald-300' },
+    insufficient: { label: 'Insuficiente', className: 'text-red-600 dark:text-red-400' },
+    excessive: { label: 'Excesivo', className: 'text-amber-700 dark:text-amber-300' },
+} as const;
 
 const fmt = (value: number, digits = 1) =>
     Number.isFinite(value)
@@ -52,7 +59,7 @@ export function SiteLightingCalcPanel({
     const byId = new Map((site?.elements ?? []).map((el) => [el.id, el]));
 
     return (
-        <div className="absolute bottom-3 left-3 z-10 w-[min(38rem,calc(100%-1.5rem))] rounded-lg border border-slate-200 bg-white/95 text-[11px] text-slate-700 shadow-lg dark:border-white/10 dark:bg-slate-900/95 dark:text-slate-200">
+        <div className="absolute bottom-3 left-3 z-10 w-[min(46rem,calc(100%-1.5rem))] rounded-lg border border-slate-200 bg-white/95 text-[11px] text-slate-700 shadow-lg dark:border-white/10 dark:bg-slate-900/95 dark:text-slate-200">
             <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-white/10">
                 <button
                     type="button"
@@ -131,6 +138,13 @@ export function SiteLightingCalcPanel({
                                     <th className="px-1 py-1 text-right" title="Luminancia media L = Ēm·ρ/π con la reflectancia estimada del suelo">
                                         L cd/m²
                                     </th>
+                                    <th
+                                        className="px-1 py-1 text-right"
+                                        title="Luminarias propias / cantidad exacta por método de lúmenes (tabla de Resultados de la V1)"
+                                    >
+                                        Lum.
+                                    </th>
+                                    <th className="px-1 py-1">Cobertura</th>
                                     <th className="px-1 py-1">Norma elegida</th>
                                 </tr>
                             </thead>
@@ -151,6 +165,12 @@ export function SiteLightingCalcPanel({
                                                 area.summary,
                                             ),
                                         );
+                                    const quantity = siteQuantityCheck(
+                                        area,
+                                        checks.find(
+                                            (check) => check.activity?.illuminanceLux,
+                                        )?.activity?.illuminanceLux,
+                                    );
                                     return (
                                         <tr
                                             key={area.elementId}
@@ -193,6 +213,28 @@ export function SiteLightingCalcPanel({
                                             <td className="px-1 py-1 text-right">
                                                 {fmt(area.avgLuminanceCdM2, 2)}
                                             </td>
+                                            <td
+                                                className="px-1 py-1 text-right tabular-nums"
+                                                title={
+                                                    quantity
+                                                        ? `Lm req. ${fmt(quantity.lumensRequired, 0)} ÷ ${fmt(quantity.lumensEach, 0)} lm c/u (mantenido)`
+                                                        : 'Elige la actividad normativa del espacio para verificar la cantidad'
+                                                }
+                                            >
+                                                {area.ownLuminaires}
+                                                {quantity && Number.isFinite(quantity.exactQuantity)
+                                                    ? ` / ${fmt(quantity.exactQuantity, 1)}`
+                                                    : ''}
+                                            </td>
+                                            <td className="px-1 py-1 text-[10px] font-semibold">
+                                                {quantity ? (
+                                                    <span className={COVERAGE[quantity.coverage].className}>
+                                                        {COVERAGE[quantity.coverage].label}
+                                                    </span>
+                                                ) : (
+                                                    <span className="font-normal text-slate-400">—</span>
+                                                )}
+                                            </td>
                                             <td className="px-1 py-1 text-[10px]">
                                                 {checks.length === 0 ? (
                                                     <span className="text-slate-400">
@@ -214,7 +256,11 @@ export function SiteLightingCalcPanel({
                                                             :{' '}
                                                             {check.activity?.illuminanceLux ??
                                                                 '—'}{' '}
-                                                            lx →{' '}
+                                                            lx
+                                                            {check.activity?.minLux
+                                                                ? ` · Emín ${check.activity.minLux}`
+                                                                : ''}{' '}
+                                                            →{' '}
                                                             <span
                                                                 className={
                                                                     check.emVerdict ===
@@ -252,7 +298,13 @@ export function SiteLightingCalcPanel({
                         cumbrera; cielo abierto: sin reflexiones). ρ del suelo
                         = estimación no normativa, solo para la luminancia. La
                         comparación con la norma es numérica, no una
-                        declaración de cumplimiento.
+                        declaración de cumplimiento. Varias cotas: la
+                        superficie se calcula por parches, cada uno a su cota;
+                        una plataforma o espacio dentro de otro se calcula
+                        solo en el suyo. "Lum." y "Cobertura": método de
+                        lúmenes de la V1 (propias / exactas; &lt; 90 %
+                        insuficiente, &gt; 150 % excesivo), estimación previa al
+                        punto a punto.
                     </p>
                 </div>
             )}

@@ -216,10 +216,8 @@ export function SiteViewer3D({
     useEffect(() => {
         builderRef.current?.setCalculatedLux(
             calculatedLighting
-                ? calculatedLighting.areas.map((area) => ({
-                      baseElevationM: area.baseElevationM,
-                      result: area.result,
-                  }))
+                ? // Un parche por cota: el mapa sigue plataformas y relieve.
+                  calculatedLighting.areas.flatMap((area) => area.patches)
                 : null,
         );
     }, [calculatedLighting]);

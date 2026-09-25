@@ -49,6 +49,8 @@ export function useNormCatalogs(regions: SiteNormRegion[]) {
     useEffect(() => {
         let alive = true;
         for (const region of key.split(',') as SiteNormRegion[]) {
+            // El catálogo exterior es local (no se carga desde BD).
+            if (region === 'exterior') continue;
             void ensureStandardDataLoaded(regionStandard(region)).then(() => {
                 if (alive) bump();
             });

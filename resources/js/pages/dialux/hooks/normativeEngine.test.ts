@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+    compareNormsForActivity,
     computeOverallStatus,
     evaluateCompliance,
     findBestMatchActivity,
+    findMostStrictNorm,
     getNormData,
     NORMATIVE_STANDARDS_META,
+    resolveApplicableNorms,
     type ComplianceResult,
+    type NormativeComparisonEntry,
     type NormativeLeafOption,
     type NormativeStandardMeta,
 } from './normativeEngine';
@@ -276,6 +280,86 @@ describe('findBestMatchActivity', () => {
         const match = findBestMatchActivity('en_12464_1', 'oficina');
         expect(match).not.toBeNull();
         expect(match!.illuminanceLux).toBeGreaterThan(0);
+    });
+});
+
+describe('comparación entre normas (NormativeComparisonModal)', () => {
+    const entry = (standard: NormativeComparisonEntry['standard'], lux: number): NormativeComparisonEntry => ({
+        standard,
+        standardLabel: standard,
+        legalStatus: 'reference',
+        activityTitle: lux > 0 ? 'x' : 'No disponible en esta versión',
+        illuminanceLux: lux,
+        ugr: null,
+        uniformity: null,
+        ra: null,
+        specificRequirements: '',
+    });
+
+    it('findMostStrictNorm elige el mayor Ēm entre las normas CON dato', () => {
+        expect(
+            findMostStrictNorm([entry('rne_peru', 300), entry('en_12464_1', 500), entry('iesna_handbook', 400)])?.standard,
+        ).toBe('en_12464_1');
+    });
+
+    it('findMostStrictNorm: empate → la primera (prioridad del país); sin datos → null', () => {
+        expect(findMostStrictNorm([entry('rne_peru', 500), entry('en_12464_1', 500)])?.standard).toBe('rne_peru');
+        expect(findMostStrictNorm([entry('nfpa101', 0), entry('ds024', 0)])).toBeNull();
+        expect(findMostStrictNorm([])).toBeNull();
+    });
+
+    it('una norma "No disponible" (0 lx) nunca es la más estricta', () => {
+        expect(findMostStrictNorm([entry('nfpa101', 0), entry('rne_peru', 300)])?.standard).toBe('rne_peru');
+    });
+
+    it('compareNormsForActivity devuelve una fila por norma pedida, en orden, con datos reales del catálogo', () => {
+        const comparison = compareNormsForActivity('oficina', ['rne_peru', 'en_12464_1', 'iesna_handbook']);
+        expect(comparison.map((item) => item.standard)).toEqual(['rne_peru', 'en_12464_1', 'iesna_handbook']);
+        const en = comparison.find((item) => item.standard === 'en_12464_1')!;
+        expect(en.illuminanceLux).toBe(findBestMatchActivity('en_12464_1', 'oficina')!.illuminanceLux);
+        // La más estricta coincide con el máximo real de la tabla.
+        const max = Math.max(...comparison.map((item) => item.illuminanceLux));
+        expect(findMostStrictNorm(comparison)!.illuminanceLux).toBe(max);
+    });
+
+    it('compareNormsForActivity marca "No disponible" una norma sin catálogo', () => {
+        const [row] = compareNormsForActivity('aula', ['nfpa101']);
+        expect(row.illuminanceLux).toBe(0);
+        expect(row.activityTitle).toBe('No disponible en esta versión');
+    });
+});
+
+describe('resolveApplicableNorms', () => {
+    it('Perú ofrece RNE y referencias con catálogo, nunca DS 024 ni NFPA 101 (sin catálogo)', () => {
+        const pe = resolveApplicableNorms('PE');
+        expect(pe).toContain('rne_peru');
+        expect(pe).not.toContain('ds024');
+        expect(pe).not.toContain('nfpa101');
+    });
+
+    it('EE.UU. ofrece IES, no NFPA 101', () => {
+        const us = resolveApplicableNorms('US');
+        expect(us).toContain('iesna_handbook');
+        expect(us).not.toContain('nfpa101');
+    });
+
+    it('toda norma ofrecida tiene catálogo cargado y figura como activa', () => {
+        for (const code of ['PE', 'US', 'ES', 'XX']) {
+            for (const standard of resolveApplicableNorms(code)) {
+                expect(getNormData(standard).length).toBeGreaterThan(0);
+                expect(NORMATIVE_STANDARDS_META[standard].active).toBe(true);
+            }
+        }
+    });
+
+    it('un país desconocido cae en EN 12464-1', () => {
+        expect(resolveApplicableNorms('XX')).toEqual(['en_12464_1']);
+    });
+
+    it('active = tiene catálogo, para todas las normas', () => {
+        for (const [standard, meta] of Object.entries(NORMATIVE_STANDARDS_META)) {
+            expect(meta.active).toBe(getNormData(standard as keyof typeof NORMATIVE_STANDARDS_META).length > 0);
+        }
     });
 });
 

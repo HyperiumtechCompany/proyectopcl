@@ -1,4 +1,6 @@
 import {
+    FileDown,
+    FileText,
     Grid3x3,
     Layers,
     Magnet,
@@ -8,7 +10,10 @@ import {
     Undo2,
 } from 'lucide-react';
 import { useState } from 'react';
+import { downloadDxfDocument } from '@/pages/dialux/export/downloadDxfDocument';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
+import { buildSiteDxf } from '../domain/siteDxfExport';
+import { useSitePdfExport } from '../export/useSitePdfExport';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 import { GeoSearchPanel } from './GeoSearchPanel';
 
@@ -24,6 +29,8 @@ export function SiteToolbar({ editor }: Props) {
     const [layersOpen, setLayersOpen] = useState(false);
     const [locationOpen, setLocationOpen] = useState(false);
     const location = editor.siteData?.location;
+    const projectName = useEditorStore((state) => state.project?.name ?? '');
+    const pdf = useSitePdfExport(editor);
 
     return (
         <div className="relative flex shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-[#0d0f14]">
@@ -137,7 +144,39 @@ export function SiteToolbar({ editor }: Props) {
                     </button>
                 </div>
             )}
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+                <button
+                    type="button"
+                    disabled={!editor.siteData}
+                    onClick={() => {
+                        if (!editor.siteData) return;
+                        const name = (projectName || 'planta').replace(/[^a-zA-Z0-9_-]/g, '_');
+                        downloadDxfDocument(
+                            buildSiteDxf(editor.siteData, { projectName }),
+                            `${name}_planta_general.dxf`,
+                        );
+                    }}
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-semibold text-slate-600 disabled:opacity-50 dark:border-white/10 dark:text-slate-300"
+                    title="Plano DXF de la planta general (m): capas por especialidad, cableado y cuadro resumen"
+                >
+                    <FileDown className="h-3.5 w-3.5" />
+                    DXF
+                </button>
+                <button
+                    type="button"
+                    disabled={!editor.siteData || pdf.exporting}
+                    onClick={() => void pdf.exportPdf()}
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-semibold text-slate-600 disabled:opacity-50 dark:border-white/10 dark:text-slate-300"
+                    title={pdf.error ?? 'Informe PDF de la planta general (estilo DIALux): planos, falsos colores, superficies, luminarias, salidas y metrado'}
+                >
+                    <FileText className={`h-3.5 w-3.5 ${pdf.exporting ? 'animate-pulse' : ''}`} />
+                    {pdf.exporting ? 'Generando…' : 'PDF'}
+                </button>
+                {pdf.error && (
+                    <span className="max-w-48 truncate text-[10px] text-red-600" title={pdf.error}>
+                        {pdf.error}
+                    </span>
+                )}
                 <button
                     type="button"
                     onClick={() => setLayersOpen((current) => !current)}

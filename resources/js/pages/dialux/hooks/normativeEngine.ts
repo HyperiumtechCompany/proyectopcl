@@ -60,6 +60,7 @@ export interface NormativeStandardMeta {
     year: number;
     authority: string;
     legalStatus: LegalStatus;
+    /** `true` solo si la norma tiene catálogo de actividades cargado (`getNormData` no vacío). */
     active: boolean;
     notes: string;
     url?: string;
@@ -234,7 +235,8 @@ export const NORMATIVE_STANDARDS_META: Record<NormativeStandard, NormativeStanda
         year: 2021,
         authority: 'National Fire Protection Association (NFPA)',
         legalStatus: 'reference',
-        active: true,
+        // Sin catálogo cargado (`getNormData` → []): no seleccionable.
+        active: false,
         notes: 'Norma de referencia para iluminación de emergencia y seguridad. Estructura base incluida; valores detallados por actividad en proceso de carga.',
         url: 'https://www.nfpa.org',
         disclaimer: NFPA_DISCLAIMER,
@@ -250,7 +252,8 @@ export const NORMATIVE_STANDARDS_META: Record<NormativeStandard, NormativeStanda
         year: 2016,
         authority: 'Ministerio de Energía y Minas del Perú (MEM)',
         legalStatus: 'mandatory',
-        active: true,
+        // Sin catálogo cargado (`getNormData` → []): no seleccionable.
+        active: false,
         notes: 'Norma obligatoria para instalaciones mineras en el Perú. Estructura base incluida; valores detallados por actividad en proceso de carga.',
         url: 'https://www.gob.pe/minem',
         disclaimer: DS024_DISCLAIMER,
@@ -269,7 +272,8 @@ export const NORMATIVE_STANDARDS_META: Record<NormativeStandard, NormativeStanda
         year: 2014,
         authority: 'CEN/TC 169',
         legalStatus: 'recommended',
-        active: true,
+        // Sin catálogo cargado (`getNormData` → []): no seleccionable.
+        active: false,
         notes: 'Norma europea para iluminación de áreas exteriores.',
         
         
@@ -287,7 +291,8 @@ export const NORMATIVE_STANDARDS_META: Record<NormativeStandard, NormativeStanda
         year: 2015,
         authority: 'CEN/TC 169',
         legalStatus: 'recommended',
-        active: true,
+        // Sin catálogo cargado (`getNormData` → []): no seleccionable.
+        active: false,
         notes: 'Norma europea para iluminación de carreteras.',
         
         
@@ -305,7 +310,8 @@ export const NORMATIVE_STANDARDS_META: Record<NormativeStandard, NormativeStanda
         year: 2020,
         authority: 'CEN/TC 169',
         legalStatus: 'recommended',
-        active: true,
+        // Sin catálogo cargado (`getNormData` → []): no seleccionable.
+        active: false,
         notes: 'Norma europea para iluminación deportiva.',
         
         
@@ -323,7 +329,8 @@ export const NORMATIVE_STANDARDS_META: Record<NormativeStandard, NormativeStanda
         year: 2017,
         authority: 'CEN/TC 169',
         legalStatus: 'recommended',
-        active: true,
+        // Sin catálogo cargado (`getNormData` → []): no seleccionable.
+        active: false,
         notes: 'Norma europea para eficiencia energética en iluminación.',
         
         
@@ -873,10 +880,14 @@ export function compareNormsForActivity(
 export function findMostStrictNorm(
     comparison: NormativeComparisonEntry[],
 ): NormativeComparisonEntry | null {
-    if (!comparison.length) {
+    // Las normas sin dato para la actividad ("No disponible", 0 lx) no
+    // compiten: si ninguna tiene dato, no hay "más estricta".
+    const withData = comparison.filter((entry) => entry.illuminanceLux > 0);
+    if (!withData.length) {
         return null;
     }
-    return comparison.reduce((prev, curr) =>
+    // Empate: gana la primera en el orden pedido (prioridad del país).
+    return withData.reduce((prev, curr) =>
         curr.illuminanceLux > prev.illuminanceLux ? curr : prev,
     );
 }

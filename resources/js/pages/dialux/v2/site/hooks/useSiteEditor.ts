@@ -19,6 +19,12 @@ import {
     autoLinkLevels,
     autoLinkStairFromPolygon,
 } from '../domain/levelAuto';
+import {
+    DEFAULT_SITE_NETWORK_SETTINGS,
+    planAutoCircuits,
+    type AutoCircuitPlan,
+    type AutoCircuitRules,
+} from '../domain/siteAutoCircuit';
 import { PROJECTED_FOR_KEY } from '../domain/siteFixtureProjection';
 import { deriveSiteNetworkLive } from '../domain/siteNetworkLive';
 import {
@@ -828,12 +834,50 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
      * deshacer). Reemplaza los que se proyectaron antes para ESA área
      * (`metadata.projectedFor`), nunca los colocados a mano.
      */
+    /**
+     * Auto-circuitado (E1): propone los circuitos del tablero con el sistema
+     * de la red y la caída real hasta él (sin red: 380/220 V 3Φ, cos φ 0,9).
+     */
+    const planPanelAutoCircuits = (
+        panelId: string,
+        rules?: Partial<AutoCircuitRules>,
+    ): AutoCircuitPlan | null =>
+        siteData
+            ? planAutoCircuits(siteData, panelId, liveNetwork.settings ?? DEFAULT_SITE_NETWORK_SETTINGS, {
+                  rules,
+                  upstreamPercent: liveNetwork.upstreamPercent,
+              })
+            : null;
+
+    /** Crea los cables del plan en UN solo paso de deshacer (y las salidas del TG si faltaban). */
+    const applyAutoCircuits = (plan: AutoCircuitPlan): number => {
+        const history = useEditorStore.getState();
+        history.beginHistoryGesture();
+        if (plan.tgOutputs) {
+            const panel = siteData?.elements.find((element) => element.id === plan.panelId);
+            if (panel?.config?.kind === 'tg') {
+                updateSiteElement(panel.id, {
+                    config: { ...panel.config, outputs: plan.tgOutputs },
+                });
+            }
+        }
+        for (const circuit of plan.circuits) addSiteCircuit(circuit);
+        history.endHistoryGesture();
+        return plan.circuits.length;
+    };
+
     const placeProjectedLuminaires = (
         areaId: string,
         positions: Point2D[],
         pole: PoleConfig,
         /** Configuración propia de cada poste (p.ej. brazo hacia la vía); si falta, `pole`. */
         configs?: PoleConfig[],
+        /**
+         * Cómo se proyectó (modo, cantidad, disposición, separación, ajuste
+         * manual…): se guarda en el ESPACIO (`metadata.projection`) para el
+         * informe por espacio.
+         */
+        projection?: Record<string, unknown>,
     ): number => {
         const area = siteData?.elements.find((element) => element.id === areaId);
         const previous = (siteData?.elements ?? [])
@@ -844,6 +888,17 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         const history = useEditorStore.getState();
         history.beginHistoryGesture();
         if (previous.length > 0) removeSiteElements(previous);
+        if (projection && area) {
+            updateSiteElement(area.id, {
+                metadata: {
+                    ...(area.metadata ?? {}),
+                    projection: {
+                        ...projection,
+                        placedAt: new Date().toISOString(),
+                    },
+                },
+            });
+        }
         addSiteElements(
             positions.map((point, index) => ({
                 type: 'pole' as const,
@@ -1429,6 +1484,8 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
             ? liveNetwork.calculations
             : network.calculations,
         placeProjectedLuminaires,
+        planPanelAutoCircuits,
+        applyAutoCircuits,
         /** Por cable de la planta: a qué tablero de la red alimenta y su ΔU. */
         circuitFeeds: liveNetwork.feeds,
         /** Por cable de la planta: la salida de tablero (motor CT V1) a la que pertenece. */

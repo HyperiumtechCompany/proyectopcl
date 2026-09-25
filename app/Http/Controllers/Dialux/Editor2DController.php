@@ -18,7 +18,7 @@ class Editor2DController extends Controller
 {
     use AuthorizesDialuxModule;
 
-    private const LANDSCAPE_PAGE_KINDS = ['ambient-list', 'room-ambient-list', 'calculation-object-list'];
+    private const LANDSCAPE_PAGE_KINDS = ['ambient-list', 'room-ambient-list', 'calculation-object-list', 'site-section'];
 
     private const ASPECT_RATIO_PAGE_KINDS = ['terrain-cad', 'terrain-architectural'];
 

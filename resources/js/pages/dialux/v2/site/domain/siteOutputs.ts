@@ -138,7 +138,8 @@ function equipmentRiserM(element: SiteElement): number {
         return config.heightM;
     }
     if (element.type === 'outlet' && config?.kind === 'outlet') {
-        return config.heightM;
+        // 0,4 m por defecto (zócalo exterior, `OutletConfig`): datos viejos sin altura.
+        return Number.isFinite(config.heightM) ? config.heightM : 0.4;
     }
     return 0;
 }
@@ -334,7 +335,11 @@ export function buildSitePanelScene(
                       ct: {
                           system: phases,
                           ...(phases === 1
-                              ? { phaseBalance: PHASE_ROTATION[rootIndex % 3] }
+                              ? {
+                                    phaseBalance:
+                                        circuit.phase ??
+                                        PHASE_ROTATION[rootIndex % 3],
+                                }
                               : {}),
                       },
                   }
