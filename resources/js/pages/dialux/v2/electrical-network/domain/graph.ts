@@ -1,5 +1,25 @@
 import type { ElectricalNetworkData, GraphIssue } from './types';
 
+/**
+ * Orígenes de la red: `rootNodeId` más todo Suministro (`service`) sin
+ * alimentador aguas arriba. Un proyecto puede tener varios suministros (p.ej.
+ * cada TG de la Planta General con su propio medidor), y cada uno es una raíz.
+ */
+export function networkRootIds(network: ElectricalNetworkData): string[] {
+    const nodeIds = new Set(network.nodes.map((node) => node.id));
+    const fed = new Set(network.edges.map((edge) => edge.targetNodeId));
+    const roots: string[] = [];
+    if (network.rootNodeId && nodeIds.has(network.rootNodeId)) {
+        roots.push(network.rootNodeId);
+    }
+    for (const node of network.nodes) {
+        if (node.type === 'service' && !fed.has(node.id) && !roots.includes(node.id)) {
+            roots.push(node.id);
+        }
+    }
+    return roots;
+}
+
 export function validateElectricalNetwork(
     network: ElectricalNetworkData,
 ): GraphIssue[] {
@@ -8,7 +28,8 @@ export function validateElectricalNetwork(
     const incoming = new Map<string, number>();
     const children = new Map<string, string[]>();
 
-    if (!network.rootNodeId || !nodes.has(network.rootNodeId)) {
+    const roots = networkRootIds(network);
+    if (roots.length === 0) {
         issues.push({
             code: 'missing-root',
             message: 'La red necesita un origen válido.',
@@ -69,8 +90,7 @@ export function validateElectricalNetwork(
         visiting.delete(nodeId);
         visited.add(nodeId);
     };
-    if (network.rootNodeId && nodes.has(network.rootNodeId))
-        walk(network.rootNodeId);
+    for (const root of roots) walk(root);
     for (const node of network.nodes) {
         if (!visited.has(node.id))
             issues.push({

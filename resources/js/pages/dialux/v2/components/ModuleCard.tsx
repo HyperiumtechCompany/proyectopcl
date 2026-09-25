@@ -8,8 +8,8 @@ import {
     Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
-import { show } from '@/actions/App/Http/Controllers/Dialux/V2/ModuleController';
 import { show as showElectricalNetwork } from '@/actions/App/Http/Controllers/Dialux/V2/ElectricalNetworkController';
+import { show } from '@/actions/App/Http/Controllers/Dialux/V2/ModuleController';
 import type { DialuxV2Module, ModuleStatus } from '../types';
 
 const statusLabels: Record<ModuleStatus, string> = {

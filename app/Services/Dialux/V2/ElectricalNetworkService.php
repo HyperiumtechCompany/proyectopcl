@@ -31,9 +31,6 @@ class ElectricalNetworkService
         $incoming = [];
         $children = [];
         $errors = [];
-        if (! isset($data['rootNodeId']) || ! $nodes->has($data['rootNodeId'])) {
-            $errors[] = 'La red necesita un origen válido.';
-        }
         foreach ($data['edges'] ?? [] as $edge) {
             $source = $edge['sourceNodeId'];
             $target = $edge['targetNodeId'];
@@ -69,8 +66,19 @@ class ElectricalNetworkService
             unset($visiting[$id]);
             $visited[$id] = true;
         };
-        if (isset($data['rootNodeId'])) {
-            $walk($data['rootNodeId']);
+        // Orígenes: rootNodeId y todo Suministro sin alimentador aguas arriba
+        // (cada TG de la Planta General puede tener su propio suministro).
+        $roots = $nodes->filter(
+            fn (array $node, string $id): bool => ($node['type'] ?? null) === 'service' && ! isset($incoming[$id]),
+        )->keys();
+        if (isset($data['rootNodeId']) && $nodes->has($data['rootNodeId'])) {
+            $roots->prepend($data['rootNodeId']);
+        }
+        if ($roots->isEmpty()) {
+            $errors[] = 'La red necesita un origen válido.';
+        }
+        foreach ($roots->unique() as $root) {
+            $walk((string) $root);
         }
 
         return array_values(array_unique($errors));
@@ -92,8 +100,14 @@ class ElectricalNetworkService
                 'connectionType' => 'star',
                 'frequencyHz' => 60,
                 'conductorMaterial' => 'copper',
-                'workingTemperatureC' => 20,
+                // Misma temperatura de trabajo que el motor CT de la V1 (ρ a 40 °C), para
+                // que la ΔU de los alimentadores (IEC 60364-5-52 Anexo G) sea coherente
+                // con la de los circuitos de los módulos.
+                'workingTemperatureC' => 40,
                 'defaultPowerFactor' => 0.9,
+                // Referencia: CNE-Utilización (Perú), Regla 050-102 — alimentador
+                // ≤ 2.5 % y total alimentador + circuito ≤ 4 %. Edición/numeral
+                // pendientes de confirmar contra el texto oficial; editables en Red y CT.
                 'feederDropLimitPercent' => 2.5,
                 'totalDropLimitPercent' => 4,
             ],

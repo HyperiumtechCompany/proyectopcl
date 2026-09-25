@@ -8,12 +8,41 @@ import {
 
 const AUTOSAVE_DEBOUNCE_MS = 2500;
 
+/** Guardado en curso (el último PATCH lanzado), para poder esperarlo. */
+let inFlightSave: Promise<void> | null = null;
+/** Adelanta el guardado pendiente (debounce) del módulo montado, si lo hay. */
+let flushPendingSave: (() => void) | null = null;
+
+/**
+ * Guarda YA lo pendiente del módulo abierto y espera a que el servidor lo
+ * tenga. Se usa antes de navegar a otra página que lee el mismo documento
+ * desde el servidor (p.ej. Red y CT lee la planta general): sin esto, un
+ * cable recién dibujado podía no llegar porque la página nueva se pedía
+ * antes de que terminara el autoguardado.
+ */
+export async function flushDialuxModuleSave(): Promise<void> {
+    flushPendingSave?.();
+    if (inFlightSave) await inFlightSave;
+}
+
 function readXsrfToken(): string {
     const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
     return match ? decodeURIComponent(match[1]) : '';
 }
 
-async function persistModule(
+function persistModule(
+    projectId: number,
+    moduleId: number,
+    project: Project,
+): Promise<void> {
+    const request = sendModule(projectId, moduleId, project).finally(() => {
+        if (inFlightSave === request) inFlightSave = null;
+    });
+    inFlightSave = request;
+    return request;
+}
+
+async function sendModule(
     projectId: number,
     moduleId: number,
     project: Project,
@@ -83,6 +112,20 @@ export function useDialuxModuleSync(
             if (timerRef.current) clearTimeout(timerRef.current);
         };
     }, [moduleId, project, projectId, ready]);
+
+    // Permite a `flushDialuxModuleSave()` adelantar el guardado pendiente.
+    useEffect(() => {
+        const flush = () => {
+            if (!timerRef.current || !latestProjectRef.current) return;
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+            void persistModule(projectId, moduleId, latestProjectRef.current);
+        };
+        flushPendingSave = flush;
+        return () => {
+            if (flushPendingSave === flush) flushPendingSave = null;
+        };
+    }, [moduleId, projectId]);
 
     useEffect(
         () => () => {

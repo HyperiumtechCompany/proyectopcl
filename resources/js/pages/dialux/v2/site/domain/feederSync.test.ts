@@ -74,6 +74,8 @@ describe('deriveFeederStatus / feederStatusColor', () => {
             lengthM: 50,
             installedPowerW: 0,
             demandPowerW: 0,
+            outgoingDemandPowerW: 0,
+            simultaneityFactor: 1,
             currentA: 0,
             designCurrentA: 0,
             breakerA: 0,

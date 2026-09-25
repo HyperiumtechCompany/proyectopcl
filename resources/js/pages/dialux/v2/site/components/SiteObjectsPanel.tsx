@@ -1,5 +1,6 @@
 import {
     Building2,
+    Cable,
     ChevronDown,
     Hexagon,
     Layers,
@@ -9,7 +10,10 @@ import {
     Zap,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
+import { feederLengthBreakdown } from '../domain/aerialCableGeometry';
+import { cableWaypointElevations } from '../domain/cableElevation';
 import type { SiteElement, SiteElementType } from '../domain/types';
+import { resolveWireEndpoints } from '../domain/wireAnchors';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 import { SITE_ELEMENT_DEFAULTS } from '../lib/siteDefaults';
 
@@ -22,12 +26,17 @@ interface Props {
 type IconType = ComponentType<{ className?: string }>;
 
 /** Mismas categorías que `SitePalette` — un objeto pertenece a una sola, para no tener dos sitios distintos de los que aprender la organización del módulo. */
-const GROUPS: { id: string; title: string; icon: IconType; types: SiteElementType[] }[] = [
+const GROUPS: {
+    id: string;
+    title: string;
+    icon: IconType;
+    types: SiteElementType[];
+}[] = [
     {
         id: 'terrain',
         title: 'Terreno',
         icon: Hexagon,
-        types: ['terrain', 'street', 'green_area'],
+        types: ['terrain', 'street', 'sidewalk', 'green_area', 'tree'],
     },
     {
         id: 'topography',
@@ -39,7 +48,7 @@ const GROUPS: { id: string; title: string; icon: IconType; types: SiteElementTyp
         id: 'building',
         title: 'Edificación',
         icon: Building2,
-        types: ['building_block', 'fence', 'gate', 'stair', 'ramp'],
+        types: ['building_block', 'canopy', 'fence', 'gate', 'stair', 'ramp'],
     },
     {
         id: 'installations',
@@ -51,13 +60,41 @@ const GROUPS: { id: string; title: string; icon: IconType; types: SiteElementTyp
         id: 'electrical',
         title: 'Red eléctrica',
         icon: Zap,
-        types: ['tg_location', 'transformer', 'pole'],
+        types: [
+            'tg_location',
+            'transformer',
+            'pole',
+            'outlet',
+            'sub_panel',
+            'ats',
+            'earth_pit',
+            'mt_cell_arrival',
+            'mt_cell_protection',
+            'mt_cell_transformation',
+            'cable_vault',
+            'pull_box',
+            'generator',
+        ],
     },
 ];
 const KNOWN_TYPES = new Set(GROUPS.flatMap((g) => g.types));
 
+const SUB_PANEL_MOUNT_LABELS: Record<string, string> = {
+    freestanding: 'Autosoportado',
+    surface: 'Adosado',
+    molded_case: 'Caja moldeada',
+    din_rail: 'Riel DIN',
+    stabilized: 'Estabilizado',
+    pump_control: 'Control de bombas',
+};
+
 function sublabelFor(element: SiteElement): string {
-    const typeLabel = SITE_ELEMENT_DEFAULTS[element.type]?.label ?? element.type;
+    let typeLabel = SITE_ELEMENT_DEFAULTS[element.type]?.label ?? element.type;
+    // El montaje distingue el color de leyenda real (rojo/magenta/amarillo/celeste).
+    if (element.config?.kind === 'sub_panel') {
+        const mountLabel = SUB_PANEL_MOUNT_LABELS[element.config.mount];
+        if (mountLabel) typeLabel = `${typeLabel} · ${mountLabel}`;
+    }
     const z = element.baseElevationM;
     if (typeof z === 'number' && Math.abs(z) > 0.001) {
         return `${typeLabel} · ▲ ${z.toFixed(2)} m`;
@@ -73,6 +110,8 @@ function sublabelFor(element: SiteElement): string {
  */
 export function SiteObjectsPanel({ editor, onSelect }: Props) {
     const elements = editor.siteData?.elements ?? [];
+    const feederPaths = editor.siteData?.feederPaths ?? [];
+    const circuits = editor.siteData?.circuits ?? [];
     const selectedIds = editor.selectedElementIds;
     const select = (id: string, additive = false) => {
         // Mayús/Ctrl + clic en la lista: agrega o quita del grupo (sin saltar a Propiedades).
@@ -85,16 +124,27 @@ export function SiteObjectsPanel({ editor, onSelect }: Props) {
     };
     const remove = (id: string) => {
         editor.removeSiteElement(id);
-        if (selectedIds.includes(id)) editor.selectElements(selectedIds.filter((x) => x !== id));
+        if (selectedIds.includes(id))
+            editor.selectElements(selectedIds.filter((x) => x !== id));
+    };
+    const selectWire = (kind: 'circuit' | 'feeder', id: string) => {
+        editor.selectWire({ kind, id });
+        onSelect?.(id);
     };
 
     const other = elements.filter((el) => !KNOWN_TYPES.has(el.type));
+    const labelOf = (id: string) =>
+        editor.siteData?.elements.find((el) => el.id === id)?.label ?? '?';
 
-    if (elements.length === 0) {
+    if (
+        elements.length === 0 &&
+        feederPaths.length === 0 &&
+        circuits.length === 0
+    ) {
         return (
             <p className="px-4 py-6 text-center text-[11px] text-slate-400">
-                Sin objetos todavía — usa las herramientas de la izquierda
-                para empezar a dibujar.
+                Sin objetos todavía — usa las herramientas de la izquierda para
+                empezar a dibujar.
             </p>
         );
     }
@@ -109,7 +159,9 @@ export function SiteObjectsPanel({ editor, onSelect }: Props) {
                     key={group.id}
                     title={group.title}
                     icon={group.icon}
-                    items={elements.filter((el) => group.types.includes(el.type))}
+                    items={elements.filter((el) =>
+                        group.types.includes(el.type),
+                    )}
                     selectedIds={selectedIds}
                     onSelect={select}
                     onDelete={remove}
@@ -123,7 +175,145 @@ export function SiteObjectsPanel({ editor, onSelect }: Props) {
                 onSelect={select}
                 onDelete={remove}
             />
+            {(feederPaths.length > 0 || circuits.length > 0) && (
+                <WireGroup
+                    title="Cableado"
+                    icon={Cable}
+                    rows={[
+                        ...feederPaths.map((path) => ({
+                            id: path.id,
+                            kind: 'feeder' as const,
+                            label: path.label ?? path.networkEdgeId,
+                            lengthM: feederLengthBreakdown(
+                                path.waypoints,
+                                editor.terrainScaleM,
+                                path.route,
+                                path.segmentModes,
+                            ).totalM,
+                        })),
+                        ...circuits.map((circuit) => {
+                            const liveWaypoints = resolveWireEndpoints(
+                                circuit.waypoints,
+                                circuit.sourceId,
+                                circuit.targetId,
+                                (id) => elements.find((el) => el.id === id),
+                                editor.terrainScaleM,
+                                circuit.tgOutputId,
+                            );
+                            return {
+                                id: circuit.id,
+                                kind: 'circuit' as const,
+                                label:
+                                    circuit.label ??
+                                    `${labelOf(circuit.sourceId)} → ${labelOf(circuit.targetId)}`,
+                                // Extremos EN VIVO y cotas de sus plataformas.
+                                lengthM: feederLengthBreakdown(
+                                    liveWaypoints,
+                                    editor.terrainScaleM,
+                                    circuit.route,
+                                    circuit.segmentModes,
+                                    cableWaypointElevations(
+                                        liveWaypoints,
+                                        elements,
+                                        editor.terrainScaleM,
+                                    ),
+                                    circuit.wastePct ?? 5,
+                                ).totalM,
+                            };
+                        }),
+                    ]}
+                    selectedWireId={editor.selectedWireId}
+                    onSelect={selectWire}
+                    onDelete={(kind, id) =>
+                        kind === 'feeder'
+                            ? editor.removeFeederPath(id)
+                            : editor.removeSiteCircuit(id)
+                    }
+                />
+            )}
         </div>
+    );
+}
+
+/** Fila de cable: entra por su longitud real (m), no por `sublabelFor` (no son `SiteElement`). */
+function WireGroup({
+    title,
+    icon: Icon,
+    rows,
+    selectedWireId,
+    onSelect,
+    onDelete,
+}: {
+    title: string;
+    icon: IconType;
+    rows: {
+        id: string;
+        kind: 'circuit' | 'feeder';
+        label: string;
+        lengthM: number;
+    }[];
+    selectedWireId: { kind: 'circuit' | 'feeder'; id: string } | null;
+    onSelect: (kind: 'circuit' | 'feeder', id: string) => void;
+    onDelete: (kind: 'circuit' | 'feeder', id: string) => void;
+}) {
+    if (rows.length === 0) return null;
+    return (
+        <details
+            className="group overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/40"
+            open
+        >
+            <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 bg-slate-50 px-2 py-1.5 hover:bg-slate-100 dark:bg-slate-900/70 dark:hover:bg-slate-800/80">
+                <Icon className="h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-slate-400" />
+                <span className="text-[11px] font-semibold tracking-wide text-slate-700 uppercase dark:text-slate-300">
+                    {title}
+                </span>
+                <span className="ml-auto rounded-full bg-slate-200 px-1.5 font-mono text-[9px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    {rows.length}
+                </span>
+                <ChevronDown className="h-3 w-3 text-slate-400 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="space-y-0.5 border-t border-slate-200 p-1 dark:border-white/10">
+                {rows.map((row) => {
+                    const isSelected =
+                        selectedWireId?.kind === row.kind &&
+                        selectedWireId.id === row.id;
+                    return (
+                        <div
+                            key={`${row.kind}:${row.id}`}
+                            onClick={() => onSelect(row.kind, row.id)}
+                            className={`group/item flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 ${
+                                isSelected
+                                    ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
+                                    : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5'
+                            }`}
+                        >
+                            <span className="flex-1 truncate text-[11px] font-medium">
+                                {row.label}
+                            </span>
+                            <span
+                                className={`shrink-0 text-[9px] ${isSelected ? '' : 'text-slate-400'}`}
+                            >
+                                {row.kind === 'feeder'
+                                    ? 'Alimentador'
+                                    : 'Instalación'}{' '}
+                                · {row.lengthM.toFixed(1)} m
+                            </span>
+                            <button
+                                type="button"
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onDelete(row.kind, row.id);
+                                }}
+                                title="Eliminar"
+                                className="ml-1 shrink-0 text-red-400 opacity-0 transition-opacity group-hover/item:opacity-100 hover:text-red-500"
+                            >
+                                <Trash2 className="h-3 w-3" />
+                            </button>
+                        </div>
+                    );
+                })}
+            </div>
+        </details>
     );
 }
 
@@ -165,7 +355,12 @@ function ObjectGroup({
                         <div
                             key={item.id}
                             onClick={(event) =>
-                                onSelect(item.id, event.shiftKey || event.ctrlKey || event.metaKey)
+                                onSelect(
+                                    item.id,
+                                    event.shiftKey ||
+                                        event.ctrlKey ||
+                                        event.metaKey,
+                                )
                             }
                             className={`group/item flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 ${
                                 isSelected

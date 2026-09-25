@@ -620,6 +620,38 @@ function ambientNamesAlongConductor(
     return [...names];
 }
 
+/**
+ * Lleva una caída de tensión heredada de la base de tensión del tablero padre
+ * a la del receptor (`volts × base_receptor / base_padre`), lo que equivale a
+ * acumular la caída en PORCENTAJE. Las caídas de esta cascada se calculan con
+ * √3·I·Z sobre la tensión de línea en 3Φ y con 2·I·Z sobre 220 V en 1Φ: sumar
+ * esos voltios sin convertir sobrestimaba la caída de cada circuito 1Φ colgado
+ * de un tablero 3Φ (auditoría `dialux-electrical-reviewer`, Fase 6 del plan
+ * `plan_compatibilizacion_planta_general_red_ct.md`). Si ambas bases coinciden
+ * el factor es 1 y el resultado es idéntico al de siempre.
+ */
+export function convertDropToBase(
+    volts: number,
+    fromBaseV: number,
+    toBaseV: number,
+): number {
+    if (!(fromBaseV > 0) || !(toBaseV > 0) || fromBaseV === toBaseV) return volts;
+    return volts * (toBaseV / fromBaseV);
+}
+
+/** Base del % de caída de una fila del cuadro: 220 V si es 1Φ, su tensión si es 3Φ. */
+function rowDropBaseV(row: { phases: number; voltageV: number }): number {
+    return row.phases === 1 ? 220 : row.voltageV;
+}
+
+/** Base de tensión de un tablero sin fila resumen: 220 V si es 1Φ, su tensión si es 3Φ. */
+function panelVoltageBase(panel: ElectricalDevice | undefined): number {
+    const phases = phasesProperty(panel?.properties?.phases);
+    return phases === 1
+        ? 220
+        : numericProperty(panel?.properties?.voltage, DEFAULT_VOLTAGE);
+}
+
 /** Resume cada salida física de tablero siguiendo la red de conductores hasta sus cargas finales. */
 export function calculatePanelCircuitSummaries(
     scene: Scene,
@@ -1004,6 +1036,14 @@ export function calculatePanelCircuitSummaries(
             // corriente real — ese factor solo aparecería en el término
             // reactivo (X·sinφ) de la fórmula completa con impedancia, que
             // este modelo no calcula (ni antes ni después de este fix).
+            //
+            // ACTUALIZACIÓN (commit 1ad77b7, 2026-08-11 "Restore voltage drop
+            // power factor multiplier"): el `× powerFactor` se RESTAURÓ a
+            // propósito para seguir la planilla de referencia
+            // (ΔV = K·I·ρ·L·cosφ/S). El párrafo anterior describe el fix que
+            // luego se revirtió; el código de abajo es el vigente. Ojo: el
+            // motor de alimentadores de la red v2 (`engine/formulas.ts::
+            // voltageDropPct`) NO lleva cosφ — los dos criterios difieren.
             const circuitOwnDropV =
                 sectionMm2 > 0
                     ? (phases === 1 ? 2 : Math.sqrt(3)) *
@@ -1414,7 +1454,10 @@ export function calculatePanelCircuitSummaries(
     // parentOf, topologicalOrder ya calculados! Borramos eso de abajo.
 
 
-    const resolvedDropByPanelId = new Map<string, number>();
+    // Caída resuelta de cada tablero, en voltios de SU base de tensión
+    // (`base`: 220 V si es 1Φ, su tensión si es 3Φ — la misma con la que se
+    // calcula su %). Ver `convertDropToBase`.
+    const resolvedDropByPanelId = new Map<string, { volts: number; base: number }>();
     const circuitsByPanelId = new Map<string, PartialPanelCircuit[]>();
     aliveCircuitsFinal.forEach((circuit) => {
         circuitsByPanelId.set(circuit.panelId, [...(circuitsByPanelId.get(circuit.panelId) ?? []), circuit]);
@@ -1423,30 +1466,38 @@ export function calculatePanelCircuitSummaries(
     return topologicalOrder.flatMap((panelId) => {
         const panel = panels.find((item) => item.id === panelId);
         const parent = parentOf.get(panelId);
+        const panelCircuits = circuitsByPanelId.get(panelId) ?? [];
+        const summaryCircuit = panelCircuits.find((circuit) => circuit.isPanelSummary);
+        // Misma base con la que se calcula el % de la fila (ver más abajo).
+        const panelBase = summaryCircuit
+            ? rowDropBaseV(summaryCircuit)
+            : panelVoltageBase(panel);
+        const parentDrop = parent
+            ? resolvedDropByPanelId.get(parent.parentPanelId)
+            : undefined;
         const panelUpstreamDropV = parent
-            ? (resolvedDropByPanelId.get(parent.parentPanelId) ?? 0)
+            ? convertDropToBase(parentDrop?.volts ?? 0, parentDrop?.base ?? panelBase, panelBase)
             : Math.max(
                   0,
                   panel?.properties?.upstreamVoltageDropV ??
                       (panel?.type === 'sub_panel' ? 6.22 : 0),
               );
 
-        const panelCircuits = circuitsByPanelId.get(panelId) ?? [];
-        const summaryCircuit = panelCircuits.find((circuit) => circuit.isPanelSummary);
         const panelTotalDropV = summaryCircuit
             ? summaryCircuit.circuitOwnDropV + panelUpstreamDropV
             : panelUpstreamDropV;
-        resolvedDropByPanelId.set(panelId, panelTotalDropV);
+        resolvedDropByPanelId.set(panelId, { volts: panelTotalDropV, base: panelBase });
 
         return panelCircuits.map((circuit) => {
             // Excel: AD(TG) no suma aguas arriba; AD(TD) suma E(TD)=AD(TG);
-            // cada circuito C suma AD(TD). Se conserva esa cadena literal.
+            // cada circuito C suma AD(TD). Se conserva esa cadena literal —
+            // con la caída heredada llevada a la base del circuito (factor 1
+            // cuando ambas bases coinciden: mismo resultado que antes).
             const baselineV = circuit.isPanelSummary
                 ? panelUpstreamDropV
-                : panelTotalDropV;
+                : convertDropToBase(panelTotalDropV, panelBase, rowDropBaseV(circuit));
             const voltageDropV = circuit.circuitOwnDropV + baselineV;
-            const voltageDropPct =
-                (voltageDropV / (circuit.phases === 1 ? 220 : circuit.voltageV)) * 100;
+            const voltageDropPct = (voltageDropV / rowDropBaseV(circuit)) * 100;
 
             const { circuitOwnDropV: _circuitOwnDropV, ...rest } = circuit;
             return {
@@ -1560,16 +1611,30 @@ export function calculateProjectPanelCircuitSummaries(scenes: Scene[]): PanelCir
             const tdOwnDropV = td.sectionMm2 > 0
                 ? (td.phases === 1 ? 2 : Math.sqrt(3)) * Math.max(td.phaseCurrentR, td.phaseCurrentS, td.phaseCurrentT) * td.copperResistivity * td.lengthM * td.powerFactor / td.sectionMm2
                 : 0;
-            td.upstreamVoltageDropV = tg.voltageDropV;
-            td.voltageDropV = tdOwnDropV + tg.voltageDropV;
+            const inheritedV = convertDropToBase(
+                tg.voltageDropV,
+                tg.circuitVoltageV,
+                td.circuitVoltageV,
+            );
+            td.upstreamVoltageDropV = inheritedV;
+            td.voltageDropV = tdOwnDropV + inheritedV;
             td.voltageDropPct = td.voltageDropV / td.circuitVoltageV * 100;
             td.voltageDropOk = td.voltageDropPct < td.maxVoltageDropPct;
 
             result.forEach((circuit) => {
                 if (circuit.panelId !== td.panelId || circuit.isPanelSummary) return;
-                const ownDropV = Math.max(0, circuit.voltageDropV - oldTdTotalDropV);
-                circuit.upstreamVoltageDropV = td.voltageDropV;
-                circuit.voltageDropV = ownDropV + td.voltageDropV;
+                const ownDropV = Math.max(
+                    0,
+                    circuit.voltageDropV -
+                        convertDropToBase(oldTdTotalDropV, td.circuitVoltageV, circuit.circuitVoltageV),
+                );
+                const inheritedCircuitV = convertDropToBase(
+                    td.voltageDropV,
+                    td.circuitVoltageV,
+                    circuit.circuitVoltageV,
+                );
+                circuit.upstreamVoltageDropV = inheritedCircuitV;
+                circuit.voltageDropV = ownDropV + inheritedCircuitV;
                 circuit.voltageDropPct = circuit.voltageDropV / circuit.circuitVoltageV * 100;
                 circuit.voltageDropOk = circuit.voltageDropPct < circuit.maxVoltageDropPct;
             });

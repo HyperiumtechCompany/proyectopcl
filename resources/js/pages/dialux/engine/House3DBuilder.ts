@@ -30,9 +30,21 @@ import { DynamicTexture } from '@babylonjs/core';
 import earcut from 'earcut';
 (window as any).earcut = earcut;
 
-import { buildContourSegments } from '@/pages/dialux/hooks/isoluxContours';
-import { pointInPolygon } from '@/pages/dialux/hooks/ambientSpaces';
 import { buildConductor3DPath } from '@/pages/dialux/engine/conductor3DPath';
+import {
+    cercoPostOffsets,
+    doorHandlePosition,
+    gateLeafLayout,
+    pointOnDoorFrame,
+} from '@/pages/dialux/engine/doorGeometry';
+import {
+    planRotationToYaw,
+    wallSnappedYaw,
+} from '@/pages/dialux/engine/rotationHelpers';
+import { pointInPolygon } from '@/pages/dialux/hooks/ambientSpaces';
+import { buildContourSegments } from '@/pages/dialux/hooks/isoluxContours';
+import { buildRampLayout, findRampAtPoint, resolveRampUndersidePoint } from '@/pages/dialux/hooks/rampGeometry';
+import { structuralRouteHeightAt } from '@/pages/dialux/hooks/roofGeometry';
 import {
     DEFAULT_STRUCTURAL_SLAB_THICKNESS,
     getCorridorRenderFlags,
@@ -42,8 +54,6 @@ import {
     getStairLaneLayout,
 } from '@/pages/dialux/hooks/stairGeometry';
 import { findStairAtPoint, resolveStairUndersidePoint } from '@/pages/dialux/hooks/stairMountingGeometry';
-import { structuralRouteHeightAt } from '@/pages/dialux/hooks/roofGeometry';
-import { buildRampLayout, findRampAtPoint, resolveRampUndersidePoint } from '@/pages/dialux/hooks/rampGeometry';
 import type {
     Room,
     Wall,
@@ -86,12 +96,9 @@ interface FixtureBodyOptions {
 }
 
 /**
- * Convierte grados (planta, sentido horario, 0°=Norte) a radianes para
- * mesh.rotation.y. El editor 2D usa la misma convención en su SVG
- * (rotate(deg) sentido horario) y worldToScreen mapea Norte=arriba de
- * pantalla, por lo que no hace falta invertir el signo aquí — a diferencia
- * de los ángulos derivados de muros (`Math.atan2(dy,dx)`), que sí lo
- * necesitan porque miden desde el eje +X en convención matemática CCW.
+ * Solo grados → radianes. Para orientar objetos en planta NO usar esto directo:
+ * ver `rotationHelpers.ts` (`planRotationToYaw` / `wallSnappedYaw`), que fija la
+ * convención de signo compartida con los muros.
  */
 function degToRad(deg: number): number {
     return (deg * Math.PI) / 180;
@@ -122,6 +129,9 @@ export class House3DBuilder {
     matFrame!: StandardMaterial;
     matCanopy!: StandardMaterial;
     matDoor!: StandardMaterial; // madera de puerta
+    matGate!: StandardMaterial; // metal de portón
+    matCercoPanel!: StandardMaterial; // paño de cerco
+    matCercoPost!: StandardMaterial; // columna de cerco
     matPasadizoSlab!: StandardMaterial; // losa de pasadizo (voladizo/techo)
 
     /** Cache de materiales por color de fixture — evita N instancias de StandardMaterial */
@@ -204,6 +214,9 @@ export class House3DBuilder {
         this.matFrame = this.makeMat('mat_frame', HEX_FRAME, 0.0);
         this.matCanopy = this.makeMat('mat_canopy', HEX_CANOPY, 0.1);
         this.matDoor = this.makeMat('mat_door', '#7c5c3a', 0.05);
+        this.matGate = this.makeMat('mat_gate', '#475569', 0.3);
+        this.matCercoPanel = this.makeMat('mat_cerco_panel', '#4a7c59', 0.05);
+        this.matCercoPost = this.makeMat('mat_cerco_post', '#78716c', 0.1);
 
         // Losa de pasadizo: mismo tono que el techo, opaca y visible desde ambos lados
         this.matPasadizoSlab = new StandardMaterial(
@@ -461,7 +474,12 @@ export class House3DBuilder {
             floorNode,
         );
         (editorScene.doors || []).forEach((d) =>
-            this.buildDoor(d, editorScene.walls || [], floorNode),
+            this.buildDoor(
+                d,
+                editorScene.walls || [],
+                floorNode,
+                editorScene.partitions || [],
+            ),
         );
         (editorScene.partitions || []).forEach((p) =>
             this.buildPartition(p, editorScene.doors || [], floorNode),
@@ -2617,10 +2635,54 @@ export class House3DBuilder {
             );
         }
 
+        if (wall.wallType === 'cerco') {
+            this.decorateCerco(wall, meshes);
+        }
+
         this.meshMap.set(wall.id, meshes);
         meshes.forEach((m) => {
             if (floorNode) m.parent = floorNode;
         });
+    }
+
+    /**
+     * Cerco perimetral: el paño toma color propio y se añaden columnas en los
+     * extremos de cada tramo y cada `postSpacing` m (default 3 m). Las columnas
+     * sobresalen un poco del paño y de su altura.
+     */
+    private decorateCerco(wall: Wall, meshes: Mesh[]) {
+        meshes.forEach((m) => {
+            m.material = this.matCercoPanel;
+        });
+        const spacing = wall.postSpacing ?? 3;
+        const postW = wall.thickness + 0.12;
+        const postH = wall.height + 0.15;
+        for (let i = 0; i < wall.vertices.length - 1; i++) {
+            const v1 = wall.vertices[i];
+            const v2 = wall.vertices[i + 1];
+            const segLen = Math.hypot(v2.x - v1.x, v2.y - v1.y);
+            if (segLen < 0.01) continue;
+            const ux = (v2.x - v1.x) / segLen;
+            const uy = (v2.y - v1.y) / segLen;
+            const angle = Math.atan2(v2.y - v1.y, v2.x - v1.x);
+            cercoPostOffsets(segLen, spacing).forEach((offset, k) => {
+                const post = MeshBuilder.CreateBox(
+                    `cerco_post_${wall.id}_${i}_${k}`,
+                    { width: postW, height: postH, depth: postW },
+                    this.scene,
+                );
+                post.position.set(
+                    v1.x + ux * offset,
+                    postH / 2,
+                    v1.y + uy * offset,
+                );
+                post.rotation.y = -angle;
+                post.material = this.matCercoPost;
+                post.receiveShadows = true;
+                this.shadowGen?.addShadowCaster(post);
+                meshes.push(post);
+            });
+        }
     }
 
     /** Crea una caja orientada para pared */
@@ -2944,10 +3006,15 @@ export class House3DBuilder {
         door: Door,
         allWalls: Wall[],
         floorNode?: import('@babylonjs/core').TransformNode,
+        allPartitions: Partition[] = [],
     ) {
-        const wall = allWalls.find((w) => w.id === door.wallId);
+        // La puerta vive en un muro o en una partición (mutuamente excluyentes).
+        const wall = door.partitionId
+            ? allPartitions.find((p) => p.id === door.partitionId)
+            : allWalls.find((w) => w.id === door.wallId);
         if (!wall || wall.vertices.length < 2) return;
 
+        const isGate = door.doorType === 'gate';
         const vertices = wall.vertices;
         const pt = this.getPointAtOffset(
             vertices,
@@ -2965,37 +3032,40 @@ export class House3DBuilder {
             return;
         }
 
-        // Hoja de puerta (caja delgada)
-        const leaf = MeshBuilder.CreateBox(
-            `door_leaf_${door.id}`,
-            {
-                width: W - 0.05,
-                height: H - 0.01,
-                depth: 0.04,
-            },
-            this.scene,
-        );
-        leaf.position.set(pt.x, H / 2, pt.y);
-        leaf.rotation.y = -pt.angle;
-        leaf.material = this.matDoor;
-        this.shadowGen?.addShadowCaster(leaf);
-        meshes.push(leaf);
+        // Hoja(s) de puerta (caja delgada); un portón lleva dos hojas metálicas.
+        const leaves = isGate
+            ? gateLeafLayout(W, door.doorType)
+            : [{ center: 0, width: W - 0.05 }];
+        leaves.forEach((spec, index) => {
+            const leaf = MeshBuilder.CreateBox(
+                `door_leaf_${door.id}_${index}`,
+                {
+                    width: spec.width,
+                    height: H - 0.01,
+                    depth: isGate ? 0.06 : 0.04,
+                },
+                this.scene,
+            );
+            const at = pointOnDoorFrame(pt, spec.center, 0);
+            leaf.position.set(at.x, H / 2, at.z);
+            leaf.rotation.y = -pt.angle;
+            leaf.material = isGate ? this.matGate : this.matDoor;
+            this.shadowGen?.addShadowCaster(leaf);
+            meshes.push(leaf);
+        });
 
         // Pomo/Manija de puerta
-        const handle = MeshBuilder.CreateSphere(
-            `door_handle_${door.id}`,
-            { diameter: 0.04 },
-            this.scene,
-        );
-        const hSide = W / 2 - 0.1;
-        const hDepth = 0.025;
-        handle.position.set(
-            pt.x + Math.cos(pt.angle) * hSide + Math.sin(pt.angle) * hDepth,
-            1.05,
-            pt.y - Math.sin(pt.angle) * hSide + Math.cos(pt.angle) * hDepth,
-        );
-        handle.material = this.matFrame;
-        meshes.push(handle);
+        if (!isGate) {
+            const handle = MeshBuilder.CreateSphere(
+                `door_handle_${door.id}`,
+                { diameter: 0.04 },
+                this.scene,
+            );
+            const handlePos = doorHandlePosition(pt, W / 2 - 0.1, 0.025);
+            handle.position.set(handlePos.x, 1.05, handlePos.z);
+            handle.material = this.matFrame;
+            meshes.push(handle);
+        }
 
         // Jamba izquierda
         const jambaL = MeshBuilder.CreateBox(
@@ -3140,7 +3210,7 @@ export class House3DBuilder {
 
         if (bestV1 && bestV2) {
             // Ángulo automático de la pared + rotación manual del usuario (planta, sentido horario)
-            body.rotation.y = -wallAngle + degToRad(ls.rotation ?? 0);
+            body.rotation.y = wallSnappedYaw(wallAngle, ls.rotation ?? 0);
             // Solo aplicamos offset si esta realmente cerca del segmento
             if (minDist < 0.25) { // 0.5m^2 dist sq
                 const offsetDist = (wallThickness / 2) + (depth / 2);
@@ -3283,7 +3353,7 @@ export class House3DBuilder {
 
         body.position.set(dev.x, dev.mountingHeight ?? 1.2, dev.y);
         if (snapped && minDist < 0.25) {
-            body.rotation.y = -wallAngle + degToRad(dev.rotation ?? 0);
+            body.rotation.y = wallSnappedYaw(wallAngle, dev.rotation ?? 0);
             // El usuario rota el símbolo en 2D para que apunte hacia el interior del cuarto.
             // Usamos esa rotación para saber si debemos empujarlo hacia un lado o hacia el otro de la pared.
             const flip = Math.cos(degToRad(dev.rotation ?? 0)) > 0 ? 1 : -1;
@@ -3291,7 +3361,7 @@ export class House3DBuilder {
             body.position.x = dev.x - Math.sin(wallAngle) * offsetDist;
             body.position.z = dev.y + Math.cos(wallAngle) * offsetDist;
         } else {
-            body.rotation.y = degToRad(dev.rotation ?? 0);
+            body.rotation.y = planRotationToYaw(dev.rotation ?? 0);
         }
 
         body.parent = floorNode;
@@ -3715,7 +3785,7 @@ export class House3DBuilder {
                 // Rotate the fixture so it faces outward from the wall
                 body.rotation.x = Math.PI / 2; // Flat against wall instead of ceiling
                 // Ángulo automático de la pared + rotación manual del usuario (planta, sentido horario)
-                body.rotation.y = -fixtureWallAngle + degToRad(fixture.rotation ?? 0);
+                body.rotation.y = wallSnappedYaw(fixtureWallAngle, fixture.rotation ?? 0);
 
                 const offsetDist = (wallThickness / 2);
                 body.position.set(
@@ -3728,7 +3798,7 @@ export class House3DBuilder {
 
         if (!isWallMounted) {
             body.position.set(bx, by, bz);
-            body.rotation.y = degToRad(fixture.rotation ?? 0);
+            body.rotation.y = planRotationToYaw(fixture.rotation ?? 0);
         }
 
         this.shadowGen?.addShadowCaster(body);

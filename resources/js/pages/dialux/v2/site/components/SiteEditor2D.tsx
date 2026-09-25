@@ -1,7 +1,14 @@
+import { useEffect } from 'react';
 import { useSiteEditor } from '../hooks/useSiteEditor';
 import { useSiteKeyboard } from '../hooks/useSiteKeyboard';
+import {
+    useSiteLightingCalculation,
+    useSiteLightingStore,
+} from '../hooks/useSiteLightingCalculation';
 import { SiteCanvas2D } from './SiteCanvas2D';
 import { SiteContourImportDialog } from './SiteContourImportDialog';
+import { IsoluxLegend } from './SiteIsoluxLayer';
+import { SiteLightingCalcPanel } from './SiteLightingCalcPanel';
 import { SitePalette } from './SitePalette';
 import { SitePlanImportDialog } from './SitePlanImportDialog';
 import { SitePropertiesPanel } from './SitePropertiesPanel';
@@ -29,14 +36,39 @@ export function SiteEditor2D({
 }: Props) {
     const editor = useSiteEditor(projectId, generalModuleId);
     useSiteKeyboard(editor, isActive);
+    const lighting = useSiteLightingCalculation(editor.siteData);
+    // El cálculo es del emplazamiento abierto: al salir del Módulo General se descarta.
+    useEffect(
+        () => () =>
+            useSiteLightingStore.getState().set({
+                calculation: null,
+                calculatedFor: null,
+                focusedAreaId: null,
+            }),
+        [],
+    );
 
     return (
         <div className="flex h-full min-h-0 flex-col">
             <SiteToolbar editor={editor} />
             <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-                <SitePalette editor={editor} />
-                <main className="min-h-105 min-w-0 flex-1 overflow-auto">
-                    <SiteCanvas2D editor={editor} isActive={isActive} />
+                <SitePalette editor={editor} lighting={lighting} />
+                <main className="relative min-h-105 min-w-0 flex-1 overflow-auto">
+                    <SiteCanvas2D
+                        editor={editor}
+                        isActive={isActive}
+                        lighting={lighting}
+                    />
+                    {lighting.calculation && lighting.showIsolux && (
+                        <IsoluxLegend />
+                    )}
+                    {/* Resultados (el botón vive en la paleta → Iluminación). */}
+                    {(lighting.calculation || lighting.running) && (
+                        <SiteLightingCalcPanel
+                            site={editor.siteData}
+                            lighting={lighting}
+                        />
+                    )}
                 </main>
                 <SitePropertiesPanel editor={editor} modules={modules} />
             </div>

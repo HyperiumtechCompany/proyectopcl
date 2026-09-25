@@ -1,4 +1,5 @@
 import { Boxes, Cable, CheckCircle2, LayoutGrid, PlugZap } from 'lucide-react';
+import { useState } from 'react';
 import type {
     ElectricalNetworkData,
     ModuleElectricalPort,
@@ -11,8 +12,16 @@ export function ElectricalPalette({
 }: {
     ports: ModuleElectricalPort[];
     data: ElectricalNetworkData;
-    onConnectModule: (moduleId: number) => void;
+    onConnectModule: (moduleId: number, parentNodeId?: string) => void;
 }) {
+    // Con varios TG (o sub tableros de la planta) se elige de cuál cuelga el
+    // módulo al importarlo; con uno solo, el selector no aparece.
+    const feeders = data.nodes.filter(
+        (node) => node.type === 'main_panel' || node.type === 'site_panel',
+    );
+    const [feederId, setFeederId] = useState<string>('');
+    const selectedFeeder =
+        feeders.find((node) => node.id === feederId) ?? feeders[0];
     const modules = [...new Set(ports.map((port) => port.moduleId))].map(
         (moduleId) => ({
             moduleId,
@@ -29,8 +38,25 @@ export function ElectricalPalette({
                 </div>
                 <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
                     Importa la jerarquía de tableros y alimenta únicamente su
-                    raíz desde el TG.
+                    raíz desde el TG. Si en la planta general trazas un cable
+                    del TG al bloque del módulo, se conecta solo.
                 </p>
+                {feeders.length > 1 && (
+                    <label className="mt-2 block text-[10px] font-semibold text-slate-500">
+                        Colgar módulos de
+                        <select
+                            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-800 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100"
+                            value={selectedFeeder?.id ?? ''}
+                            onChange={(event) => setFeederId(event.target.value)}
+                        >
+                            {feeders.map((node) => (
+                                <option key={node.id} value={node.id}>
+                                    {node.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                )}
             </div>
             <div className="max-h-64 space-y-3 overflow-y-auto p-3 lg:max-h-none">
                 {modules.length === 0 && (
@@ -87,7 +113,7 @@ export function ElectricalPalette({
                                             <span className="col-start-2 truncate text-slate-400">
                                                 {parent
                                                     ? `Alimentado por ${parent.panelLabel}`
-                                                    : 'Raíz del módulo · alimentado por TG'}
+                                                    : `Raíz del módulo · alimentado por ${selectedFeeder?.label ?? 'TG'}`}
                                             </span>
                                         </div>
                                     );
@@ -95,7 +121,9 @@ export function ElectricalPalette({
                             </div>
                             <button
                                 type="button"
-                                onClick={() => onConnectModule(moduleId)}
+                                onClick={() =>
+                                    onConnectModule(moduleId, selectedFeeder?.id)
+                                }
                                 className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-600 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-cyan-500"
                             >
                                 {imported ? (

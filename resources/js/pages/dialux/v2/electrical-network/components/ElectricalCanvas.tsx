@@ -498,8 +498,31 @@ export function ElectricalCanvas({
                         >
                             {node.type === 'module_panel_port'
                                 ? 'Tablero de módulo'
-                                : node.type.replace('_', ' ')}
+                                : node.type === 'site_panel'
+                                  ? 'Sub tablero'
+                                  : node.type.replace('_', ' ')}
                         </text>
+                        {node.origin === 'site' || node.siteElementId ? (
+                            <g transform="translate(138 11)">
+                                <title>
+                                    Viene de la Planta General (se sincroniza solo)
+                                </title>
+                                <rect
+                                    width="50"
+                                    height="17"
+                                    rx="8.5"
+                                    className="fill-cyan-100 dark:fill-cyan-900/60"
+                                />
+                                <text
+                                    x="25"
+                                    y="12"
+                                    textAnchor="middle"
+                                    className="fill-cyan-700 text-[9px] font-bold dark:fill-cyan-300"
+                                >
+                                    PLANTA
+                                </text>
+                            </g>
+                        ) : null}
                         <text
                             x="16"
                             y="49"

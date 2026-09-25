@@ -236,12 +236,16 @@ export function planStairFlights(
     widthM: number,
     maxSteps: number = STAIR_NORM.maxStepsBeforeLanding,
     shape: 'straight' | 'L' | 'U' = 'straight',
+    /** Escalera recta continua: UN tramo con todos los peldaños y sin descanso intermedio. */
+    continuous = false,
+    /** Fondo del descanso (m); ausente = el mayor entre `widthM` y el mínimo de referencia. */
+    landingDepthM?: number,
 ): RampFlight[] {
-    const turn = shape === 'U' ? 180 : shape === 'L' ? 90 : 0;
+    const turn = continuous ? 0 : shape === 'U' ? 180 : shape === 'L' ? 90 : 0;
     const total = Math.abs(totalRiseM);
     if (total < 1e-6) return [];
     const steps = stairStepCount(total);
-    const count = Math.max(1, Math.ceil(steps / Math.max(1, maxSteps)));
+    const count = continuous ? 1 : Math.max(1, Math.ceil(steps / Math.max(1, maxSteps)));
     const riser = totalRiseM / steps;
     return Array.from({ length: count }, (_, i) => {
         const n = Math.floor(steps / count) + (i < steps % count ? 1 : 0);
@@ -251,7 +255,9 @@ export function planStairFlights(
             direction: 'east' as const,
             lengthM: Math.round(n * STAIR_NORM.treadM * 100) / 100,
             riseM: Math.round(riser * n * 1000) / 1000,
-            landingLengthM: last ? 0 : Math.max(widthM, STAIR_NORM.landingM),
+            landingLengthM: last
+                ? 0
+                : (landingDepthM ?? Math.max(widthM, STAIR_NORM.landingM)),
             turnAfterDeg: last ? 0 : turn,
         };
     });
@@ -263,6 +269,10 @@ export function evaluateStair(input: {
     widthM: number;
     maxStepsPerFlight?: number;
     shape?: 'straight' | 'L' | 'U';
+    /** Escalera recta continua (sin descansos intermedios). */
+    continuous?: boolean;
+    /** Fondo del descanso configurado (m). */
+    landingDepthM?: number;
     /** Huella real (m); si falta se usa la con la que se generan los tramos. */
     treadM?: number;
 }): NormFinding[] {
@@ -284,11 +294,22 @@ export function evaluateStair(input: {
         input.widthM,
         input.maxStepsPerFlight ?? STAIR_NORM.maxStepsBeforeLanding,
         input.shape,
+        input.continuous,
     ).length;
     if (tread < STAIR_NORM.minTreadM - 1e-9) {
         findings.push({
             level: 'review',
             text: `Huella de ${tread.toFixed(2)} m < ${STAIR_NORM.minTreadM} m de referencia.`,
+        });
+    }
+    if (
+        !input.continuous &&
+        input.landingDepthM !== undefined &&
+        input.landingDepthM < input.widthM - 1e-9
+    ) {
+        findings.push({
+            level: 'review',
+            text: `Descanso de ${input.landingDepthM.toFixed(2)} m de fondo < ${input.widthM.toFixed(2)} m de ancho de la escalera: la referencia pide un descanso al menos tan profundo como el ancho.`,
         });
     }
     if (input.widthM < STAIR_NORM.minWidthM - 1e-9) {
@@ -297,7 +318,16 @@ export function evaluateStair(input: {
             text: `Ancho ${input.widthM.toFixed(2)} m < ${STAIR_NORM.minWidthM.toFixed(2)} m de referencia.`,
         });
     }
-    if ((input.maxStepsPerFlight ?? STAIR_NORM.maxStepsBeforeLanding) > STAIR_NORM.maxStepsBeforeLanding) {
+    if (input.continuous && steps > STAIR_NORM.maxStepsBeforeLanding) {
+        findings.push({
+            level: 'review',
+            text: `Escalera continua de ${steps} peldaños: pasa de los ${STAIR_NORM.maxStepsBeforeLanding} seguidos de referencia; considera un descanso intermedio.`,
+        });
+    }
+    if (
+        !input.continuous &&
+        (input.maxStepsPerFlight ?? STAIR_NORM.maxStepsBeforeLanding) > STAIR_NORM.maxStepsBeforeLanding
+    ) {
         findings.push({
             level: 'review',
             text: `Más de ${STAIR_NORM.maxStepsBeforeLanding} peldaños seguidos: la referencia pide descanso antes.`,
@@ -306,7 +336,7 @@ export function evaluateStair(input: {
     if (findings.length === 0) {
         findings.push({
             level: 'info',
-            text: `${steps} peldaños de ${(riser * 100).toFixed(1)} cm de contrahuella y ${(tread * 100).toFixed(0)} cm de huella, en ${flights} tramo${flights > 1 ? 's con descanso' : ''}: dentro de la referencia (sin confirmar por especialista).`,
+            text: `${steps} peldaños de ${(riser * 100).toFixed(1)} cm de contrahuella y ${(tread * 100).toFixed(0)} cm de huella, en ${flights} tramo${flights > 1 ? 's con descanso' : input.continuous ? ' recto continuo' : ''}: dentro de la referencia (sin confirmar por especialista).`,
         });
     }
     return findings;

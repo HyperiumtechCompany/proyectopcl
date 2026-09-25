@@ -1,5 +1,6 @@
 import type { EdgeCalculation } from '../../electrical-network/domain/calculations';
 import type { ElectricalEdge } from '../../electrical-network/domain/types';
+import { feederPathLengthM } from './aerialCableGeometry';
 import { polylineLength } from './geometry';
 import type { FeederPath } from './types';
 
@@ -18,6 +19,7 @@ import type { FeederPath } from './types';
 export function syncFeederLengths(
     edges: ElectricalEdge[],
     feederPaths: FeederPath[],
+    scaleM = 1,
 ): ElectricalEdge[] {
     if (feederPaths.length === 0) return edges;
     const pathByEdge = new Map(
@@ -26,15 +28,26 @@ export function syncFeederLengths(
     return edges.map((edge) => {
         const path = pathByEdge.get(edge.id);
         if (!path) return edge;
-        const lengthM =
-            path.calculatedLengthM || polylineLength(path.waypoints);
+        // Con ruta aérea/subterránea suma catenaria y tramos verticales; con escala ≠ 1 convierte a metros.
+        const lengthM = feederPathLengthM(path, scaleM);
+        // El material y el tipo de cable elegidos en el trazado mandan sobre el alimentador de la red.
+        const material = path.route?.conductorMaterial ?? edge.conductorMaterial;
+        const cableType = path.route?.cableType ?? edge.conductorType;
         if (
             edge.lengthMode === 'site' &&
-            Math.abs(edge.horizontalLengthM - lengthM) < 1e-6
+            Math.abs(edge.horizontalLengthM - lengthM) < 1e-6 &&
+            edge.conductorMaterial === material &&
+            edge.conductorType === cableType
         ) {
             return edge;
         }
-        return { ...edge, lengthMode: 'site', horizontalLengthM: lengthM };
+        return {
+            ...edge,
+            lengthMode: 'site',
+            horizontalLengthM: lengthM,
+            conductorMaterial: material,
+            conductorType: cableType,
+        };
     });
 }
 

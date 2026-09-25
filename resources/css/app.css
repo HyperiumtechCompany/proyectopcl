@@ -297,3 +297,69 @@
 /* Fix SweetAlert2 z-index for modals */
 .swal2-container { z-index: 99999 !important; }
 
+
+/*
+ * Controles nativos (desplegables de <select>, selector de fecha, casillas,
+ * barras de desplazamiento) siguen el tema claro/oscuro automáticamente.
+ */
+:root {
+    color-scheme: light;
+}
+.dark {
+    color-scheme: dark;
+}
+
+/*
+ * Editor DIALux: cualquier campo de formulario SIN clases propias hereda el
+ * tema (claro/oscuro) por defecto. `:where` deja la especificidad en 0, así que
+ * las utilidades de Tailwind de cada componente siguen mandando.
+ */
+@layer base {
+    .dialux-forms {
+        accent-color: var(--color-cyan-600);
+    }
+    .dialux-forms
+        :where(
+            select,
+            textarea,
+            input:not(
+                [type='checkbox'],
+                [type='radio'],
+                [type='range'],
+                [type='color'],
+                [type='file']
+            )
+        ) {
+        background-color: var(--color-white);
+        color: var(--color-slate-900);
+        border-color: var(--color-slate-200);
+    }
+    .dark
+        .dialux-forms
+        :where(
+            select,
+            textarea,
+            input:not(
+                [type='checkbox'],
+                [type='radio'],
+                [type='range'],
+                [type='color'],
+                [type='file']
+            )
+        ) {
+        background-color: var(--color-slate-900);
+        color: var(--color-white);
+        border-color: var(--color-slate-700);
+    }
+    .dialux-forms :where(option, optgroup) {
+        background-color: inherit;
+        color: inherit;
+    }
+    .dialux-forms :where(input, textarea)::placeholder {
+        color: var(--color-slate-400);
+    }
+    .dialux-forms :where(input, select, textarea):disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+}

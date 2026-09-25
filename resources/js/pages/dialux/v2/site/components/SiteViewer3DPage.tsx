@@ -1,6 +1,12 @@
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
+import { ModuleLoadingOverlay } from '../../components/ModuleLoadingOverlay';
+import { deriveSiteNetworkLive } from '../domain/siteNetworkLive';
 import { useLuminairePhotometry } from '../hooks/useLuminaireCatalog';
 import { useNetworkSnapshotForSite } from '../hooks/useNetworkSnapshotForSite';
+import {
+    siteLightProductIds,
+    useSiteLightingStore,
+} from '../hooks/useSiteLightingCalculation';
 import { SiteViewer3D } from './SiteViewer3D';
 
 interface Props {
@@ -18,22 +24,44 @@ interface Props {
  */
 export function SiteViewer3DPage({ projectId, isActive = true }: Props) {
     const siteData = useEditorStore((state) => state.project?.site);
-    const { moduleScenes, calculations } = useNetworkSnapshotForSite(projectId);
+    const snapshot = useNetworkSnapshotForSite(projectId);
+    const { moduleScenes, loading } = snapshot;
+    // Misma red "en vivo" que el 2D: la planta actual (cables recién
+    // dibujados, cargas de las salidas) colorea los alimentadores en 3D.
+    const calculations = snapshot.network
+        ? deriveSiteNetworkLive(
+              snapshot.network,
+              siteData,
+              snapshot.ports,
+              snapshot.conductors,
+          ).calculations
+        : snapshot.calculations;
     // Fotometría real de las luminarias del catálogo usadas por los postes.
     const luminairePhotometry = useLuminairePhotometry(
-        (siteData?.elements ?? []).flatMap((element) =>
-            element.type === 'pole' &&
-            element.config?.kind === 'pole' &&
-            element.config.productId
-                ? [element.config.productId]
-                : [],
-        ),
+        siteLightProductIds(siteData),
     );
+    // Resultado de "Calcular alumbrado" del 2D (mismo store).
+    const calculation = useSiteLightingStore((state) => state.calculation);
+    const calculatedFor = useSiteLightingStore((state) => state.calculatedFor);
 
     if (!siteData) {
         return (
-            <div className="flex h-full items-center justify-center text-xs text-slate-400">
-                Cargando emplazamiento…
+            <div className="relative h-full">
+                <ModuleLoadingOverlay
+                    title="Cargando vista 3D"
+                    stages={[
+                        {
+                            id: 'site',
+                            label: 'Objetos del emplazamiento',
+                            status: 'active',
+                        },
+                        {
+                            id: 'scene',
+                            label: 'Construyendo la escena 3D',
+                            status: 'pending',
+                        },
+                    ]}
+                />
             </div>
         );
     }
@@ -45,6 +73,11 @@ export function SiteViewer3DPage({ projectId, isActive = true }: Props) {
             feederCalculations={calculations}
             luminairePhotometry={luminairePhotometry}
             isActive={isActive}
+            networkLoading={loading}
+            calculatedLighting={calculation}
+            calculatedLightingStale={
+                calculation !== null && calculatedFor !== siteData
+            }
         />
     );
 }

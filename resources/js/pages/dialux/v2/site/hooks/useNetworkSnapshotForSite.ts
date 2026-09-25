@@ -9,6 +9,8 @@ import type {
     ElectricalNetworkData,
     ModuleElectricalPort,
 } from '../../electrical-network/domain/types';
+import { applySiteToNetwork } from '../domain/siteNetworkBridge';
+import type { SiteData } from '../domain/types';
 import type { SiteModuleScene } from '../engine/SiteBuilder3D';
 
 export interface NetworkEdgeOption {
@@ -21,6 +23,10 @@ interface NetworkSnapshotForSite {
     calculations: EdgeCalculation[];
     /** Módulos hijos (con sus escenas completas) — solo se usa para la vista 3D del emplazamiento (interiores read-only). */
     moduleScenes: SiteModuleScene[];
+    /** Red guardada tal cual (sin la planta): el editor 2D la combina con la planta EN VIVO (`deriveSiteNetworkLive`). */
+    network: ElectricalNetworkData | null;
+    ports: ModuleElectricalPort[];
+    conductors: ConductorCatalog[];
     loading: boolean;
 }
 
@@ -39,6 +45,9 @@ export function useNetworkSnapshotForSite(
         edges: [],
         calculations: [],
         moduleScenes: [],
+        network: null,
+        ports: [],
+        conductors: [],
         loading: true,
     });
 
@@ -59,11 +68,17 @@ export function useNetworkSnapshotForSite(
                         ports?: ModuleElectricalPort[];
                         conductors?: ConductorCatalog[];
                         moduleScenes?: SiteModuleScene[];
+                        siteData?: SiteData | null;
                     } | null,
                 ) => {
                     if (cancelled || !payload?.network) return;
-                    const data = payload.network.data;
+                    // Misma incorporación de la planta que hace la página Red y CT.
                     const ports = payload.ports ?? [];
+                    const data = applySiteToNetwork(
+                        payload.network.data,
+                        payload.siteData,
+                        { ports },
+                    ).data;
                     const conductors = payload.conductors ?? [];
                     const nodesById = new Map(
                         data.nodes.map((node) => [node.id, node]),
@@ -82,6 +97,9 @@ export function useNetworkSnapshotForSite(
                             conductors,
                         ),
                         moduleScenes: payload.moduleScenes ?? [],
+                        network: payload.network.data,
+                        ports,
+                        conductors,
                         loading: false,
                     });
                 },

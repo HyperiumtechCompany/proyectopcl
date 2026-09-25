@@ -168,3 +168,8 @@ Ver el proceso completo, con pasos accionables, en `.claude/skills/normativa-dia
 - **Cadencia de revisión de ediciones**: anual, o inmediatamente si alguien del equipo detecta que una norma citada aquí (EN 12464-1:2021, RNE EM.010 D.S. N°006-2014-V, EN 1838:2013, RNE A.130 D.S. N°017-2012-VIVIENDA, IES HB-10-17, NFPA 101:2021, DS-024-2016-EM) fue reemplazada por una edición nueva.
 - **Agregar un tipo de proyecto nuevo** (salud, comercio, oficinas...): agregar una fila a la tabla de la sección 6 y, si corresponde, filas nuevas en las secciones 1-5 con su propio `tipoProyecto`. No requiere tocar ningún agente.
 - **Agregar un dominio de revisión nuevo** (exteriores, vial, IFC...): ver `.claude/skills/revisar-dialux/SKILL.md` sección "Agregar un dominio nuevo".
+
+### Nota 2026-09-21 — espesor del cerco en el emplazamiento (`v2/site/domain/fenceModel.ts`)
+| id | fuente | en_código | valor_referencial | estado |
+|---|---|---|---|---|
+| cerco-espesor-modelado | **sin fuente cargada** (candidata: RNE E.070 / ordenanza municipal) | `FENCE_MODEL.minThicknessM` = 0.12 m, `defaultThicknessM` = 0.25 m | 0.12 m es el "mínimo operativo" que la app ya usa para muro de ladrillo de vivienda (`hooks/wallNorms.ts`); 0.25 m es solo el valor de modelado por defecto. La UI lo rotula "mínimo operativo de la app, no exigencia de E.070 ni municipal". Nunca "cumple". | pending-confirmation |

@@ -123,7 +123,12 @@ export function PoleLuminairePanel({ config, onPatch, count = 1 }: Props) {
 
     const pick = (id: number) => {
         // Con producto, el flujo por defecto es el de su ficha (se puede sobrescribir).
-        onPatch({ productId: id, lumens: undefined, wattage: undefined });
+        onPatch({
+            productId: id,
+            lumens: undefined,
+            wattage: undefined,
+            resolvedWatts: catalog.items.find((item) => item.id === id)?.powerWatts ?? undefined,
+        });
         setMessage(null);
     };
 
@@ -134,7 +139,12 @@ export function PoleLuminairePanel({ config, onPatch, count = 1 }: Props) {
         try {
             const { item, warnings } = await importLuminaireFile(file);
             catalog.reload();
-            onPatch({ productId: item.id, lumens: undefined, wattage: undefined });
+            onPatch({
+                productId: item.id,
+                lumens: undefined,
+                wattage: undefined,
+                resolvedWatts: item.powerWatts ?? undefined,
+            });
             setMessage(
                 `Importada "${item.name}" al catálogo compartido (también disponible en el editor de interiores).${
                     warnings.length ? ` ${warnings.length} advertencia(s) del lector.` : ''

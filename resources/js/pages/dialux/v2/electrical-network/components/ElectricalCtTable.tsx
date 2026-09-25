@@ -6,6 +6,7 @@ import {
     calculatePanelTotalCurrentA,
     resolveConformingSectionMm2,
 } from '@/pages/dialux/hooks/wireLengthCalculations';
+import type { SiteOutputRow } from '../../site/domain/siteOutputs';
 import type { EdgeCalculation } from '../domain/calculations';
 import {
     rowsForDistributionPanel,
@@ -31,6 +32,11 @@ interface Props {
         patch: Partial<ModuleCtCircuit>,
     ) => void;
     onSelect: (id: string) => void;
+    /**
+     * Salidas de la Planta General (motor CT V1, `siteOutputs.ts`): su carga
+     * y corrientes por fase se suman a la fila resumen del TG del que salen.
+     */
+    siteOutputRows?: SiteOutputRow[];
 }
 const COLS = 36;
 // Techo del alimentador de UN TD/Sub-TD específico al corregir el árbol
@@ -127,6 +133,7 @@ export function ElectricalCtTable({
     onUpdateEdge,
     onUpdateCircuit,
     onSelect,
+    siteOutputRows = [],
 }: Props) {
     const [treeFixApplied, setTreeFixApplied] = useState(false);
     const nodes = new Map(data.nodes.map((node) => [node.id, node]));
@@ -185,6 +192,7 @@ export function ElectricalCtTable({
     const rootEdges = edges.filter(
         (edge) => nodes.get(edge.sourceNodeId)?.type === 'main_panel',
     );
+    const mainPanels = data.nodes.filter((node) => node.type === 'main_panel');
     const rootPanelIds = new Set(
         rootEdges
             .map((edge) => nodes.get(edge.targetNodeId)?.deviceId)
@@ -291,7 +299,7 @@ export function ElectricalCtTable({
                         className={`rounded-full px-3 py-1.5 text-[10px] font-semibold ${problems === 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}
                     >
                         {problems === 0
-                            ? 'Árbol completo y conforme'
+                            ? 'Árbol completo dentro de los límites configurados'
                             : `${problems} incidencia(s): ${topologyProblems} topología · ${feederProblems} alimentadores · ${circuitProblems} circuitos · ${disconnected.length} desconectados`}
                     </span>
                     {treeFixApplied && (
@@ -303,7 +311,7 @@ export function ElectricalCtTable({
                             }
                         >
                             {problems === 0
-                                ? 'Todo el árbol multimódulo cumple.'
+                                ? 'Todo el árbol multimódulo está dentro de los límites configurados.'
                                 : `${problems} incidencia(s) siguen sin cumplir — vuelve a pulsar "Corregir automáticamente" (subir un alimentador cambia la caída heredada de sus hijos) o revisa el calibre máximo disponible.`}
                         </p>
                     )}
@@ -515,13 +523,46 @@ export function ElectricalCtTable({
                                 módulo(s) · {rootEdges.length} TD principal(es)
                             </td>
                         </tr>
-                        <GeneralRow
-                            data={data}
-                            calculations={calculations}
-                            distributionSummaries={rootDistributionSummaries}
-                            onUpdate={onUpdateSettings}
-                            onUpdateEdge={onUpdateEdge}
-                        />
+                        {mainPanels.map((tg) => {
+                            // Con varios TG, cada fila resumen lleva SOLO lo
+                            // que cuelga de ese TG (sus módulos y sus salidas
+                            // de la planta), con su propio alimentador.
+                            const tgPanelIds = new Set(
+                                rootEdges
+                                    .filter(
+                                        (edge) =>
+                                            mainPanels.length === 1 ||
+                                            edge.sourceNodeId === tg.id,
+                                    )
+                                    .map(
+                                        (edge) =>
+                                            nodes.get(edge.targetNodeId)
+                                                ?.deviceId,
+                                    )
+                                    .filter((panelId): panelId is string =>
+                                        Boolean(panelId),
+                                    ),
+                            );
+                            return (
+                                <GeneralRow
+                                    key={tg.id}
+                                    tgNodeId={tg.id}
+                                    data={data}
+                                    calculations={calculations}
+                                    distributionSummaries={rootDistributionSummaries.filter(
+                                        (circuit) =>
+                                            tgPanelIds.has(circuit.panelId),
+                                    )}
+                                    siteRows={siteOutputRows.filter(
+                                        (row) =>
+                                            row.panelElementId ===
+                                            tg.siteElementId,
+                                    )}
+                                    onUpdate={onUpdateSettings}
+                                    onUpdateEdge={onUpdateEdge}
+                                />
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -587,43 +628,62 @@ function FullHeader() {
 }
 
 function GeneralRow({
+    tgNodeId,
     data,
     calculations,
     distributionSummaries,
+    siteRows = [],
     onUpdate,
     onUpdateEdge,
 }: {
+    tgNodeId?: string;
     data: ElectricalNetworkData;
     calculations: EdgeCalculation[];
     distributionSummaries: ModuleCtCircuit[];
+    /** Salidas de la planta que salen de ESTE TG (motor CT V1). */
+    siteRows?: SiteOutputRow[];
     onUpdate: Props['onUpdateSettings'];
     onUpdateEdge: Props['onUpdateEdge'];
 }) {
     // Alimentador real Medidor → TG (el único TG del proyecto) — sin esto la
     // fila resumen del TG mostraba longitud/sección/ΔU fijos en 0, aunque el
     // usuario ya lo hubiera configurado en el diagrama de red.
-    const tgNode = data.nodes.find((node) => node.type === 'main_panel');
+    const tgNode =
+        data.nodes.find((node) => node.id === tgNodeId) ??
+        data.nodes.find((node) => node.type === 'main_panel');
     const tgEdge = data.edges.find(
         (edge) => edge.targetNodeId === tgNode?.id,
     );
     const tgResult = calculations.find((item) => item.edgeId === tgEdge?.id);
-    const installedPowerW = distributionSummaries.reduce(
+    // Carga del TG = sus tableros de módulo + sus salidas de la planta (ambas
+    // salen del mismo motor CT V1, mismas columnas de fase).
+    const loadRows: Array<
+        Pick<
+            ModuleCtCircuit,
+            | 'installedPowerW'
+            | 'maximumDemandKw'
+            | 'phaseCurrentR'
+            | 'phaseCurrentS'
+            | 'phaseCurrentT'
+        >
+    > = [...distributionSummaries, ...siteRows];
+    const installedPowerW = loadRows.reduce(
         (sum, circuit) => sum + circuit.installedPowerW,
         0,
     );
-    const demandPowerW = distributionSummaries.reduce(
+    const demandPowerW = loadRows.reduce(
         (sum, circuit) => sum + circuit.maximumDemandKw * 1000,
         0,
     );
-    const phaseCurrentR = distributionSummaries.reduce(
+    const phaseCurrentR = loadRows.reduce(
         (sum, circuit) => sum + circuit.phaseCurrentR,
         0,
     );
-    const phaseCurrentS = distributionSummaries.reduce(
+    const phaseCurrentS = loadRows.reduce(
         (sum, circuit) => sum + circuit.phaseCurrentS,
         0,
     );
-    const phaseCurrentT = distributionSummaries.reduce(
+    const phaseCurrentT = loadRows.reduce(
         (sum, circuit) => sum + circuit.phaseCurrentT,
         0,
     );
@@ -648,11 +708,15 @@ function GeneralRow({
 
     return (
         <tr className="border-b-4 border-violet-300 bg-violet-50/80 font-semibold dark:border-violet-900 dark:bg-violet-950/20">
-            <Mono value="TG · General" accent />
+            <Mono value={`${tgNode?.label ?? 'TG'} · General`} accent />
             <Mono value="CG1" accent />
             <Description
-                title="Resumen del TG General"
-                detail="Carga acumulada de todos los módulos conectados"
+                title={`Resumen de ${tgNode?.label ?? 'TG'}`}
+                detail={
+                    siteRows.length > 0
+                        ? `Módulos conectados + ${siteRows.length} salida(s) de la planta general`
+                        : 'Carga acumulada de todos los módulos conectados'
+                }
             />
             <Mono value="0" />
             <Mono value="0" />

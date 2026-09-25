@@ -22,13 +22,22 @@ import { ElectricalCtTable } from './electrical-network/components/ElectricalCtT
 import { ElectricalPalette } from './electrical-network/components/ElectricalPalette';
 import { ElectricalPropertiesPanel } from './electrical-network/components/ElectricalPropertiesPanel';
 import { ElectricalTreeView } from './electrical-network/components/ElectricalTreeView';
+import { SectionOptimizerPanel } from './electrical-network/components/SectionOptimizerPanel';
+import { SiteOutputsCtTable } from './electrical-network/components/SiteOutputsCtTable';
 import { VoltageDropAlertPanel } from './electrical-network/components/VoltageDropAlertPanel';
 import type { ModuleCtCircuit } from './electrical-network/domain/ctTableRows';
+import {
+    calculatePhaseBalance,
+    sitePhaseLoads,
+} from './electrical-network/domain/phaseBalance';
+import { calculateShortCircuits } from './electrical-network/domain/shortCircuit';
 import type {
     ElectricalNetworkSnapshot,
     ModuleElectricalPort,
 } from './electrical-network/domain/types';
 import { useElectricalNetwork } from './electrical-network/hooks/useElectricalNetwork';
+import { buildExteriorLightingPort } from './site/domain/exteriorLightingPort';
+import { analyzeSiteOutputs } from './site/domain/siteOutputs';
 import type { SiteData } from './site/domain/types';
 
 const defined = <T extends Record<string, unknown>>(values: T): Partial<T> =>
@@ -39,7 +48,7 @@ const defined = <T extends Record<string, unknown>>(values: T): Partial<T> =>
 export default function ElectricalNetworkPage({
     project,
     network,
-    ports,
+    ports: serverPorts,
     conductors,
     moduleScenes,
     generalModuleId,
@@ -58,6 +67,30 @@ export default function ElectricalNetworkPage({
     generalModuleId: number | null;
     siteData: SiteData | null;
 }) {
+    // Tablero virtual "Alumbrado exterior": los postes del emplazamiento como
+    // carga colgable del TG — SOLO los que no están ya cableados a un tablero
+    // de la planta (esos suben por su salida; si no, se contarían dos veces).
+    const exteriorPort = useMemo(
+        () =>
+            generalModuleId && siteData
+                ? buildExteriorLightingPort(
+                      siteData.elements,
+                      generalModuleId,
+                      {
+                          nominalVoltageV: network.data.settings.nominalVoltageV,
+                          phases: network.data.settings.phases,
+                          powerFactor: network.data.settings.defaultPowerFactor,
+                      },
+                      analyzeSiteOutputs(siteData, network.data.settings)
+                          .coveredLoadIds,
+                  )
+                : null,
+        [generalModuleId, siteData, network.data.settings],
+    );
+    const ports = useMemo(
+        () => (exteriorPort ? [...serverPorts, exteriorPort] : serverPorts),
+        [serverPorts, exteriorPort],
+    );
     const [modulesData, setModulesData] = useState(moduleScenes);
     const [workspaceView, setWorkspaceView] = useState<'diagram' | 'ct'>(
         'diagram',
@@ -239,6 +272,8 @@ export default function ElectricalNetworkPage({
         conductors,
         panelFeederGeometry,
         feederPaths,
+        siteData?.terrainScaleM || 1,
+        siteData,
     );
     const viewFeederInSitePlan = (edgeId: string) => {
         if (!generalModuleId) return;
@@ -393,6 +428,35 @@ export default function ElectricalNetworkPage({
             }),
         [modulesData, upstreamVoltageDropVByDevice, upstreamFeederLengthByDevice],
     );
+    // R3: cortocircuito por tablero (IEC 60909-0) + verificación térmica.
+    const shortCircuits = calculateShortCircuits(
+        editor.snapshot.data,
+        ports,
+        editor.calculations,
+    );
+    // R5: alimentadores cuya sección la fija el cable de la planta (el puente
+    // la reimpone): el optimizador no los toca.
+    const siteSectionCircuitIds = new Set(
+        (siteData?.circuits ?? [])
+            .filter((circuit) => circuit.sectionMm2 !== undefined)
+            .map((circuit) => circuit.id),
+    );
+    const siteFixedSectionEdgeIds = new Set(
+        editor.snapshot.data.edges
+            .filter(
+                (edge) =>
+                    edge.siteCircuitId &&
+                    siteSectionCircuitIds.has(edge.siteCircuitId),
+            )
+            .map((edge) => edge.id),
+    );
+    // R4: balance de fases por tablero trifásico (con las salidas de la planta).
+    const phaseBalance = calculatePhaseBalance(
+        editor.snapshot.data,
+        ports,
+        editor.calculations,
+        sitePhaseLoads(editor.snapshot.data, editor.siteOutputRows),
+    );
     const voltageDropAlertCount = editor.calculations.filter((item) =>
         ['non_compliant', 'warning', 'incomplete'].includes(item.status),
     ).length;
@@ -471,9 +535,46 @@ export default function ElectricalNetworkPage({
                         {editor.message ?? editor.issues[0]?.message}
                     </div>
                 )}
+                {editor.siteConflicts.length > 0 && (
+                    <details className="border-b border-amber-300 bg-amber-50/60 px-4 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+                        <summary className="cursor-pointer font-semibold">
+                            Planta general: {editor.siteConflicts.length}{' '}
+                            aviso(s) al sincronizar tableros y cables
+                        </summary>
+                        {editor.siteConflicts.some((conflict) =>
+                            conflict.code.startsWith('orphan'),
+                        ) && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (
+                                        window.confirm(
+                                            '¿Retirar de la red los equipos y cables que ya no existen en la planta general?',
+                                        )
+                                    ) {
+                                        editor.removeSiteOrphans();
+                                    }
+                                }}
+                                className="mt-1 rounded border border-amber-400 px-2 py-0.5 text-[11px] font-semibold hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900/40"
+                            >
+                                Retirar de la red lo que ya no está en la planta
+                            </button>
+                        )}
+                        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                            {editor.siteConflicts.map((conflict) => (
+                                <li
+                                    key={`${conflict.code}:${conflict.nodeId ?? ''}:${conflict.edgeId ?? ''}:${conflict.siteCircuitId ?? ''}`}
+                                >
+                                    {conflict.message}
+                                </li>
+                            ))}
+                        </ul>
+                    </details>
+                )}
                 <ElectricalCtSummary
                     calculations={editor.calculations}
                     data={editor.snapshot.data}
+                    shortCircuits={shortCircuits}
                 />
                 <nav className="flex items-center gap-1 border-b border-slate-200 bg-white px-4 py-2 dark:border-white/10 dark:bg-[#101218]">
                     <button
@@ -494,16 +595,28 @@ export default function ElectricalNetworkPage({
                     </button>
                 </nav>
                 {workspaceView === 'ct' ? (
-                    <ElectricalCtTable
-                        data={editor.snapshot.data}
-                        calculations={editor.calculations}
-                        moduleCtCircuits={moduleCtCircuits}
-                        onUpdateCircuit={updateModuleCircuit}
-                        issues={editor.issues}
-                        onUpdateSettings={editor.updateSettings}
-                        onUpdateEdge={editor.updateEdge}
-                        onSelect={editor.setSelectedId}
-                    />
+                    <div className="flex min-h-0 flex-1 flex-col">
+                        <ElectricalCtTable
+                            data={editor.snapshot.data}
+                            calculations={editor.calculations}
+                            moduleCtCircuits={moduleCtCircuits}
+                            onUpdateCircuit={updateModuleCircuit}
+                            issues={editor.issues}
+                            onUpdateSettings={editor.updateSettings}
+                            onUpdateEdge={editor.updateEdge}
+                            onSelect={editor.setSelectedId}
+                            siteOutputRows={editor.siteOutputRows}
+                        />
+                        <SiteOutputsCtTable
+                            rows={editor.siteOutputRows}
+                            data={editor.snapshot.data}
+                            calculations={editor.calculations}
+                            onSelect={(id) => {
+                                editor.setSelectedId(id);
+                                setWorkspaceView('diagram');
+                            }}
+                        />
+                    </div>
                 ) : (
                     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
                         <ElectricalPalette
@@ -540,11 +653,23 @@ export default function ElectricalNetworkPage({
                                 data={editor.snapshot.data}
                                 selectedId={editor.selectedId}
                                 calculations={editor.calculations}
+                                shortCircuits={shortCircuits}
+                                phaseBalance={phaseBalance}
                                 onUpdateEdge={editor.updateEdge}
                                 onUpdateNode={editor.updateNode}
                                 onChangeNodeParent={editor.changeNodeParent}
                                 onUpdateSettings={editor.updateSettings}
                                 onRemove={editor.removeById}
+                            />
+                            <SectionOptimizerPanel
+                                data={editor.snapshot.data}
+                                ports={ports}
+                                calculations={editor.calculations}
+                                conductors={conductors}
+                                shortCircuits={shortCircuits}
+                                fixedEdgeIds={siteFixedSectionEdgeIds}
+                                onUpdateEdge={editor.updateEdge}
+                                onSelect={editor.setSelectedId}
                             />
                             <VoltageDropAlertPanel
                                 data={editor.snapshot.data}

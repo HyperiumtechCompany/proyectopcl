@@ -121,7 +121,7 @@ export function VoltageDropAlertPanel({
                 )}
                 <div className="flex items-center gap-1 pt-1 text-emerald-600 dark:text-emerald-400">
                     <CheckCircle2 className="h-3.5 w-3.5" />
-                    {`Conformes: ${compliant.length} de ${calculations.length}`}
+                    {`Dentro del límite: ${compliant.length} de ${calculations.length}`}
                 </div>
             </div>
         </details>

@@ -2,16 +2,26 @@ import {
     circuitCurrent,
     selectBreaker,
     selectConductor,
-    voltageDropPct,
 } from '@/pages/dialux/electrical/engine/formulas';
 import type { ConductorCatalog } from '@/pages/dialux/electrical/engine/types';
-import type { ElectricalNetworkData, ModuleElectricalPort } from './types';
+import { feederVoltageDrop } from './feederVoltageDrop';
+import { networkRootIds } from './graph';
+import type {
+    ElectricalNetworkData,
+    ElectricalNode,
+    ModuleElectricalPort,
+} from './types';
 
 export interface EdgeCalculation {
     edgeId: string;
     lengthM: number;
     installedPowerW: number;
+    /** Demanda del tablero receptor, ya con su factor de simultaneidad. */
     demandPowerW: number;
+    /** Suma simple de las demandas de las salidas del tablero receptor (sin fs). */
+    outgoingDemandPowerW: number;
+    /** Factor de simultaneidad aplicado en el tablero receptor (1 = ninguno). */
+    simultaneityFactor: number;
     currentA: number;
     designCurrentA: number;
     ampacityA?: number;
@@ -21,23 +31,52 @@ export interface EdgeCalculation {
     ownVoltageDropPercent: number;
     accumulatedVoltageDropPercent: number;
     /**
-     * Caída de tensión acumulada en VOLTIOS desde el TG real (raíz de la red
-     * general) hasta el extremo receptor de este alimentador — incluye la
-     * caída propia de este tramo. A diferencia de `accumulatedVoltageDropPercent`,
-     * este valor en voltios es el que se inyecta como `upstreamVoltageDropV`
-     * en el tablero raíz de un módulo (ver `ElectricalNetwork.tsx`), para que
-     * su propio árbol TD→C encadene la caída real con la MISMA fórmula que
-     * usa `calculatePanelCircuitSummaries` dentro del módulo.
+     * Caída acumulada desde el suministro hasta el extremo receptor de este
+     * alimentador, en VOLTIOS expresados en la base de ESTE tramo
+     * (= `accumulatedVoltageDropPercent` × tensión del tablero receptor). Es
+     * lo que se inyecta como `upstreamVoltageDropV` en el tablero raíz de un
+     * módulo (ver `ElectricalNetwork.tsx`), en la misma base con la que el
+     * motor CT de la V1 evalúa ese tablero.
      */
     accumulatedVoltageDropV: number;
     status: 'complete' | 'warning' | 'non_compliant' | 'incomplete';
     warnings: string[];
+    /** Tensión, sistema y cos φ con que se evaluó el tramo (los usa el optimizador R5). */
+    voltageV?: number;
+    phases?: 1 | 3;
+    powerFactor?: number;
+}
+
+/** Factor de simultaneidad válido del tablero (0 < fs ≤ 1); si no, 1. */
+export function simultaneityFactorOf(node: ElectricalNode | undefined): number {
+    const fs = node?.simultaneityFactor;
+    return typeof fs === 'number' && fs > 0 && fs <= 1 ? fs : 1;
+}
+
+/**
+ * Factor de simultaneidad de REFERENCIA para un tablero de distribución según
+ * su número de circuitos de salida: IEC 61439-1 (factor de simultaneidad
+ * asignado supuesto) — 2–3 → 0,9; 4–5 → 0,8; 6–9 → 0,7; ≥ 10 → 0,6. Solo se
+ * SUGIERE en la interfaz (el usuario decide aplicarlo); verificar la edición
+ * vigente de la norma antes de citarlo.
+ */
+export function suggestedSimultaneityFactor(outgoingCircuits: number): number {
+    if (outgoingCircuits <= 1) return 1;
+    if (outgoingCircuits <= 3) return 0.9;
+    if (outgoingCircuits <= 5) return 0.8;
+    if (outgoingCircuits <= 9) return 0.7;
+    return 0.6;
 }
 
 export function calculateElectricalNetwork(
     network: ElectricalNetworkData,
     ports: ModuleElectricalPort[],
     conductors: ConductorCatalog[] = [],
+    /**
+     * Carga propia adicional por nodo (p.ej. las salidas de un TG de la
+     * Planta General hacia postes/tomacorrientes, `site/domain/siteOutputs`).
+     */
+    extraLoads: Map<string, { installed: number; demand: number }> = new Map(),
 ): EdgeCalculation[] {
     const portByNode = new Map(
         network.nodes
@@ -60,9 +99,22 @@ export function calculateElectricalNetwork(
         ]);
     }
 
-    const loadMemo = new Map<string, { installed: number; demand: number }>();
-    const loadAt = (nodeId: string): { installed: number; demand: number } => {
+    const nodeById = new Map(network.nodes.map((node) => [node.id, node]));
+    const loadMemo = new Map<
+        string,
+        { installed: number; demand: number; outgoingDemand: number; fs: number }
+    >();
+    // Guarda anti-ciclo: un dato con ciclo (que `validateElectricalNetwork`
+    // ya reporta) no debe colgar el cálculo con recursión infinita.
+    const loading = new Set<string>();
+    const loadAt = (
+        nodeId: string,
+    ): { installed: number; demand: number; outgoingDemand: number; fs: number } => {
         if (loadMemo.has(nodeId)) return loadMemo.get(nodeId)!;
+        if (loading.has(nodeId)) {
+            return { installed: 0, demand: 0, outgoingDemand: 0, fs: 1 };
+        }
+        loading.add(nodeId);
         const port = portByNode.get(nodeId);
         const downstream = (children.get(nodeId) ?? []).reduce(
             (total, edge) => {
@@ -74,21 +126,44 @@ export function calculateElectricalNetwork(
             },
             { installed: 0, demand: 0 },
         );
+        const extra = extraLoads.get(nodeId);
+        // Simultaneidad (R1): se aplica a las SALIDAS del tablero (hijos +
+        // salidas de la planta), nunca a su carga propia ni a la potencia
+        // instalada. Sin factor → 1 → suma simple (resultado anterior).
+        const fs = simultaneityFactorOf(nodeById.get(nodeId));
+        const outgoingDemand = (extra?.demand ?? 0) + downstream.demand;
         const result = {
             installed:
                 (port?.ownInstalledPowerW ?? port?.installedPowerW ?? 0) +
+                (extra?.installed ?? 0) +
                 downstream.installed,
             demand:
                 (port?.ownDemandPowerW ?? port?.demandPowerW ?? 0) +
-                downstream.demand,
+                fs * outgoingDemand,
+            outgoingDemand,
+            fs,
         };
         loadMemo.set(nodeId, result);
+        loading.delete(nodeId);
         return result;
     };
-    if (network.rootNodeId) loadAt(network.rootNodeId);
+    const roots = networkRootIds(network);
+    for (const root of roots) loadAt(root);
 
     const results: EdgeCalculation[] = [];
-    const walk = (nodeId: string, upstreamV: number): void => {
+    const walked = new Set<string>();
+    /**
+     * `upstreamPercent` = caída acumulada (%) hasta `nodeId`. Se acumulan
+     * PORCENTAJES, no voltios: en un sistema en estrella balanceado (p.ej.
+     * 380/220 V) el % de un tramo trifásico es el mismo referido a la tensión
+     * de línea o a la de fase, así que la suma de % es exacta al pasar de un
+     * tramo 3Φ (√3·I·Z, base de línea) a uno 1Φ (2·I·Z, base de fase). Sumar
+     * VOLTIOS de ambas bases sobrestimaba la caída (auditoría
+     * `dialux-electrical-reviewer`, Fase 6).
+     */
+    const walk = (nodeId: string, upstreamPercent: number): void => {
+        if (walked.has(nodeId)) return;
+        walked.add(nodeId);
         for (const edge of children.get(nodeId) ?? []) {
             const load = loadAt(edge.targetNodeId);
             const powerFactor =
@@ -104,9 +179,19 @@ export function calculateElectricalNetwork(
             // nodos sin puerto propio (Medidor, TG) sí usan el voltaje
             // general, porque ahí no hay un circuito receptor más específico.
             const targetPort = portByNode.get(edge.targetNodeId);
+            // Tableros sin puerto (TG/sub tablero de la planta, ATS): su
+            // sistema propio si se definió en Red y CT; si no, el general.
+            const targetNode = nodeById.get(edge.targetNodeId);
+            const edgePhases =
+                targetPort?.phases ?? targetNode?.phases ?? network.settings.phases;
             const edgeVoltageV =
-                targetPort?.nominalVoltageV || network.settings.nominalVoltageV;
-            const edgePhases = targetPort?.phases ?? network.settings.phases;
+                targetPort?.nominalVoltageV ||
+                targetNode?.nominalVoltageV ||
+                (edgePhases === 1 &&
+                network.settings.phases === 3 &&
+                network.settings.connectionType === 'star'
+                    ? network.settings.nominalVoltageV / Math.sqrt(3)
+                    : network.settings.nominalVoltageV);
             const currentA = circuitCurrent(
                 load.demand,
                 edgeVoltageV,
@@ -131,22 +216,24 @@ export function calculateElectricalNetwork(
             const selected = catalog.find(
                 (item) => item.section_mm2 === edge.sectionMm2,
             );
-            const ownPercent = voltageDropPct(
-                currentA,
-                lengthM,
-                edge.sectionMm2,
-                edgeVoltageV,
-                edgePhases,
-                material,
-            );
-            const ownVoltageDropV = (ownPercent * edgeVoltageV) / 100;
-            // Los VOLTIOS acumulados sí se suman sin ambigüedad (son una
-            // cantidad física, no dependen de la base elegida); el % de
-            // caída acumulada se recalcula aquí contra el voltaje de ESTE
-            // tramo — nunca sumando porcentajes ya calculados con voltajes
-            // distintos aguas arriba, que es matemáticamente inválido.
-            const accumulatedV = upstreamV + ownVoltageDropV;
-            const accumulatedPercent = (accumulatedV / edgeVoltageV) * 100;
+            // IEC 60364-5-52 Anexo G (cos φ + reactancia), ver feederVoltageDrop.ts.
+            const { dropPercent: ownPercent, dropV: ownVoltageDropV } =
+                feederVoltageDrop({
+                    currentA,
+                    lengthM,
+                    sectionMm2: edge.sectionMm2,
+                    voltageV: edgeVoltageV,
+                    phases: edgePhases,
+                    material,
+                    powerFactor,
+                    temperatureC: network.settings.workingTemperatureC,
+                });
+            // % acumulado exacto (ver `walk`); los voltios acumulados se
+            // expresan en la base de ESTE tramo (la del tablero que lo
+            // recibe) — así se inyectan como `upstreamVoltageDropV` al motor
+            // CT de la V1 en la misma base con la que ese tablero calcula.
+            const accumulatedPercent = upstreamPercent + ownPercent;
+            const accumulatedV = (accumulatedPercent / 100) * edgeVoltageV;
             const suggestion = selectConductor({
                 designCurrentA,
                 lengthM,
@@ -169,7 +256,11 @@ export function calculateElectricalNetwork(
                     'El módulo todavía no publica máxima demanda. Guarda o recalcula su documento eléctrico.',
                 );
             }
-            if (!selected) {
+            if (!selected && catalog.length === 0) {
+                warnings.push(
+                    `No hay conductores de ${material} en el catálogo: la caída se calcula con su resistividad, pero no se verifica la ampacidad. Cárgalos en Catálogos.`,
+                );
+            } else if (!selected) {
                 warnings.push(
                     `La sección ${edge.sectionMm2} mm² no existe para ${edge.conductorType || material}.`,
                 );
@@ -208,6 +299,8 @@ export function calculateElectricalNetwork(
                 lengthM,
                 installedPowerW: load.installed,
                 demandPowerW: load.demand,
+                outgoingDemandPowerW: load.outgoingDemand,
+                simultaneityFactor: load.fs,
                 currentA,
                 designCurrentA,
                 ampacityA: selected?.ampacity_a,
@@ -230,11 +323,14 @@ export function calculateElectricalNetwork(
                             ? 'warning'
                             : 'complete',
                 warnings,
+                voltageV: edgeVoltageV,
+                phases: edgePhases,
+                powerFactor,
             });
-            walk(edge.targetNodeId, accumulatedV);
+            walk(edge.targetNodeId, accumulatedPercent);
         }
     };
-    if (network.rootNodeId) walk(network.rootNodeId, 0);
+    for (const root of roots) walk(root, 0);
 
     return results;
 }

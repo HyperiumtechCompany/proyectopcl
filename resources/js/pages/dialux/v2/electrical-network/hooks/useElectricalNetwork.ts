@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ConductorCatalog } from '@/pages/dialux/electrical/engine/types';
 import { syncFeederLengths } from '../../site/domain/feederSync';
-import type { FeederPath } from '../../site/domain/types';
-import { calculateElectricalNetwork } from '../domain/calculations';
+import {
+    applySiteToNetwork,
+    type SiteBridgeOptions,
+} from '../../site/domain/siteNetworkBridge';
+import { calculateNetworkWithSite } from '../../site/domain/siteNetworkLive';
+import type { FeederPath, SiteData } from '../../site/domain/types';
 import { canConnect, validateElectricalNetwork } from '../domain/graph';
 import type {
     ElectricalEdge,
@@ -85,6 +89,22 @@ export function deriveAutoEdgeLength(
     return { lengthMode: 'plan', horizontalLengthM, verticalLengthM };
 }
 
+/** Opciones del puente planta → red: tableros de cada módulo y su subida real. */
+function siteBridgeOptions(
+    ports: ModuleElectricalPort[],
+    panelFeederGeometry: PanelFeederGeometry,
+): SiteBridgeOptions {
+    return {
+        ports,
+        panelVerticalM: (panelId) => {
+            const geometry = panelFeederGeometry[panelId];
+            return geometry
+                ? geometry.floorElevationM + geometry.mountingHeightM
+                : undefined;
+        },
+    };
+}
+
 export function useElectricalNetwork(
     projectId: number,
     initial: ElectricalNetworkSnapshot,
@@ -92,13 +112,35 @@ export function useElectricalNetwork(
     conductors: ConductorCatalog[],
     panelFeederGeometry: PanelFeederGeometry = {},
     feederPaths: FeederPath[] = [],
+    terrainScaleM = 1,
+    /** Planta General: sus tableros y cables se incorporan solos a la red. */
+    siteData: SiteData | null = null,
 ) {
-    const [snapshot, setSnapshot] = useState(initial);
+    // La planta se incorpora al CARGAR (automático, sin botón) y de nuevo
+    // tras cada edición (`change`), así un TG que se reconecta a otro medidor
+    // suelta su suministro propio al instante. Es idempotente: si no hay nada
+    // nuevo en la planta, la red queda igual.
+    const [initialBridge] = useState(() =>
+        applySiteToNetwork(
+            initial.data,
+            siteData,
+            siteBridgeOptions(ports, panelFeederGeometry),
+        ),
+    );
+    const [snapshot, setSnapshot] = useState(() =>
+        initialBridge.changed
+            ? { ...initial, data: initialBridge.data }
+            : initial,
+    );
     const [selectedId, setSelectedId] = useState<string>();
     const [connectingFrom, setConnectingFrom] = useState<string>();
     const [saving, setSaving] = useState(false);
-    const [dirty, setDirty] = useState(false);
-    const [message, setMessage] = useState<string>();
+    const [dirty, setDirty] = useState(initialBridge.changed);
+    const [message, setMessage] = useState<string | undefined>(() =>
+        initialBridge.addedNodes + initialBridge.addedEdges > 0
+            ? `Desde la planta general se incorporaron ${initialBridge.addedNodes} equipo(s) y ${initialBridge.addedEdges} alimentador(es). Guarda para conservar posiciones y ediciones.`
+            : undefined,
+    );
     // Resincroniza las longitudes AUTOMÁTICAS (`lengthMode !== 'manual'`)
     // cada vez que cambia la geometría real de los módulos — altura de
     // montaje, elevación de piso, posición del tablero — no solo al montar
@@ -144,7 +186,7 @@ export function useElectricalNetwork(
         // Si un alimentador tiene un trazado vinculado en el emplazamiento,
         // ese trazado manda sobre cualquier otro modo (incluso si acaba de
         // vincularse recién: pasa a 'site' aquí mismo).
-        const synced = syncFeederLengths(edges, feederPaths);
+        const synced = syncFeederLengths(edges, feederPaths, terrainScaleM);
         if (synced.some((edge, index) => edge !== edges[index])) {
             edges = synced;
             changed = true;
@@ -161,14 +203,26 @@ export function useElectricalNetwork(
         // fórmula canónica). No se agrega `snapshot` completo para no
         // reejecutar esto en cada edición manual del usuario.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [panelFeederGeometry, feederPaths, snapshot.data.edges.length]);
+    }, [panelFeederGeometry, feederPaths, terrainScaleM, snapshot.data.edges.length]);
     const issues = useMemo(
         () => validateElectricalNetwork(snapshot.data),
         [snapshot.data],
     );
-    const calculations = useMemo(
-        () => calculateElectricalNetwork(snapshot.data, ports, conductors),
-        [snapshot.data, ports, conductors],
+    // Con la planta: las salidas de sus tableros (postes, tomacorrientes…)
+    // suman carga a su TG/TD y tienen sus propias filas CT.
+    const { calculations, outputRows: siteOutputRows } = useMemo(
+        () =>
+            calculateNetworkWithSite(snapshot.data, siteData, ports, conductors),
+        [snapshot.data, siteData, ports, conductors],
+    );
+    const siteConflicts = useMemo(
+        () =>
+            applySiteToNetwork(
+                snapshot.data,
+                siteData,
+                siteBridgeOptions(ports, panelFeederGeometry),
+            ).conflicts,
+        [snapshot.data, siteData, ports, panelFeederGeometry],
     );
 
     const change = (
@@ -176,7 +230,14 @@ export function useElectricalNetwork(
             data: ElectricalNetworkSnapshot['data'],
         ) => ElectricalNetworkSnapshot['data'],
     ) => {
-        setSnapshot((current) => ({ ...current, data: mutate(current.data) }));
+        setSnapshot((current) => ({
+            ...current,
+            data: applySiteToNetwork(
+                mutate(current.data),
+                siteData,
+                siteBridgeOptions(ports, panelFeederGeometry),
+            ).data,
+        }));
         setDirty(true);
     };
     const moveNode = (nodeId: string, position: Point) =>
@@ -195,6 +256,26 @@ export function useElectricalNetwork(
         }));
     const changeNodeParent = (nodeId: string, parentId: string) => {
         if (parentId === nodeId) return;
+        const current = snapshot.data.nodes.find((node) => node.id === nodeId);
+        // TG de la planta: "Suministro propio" crea su cadena Suministro →
+        // Medidor; elegir otro origen vuelve al modo normal.
+        if (current?.type === 'main_panel' && current.siteElementId) {
+            change((data) => ({
+                ...data,
+                nodes: data.nodes.map((node) =>
+                    node.id === nodeId
+                        ? { ...node, supplyMode: parentId ? undefined : 'own' }
+                        : node,
+                ),
+                edges: parentId
+                    ? data.edges
+                    : data.edges.filter((edge) => edge.targetNodeId !== nodeId),
+            }));
+            if (!parentId) {
+                setMessage(`${current.label} ahora tiene su propio suministro y medidor.`);
+                return;
+            }
+        }
         if (!parentId) {
             change((data) => ({
                 ...data,
@@ -246,7 +327,7 @@ export function useElectricalNetwork(
         });
         setMessage('Tablero alimentador actualizado. Longitud recalculada.');
     };
-    const connectModuleToTg = (moduleId: number) => {
+    const connectModuleToTg = (moduleId: number, parentNodeId?: string) => {
         const modulePorts = ports.filter((port) => port.moduleId === moduleId);
         if (modulePorts.length === 0) return;
         change((data) => {
@@ -295,7 +376,10 @@ export function useElectricalNetwork(
                 }
             });
 
-            const tg = nodes.find((node) => node.type === 'main_panel');
+            const tg =
+                (parentNodeId &&
+                    nodes.find((node) => node.id === parentNodeId)) ||
+                nodes.find((node) => node.type === 'main_panel');
             if (!tg) return { ...data, nodes };
             let edges = [...data.edges];
             const addEdge = (
@@ -367,7 +451,7 @@ export function useElectricalNetwork(
                     targetId,
                     parentId
                         ? `${parentPort?.panelLabel ?? 'Tablero'} → ${port.panelLabel}`
-                        : `TG → ${port.moduleName}: ${port.panelLabel}`,
+                        : `${tg.label} → ${port.moduleName}: ${port.panelLabel}`,
                     deriveAutoEdgeLength(
                         { horizontalLengthM: port.feederLengthM ?? 0 },
                         parentId
@@ -485,6 +569,55 @@ export function useElectricalNetwork(
         }));
         setSelectedId(undefined);
     };
+    /**
+     * Retira de la red lo que ya no existe en la planta (objeto o cable
+     * borrado allá). Un nodo creado desde la planta se elimina; uno que la red
+     * ya tenía (el TG/suministro original que la planta "reclamó") solo se
+     * desvincula. Después el puente vuelve a colgar lo que quedó sin
+     * alimentador (p.ej. el TG vuelve al medidor principal).
+     */
+    const removeSiteOrphans = () => {
+        const orphanNodeIds = new Set(
+            siteConflicts
+                .filter((conflict) => conflict.code === 'orphan-node')
+                .map((conflict) => conflict.nodeId),
+        );
+        const orphanEdgeIds = new Set(
+            siteConflicts
+                .filter((conflict) => conflict.code === 'orphan-edge')
+                .map((conflict) => conflict.edgeId),
+        );
+        if (orphanNodeIds.size + orphanEdgeIds.size === 0) return;
+        change((data) => {
+            const dropped = new Set(
+                data.nodes
+                    .filter(
+                        (node) =>
+                            orphanNodeIds.has(node.id) && node.origin === 'site',
+                    )
+                    .map((node) => node.id),
+            );
+            return {
+                ...data,
+                nodes: data.nodes
+                    .filter((node) => !dropped.has(node.id))
+                    .map((node) =>
+                        orphanNodeIds.has(node.id)
+                            ? { ...node, siteElementId: undefined }
+                            : node,
+                    ),
+                edges: data.edges.filter(
+                    (edge) =>
+                        !orphanEdgeIds.has(edge.id) &&
+                        !dropped.has(edge.sourceNodeId) &&
+                        !dropped.has(edge.targetNodeId),
+                ),
+            };
+        });
+        setMessage(
+            'Se retiró de la red lo que ya no existe en la planta general.',
+        );
+    };
     const removeSelected = () => {
         if (selectedId) removeById(selectedId);
     };
@@ -510,6 +643,9 @@ export function useElectricalNetwork(
         ports,
         issues,
         calculations,
+        siteOutputRows,
+        siteConflicts,
+        removeSiteOrphans,
         selectedId,
         setSelectedId,
         connectingFrom,

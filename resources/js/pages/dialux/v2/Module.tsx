@@ -3,23 +3,17 @@ import { useEffect, useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import { EditorLayout } from '@/pages/dialux/components/EditorLayout';
 import { ensureStandardDataLoaded } from '@/pages/dialux/hooks/normativeRemoteData';
-import {
-    useEditorStore,
-    type Project as EditorProject,
-} from '@/pages/dialux/hooks/useEditorStore';
+import { useEditorStore, type Project as EditorProject } from '@/pages/dialux/hooks/useEditorStore';
 import type { BreadcrumbItem } from '@/types';
 import { GeneralWorkspaceTabs } from './components/GeneralWorkspaceTabs';
+import { ModuleLoadingOverlay } from './components/ModuleLoadingOverlay';
 import { ModuleSidebar } from './components/ModuleSidebar';
 import { useDialuxModuleSync } from './hooks/useDialuxModuleSync';
 import { useModuleActions } from './hooks/useModuleActions';
 import { createBlankModuleProject } from './lib/createBlankModuleProject';
 import { SiteEditor2D } from './site/components/SiteEditor2D';
 import { SiteViewer3DPage } from './site/components/SiteViewer3DPage';
-import type {
-    DialuxV2EditorModule,
-    DialuxV2Module,
-    DialuxV2Project,
-} from './types';
+import type { DialuxV2EditorModule, DialuxV2Module, DialuxV2Project } from './types';
 
 interface Props {
     project: Pick<DialuxV2Project, 'id' | 'name'>;
@@ -28,17 +22,10 @@ interface Props {
     initialView?: '2d' | '3d';
 }
 
-export default function DialuxV2Module({
-    project,
-    module,
-    modules,
-    initialView = '2d',
-}: Props) {
+export default function DialuxV2Module({ project, module, modules, initialView = '2d' }: Props) {
     const setProject = useEditorStore((state) => state.setProject);
     const setActiveScene = useEditorStore((state) => state.setActiveScene);
-    const setDefaultStandard = useEditorStore(
-        (state) => state.setDefaultRoomNormativeStandard,
-    );
+    const setDefaultStandard = useEditorStore((state) => state.setDefaultRoomNormativeStandard);
     const resetHistory = useEditorStore((state) => state.resetHistory);
     const set3DView = useEditorStore((state) => state.set3DView);
     // "Listo" es POR módulo+vista: al cambiar de módulo (misma instancia de
@@ -58,11 +45,11 @@ export default function DialuxV2Module({
     useEffect(() => {
         const initial: EditorProject = module.data
             ? {
-                  ...module.data,
-                  id: String(project.id),
-                  moduleId: String(module.id),
-                  name: module.name,
-              }
+                ...module.data,
+                id: String(project.id),
+                moduleId: String(module.id),
+                name: module.name,
+            }
             : createBlankModuleProject(project.id, module.id, module.name);
 
         setProject(initial);
@@ -90,9 +77,7 @@ export default function DialuxV2Module({
     // navega, así el editor 2D y su motor CAD (que reparsear el DWG de fondo
     // tarda segundos) y la escena 3D quedan montados. Solo se oculta el
     // inactivo, igual que hace el editor de interiores (EditorLayout).
-    const [generalView, setGeneralView] = useState<'2d' | '3d'>(
-        initialView === '3d' ? '3d' : '2d',
-    );
+    const [generalView, setGeneralView] = useState<'2d' | '3d'>(initialView === '3d' ? '3d' : '2d');
     // El visor 3D (motor Babylon + contexto WebGL) se monta la primera vez
     // que se abre su pestaña, no al entrar al módulo: entrar al Módulo
     // General ya no paga ese costo si solo se trabaja en 2D. Una vez
@@ -122,7 +107,7 @@ export default function DialuxV2Module({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${module.name}” ${project.name}`} />
-            <div className="flex h-[calc(100vh-4rem)] min-h-0 overflow-hidden">
+            <div className="dialux-forms flex h-[calc(100vh-4rem)] min-h-0 overflow-hidden">
                 <ModuleSidebar
                     projectId={project.id}
                     modules={modules}
@@ -143,9 +128,24 @@ export default function DialuxV2Module({
                         )}
                         <div className="relative min-h-0 flex-1 overflow-hidden">
                             {!ready ? (
-                                <div className="flex h-full items-center justify-center text-xs text-slate-400">
-                                    Cargando módulo…
-                                </div>
+                                <ModuleLoadingOverlay
+                                    title={`Cargando ${module.name}`}
+                                    stages={[
+                                        {
+                                            id: 'data',
+                                            label: 'Datos del módulo',
+                                            status: 'active',
+                                        },
+                                        {
+                                            id: 'editor',
+                                            label:
+                                                module.kind === 'general'
+                                                    ? 'Editor de emplazamiento y plano'
+                                                    : 'Editor del módulo y plano',
+                                            status: 'pending',
+                                        },
+                                    ]}
+                                />
                             ) : module.kind === 'general' ? (
                                 <>
                                     <div

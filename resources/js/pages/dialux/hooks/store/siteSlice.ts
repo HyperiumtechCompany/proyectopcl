@@ -1,13 +1,17 @@
 import { v4 as uuidv4 } from 'uuid';
 import type {
     FeederPath,
+    FeederRoute,
     GeoLocation,
     ImportedSitePlan,
     Point2D,
+    SiteCircuit,
     SiteData,
     SiteElement,
     SiteElementType,
+    SiteNormRegion,
 } from '../../v2/site/domain/types';
+import { followMovedElements } from '../../v2/site/domain/wireFollow';
 import { createDefaultSiteLayers } from '../../v2/site/lib/siteDefaults';
 import type { EditorSlice } from './sliceTypes';
 
@@ -48,6 +52,25 @@ export interface SiteSlice {
     ) => string;
     updateFeederPath: (id: string, waypoints: Point2D[]) => void;
     removeFeederPath: (id: string) => void;
+    /** Tendido aéreo/subterráneo de un alimentador (`undefined` = plano). */
+    setFeederRoute: (
+        id: string,
+        route: FeederRoute | undefined,
+        segmentModes?: Array<'aerial' | 'underground'>,
+    ) => void;
+    /** Cableado de instalaciones (postes, tomacorrientes, tableros…) — no es un alimentador de la red troncal. */
+    addSiteCircuit: (
+        circuit: Omit<SiteCircuit, 'id' | 'calculatedLengthM'> & {
+            calculatedLengthM?: number;
+        },
+    ) => string;
+    updateSiteCircuit: (id: string, patch: Partial<SiteCircuit>) => void;
+    removeSiteCircuit: (id: string) => void;
+    setSiteCircuitRoute: (
+        id: string,
+        route: FeederRoute | undefined,
+        segmentModes?: Array<'aerial' | 'underground'>,
+    ) => void;
     setSiteLocation: (location: GeoLocation) => void;
     toggleSiteLayer: (layerId: string) => void;
     lockSiteLayer: (layerId: string, locked: boolean) => void;
@@ -56,6 +79,10 @@ export interface SiteSlice {
     removeImportedPlan: () => void;
     /** Fija la escala real del emplazamiento: metros por unidad de coordenada. */
     setTerrainScale: (metersPerUnit: number) => void;
+    /** Regiones normativas activas para verificar iluminación exterior. */
+    setSiteNormRegions: (regions: SiteNormRegion[]) => void;
+    /** Fija el bloqueo de la base (terreno, cerco, plataformas). */
+    setSiteBaseLocked: (locked: boolean) => void;
 }
 
 function defaultSiteData(): SiteData {
@@ -67,6 +94,7 @@ function defaultSiteData(): SiteData {
         canvasHeight: 1200,
         elements: [],
         feederPaths: [],
+        circuits: [],
         layers: createDefaultSiteLayers(),
     };
 }
@@ -110,15 +138,23 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
     updateSiteElement: (id, patch) =>
         set((state) => {
             if (!state.project?.site) return state;
+            const site = {
+                ...state.project.site,
+                elements: state.project.site.elements.map((item) =>
+                    item.id === id ? { ...item, ...patch } : item,
+                ),
+            };
             return {
                 project: {
                     ...state.project,
-                    site: {
-                        ...state.project.site,
-                        elements: state.project.site.elements.map((item) =>
-                            item.id === id ? { ...item, ...patch } : item,
-                        ),
-                    },
+                    // Los cables que pasan por el objeto lo siguen al moverlo.
+                    site: patch.vertices
+                        ? followMovedElements(
+                              state.project.site.elements,
+                              site,
+                              [id],
+                          )
+                        : site,
                 },
             };
         }),
@@ -284,23 +320,29 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
     moveSiteElements: (origins, dx, dy) =>
         set((state) => {
             if (!state.project?.site) return state;
+            const site = {
+                ...state.project.site,
+                elements: state.project.site.elements.map((item) => {
+                    const origin = origins[item.id];
+                    if (!origin) return item;
+                    return {
+                        ...item,
+                        vertices: origin.map((vertex) => ({
+                            x: vertex.x + dx,
+                            y: vertex.y + dy,
+                        })),
+                    };
+                }),
+            };
             return {
                 project: {
                     ...state.project,
-                    site: {
-                        ...state.project.site,
-                        elements: state.project.site.elements.map((item) => {
-                            const origin = origins[item.id];
-                            if (!origin) return item;
-                            return {
-                                ...item,
-                                vertices: origin.map((vertex) => ({
-                                    x: vertex.x + dx,
-                                    y: vertex.y + dy,
-                                })),
-                            };
-                        }),
-                    },
+                    // Los cables que pasan por los objetos arrastrados los siguen.
+                    site: followMovedElements(
+                        state.project.site.elements,
+                        site,
+                        Object.keys(origins),
+                    ),
                 },
             };
         }),
@@ -369,6 +411,21 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
                 },
             };
         }),
+    setFeederRoute: (id, route, segmentModes) =>
+        set((state) => {
+            if (!state.project?.site) return state;
+            return {
+                project: {
+                    ...state.project,
+                    site: {
+                        ...state.project.site,
+                        feederPaths: state.project.site.feederPaths.map((path) =>
+                            path.id === id ? { ...path, route, segmentModes } : path,
+                        ),
+                    },
+                },
+            };
+        }),
     removeFeederPath: (id) =>
         set((state) => {
             if (!state.project?.site) return state;
@@ -379,6 +436,90 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
                         ...state.project.site,
                         feederPaths: state.project.site.feederPaths.filter(
                             (path) => path.id !== id,
+                        ),
+                    },
+                },
+            };
+        }),
+    addSiteCircuit: (circuit) => {
+        const id = uuidv4();
+        set((state) => {
+            if (!state.project) return state;
+            const site = state.project.site ?? defaultSiteData();
+            return {
+                project: {
+                    ...state.project,
+                    site: {
+                        ...site,
+                        circuits: [
+                            ...(site.circuits ?? []),
+                            {
+                                ...circuit,
+                                id,
+                                calculatedLengthM:
+                                    circuit.calculatedLengthM ??
+                                    polylineLength(circuit.waypoints),
+                            },
+                        ],
+                    },
+                },
+            };
+        });
+        return id;
+    },
+    updateSiteCircuit: (id, patch) =>
+        set((state) => {
+            if (!state.project?.site) return state;
+            return {
+                project: {
+                    ...state.project,
+                    site: {
+                        ...state.project.site,
+                        circuits: (state.project.site.circuits ?? []).map(
+                            (circuit) =>
+                                circuit.id === id
+                                    ? {
+                                          ...circuit,
+                                          ...patch,
+                                          calculatedLengthM: patch.waypoints
+                                              ? polylineLength(patch.waypoints)
+                                              : (patch.calculatedLengthM ??
+                                                circuit.calculatedLengthM),
+                                      }
+                                    : circuit,
+                        ),
+                    },
+                },
+            };
+        }),
+    removeSiteCircuit: (id) =>
+        set((state) => {
+            if (!state.project?.site) return state;
+            return {
+                project: {
+                    ...state.project,
+                    site: {
+                        ...state.project.site,
+                        circuits: (state.project.site.circuits ?? []).filter(
+                            (circuit) => circuit.id !== id,
+                        ),
+                    },
+                },
+            };
+        }),
+    setSiteCircuitRoute: (id, route, segmentModes) =>
+        set((state) => {
+            if (!state.project?.site) return state;
+            return {
+                project: {
+                    ...state.project,
+                    site: {
+                        ...state.project.site,
+                        circuits: (state.project.site.circuits ?? []).map(
+                            (circuit) =>
+                                circuit.id === id
+                                    ? { ...circuit, route, segmentModes }
+                                    : circuit,
                         ),
                     },
                 },
@@ -458,6 +599,26 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
             delete site.importedPlan;
             return {
                 project: { ...state.project, site },
+            };
+        }),
+    setSiteBaseLocked: (locked) =>
+        set((state) => {
+            if (!state.project?.site) return state;
+            return {
+                project: {
+                    ...state.project,
+                    site: { ...state.project.site, baseLocked: locked },
+                },
+            };
+        }),
+    setSiteNormRegions: (regions) =>
+        set((state) => {
+            if (!state.project?.site) return state;
+            return {
+                project: {
+                    ...state.project,
+                    site: { ...state.project.site, normRegions: regions },
+                },
             };
         }),
     setTerrainScale: (metersPerUnit) =>

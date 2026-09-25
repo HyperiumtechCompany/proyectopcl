@@ -50,6 +50,7 @@ export function useSiteKeyboard(editor: UseSiteEditorReturn, isActive: boolean) 
                 else if (ed.calibrationPoints.length > 0) ed.cancelCalibration();
                 else if (ed.activeTool !== 'select') ed.startTool('select');
                 else if (ed.selectedElementId) ed.selectElement(null);
+                else if (ed.selectedWireId) ed.selectWire(null);
                 else return;
                 handled();
                 return;

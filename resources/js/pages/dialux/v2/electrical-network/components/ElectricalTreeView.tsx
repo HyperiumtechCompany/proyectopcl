@@ -1,3 +1,4 @@
+import { networkRootIds } from '../domain/graph';
 import type { ElectricalNetworkData } from '../domain/types';
 
 export function ElectricalTreeView({
@@ -35,10 +36,11 @@ export function ElectricalTreeView({
             </li>
         );
     };
+    const roots = networkRootIds(data);
     return (
         <ul className="p-3">
-            {data.rootNodeId ? (
-                branch(data.rootNodeId)
+            {roots.length > 0 ? (
+                roots.map((root) => branch(root))
             ) : (
                 <li className="text-xs text-slate-500">Sin raíz</li>
             )}

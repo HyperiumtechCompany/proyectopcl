@@ -124,4 +124,34 @@ describe('site/domain/siteNorms', () => {
         ).toBe(true);
         expect(evaluatePlatformRetention(0)).toEqual([]);
     });
+
+    it('escalera con descanso: reparte los peldaños en tramos y deja descanso entre ellos', () => {
+        const flights = planStairFlights(3.5, 1.2, 12);
+        expect(flights.length).toBeGreaterThan(1);
+        expect(flights[0].landingLengthM).toBeGreaterThan(0);
+        expect(flights[flights.length - 1].landingLengthM).toBe(0);
+    });
+
+    it('escalera recta continua: un solo tramo con todos los peldaños y sin descanso', () => {
+        const flights = planStairFlights(3.5, 1.2, 12, 'U', true);
+        expect(flights).toHaveLength(1);
+        expect(flights[0].landingLengthM).toBe(0);
+        expect(flights[0].turnAfterDeg).toBe(0);
+        expect(flights[0].riseM).toBeCloseTo(3.5, 2);
+        // Mismo total de peldaños que con descansos.
+        const stepped = planStairFlights(3.5, 1.2, 12);
+        const steps = Math.round(flights[0].lengthM / 0.3);
+        const steppedSteps = stepped.reduce((s, f) => s + Math.round(f.lengthM / 0.3), 0);
+        expect(steps).toBe(steppedSteps);
+    });
+
+    it('una escalera continua muy alta se marca para revisar (más de 18 peldaños seguidos)', () => {
+        const findings = evaluateStair({
+            fromElevationM: 0,
+            toElevationM: 3.5,
+            widthM: 1.2,
+            continuous: true,
+        });
+        expect(findings.some((f) => f.level === 'review' && f.text.includes('continua'))).toBe(true);
+    });
 });

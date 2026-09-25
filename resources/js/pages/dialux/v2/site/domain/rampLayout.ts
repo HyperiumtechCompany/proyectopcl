@@ -294,8 +294,12 @@ export function stairAsRampConfig(
             stair.widthM,
             stair.maxStepsPerFlight ?? STAIR_NORM.maxStepsBeforeLanding,
             stair.run,
+            stair.landings === 'none',
+            stair.landingDepthM,
         ).map((flight) => ({ ...flight, direction })),
         arrivalLandingM: stair.arrivalLandingM ?? STAIR_NORM.landingM,
         reversed: stair.reversed,
+        fitToPolygon: stair.fitToPolygon,
+        handrailHeightM: stair.handrailHeightM,
     };
 }

@@ -172,3 +172,89 @@ test('another user cannot read or update the project electrical network', functi
 
     $this->actingAs($intruder)->getJson(route('dialux-v2.projects.electrical-network.show', $project))->assertForbidden();
 });
+
+test('a network with one supply per site TG and site-linked feeders is persisted intact', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $snapshot = $this->actingAs($user)
+        ->getJson(route('dialux-v2.projects.electrical-network.show', $project))
+        ->assertSuccessful()
+        ->json('network');
+
+    $edge = fn (string $id, string $source, string $target, array $extra = []): array => [
+        'id' => $id, 'sourceNodeId' => $source, 'targetNodeId' => $target,
+        'lengthMode' => 'manual', 'horizontalLengthM' => 10, 'verticalLengthM' => 0,
+        'conductorType' => 'N2XOH', 'conductorMaterial' => 'copper', 'sectionMm2' => 10,
+        'wireConfiguration' => '3F+N+T', ...$extra,
+    ];
+    $snapshot['data']['nodes'][2]['siteElementId'] = 'tg-a';
+    $snapshot['data']['nodes'][] = ['id' => 'site-supply-tg-b', 'type' => 'service', 'label' => 'Suministro TG-B', 'origin' => 'site', 'siteElementId' => 'tg-b', 'position' => ['x' => 80, 'y' => 400]];
+    $snapshot['data']['nodes'][] = ['id' => 'site-meter-tg-b', 'type' => 'meter', 'label' => 'Medidor TG-B', 'origin' => 'site', 'siteElementId' => 'tg-b', 'position' => ['x' => 320, 'y' => 400]];
+    $snapshot['data']['nodes'][] = ['id' => 'site-tg-b', 'type' => 'main_panel', 'label' => 'TG-B', 'origin' => 'site', 'siteElementId' => 'tg-b', 'supplyMode' => 'own', 'position' => ['x' => 560, 'y' => 400]];
+    $snapshot['data']['nodes'][] = ['id' => 'site-td-1', 'type' => 'site_panel', 'label' => 'TD bombas', 'origin' => 'site', 'siteElementId' => 'td-1', 'phases' => 1, 'nominalVoltageV' => 220, 'position' => ['x' => 820, 'y' => 400]];
+    $snapshot['data']['edges'][] = $edge('site-supply-edge-tg-b', 'site-supply-tg-b', 'site-meter-tg-b', ['origin' => 'site']);
+    $snapshot['data']['edges'][] = $edge('site-meter-edge-tg-b', 'site-meter-tg-b', 'site-tg-b', ['origin' => 'site']);
+    $snapshot['data']['edges'][] = $edge('site-circuit-c1', 'site-tg-b', 'site-td-1', [
+        'origin' => 'site', 'siteCircuitId' => 'c1', 'lengthMode' => 'site',
+    ]);
+
+    $saved = $this->actingAs($user)
+        ->putJson(route('dialux-v2.projects.electrical-network.update', $project), $snapshot)
+        ->assertSuccessful()
+        ->json('network.data');
+
+    expect(collect($saved['nodes'])->firstWhere('id', 'site-td-1'))
+        ->toMatchArray(['type' => 'site_panel', 'origin' => 'site', 'siteElementId' => 'td-1', 'phases' => 1, 'nominalVoltageV' => 220])
+        ->and(collect($saved['nodes'])->get(2)['siteElementId'])->toBe('tg-a')
+        ->and(collect($saved['nodes'])->firstWhere('id', 'site-tg-b')['supplyMode'])->toBe('own')
+        ->and(collect($saved['edges'])->firstWhere('id', 'site-circuit-c1'))
+        ->toMatchArray(['lengthMode' => 'site', 'siteCircuitId' => 'c1']);
+});
+
+test('sizing data (simultaneity, transformer, short circuit) is persisted and validated', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $snapshot = $this->actingAs($user)
+        ->getJson(route('dialux-v2.projects.electrical-network.show', $project))
+        ->assertSuccessful()
+        ->json('network');
+
+    $snapshot['data']['settings']['faultClearingTimeS'] = 0.2;
+    $snapshot['data']['nodes'][0] = [
+        ...$snapshot['data']['nodes'][0],
+        'transformerKva' => 400,
+        'supplyReservePercent' => 20,
+        'transformerUkPercent' => 4,
+        'upstreamShortCircuitMva' => 250,
+    ];
+    $snapshot['data']['nodes'][2] = [
+        ...$snapshot['data']['nodes'][2],
+        'simultaneityFactor' => 0.8,
+        'breakingCapacityKa' => 25,
+        'phase' => 'S',
+    ];
+
+    $saved = $this->actingAs($user)
+        ->putJson(route('dialux-v2.projects.electrical-network.update', $project), $snapshot)
+        ->assertSuccessful()
+        ->json('network.data');
+
+    expect($saved['settings']['faultClearingTimeS'])->toEqual(0.2)
+        ->and($saved['nodes'][0])->toMatchArray([
+            'transformerKva' => 400, 'supplyReservePercent' => 20,
+            'transformerUkPercent' => 4, 'upstreamShortCircuitMva' => 250,
+        ])
+        ->and($saved['nodes'][2])->toMatchArray(['simultaneityFactor' => 0.8, 'breakingCapacityKa' => 25, 'phase' => 'S']);
+
+    $snapshot['version'] = $this->actingAs($user)
+        ->getJson(route('dialux-v2.projects.electrical-network.show', $project))
+        ->json('network.version');
+    $snapshot['data']['nodes'][2]['simultaneityFactor'] = 1.5;
+
+    $this->actingAs($user)
+        ->putJson(route('dialux-v2.projects.electrical-network.update', $project), $snapshot)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('data.nodes.2.simultaneityFactor');
+});

@@ -534,6 +534,16 @@ export const doorCatalog: {
         },
     },
     {
+        label: 'Portón de cerco (2 hojas)',
+        icon: <Columns size={13} />,
+        template: {
+            doorType: 'gate',
+            width: 3.5,
+            height: 2.2,
+            openingDirection: 'outward',
+        },
+    },
+    {
         label: 'Puerta de Garaje',
         icon: <Columns size={13} />,
         template: {

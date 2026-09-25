@@ -205,6 +205,7 @@ export const DoorProps: React.FC<{
                 { value: 'sliding', label: 'Corrediza' },
                 { value: 'folding', label: 'Plegable' },
                 { value: 'opening', label: 'Vano Abierto' },
+                { value: 'gate', label: 'Portón (2 hojas)' },
             ]}
             onChange={(value) => onUpdate({ doorType: value as any })}
         />

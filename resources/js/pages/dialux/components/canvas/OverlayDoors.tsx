@@ -157,7 +157,8 @@ export const OverlayDoors = memo(function OverlayDoors({
                 // Etiqueta
                 const midX = (hingeScreen.x + swingScreen.x) / 2;
                 const midY = (hingeScreen.y + swingScreen.y) / 2 - 9;
-                const label = `P ${door.width.toFixed(2)}×${door.height.toFixed(2)}`;
+                const isGate = door.doorType === 'gate';
+                const label = `${isGate ? 'Portón' : 'P'} ${door.width.toFixed(2)}×${door.height.toFixed(2)}`;
                 const fontSize = safeNum(Math.max(8, 9 * zoom));
 
                 return (
@@ -176,6 +177,30 @@ export const OverlayDoors = memo(function OverlayDoors({
                             strokeWidth={strokeW + 0.5}
                             strokeLinecap="butt"
                         />
+
+                        {/* ── Portón: dos hojas macizas a cada lado del centro del vano ── */}
+                        {isGate && (
+                            <>
+                                <line
+                                    x1={safeNum(hingeScreen.x)}
+                                    y1={safeNum(hingeScreen.y)}
+                                    x2={safeNum((hingeScreen.x + swingScreen.x) / 2 - ux * 1.5)}
+                                    y2={safeNum((hingeScreen.y + swingScreen.y) / 2 - uy * 1.5)}
+                                    stroke={color}
+                                    strokeWidth={strokeW * 2.2}
+                                    strokeLinecap="butt"
+                                />
+                                <line
+                                    x1={safeNum((hingeScreen.x + swingScreen.x) / 2 + ux * 1.5)}
+                                    y1={safeNum((hingeScreen.y + swingScreen.y) / 2 + uy * 1.5)}
+                                    x2={safeNum(swingScreen.x)}
+                                    y2={safeNum(swingScreen.y)}
+                                    stroke={color}
+                                    strokeWidth={strokeW * 2.2}
+                                    strokeLinecap="butt"
+                                />
+                            </>
+                        )}
 
                         {/* ── Hoja de puerta (línea sólida desde bisagra al extremo del arco) ── */}
                         <line

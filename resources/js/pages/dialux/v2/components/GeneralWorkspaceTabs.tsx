@@ -1,5 +1,6 @@
 import { Link, router } from '@inertiajs/react';
 import { Box, Map, Network } from 'lucide-react';
+import { flushDialuxModuleSave } from '../hooks/useDialuxModuleSync';
 
 export type GeneralWorkspaceView = '2d' | '3d' | 'network';
 
@@ -44,12 +45,21 @@ export function GeneralWorkspaceTabs({
                 const selected = active === key;
 
                 if (key === 'network') {
+                    const networkUrl = `/dialux-v2/projects/${projectId}/electrical-network`;
                     return (
                         <Link
                             key={key}
-                            href={`/dialux-v2/projects/${projectId}/electrical-network`}
+                            href={networkUrl}
                             aria-current={selected ? 'page' : undefined}
                             className={cls(selected)}
+                            onClick={(event) => {
+                                // Red y CT lee la planta desde el servidor:
+                                // primero se guarda lo recién dibujado.
+                                event.preventDefault();
+                                void flushDialuxModuleSave().finally(() =>
+                                    router.visit(networkUrl),
+                                );
+                            }}
                         >
                             <Icon className="h-4 w-4" />
                             {label}

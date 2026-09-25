@@ -539,7 +539,13 @@ export interface Door {
      *   'opening'  Ã¢â€ â€™ solo vano (hueco sin panel ni marco)
      */
     doorType?:
-        'single' | 'double' | 'sliding' | 'folding' | 'bathroom' | 'opening';
+        | 'single'
+        | 'double'
+        | 'sliding'
+        | 'folding'
+        | 'bathroom'
+        | 'opening'
+        | 'gate'; // portón metálico de dos hojas (sobre cercos)
     openingDirection?: 'inward' | 'outward';
     /** Lado donde estÃƒÂ¡ la bisagra: 'left' = inicio de la pared, 'right' = fin */
     hingeDirection?: 'left' | 'right';

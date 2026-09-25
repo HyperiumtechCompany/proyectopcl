@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { calculateElectricalNetwork } from './calculations';
+import {
+    calculateElectricalNetwork,
+    suggestedSimultaneityFactor,
+} from './calculations';
 import type { ElectricalNetworkData, ModuleElectricalPort } from './types';
 
 function buildNetwork(): ElectricalNetworkData {
@@ -147,5 +150,106 @@ describe('calculateElectricalNetwork — base de voltaje por tablero destino', (
             expectedPercentAt380,
             6,
         );
+    });
+});
+
+describe('calculateElectricalNetwork — simultaneidad por tablero (R1)', () => {
+    /** TG con 3 módulos de 10 kW cada uno (1Φ 220 V, a 50 m del TG). */
+    function threeModules(fs?: number) {
+        const base = buildNetwork();
+        const network: ElectricalNetworkData = {
+            ...base,
+            nodes: [
+                ...base.nodes.filter((node) => node.id !== 'td'),
+                ...[1, 2, 3].map((i) => ({
+                    id: `m${i}`,
+                    type: 'module_panel_port' as const,
+                    label: `TD-${i}`,
+                    moduleId: i,
+                    sceneId: 'scene-1',
+                    deviceId: 'panel-td',
+                    position: { x: 0, y: 0 },
+                })),
+            ].map((node) =>
+                node.id === 'tg' && fs !== undefined
+                    ? { ...node, simultaneityFactor: fs }
+                    : node,
+            ),
+            edges: [
+                ...base.edges.filter((edge) => edge.id !== 'e3'),
+                ...[1, 2, 3].map((i) => ({
+                    ...base.edges[2],
+                    id: `f${i}`,
+                    targetNodeId: `m${i}`,
+                    horizontalLengthM: 50,
+                    sectionMm2: 16,
+                })),
+            ],
+        };
+        const ports: ModuleElectricalPort[] = [1, 2, 3].map((i) => ({
+            ...buildPorts()[0],
+            key: `${i}:scene-1:panel-td`,
+            moduleId: i,
+            installedPowerW: 10000,
+            demandPowerW: 10000,
+        }));
+        return calculateElectricalNetwork(network, ports, []);
+    }
+
+    it('sin factor el TG suma simple (resultado anterior intacto)', () => {
+        const tgFeeder = threeModules().find((item) => item.edgeId === 'e2')!;
+        expect(tgFeeder.demandPowerW).toBe(30000);
+        expect(tgFeeder.outgoingDemandPowerW).toBe(30000);
+        expect(tgFeeder.simultaneityFactor).toBe(1);
+    });
+
+    it('fs 0,9 en el TG: 27 kW, y corriente/ΔU del alimentador y aguas arriba proporcionales (caso a mano)', () => {
+        const plain = threeModules();
+        const reduced = threeModules(0.9);
+        const tgPlain = plain.find((item) => item.edgeId === 'e2')!;
+        const tgReduced = reduced.find((item) => item.edgeId === 'e2')!;
+        expect(tgReduced.demandPowerW).toBeCloseTo(27000, 9);
+        expect(tgReduced.installedPowerW).toBe(30000);
+        // I = P / (√3 · 380 · 0,9) = 27000 / 592,34 ≈ 45,58 A
+        expect(tgReduced.currentA).toBeCloseTo(27000 / (Math.sqrt(3) * 380 * 0.9), 6);
+        expect(tgReduced.ownVoltageDropPercent).toBeCloseTo(
+            tgPlain.ownVoltageDropPercent * 0.9,
+            9,
+        );
+        // El suministro (aguas arriba) también ve la demanda reducida.
+        const servicePlain = plain.find((item) => item.edgeId === 'e1')!;
+        const serviceReduced = reduced.find((item) => item.edgeId === 'e1')!;
+        expect(serviceReduced.demandPowerW).toBeCloseTo(servicePlain.demandPowerW * 0.9, 9);
+        // Cada módulo conserva su propia demanda (el fs es del TG, no de sus hijos).
+        expect(reduced.find((item) => item.edgeId === 'f1')!.demandPowerW).toBe(10000);
+    });
+
+    it('el factor se aplica también a las salidas de la planta (extraLoads) del TG', () => {
+        const base = buildNetwork();
+        const network: ElectricalNetworkData = {
+            ...base,
+            nodes: base.nodes.map((node) =>
+                node.id === 'tg' ? { ...node, simultaneityFactor: 0.8 } : node,
+            ),
+            edges: base.edges.filter((edge) => edge.id !== 'e3'),
+        };
+        const results = calculateElectricalNetwork(
+            network,
+            [],
+            [],
+            new Map([['tg', { installed: 5000, demand: 5000 }]]),
+        );
+        expect(results.find((item) => item.edgeId === 'e2')!.demandPowerW).toBeCloseTo(4000, 9);
+    });
+
+    it('un factor fuera de rango (0, >1) se ignora', () => {
+        expect(threeModules(0).find((item) => item.edgeId === 'e2')!.demandPowerW).toBe(30000);
+        expect(threeModules(1.5).find((item) => item.edgeId === 'e2')!.demandPowerW).toBe(30000);
+    });
+
+    it('sugerencia de referencia IEC 61439-1 por número de salidas', () => {
+        expect([1, 2, 3, 4, 5, 6, 9, 10, 15].map(suggestedSimultaneityFactor)).toEqual([
+            1, 0.9, 0.9, 0.8, 0.8, 0.7, 0.7, 0.6, 0.6,
+        ]);
     });
 });

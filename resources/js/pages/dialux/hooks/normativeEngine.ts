@@ -464,7 +464,7 @@ export function resolvePrimaryStandard(countryCode: string): NormativeStandard {
  * Flattening recursivo del árbol normativo para una norma específica.
  * Retorna array plano de hojas con categoría y sección padres.
  */
-function flattenNormTree(
+export function flattenNormTree(
     branches: Array<RawNormativeBranch | RawNormativeLeaf>,
     categoryTitle = '',
     sectionTitle = '',

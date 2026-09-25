@@ -44,6 +44,15 @@ export type SiteCadPlanStatus =
     /** Plano demasiado pesado para abrirse solo: se muestra la imagen y el usuario decide cargar el vectorial. */
     | 'deferred';
 
+/**
+ * Sub-etapa de la apertura, solo para el indicador de carga
+ * (`ModuleLoadingOverlay`): `reading` = buscando el archivo (IndexedDB y, si
+ * falta, descarga del servidor), `initializing` = creando el visor CAD,
+ * `opening` = parseo + render del DWG/DXF (la etapa larga). `null` = nada en
+ * curso.
+ */
+export type SiteCadPlanPhase = 'reading' | 'initializing' | 'opening' | null;
+
 /** Sobre este tamaño el DWG NO se abre automáticamente: el motor lo procesa en el hilo principal y congela el editor (medido: 5 s por mensaje del worker, >30 min sin terminar con "PLANTA GENERAL.dwg"). */
 const AUTO_OPEN_MAX_BYTES = 1_500_000;
 /** Tope de espera al abrir: pasado esto se abandona y se vuelve a la imagen. */
@@ -74,6 +83,9 @@ export function useSiteCadPlan(
     const containerRef = useRef<HTMLDivElement>(null);
     const [status, setStatus] = useState<SiteCadPlanStatus>('idle');
     const [deferredBytes, setDeferredBytes] = useState(0);
+    const [phase, setPhase] = useState<SiteCadPlanPhase>(null);
+    /** Tamaño del archivo que se está abriendo (para el indicador). */
+    const [fileBytes, setFileBytes] = useState(0);
     /** El usuario pidió cargar el vectorial aunque sea pesado. */
     const [forceLoad, setForceLoad] = useState(false);
     /** Sube al abandonar una carga en curso: su resultado tardío se ignora. */
@@ -96,6 +108,7 @@ export function useSiteCadPlan(
         const ticket = ++abortRef.current;
         const stale = () => cancelled || abortRef.current !== ticket;
         void (async () => {
+            setPhase('reading');
             try {
                 let stored = await loadDialuxPlan(
                     String(projectId),
@@ -119,6 +132,7 @@ export function useSiteCadPlan(
                 }
 
                 const file = storedDialuxPlanToFile(stored);
+                setFileBytes(file.size);
                 if (file.size > AUTO_OPEN_MAX_BYTES && !forceLoad) {
                     setDeferredBytes(file.size);
                     setStatus('deferred');
@@ -132,10 +146,12 @@ export function useSiteCadPlan(
                     return;
                 }
                 if (!initedRef.current) {
+                    setPhase('initializing');
                     initedRef.current = true;
                     await engine.initViewer(container);
                     if (stale()) return;
                 }
+                setPhase('opening');
 
                 const opened = await Promise.race([
                     engine.openFile(file),
@@ -167,6 +183,8 @@ export function useSiteCadPlan(
                     error,
                 );
                 setStatus('error');
+            } finally {
+                if (!stale()) setPhase(null);
             }
         })();
 
@@ -182,6 +200,7 @@ export function useSiteCadPlan(
     /** Abandona la carga en curso y vuelve a la imagen del plano. */
     const abandonVector = useCallback(() => {
         abortRef.current += 1;
+        setPhase(null);
         setForceLoad(false);
         setStatus('deferred');
     }, []);
@@ -284,6 +303,8 @@ export function useSiteCadPlan(
     return {
         containerRef,
         status,
+        phase,
+        fileBytes,
         deferredBytes,
         loadVector,
         abandonVector,

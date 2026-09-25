@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Conductor, ElectricalDevice, Fixture, Room, Scene } from './types';
 import {
     calculatePanelCircuitSummaries,
+    convertDropToBase,
     excelCopperResistivity,
     resolveConformingSectionMm2,
     resolveTreeConformingSections,
@@ -778,11 +779,21 @@ describe('caída de tensión en cascada (árbol de tableros)', () => {
         expect(tgFeeder.upstreamVoltageDropV).toBe(0);
         expect(tgFeeder.voltageDropV).toBeGreaterThan(0);
 
-        // El TD hereda EXACTAMENTE el ΔV ya resuelto de la salida del TG que
-        // lo alimenta — ya no el 6.22 V fijo de antes de este cambio.
-        expect(tdBranch.upstreamVoltageDropV).toBeCloseTo(tgFeeder.voltageDropV, 8);
+        // El TD hereda el ΔV ya resuelto de la salida del TG que lo alimenta
+        // — ya no el 6.22 V fijo — LLEVADO A SU BASE: el TG es 3Φ 380 V y el
+        // TD 1Φ 220 V, así que se hereda el mismo % (voltios × 220/380).
+        // Sumar los voltios sin convertir sobrestimaba la caída (Fase 6,
+        // `convertDropToBase`).
+        expect(tdBranch.upstreamVoltageDropV).toBeCloseTo(
+            tgFeeder.voltageDropV * (220 / 380),
+            8,
+        );
+        expect((tdBranch.upstreamVoltageDropV / 220) * 100).toBeCloseTo(
+            tgFeeder.voltageDropPct,
+            8,
+        );
         expect(tdBranch.upstreamVoltageDropV).not.toBeCloseTo(6.22, 1);
-        expect(tdBranch.voltageDropV).toBeGreaterThan(tgFeeder.voltageDropV);
+        expect(tdBranch.voltageDropPct).toBeGreaterThan(tgFeeder.voltageDropPct);
     });
 
     it('cascada de tres niveles TG → TD1 → TD2: cada uno hereda el ΔV real de su padre, acumulado', () => {
@@ -809,11 +820,37 @@ describe('caída de tensión en cascada (árbol de tableros)', () => {
         const td2Branch = circuits.find((c) => c.panelId === 'td2')!;
 
         expect(tgToTd1.upstreamVoltageDropV).toBe(0);
-        expect(td1ToTd2.upstreamVoltageDropV).toBeCloseTo(tgToTd1.voltageDropV, 8);
+        // TG (3Φ 380 V) → TD1 (1Φ 220 V): se hereda el mismo %, en la base del TD1.
+        expect(td1ToTd2.upstreamVoltageDropV).toBeCloseTo(
+            tgToTd1.voltageDropV * (220 / 380),
+            8,
+        );
+        // TD1 → TD2 (ambos 1Φ 220 V): misma base, se hereda sin conversión.
         expect(td2Branch.upstreamVoltageDropV).toBeCloseTo(td1ToTd2.voltageDropV, 8);
-        // Se va acumulando de nivel en nivel, nunca se resetea a mitad del árbol.
-        expect(td1ToTd2.voltageDropV).toBeGreaterThan(tgToTd1.voltageDropV);
-        expect(td2Branch.voltageDropV).toBeGreaterThan(td1ToTd2.voltageDropV);
+        // Se va acumulando de nivel en nivel (en %), nunca se resetea a mitad del árbol.
+        expect(td1ToTd2.voltageDropPct).toBeGreaterThan(tgToTd1.voltageDropPct);
+        expect(td2Branch.voltageDropPct).toBeGreaterThan(td1ToTd2.voltageDropPct);
+    });
+
+    it('con bases iguales (TG y TD 1Φ 220 V) la herencia es la de siempre: voltios sin convertir', () => {
+        const tg = { id: 'tg', type: 'main_panel', label: 'TG', x: 0, y: 0, properties: { voltage: '220V', phases: '1O' } } as ElectricalDevice;
+        const td = { id: 'td', type: 'sub_panel', label: 'TD', x: 4, y: 0, properties: { voltage: '220V', phases: '1O' } } as ElectricalDevice;
+        const load = { ...fixture('load-1', 'room-a', 300), x: 8 };
+        const scene = {
+            id: 'level-1', name: 'Piso 1', floorIndex: 0,
+            fixtures: [load],
+            electricalDevices: [tg, td],
+            conductors: [conductor('feeder', 'tg', 'td', 20), conductor('branch', 'td', 'load-1', 3)],
+            rooms: [{ id: 'room-a', name: 'Aula', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
+            walls: [], lightSwitches: [],
+        } as unknown as Scene;
+        const circuits = calculatePanelCircuitSummaries(scene);
+        const feeder = circuits.find((c) => c.panelId === 'tg')!;
+        const branch = circuits.find((c) => c.panelId === 'td')!;
+        expect(branch.upstreamVoltageDropV).toBeCloseTo(feeder.voltageDropV, 12);
+        expect(convertDropToBase(1.234, 220, 220)).toBe(1.234);
+        // 3Φ 380 V → 1Φ 220 V equivale a acumular el mismo %.
+        expect((convertDropToBase(3.8, 380, 220) / 220) * 100).toBeCloseTo((3.8 / 380) * 100, 12);
     });
 
     it('un tablero sin padre en el grafo (TD suelto, sin TG) sigue respetando su ΔV manual', () => {
@@ -894,11 +931,13 @@ describe('caída de tensión en cascada (árbol de tableros)', () => {
             fixtures: [load],
             electricalDevices: [tg, td],
             conductors: [
-                // Alimentador TG→TD muy largo (300 m a 2.5 mm²): por sí solo
+                // Alimentador TG→TD muy largo (600 m a 2.5 mm²): por sí solo
                 // ya excede el ΔV admisible — arrastra a la salida final C
                 // (branch, corta, 3 m) a no cumplir su propio límite de 4%
-                // aunque ELLA sola nunca lo superaría.
-                conductor('feeder', 'tg', 'td', 300),
+                // aunque ELLA sola nunca lo superaría. (Antes 300 m: con la
+                // caída heredada ya convertida de base 380 V a 220 V, 300 m
+                // dejaban de romper el límite y la premisa del test no se daba.)
+                conductor('feeder', 'tg', 'td', 600),
                 { ...conductor('branch', 'td', 'load-1', 3), sectionMm2: 2.5 },
             ],
             rooms: [{ id: 'room-a', name: 'Aula', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],

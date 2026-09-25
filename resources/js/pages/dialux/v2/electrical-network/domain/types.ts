@@ -5,7 +5,9 @@ export type ElectricalNodeType =
     | 'generator'
     | 'ups'
     | 'main_panel'
-    | 'module_panel_port';
+    | 'module_panel_port'
+    /** Sub tablero dibujado en la Planta General (no pertenece a un módulo). */
+    | 'site_panel';
 
 export interface Point {
     x: number;
@@ -24,6 +26,48 @@ export interface ElectricalNode {
     panelRole?: 'distribution' | 'sub_distribution';
     position: Point;
     collapsed?: boolean;
+    /** `'site'` = creado automáticamente desde la Planta General (`siteNetworkBridge`). */
+    origin?: 'site';
+    /** → `SiteElement.id` del tablero en la planta (o del TG dueño, en su suministro/medidor). */
+    siteElementId?: string;
+    /**
+     * TG de la planta: `'own'` = el usuario eligió "Suministro propio" (su
+     * propia cadena Suministro → Medidor). Ausente = cuelga del medidor
+     * principal cuando no tiene un cable dibujado que lo alimente.
+     */
+    supplyMode?: 'own';
+    /**
+     * Sistema propio de un tablero SIN puerto de módulo (TG / sub tablero de
+     * la planta, ATS): p.ej. un sub tablero 1Φ 220 V colgado de una red 3Φ
+     * 380 V. Ausente = el sistema general de la red.
+     */
+    phases?: 1 | 3;
+    nominalVoltageV?: number;
+    /**
+     * Factor de simultaneidad del tablero (0 < fs ≤ 1) aplicado a la suma de
+     * las demandas de sus salidas (hijos + salidas de la planta). Ausente = 1
+     * (suma simple, el comportamiento anterior). Ver
+     * `plan_red_ct_dimensionamiento_multimodulo.md`, R1.
+     */
+    simultaneityFactor?: number;
+    /**
+     * Suministro (raíz): potencia del transformador / potencia contratada en
+     * kVA. Ausente = se sugiere una potencia normalizada (R2).
+     */
+    transformerKva?: number;
+    /** Suministro (raíz): reserva sobre la demanda, % (por defecto 25). */
+    supplyReservePercent?: number;
+    /** Suministro (raíz): tensión de cortocircuito del transformador uk, % (R3). */
+    transformerUkPercent?: number;
+    /** Suministro (raíz): potencia de cortocircuito de la red aguas arriba S''kQ, MVA (R3). */
+    upstreamShortCircuitMva?: number;
+    /** Tablero: poder de corte de su interruptor general Icu, kA (R3). */
+    breakingCapacityKa?: number;
+    /**
+     * Tablero MONOFÁSICO colgado de uno trifásico: fase a la que se conecta
+     * (R4). Ausente = la propone el balance de fases; fijada = nunca se cambia.
+     */
+    phase?: 'R' | 'S' | 'T';
 }
 
 export interface ElectricalEdge {
@@ -41,6 +85,10 @@ export interface ElectricalEdge {
     wireConfiguration: string;
     powerFactor?: number;
     demandFactor?: number;
+    /** `'site'` = creado automáticamente desde la Planta General. */
+    origin?: 'site';
+    /** → `SiteCircuit.id`: cable de la planta que ES este alimentador. */
+    siteCircuitId?: string;
 }
 
 export interface ElectricalNetworkData {
@@ -57,6 +105,8 @@ export interface ElectricalNetworkData {
         designFactor?: number;
         feederDropLimitPercent: number;
         totalDropLimitPercent: number;
+        /** Tiempo de despeje de falla para la verificación térmica del cable, s (R3; por defecto 0,1). */
+        faultClearingTimeS?: number;
     };
     nodes: ElectricalNode[];
     edges: ElectricalEdge[];

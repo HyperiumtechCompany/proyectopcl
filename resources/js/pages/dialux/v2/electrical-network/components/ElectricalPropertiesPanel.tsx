@@ -1,12 +1,25 @@
 import type { EdgeCalculation } from '../domain/calculations';
+import { networkRootIds } from '../domain/graph';
+import type { NodePhaseBalance } from '../domain/phaseBalance';
+import type {
+    EdgeThermalCheck,
+    ShortCircuitResult,
+} from '../domain/shortCircuit';
+import { DEFAULT_FAULT_CLEARING_TIME_S } from '../domain/shortCircuit';
 import type {
     ElectricalEdge,
     ElectricalNetworkData,
     ElectricalNode,
 } from '../domain/types';
-
-const inputClass =
-    'mt-1 h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white';
+import {
+    fmtNumber,
+    Info,
+    inputClass,
+    ShortCircuitFields,
+    SimultaneityFields,
+    SupplyFields,
+} from './ElectricalSizingFields';
+import { PhaseBalanceFields } from './PhaseBalanceFields';
 
 export function ElectricalPropertiesPanel({
     data,
@@ -17,10 +30,16 @@ export function ElectricalPropertiesPanel({
     onChangeNodeParent,
     onUpdateSettings,
     onRemove,
+    shortCircuits,
+    phaseBalance,
 }: {
     data: ElectricalNetworkData;
     selectedId?: string;
     calculations: EdgeCalculation[];
+    /** R3: cortocircuito por tablero y verificación térmica por alimentador. */
+    shortCircuits?: ShortCircuitResult;
+    /** R4: balance de fases por tablero trifásico. */
+    phaseBalance?: Map<string, NodePhaseBalance>;
     onUpdateEdge: (id: string, patch: Partial<ElectricalEdge>) => void;
     onUpdateNode: (id: string, patch: Partial<ElectricalNode>) => void;
     onChangeNodeParent: (nodeId: string, parentId: string) => void;
@@ -132,15 +151,188 @@ export function ElectricalPropertiesPanel({
                                 </span>
                             </label>
                         )}
+                        {(node.type === 'main_panel' ||
+                            node.type === 'site_panel') && (
+                            <label className="text-[11px] text-slate-500">
+                                Alimentado desde
+                                <select
+                                    className={inputClass}
+                                    value={
+                                        data.edges.find(
+                                            (item) =>
+                                                item.targetNodeId === node.id,
+                                        )?.sourceNodeId ?? ''
+                                    }
+                                    onChange={(event) =>
+                                        onChangeNodeParent(
+                                            node.id,
+                                            event.target.value,
+                                        )
+                                    }
+                                >
+                                    <option value="">
+                                        {node.type === 'main_panel' &&
+                                        node.siteElementId
+                                            ? 'Suministro propio'
+                                            : 'Sin conexión'}
+                                    </option>
+                                    {data.nodes
+                                        .filter(
+                                            (candidate) =>
+                                                candidate.id !== node.id &&
+                                                (node.type === 'main_panel'
+                                                    ? [
+                                                          'service',
+                                                          'meter',
+                                                          'ats',
+                                                          'generator',
+                                                          'ups',
+                                                          'main_panel',
+                                                      ]
+                                                    : [
+                                                          'main_panel',
+                                                          'site_panel',
+                                                          'ats',
+                                                          'generator',
+                                                          'ups',
+                                                      ]
+                                                ).includes(candidate.type),
+                                        )
+                                        .map((candidate) => (
+                                            <option
+                                                key={candidate.id}
+                                                value={candidate.id}
+                                            >
+                                                {candidate.label}
+                                            </option>
+                                        ))}
+                                </select>
+                                <span className="mt-1 block leading-relaxed text-slate-400">
+                                    {node.siteElementId
+                                        ? 'Viene de la planta general. Puedes colgarlo del medidor de otro TG; su suministro propio se retira solo.'
+                                        : 'Reemplaza únicamente el tramo de entrada de este tablero.'}
+                                </span>
+                            </label>
+                        )}
+                        {(node.type === 'main_panel' ||
+                            node.type === 'site_panel' ||
+                            node.type === 'ats') && (
+                            <label className="text-[11px] text-slate-500">
+                                Sistema del tablero
+                                <select
+                                    className={inputClass}
+                                    value={
+                                        node.phases === 1
+                                            ? '1'
+                                            : node.phases === 3
+                                              ? '3'
+                                              : ''
+                                    }
+                                    onChange={(event) =>
+                                        onUpdateNode(
+                                            node.id,
+                                            event.target.value === ''
+                                                ? {
+                                                      phases: undefined,
+                                                      nominalVoltageV: undefined,
+                                                  }
+                                                : event.target.value === '1'
+                                                  ? {
+                                                        phases: 1,
+                                                        nominalVoltageV:
+                                                            data.settings
+                                                                .connectionType ===
+                                                                'star' &&
+                                                            data.settings
+                                                                .phases === 3
+                                                                ? Math.round(
+                                                                      data
+                                                                          .settings
+                                                                          .nominalVoltageV /
+                                                                          Math.sqrt(
+                                                                              3,
+                                                                          ),
+                                                                  )
+                                                                : data.settings
+                                                                      .nominalVoltageV,
+                                                    }
+                                                  : {
+                                                        phases: 3,
+                                                        nominalVoltageV:
+                                                            data.settings
+                                                                .nominalVoltageV,
+                                                    },
+                                        )
+                                    }
+                                >
+                                    <option value="">
+                                        Igual que la red (
+                                        {data.settings.phases === 3 ? '3Φ' : '1Φ'}{' '}
+                                        {data.settings.nominalVoltageV} V)
+                                    </option>
+                                    <option value="3">
+                                        Trifásico 3Φ {data.settings.nominalVoltageV} V
+                                    </option>
+                                    <option value="1">
+                                        Monofásico 1Φ (fase-neutro)
+                                    </option>
+                                </select>
+                                <span className="mt-1 block leading-relaxed text-slate-400">
+                                    La caída de su alimentador se evalúa contra
+                                    esta tensión.
+                                </span>
+                            </label>
+                        )}
+                        {!incomingEdge &&
+                            networkRootIds(data).includes(node.id) && (
+                                <SupplyFields
+                                    node={node}
+                                    data={data}
+                                    calculations={calculations}
+                                    onUpdateNode={onUpdateNode}
+                                />
+                            )}
+                        {node.type !== 'meter' && (
+                            <ShortCircuitFields
+                                node={node}
+                                result={shortCircuits?.nodes.get(node.id)}
+                                withoutSource={
+                                    shortCircuits?.rootsWithoutSource.length ?? 0
+                                }
+                                onUpdateNode={onUpdateNode}
+                            />
+                        )}
+                        {(node.type === 'main_panel' ||
+                            node.type === 'site_panel' ||
+                            node.type === 'module_panel_port' ||
+                            node.type === 'ats') && (
+                            <SimultaneityFields
+                                node={node}
+                                outgoingCount={
+                                    data.edges.filter(
+                                        (item) => item.sourceNodeId === node.id,
+                                    ).length
+                                }
+                                result={incomingResult}
+                                onUpdateNode={onUpdateNode}
+                            />
+                        )}
+                        {phaseBalance?.get(node.id) && (
+                            <PhaseBalanceFields
+                                balance={phaseBalance.get(node.id)!}
+                                incomingResult={incomingResult}
+                                designFactor={data.settings.designFactor ?? 1.25}
+                                onUpdateNode={onUpdateNode}
+                            />
+                        )}
                         {node.type === 'main_panel' && (
                             <>
                                 <div className="mt-1 border-t border-slate-200 pt-3 text-xs font-bold text-slate-700 dark:border-white/10 dark:text-slate-300">
                                     Configuración general de la red
                                 </div>
                                 <p className="-mt-2 text-[10px] leading-relaxed text-slate-400">
-                                    Este es el único TG del proyecto — desde
-                                    aquí se define el suministro para todos
-                                    los módulos conectados.
+                                    Configuración común a toda la red (todos
+                                    los TG y módulos conectados).
                                 </p>
                                 <NumberField
                                     label="Voltaje de operación (V)"
@@ -253,6 +445,20 @@ export function ElectricalPropertiesPanel({
                                     }
                                 />
                                 <NumberField
+                                    label="Tiempo de despeje de falla (s)"
+                                    value={
+                                        data.settings.faultClearingTimeS ??
+                                        DEFAULT_FAULT_CLEARING_TIME_S
+                                    }
+                                    min={0.01}
+                                    onChange={(value) =>
+                                        onUpdateSettings({
+                                            faultClearingTimeS:
+                                                value > 0 ? value : undefined,
+                                        })
+                                    }
+                                />
+                                <NumberField
                                     label="Límite ΔU acumulada total (%)"
                                     value={data.settings.totalDropLimitPercent}
                                     min={0.1}
@@ -262,6 +468,14 @@ export function ElectricalPropertiesPanel({
                                         })
                                     }
                                 />
+                                <p className="-mt-1 text-[10px] leading-relaxed text-slate-400">
+                                    Límites de ΔU por defecto (2,5 % / 4 %):
+                                    referencia CNE-Utilización (Perú), Regla
+                                    050-102 — edición y numeral sin confirmar
+                                    contra el texto oficial. Son editables; el
+                                    sistema compara contra el valor configurado,
+                                    no declara conformidad normativa.
+                                </p>
                             </>
                         )}
                         {incomingEdge && (
@@ -272,6 +486,9 @@ export function ElectricalPropertiesPanel({
                                 <EdgeFields
                                     edge={incomingEdge}
                                     result={incomingResult}
+                                    thermal={shortCircuits?.edges.get(
+                                        incomingEdge.id,
+                                    )}
                                     onUpdateEdge={onUpdateEdge}
                                     onRemove={onRemove}
                                     disconnectLabel="Desconectar alimentador"
@@ -285,6 +502,7 @@ export function ElectricalPropertiesPanel({
                     <EdgeFields
                         edge={edge}
                         result={result}
+                        thermal={shortCircuits?.edges.get(edge.id)}
                         onUpdateEdge={onUpdateEdge}
                         onRemove={onRemove}
                         disconnectLabel="Desconectar este tramo"
@@ -298,6 +516,7 @@ export function ElectricalPropertiesPanel({
 function EdgeFields({
     edge,
     result,
+    thermal,
     onUpdateEdge,
     onRemove,
     disconnectLabel,
@@ -305,6 +524,7 @@ function EdgeFields({
 }: {
     edge: ElectricalEdge;
     result?: EdgeCalculation;
+    thermal?: EdgeThermalCheck;
     onUpdateEdge: (id: string, patch: Partial<ElectricalEdge>) => void;
     onRemove: (id: string) => void;
     disconnectLabel: string;
@@ -417,6 +637,26 @@ function EdgeFields({
                     ))}
                 </div>
             )}
+            {thermal && Number.isFinite(thermal.ikAtOriginKa) && (
+                <div className="grid gap-0.5">
+                    <Info
+                        label="I″k en el origen"
+                        value={`${fmtNumber(thermal.ikAtOriginKa, 2)} kA`}
+                    />
+                    <Info
+                        label={`Sección mín. por falla (k ${thermal.k}, t ${thermal.clearingTimeS} s)`}
+                        value={`${fmtNumber(thermal.minSectionMm2, 1)} mm² ${thermal.ok ? '≤' : '>'} ${edge.sectionMm2}`}
+                    />
+                    {!thermal.ok && (
+                        <p className="text-[10px] leading-snug text-red-600 dark:text-red-300">
+                            La sección no soporta térmicamente la corriente de
+                            cortocircuito en el tiempo de despeje (S ≥ I·√t/k,
+                            IEC 60364-4-43). Sube la sección o reduce el tiempo
+                            de despeje del interruptor.
+                        </p>
+                    )}
+                </div>
+            )}
             <button
                 type="button"
                 onClick={() => onRemove(edge.id)}
@@ -479,15 +719,5 @@ function SelectField({
                 ))}
             </select>
         </label>
-    );
-}
-function Info({ label, value }: { label: string; value: string }) {
-    return (
-        <div className="flex items-center justify-between gap-2 py-1 text-xs">
-            <span className="text-slate-500">{label}</span>
-            <strong className="text-right text-slate-900 dark:text-white">
-                {value}
-            </strong>
-        </div>
     );
 }
