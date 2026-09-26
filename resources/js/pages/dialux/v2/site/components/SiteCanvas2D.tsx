@@ -135,6 +135,7 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
     const projectionPreview = useSiteLightingStore(
         (state) => state.projectionPreview,
     );
+    const showIsolines = useSiteLightingStore((state) => state.showIsolines);
     const baseWidth = siteData?.canvasWidth ?? 2000;
     const baseHeight = siteData?.canvasHeight ?? 1200;
 
@@ -2272,6 +2273,8 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                 )}
                 {lighting?.calculation && lighting.showIsolux && (
                     <IsoluxLayer
+                        showIsolines={showIsolines}
+                        site={siteData ?? undefined}
                         calculation={lighting.calculation}
                         focusedAreaId={lighting.focusedAreaId}
                         scaleM={editor.terrainScaleM || 1}

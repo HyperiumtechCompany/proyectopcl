@@ -25,7 +25,6 @@ import { ElectricalPropertiesPanel } from './electrical-network/components/Elect
 import { ElectricalTreeView } from './electrical-network/components/ElectricalTreeView';
 import { SectionOptimizerPanel } from './electrical-network/components/SectionOptimizerPanel';
 import { SingleLineDiagramDialog } from './electrical-network/components/SingleLineDiagramDialog';
-import { SiteOutputsCtTable } from './electrical-network/components/SiteOutputsCtTable';
 import { VoltageDropAlertPanel } from './electrical-network/components/VoltageDropAlertPanel';
 import type { ModuleCtCircuit } from './electrical-network/domain/ctTableRows';
 import {
@@ -80,7 +79,8 @@ export default function ElectricalNetworkPage({
                       siteData.elements,
                       generalModuleId,
                       {
-                          nominalVoltageV: network.data.settings.nominalVoltageV,
+                          nominalVoltageV:
+                              network.data.settings.nominalVoltageV,
                           phases: network.data.settings.phases,
                           powerFactor: network.data.settings.defaultPowerFactor,
                       },
@@ -430,7 +430,11 @@ export default function ElectricalNetworkPage({
                     },
                 );
             }),
-        [modulesData, upstreamVoltageDropVByDevice, upstreamFeederLengthByDevice],
+        [
+            modulesData,
+            upstreamVoltageDropVByDevice,
+            upstreamFeederLengthByDevice,
+        ],
     );
     // R3: cortocircuito por tablero (IEC 60909-0) + verificación térmica.
     const shortCircuits = calculateShortCircuits(
@@ -634,15 +638,6 @@ export default function ElectricalNetworkPage({
                             onSelect={editor.setSelectedId}
                             siteOutputRows={editor.siteOutputRows}
                         />
-                        <SiteOutputsCtTable
-                            rows={editor.siteOutputRows}
-                            data={editor.snapshot.data}
-                            calculations={editor.calculations}
-                            onSelect={(id) => {
-                                editor.setSelectedId(id);
-                                setWorkspaceView('diagram');
-                            }}
-                        />
                     </div>
                 ) : (
                     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
@@ -675,7 +670,7 @@ export default function ElectricalNetworkPage({
                                 }
                             />
                         </main>
-                        <div className="flex w-full min-h-0 flex-col overflow-y-auto xl:w-80">
+                        <div className="flex min-h-0 w-full flex-col overflow-y-auto xl:w-80">
                             <ElectricalPropertiesPanel
                                 data={editor.snapshot.data}
                                 selectedId={editor.selectedId}

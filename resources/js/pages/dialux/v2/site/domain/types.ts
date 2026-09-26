@@ -548,6 +548,30 @@ export interface SiteNormRequirement {
     activities: Partial<Record<SiteNormRegion, string>>;
 }
 
+/** Configuración de la superficie de cálculo de un espacio exterior. */
+export interface SiteCalcSurface {
+    /**
+     * 'standard' = tamaño de malla automático EN 12464 (p = 0,2 · 5^log10 d),
+     * como DIALux evo; 'fine' = malla fina (hasta ~2500 puntos);
+     * 'custom' = paso fijo `spacingM`.
+     */
+    grid?: 'standard' | 'fine' | 'custom';
+    spacingM?: number;
+    /** Altura del plano de cálculo sobre la superficie (m). 0 por defecto. */
+    heightM?: number;
+    /**
+     * Qué luminarias entran al cálculo del espacio: 'own' (por defecto) =
+     * solo las del espacio (proyectadas para él, sus luces de techado o
+     * colocadas dentro de su contorno), como un local de la V1; 'all' = toda
+     * la escena (también la luz que llega de espacios vecinos).
+     */
+    luminaires?: 'own' | 'all';
+    /** Reflectancia del suelo del espacio (0–1). Por defecto la típica del material. */
+    floorReflectance?: number;
+    /** Reflectancia de la cara inferior de la cubierta (techado / cancha techada), 0–1. Por defecto 0,70. */
+    ceilingReflectance?: number;
+}
+
 export interface SiteElement {
     id: string;
     type: SiteElementType;
@@ -566,6 +590,11 @@ export interface SiteElement {
     metadata?: Record<string, unknown>;
     /** Exigencia de iluminancia elegida por el cliente (solo tiene sentido en espacios/áreas). */
     normReq?: SiteNormRequirement;
+    /**
+     * Objeto de cálculo del ESPACIO (como en DIALux evo): malla y altura del
+     * plano. Ausente = malla automática EN 12464 a nivel del suelo.
+     */
+    calcSurface?: SiteCalcSurface;
 }
 
 // ── Trazado de alimentadores ─────────────────────

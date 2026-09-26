@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { LuminairePhotometry } from '../lib/luminaireCatalog';
 import {
+    areaGridFor,
     calculateSiteLighting,
     clipPolygonToRect,
+    en12464GridSpacingM,
     siteLuminaires,
 } from './siteLightingCalculation';
 import type { SiteData, SiteElement } from './types';
@@ -108,12 +110,12 @@ describe('calculateSiteLighting (motor luminotécnico V1 en exteriores)', () => 
 
     it('un edificio entre el poste y el área le hace sombra', () => {
         const open = calculateSiteLighting(
-            site([square('patio', 'custom_zone', 0, 0, 10), pole('p1', 20, 5, { heightM: 4 })]),
+            site([square('patio', 'custom_zone', 0, 0, 10, { calcSurface: { luminaires: 'all' } }), pole('p1', 20, 5, { heightM: 4 })]),
             NO_PHOTOMETRY,
         ).areas.find((area) => area.elementId === 'patio')!;
         const shaded = calculateSiteLighting(
             site([
-                square('patio', 'custom_zone', 0, 0, 10),
+                square('patio', 'custom_zone', 0, 0, 10, { calcSurface: { luminaires: 'all' } }),
                 // Bloque de 2 m de ancho entre el patio (x 0–10) y el poste (x 20).
                 square('bloque', 'building_block', 12, -5, 2, {
                     heightM: 10,
@@ -216,7 +218,7 @@ describe('calculateSiteLighting · alcance de cada luminaria (auditoría Fase 6)
     it('un mástil alto aporta más allá de 60 m (radio = max(60 m, 15·h))', () => {
         // Mástil de 20 m a 70 m del área: fuera de 60 m pero dentro de 15·20 = 300 m.
         const [area] = calculateSiteLighting(
-            site([square('cancha', 'court', 0, 0, 10), pole('m1', 80, 5, { heightM: 20, lumens: 100000 })]),
+            site([square('cancha', 'court', 0, 0, 10, { calcSurface: { luminaires: 'all' } }), pole('m1', 80, 5, { heightM: 20, lumens: 100000 })]),
             NO_PHOTOMETRY,
         ).areas;
         expect(area.luminairesUsed).toBe(1);
@@ -234,7 +236,7 @@ describe('calculateSiteLighting · alcance de cada luminaria (auditoría Fase 6)
     it('una luminaria por debajo de la superficie no la ilumina y se informa', () => {
         const result = calculateSiteLighting(
             site([
-                square('plataforma', 'terrace_platform', 0, 0, 10, { baseElevationM: 10 }),
+                square('plataforma', 'terrace_platform', 0, 0, 10, { baseElevationM: 10, calcSurface: { luminaires: 'all' } }),
                 // Poste de 4 m al lado, sobre el terreno (cota 0): cabeza a 4 m < 10 m.
                 pole('p1', 12, 5, { heightM: 4 }),
             ]),
@@ -284,7 +286,7 @@ describe('calculateSiteLighting · plataformas y terreno (mapa de lux adaptable)
 
     it('una zona sobre dos cotas se calcula en parches, cada uno a su cota', () => {
         const zone = {
-            ...square('zona', 'custom_zone', 0, 0, 20),
+            ...square('zona', 'custom_zone', 0, 0, 20, { calcSurface: { luminaires: 'all' } }),
             vertices: [
                 { x: 10, y: 0 },
                 { x: 30, y: 0 },
@@ -336,3 +338,146 @@ describe('clipPolygonToRect', () => {
     });
 });
 
+
+describe('objeto de cálculo por espacio (como DIALux evo)', () => {
+    it('malla automática EN 12464: p = 0,2·5^log10(d), tope 10 m', () => {
+        expect(en12464GridSpacingM(10)).toBeCloseTo(1, 9);
+        expect(en12464GridSpacingM(100)).toBeCloseTo(5, 9);
+        expect(en12464GridSpacingM(1000)).toBe(10);
+        expect(areaGridFor(undefined, 40, 20).spacingM).toBeCloseTo(0.2 * 5 ** Math.log10(40), 9);
+    });
+
+    it('malla propia con tope de puntos por rendimiento', () => {
+        const grid = areaGridFor({ grid: 'custom', spacingM: 0.1 }, 500, 500);
+        expect(grid.capped).toBe(true);
+        expect((500 / grid.spacingM) * (500 / grid.spacingM)).toBeLessThanOrEqual(20000 + 1);
+    });
+
+    it('cada espacio usa SU malla y su altura de plano; se informa en el resultado', () => {
+        const plant = site([
+            square('cancha', 'court', 0, 0, 20, { calcSurface: { grid: 'custom', spacingM: 2, heightM: 1 } }),
+            square('patio', 'custom_zone', 30, 0, 20),
+            pole('p1', 10, 10),
+            pole('p2', 40, 10),
+        ]);
+        const { areas } = calculateSiteLighting(plant, NO_PHOTOMETRY);
+        const cancha = areas.find((a) => a.elementId === 'cancha')!;
+        const patio = areas.find((a) => a.elementId === 'patio')!;
+        expect(cancha.gridMode).toBe('custom');
+        expect(cancha.spacingM).toBe(2);
+        expect(cancha.planeHeightM).toBe(1);
+        expect(cancha.gridPoints).toBe(100);
+        expect(patio.gridMode).toBe('standard');
+        expect(patio.gridBasis).toMatch(/EN 12464/);
+        // Plano a 1 m: la luminaria está 1 m más cerca → Emáx bajo el poste mayor.
+        const ground = calculateSiteLighting(
+            site([square('cancha', 'court', 0, 0, 20, { calcSurface: { grid: 'custom', spacingM: 2 } }), pole('p1', 10, 10)]),
+            NO_PHOTOMETRY,
+        ).areas[0];
+        expect(cancha.result.max_lux).toBeGreaterThan(ground.result.max_lux);
+    });
+
+    it('calcular SOLO un espacio no calcula los demás', () => {
+        const plant = site([square('a', 'court', 0, 0, 20), square('b', 'custom_zone', 30, 0, 20), pole('p1', 10, 10)]);
+        const { areas } = calculateSiteLighting(plant, NO_PHOTOMETRY, new Set(['b']));
+        expect(areas.map((a) => a.elementId)).toEqual(['b']);
+    });
+
+    it('un espacio duplicado encima de otro no se omite en silencio: se informa quién lo cubre', () => {
+        const plant = site([square('techo-1', 'canopy', 0, 0, 10), square('techo-2', 'canopy', 0, 0, 10), pole('p1', 5, 5)]);
+        const calc = calculateSiteLighting(plant, NO_PHOTOMETRY);
+        expect(calc.areas).toHaveLength(1);
+        expect(calc.skipped).toHaveLength(1);
+        const [skipped] = calc.skipped ?? [];
+        expect(skipped.coveredById).toBe(calc.areas[0].elementId);
+        expect(calc.warnings.some((w) => w.includes(`${skipped.label}: sin puntos de cálculo propios`))).toBe(true);
+    });
+});
+
+describe('cada espacio con SUS luminarias (como un local de la V1)', () => {
+    it('por defecto la vereda no recibe la luz del poste del estacionamiento vecino', () => {
+        const plant = site([
+            square('estac', 'parking', 0, 0, 10),
+            square('vereda', 'sidewalk', 10, 0, 4),
+            pole('p-estac', 5, 5),
+        ]);
+        const own = calculateSiteLighting(plant, NO_PHOTOMETRY);
+        const vereda = own.areas.find((area) => area.elementId === 'vereda')!;
+        expect(vereda.luminaireMode).toBe('own');
+        expect(vereda.luminairesUsed).toBe(0);
+        expect(vereda.result.avg_lux).toBe(0);
+        expect(own.warnings.some((w) => w.startsWith('vereda: sin luminarias propias'))).toBe(true);
+        expect(own.areas.find((area) => area.elementId === 'estac')!.ownLuminaireIds).toHaveLength(1);
+
+        // Modo escena completa: la misma vereda sí recibe esa luz.
+        const scene = site([
+            square('estac', 'parking', 0, 0, 10),
+            square('vereda', 'sidewalk', 10, 0, 4, { calcSurface: { luminaires: 'all' } }),
+            pole('p-estac', 5, 5),
+        ]);
+        const all = calculateSiteLighting(scene, NO_PHOTOMETRY).areas.find((area) => area.elementId === 'vereda')!;
+        expect(all.luminairesUsed).toBe(1);
+        expect(all.result.avg_lux).toBeGreaterThan(0);
+        expect(all.ownLuminaireIds).toHaveLength(0);
+    });
+
+    it('un poste proyectado para la vereda es de la vereda aunque esté fuera de su borde', () => {
+        const plant = site([
+            square('estac', 'parking', 0, 0, 10),
+            square('vereda', 'sidewalk', 10, 0, 4),
+            pole('p-vereda', 9.5, 2, {}, { metadata: { projectedFor: 'vereda' } }),
+        ]);
+        const { areas } = calculateSiteLighting(plant, NO_PHOTOMETRY);
+        expect(areas.find((area) => area.elementId === 'vereda')!.luminairesUsed).toBe(1);
+        expect(areas.find((area) => area.elementId === 'estac')!.luminairesUsed).toBe(0);
+    });
+});
+
+describe('reflexiones del espacio', () => {
+    it('a cielo abierto no hay techo: solo reflectancia de suelo, sin rebote', () => {
+        const [area] = calculateSiteLighting(site([square('patio', 'custom_zone', 0, 0, 10), pole('p1', 5, 5)]), NO_PHOTOMETRY).areas;
+        expect(area.reflectances).toEqual({ floor: 0.2, ceiling: null });
+    });
+
+    it('bajo un techado el techo (70 %) devuelve luz al suelo: más Ēm que sin reflexión', () => {
+        const canopy = (ceilingReflectance: number) =>
+            square('techo', 'canopy', 0, 0, 10, {
+                config: {
+                    kind: 'canopy',
+                    heightM: 3,
+                    roof: 'flat',
+                    translucent: false,
+                    columnSpacingM: 5,
+                    columnDiameterM: 0.2,
+                    lights: { enabled: true, count: 4, columns: 2, rows: 2, lumens: 3000, wattage: 30 },
+                } as SiteElement['config'],
+                calcSurface: { ceilingReflectance },
+            });
+        const withRoof = calculateSiteLighting(site([canopy(0.7)]), NO_PHOTOMETRY).areas[0];
+        const black = calculateSiteLighting(site([canopy(0)]), NO_PHOTOMETRY).areas[0];
+        expect(withRoof.reflectances.ceiling).toBe(0.7);
+        expect(withRoof.luminairesUsed).toBe(4);
+        expect(withRoof.result.avg_lux).toBeGreaterThan(black.result.avg_lux);
+    });
+});
+
+describe('techado duplicado encima de otro', () => {
+    it('sus luminarias pasan al espacio que lo cubre (no se pierden)', () => {
+        const canopy = (id: string, lights: boolean) =>
+            square(id, 'canopy', 0, 0, 10, {
+                config: {
+                    kind: 'canopy',
+                    heightM: 3,
+                    roof: 'flat',
+                    translucent: false,
+                    columnSpacingM: 5,
+                    columnDiameterM: 0.2,
+                    lights: { enabled: lights, count: 4, columns: 2, rows: 2, lumens: 3000, wattage: 30 },
+                } as SiteElement['config'],
+            });
+        const calc = calculateSiteLighting(site([canopy('visible', false), canopy('duplicado', true)]), NO_PHOTOMETRY);
+        expect(calc.areas).toHaveLength(1);
+        expect(calc.areas[0].ownLuminaires).toBe(4);
+        expect(calc.areas[0].result.avg_lux).toBeGreaterThan(0);
+    });
+});

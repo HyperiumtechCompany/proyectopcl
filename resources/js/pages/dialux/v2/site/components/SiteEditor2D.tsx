@@ -7,7 +7,7 @@ import {
 } from '../hooks/useSiteLightingCalculation';
 import { SiteCanvas2D } from './SiteCanvas2D';
 import { SiteContourImportDialog } from './SiteContourImportDialog';
-import { IsoluxLegend } from './SiteIsoluxLayer';
+import { focusLegendData, IsoluxLegend } from './SiteIsoluxLayer';
 import { SiteLightingCalcPanel } from './SiteLightingCalcPanel';
 import { SitePalette } from './SitePalette';
 import { SitePlanImportDialog } from './SitePlanImportDialog';
@@ -60,7 +60,14 @@ export function SiteEditor2D({
                         lighting={lighting}
                     />
                     {lighting.calculation && lighting.showIsolux && (
-                        <IsoluxLegend />
+                        <IsoluxLegend
+                            focus={focusLegendData(
+                                editor.siteData,
+                                lighting.calculation.areas.find(
+                                    (area) => area.elementId === lighting.focusedAreaId,
+                                ),
+                            )}
+                        />
                     )}
                     {/* Resultados (el botón vive en la paleta → Iluminación). */}
                     {(lighting.calculation || lighting.running) && (

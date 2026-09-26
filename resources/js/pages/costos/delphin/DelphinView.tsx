@@ -502,10 +502,7 @@ export default function DelphinView({
             if (groupIds.has(row.id)) continue;
             if (!row.unidad?.trim()) continue;
             const acu = acuByPartida.get(normP(String(row.partida ?? '')));
-            if (!acu || acu.costo_unitario_total === 0 || Math.abs(row.precio_unitario - acu.costo_unitario_total) > 0.01) {
-                count++;
-            }
-        }
+            if (!acu || acu.costo_unitario_total === 0 || Math.abs(row.precio_unitario - acu.costo_unitario_total) > 0.01) {count++;}}
         return count;
     }, [delphinRows, acuRows, groupIds]);
 

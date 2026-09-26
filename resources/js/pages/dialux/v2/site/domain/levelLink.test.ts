@@ -104,4 +104,27 @@ describe('site/domain/levelLink · acciones de conexión', () => {
         expect(shift.x).toBeCloseTo(2.5, 1);
         expect(shift.y).toBeCloseTo(0, 1);
     });
+
+    it('une DOS EDIFICACIONES: cada extremo llega a la cota del piso de su edificio', () => {
+        const a = el('a', 'building_block', rect(-20, -10, 0.5, 10), { label: 'Edificio 1' });
+        const b = el('b', 'building_block', rect(13, -10, 30, 10), { label: 'Edificio 2', baseElevationM: 1 });
+        const report = checkLevelLink(ramp, [ramp, a, b], 1, cfg)!;
+        expect(report.start.ok).toBe(true);
+        expect(report.end.ok).toBe(true);
+        expect(report.start.platform).toMatchObject({ label: 'Edificio 1', kind: 'building', elevationM: 0 });
+        expect(report.end.platform).toMatchObject({ label: 'Edificio 2', kind: 'building', elevationM: 1 });
+        expect(report.end.message).toContain('la edificación "Edificio 2"');
+        // Cotas sugeridas desde las edificaciones.
+        expect(suggestCotasFromPlatforms(report, [ramp, a, b], 1)).toEqual({ fromElevationM: 0, toElevationM: 1 });
+    });
+
+    it('un edificio sobre una plataforma toma la cota de la plataforma (plataforma → edificio)', () => {
+        const low = el('low', 'terrace_platform', rect(-20, -10, 0.5, 10), { baseElevationM: 0, label: 'Patio' });
+        const high = el('high', 'terrace_platform', rect(13, -10, 40, 10), { baseElevationM: 1, label: 'Alta' });
+        const building = el('b', 'building_block', rect(13, -8, 30, 8), { label: 'Edificio' });
+        const report = checkLevelLink(ramp, [ramp, low, high, building], 1, cfg)!;
+        expect(report.end.ok).toBe(true);
+        expect(report.end.platform?.elevationM).toBe(1);
+    });
 });
+

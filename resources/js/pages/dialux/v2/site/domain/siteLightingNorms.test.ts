@@ -3,6 +3,7 @@ import type { LightingSummary } from './exteriorLighting';
 import {
     ALL_SITE_NORM_REGIONS,
     checkAgainstNorm,
+    effectiveNormChecks,
     findActivity,
     isInteriorCatalog,
     listActivities,
@@ -96,3 +97,42 @@ describe('región Exterior (EN 12464-2 / EN 13201-2) — fase X1', () => {
     });
 });
 
+describe('comparación siempre visible (elegida o sugerida)', () => {
+    it('sin actividad elegida compara con la SUGERIDA del catálogo exterior', () => {
+        const [check] = effectiveNormChecks({ type: 'sidewalk' }, ['exterior', 'peru'], summary(10, 0.2));
+        expect(check.suggested).toBe(true);
+        expect(check.activity?.title).toBe('P3');
+        expect(check.emVerdict).toBe('meets');
+    });
+
+    it('si el cliente eligió actividades, se usan esas (no la sugerida)', () => {
+        const checks = effectiveNormChecks(
+            { type: 'sidewalk', normReq: { activities: { exterior: 'EN 13201-2 · Clases P (peatonal / baja velocidad) › P1' } } },
+            ['exterior', 'peru'],
+            summary(10, 0.2),
+        );
+        expect(checks).toHaveLength(1);
+        expect(checks[0].suggested).toBe(false);
+        expect(checks[0].activity?.title).toBe('P1');
+        expect(checks[0].emVerdict).toBe('below');
+    });
+
+    it('canchas: sin sugerencia (EN 12193 no cargada) → sin comparación', () => {
+        expect(effectiveNormChecks({ type: 'court' }, ['exterior'], summary(100, 0.5))).toEqual([]);
+    });
+});
+
+
+describe('effectiveNormChecks · actividad elegida que no está en el catálogo', () => {
+    it('no queda "sin datos": compara con la sugerida del tipo de espacio', () => {
+        const checks = effectiveNormChecks(
+            { type: 'sidewalk', normReq: { activities: { peru: 'Actividad que no existe › X' } } },
+            ['peru'],
+            { luminaires: 2, fluxLm: 1000, avgLux: 10, minLux: 3, maxLux: 20, uniformity: 0.3, areaM2: 50 },
+        );
+        expect(checks).toHaveLength(1);
+        expect(checks[0].suggested).toBe(true);
+        expect(checks[0].activity?.title).toBe('P3');
+        expect(checks[0].emVerdict).toBe('meets');
+    });
+});

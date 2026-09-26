@@ -1,8 +1,9 @@
 import { closestPointOnPolygon, pointInPolygon } from './geometry';
 import { elementBox } from './layoutFit';
 import { buildStraightRampLayout } from './rampLayout';
+import { siteElementBaseElevation } from './siteLightingCalculation';
 import { exclusiveSpacePolygons, polygonsClash } from './spaceGuard';
-import type { Point2D, RampConfig, SiteElement } from './types';
+import type { Point2D, RampConfig, SiteData, SiteElement } from './types';
 
 /** Tolerancia de cota (m) para decir que una rampa/escalera "llega" a una plataforma. */
 export const LEVEL_TOL_M = 0.05;
@@ -15,8 +16,8 @@ export interface LevelLinkEnd {
     elevationM: number;
     point: Point2D;
     ok: boolean;
-    /** Plataforma a la que conecta (cota coincidente y a ≤ LINK_REACH_M). */
-    platform?: { id: string; label: string; elevationM: number };
+    /** Plataforma o edificación a la que conecta (cota coincidente y a ≤ LINK_REACH_M). */
+    platform?: { id: string; label: string; elevationM: number; kind: 'platform' | 'building' };
     message: string;
 }
 
@@ -30,6 +31,41 @@ export interface LevelLinkReport {
 }
 
 const OBSTACLE_TYPES = new Set(['pole', 'tg_location', 'transformer', 'tree']);
+
+/**
+ * A qué se conecta una rampa/escalera: una PLATAFORMA (su cota) o una
+ * EDIFICACIÓN (la cota de su piso: la superficie sobre la que está + su
+ * elevación propia — mismo criterio que el cálculo y el 3D). Así una rampa
+ * puede unir dos plataformas, dos edificaciones o una plataforma con un
+ * edificio.
+ */
+export interface LevelTarget {
+    element: SiteElement;
+    elevationM: number;
+    kind: 'platform' | 'building';
+}
+
+export function levelTargets(elements: SiteElement[]): LevelTarget[] {
+    const site = { elements } as unknown as SiteData;
+    return elements
+        .filter(
+            (el) =>
+                (el.type === 'terrace_platform' || el.type === 'building_block') &&
+                el.visible !== false &&
+                el.vertices.length >= 3,
+        )
+        .map((el) => ({
+            element: el,
+            kind: el.type === 'terrace_platform' ? ('platform' as const) : ('building' as const),
+            elevationM:
+                el.type === 'terrace_platform'
+                    ? (el.baseElevationM ?? 0)
+                    : siteElementBaseElevation(site, el),
+        }));
+}
+
+const targetName = (target: LevelTarget) =>
+    `${target.kind === 'building' ? 'la edificación' : 'la plataforma'} "${target.element.label}"`;
 
 /**
  * Comprueba que una rampa/escalera de tramos cumple su razón de ser: unir dos
@@ -58,15 +94,10 @@ export function checkLevelLink(
     const startPoint = planOf(firstFlight.startLocal.x, firstFlight.startLocal.z);
     const endPoint = planOf(last.endLocal.x, last.endLocal.z);
 
-    const platforms = elements.filter(
-        (el) =>
-            el.type === 'terrace_platform' &&
-            el.visible !== false &&
-            el.vertices.length >= 3,
-    );
-    const reach = (point: Point2D, platform: SiteElement): number => {
-        if (pointInPolygon(point, platform.vertices)) return 0;
-        const hit = closestPointOnPolygon(point, platform.vertices, true);
+    const targets = levelTargets(elements);
+    const reach = (point: Point2D, target: LevelTarget): number => {
+        if (pointInPolygon(point, target.element.vertices)) return 0;
+        const hit = closestPointOnPolygon(point, target.element.vertices, true);
         return hit ? hit.distance * scaleM : Infinity;
     };
     const evaluate = (
@@ -75,13 +106,11 @@ export function checkLevelLink(
         point: Point2D,
     ): LevelLinkEnd => {
         const label = role === 'start' ? 'INICIO' : 'FIN';
-        const withDistance = platforms
+        const withDistance = targets
             .map((p) => ({ p, d: reach(point, p) }))
             .sort((a, b) => a.d - b.d);
         const match = withDistance.find(
-            ({ p, d }) =>
-                Math.abs((p.baseElevationM ?? 0) - elevationM) <= LEVEL_TOL_M &&
-                d <= LINK_REACH_M,
+            ({ p, d }) => Math.abs(p.elevationM - elevationM) <= LEVEL_TOL_M && d <= LINK_REACH_M,
         );
         if (match) {
             return {
@@ -90,21 +119,22 @@ export function checkLevelLink(
                 point,
                 ok: true,
                 platform: {
-                    id: match.p.id,
-                    label: match.p.label,
-                    elevationM: match.p.baseElevationM ?? 0,
+                    id: match.p.element.id,
+                    label: match.p.element.label,
+                    elevationM: match.p.elevationM,
+                    kind: match.p.kind,
                 },
-                message: `${label} ${elevationM.toFixed(2)} m llega a "${match.p.label}".`,
+                message: `${label} ${elevationM.toFixed(2)} m llega a ${targetName(match.p)}.`,
             };
         }
         const nearest = withDistance[0];
         let message: string;
         if (!nearest || nearest.d > LINK_REACH_M * 3) {
-            message = `${label} ${elevationM.toFixed(2)} m no toca ninguna plataforma (¿queda en el aire o sobre terreno natural?).`;
-        } else if (Math.abs((nearest.p.baseElevationM ?? 0) - elevationM) > LEVEL_TOL_M) {
-            message = `${label} declara ${elevationM.toFixed(2)} m pero la plataforma cercana "${nearest.p.label}" está a ${(nearest.p.baseElevationM ?? 0).toFixed(2)} m: corrige la cota o mueve el extremo.`;
+            message = `${label} ${elevationM.toFixed(2)} m no toca ninguna plataforma ni edificación (¿queda en el aire o sobre terreno natural?).`;
+        } else if (Math.abs(nearest.p.elevationM - elevationM) > LEVEL_TOL_M) {
+            message = `${label} declara ${elevationM.toFixed(2)} m pero ${targetName(nearest.p)} cercana está a ${nearest.p.elevationM.toFixed(2)} m: corrige la cota o mueve el extremo.`;
         } else {
-            message = `${label} queda a ${nearest.d.toFixed(1)} m del borde de "${nearest.p.label}" (máx. ${LINK_REACH_M} m): acerca el extremo.`;
+            message = `${label} queda a ${nearest.d.toFixed(1)} m del borde de ${targetName(nearest.p)} (máx. ${LINK_REACH_M} m): acerca el extremo.`;
         }
         return { role, elevationM, point, ok: false, message };
     };
@@ -152,29 +182,19 @@ export function checkLevelLink(
     return { start, end, overlaps, obstacles };
 }
 
-/** Plataforma más cercana a un punto (sin importar su cota) y el punto de su borde más próximo. */
+/** Plataforma o edificación más cercana a un punto (sin importar su cota), su cota y el punto de su borde más próximo. */
 export function nearestPlatform(
     point: Point2D,
     elements: SiteElement[],
     scaleM: number,
-): { platform: SiteElement; distanceM: number; edgePoint: Point2D } | null {
-    let best: { platform: SiteElement; distanceM: number; edgePoint: Point2D } | null = null;
-    for (const platform of elements) {
-        if (
-            platform.type !== 'terrace_platform' ||
-            platform.visible === false ||
-            platform.vertices.length < 3
-        ) {
-            continue;
-        }
+): { platform: SiteElement; distanceM: number; edgePoint: Point2D; elevationM: number } | null {
+    let best: { platform: SiteElement; distanceM: number; edgePoint: Point2D; elevationM: number } | null = null;
+    for (const target of levelTargets(elements)) {
+        const platform = target.element;
         if (pointInPolygon(point, platform.vertices)) {
             // Varias pueden contenerlo (una baja que rodea a una alta): manda la MÁS ALTA, como el suelo real.
-            if (
-                !best ||
-                best.distanceM > 0 ||
-                (platform.baseElevationM ?? 0) > (best.platform.baseElevationM ?? 0)
-            ) {
-                best = { platform, distanceM: 0, edgePoint: point };
+            if (!best || best.distanceM > 0 || target.elevationM > best.elevationM) {
+                best = { platform, distanceM: 0, edgePoint: point, elevationM: target.elevationM };
             }
             continue;
         }
@@ -183,7 +203,7 @@ export function nearestPlatform(
         if (!hit) continue;
         const distanceM = hit.distance * scaleM;
         if (!best || distanceM < best.distanceM) {
-            best = { platform, distanceM, edgePoint: hit.point };
+            best = { platform, distanceM, edgePoint: hit.point, elevationM: target.elevationM };
         }
     }
     return best;
@@ -204,14 +224,14 @@ export function suggestCotasFromPlatforms(
         return null;
     }
     return {
-        fromElevationM: a.platform.baseElevationM ?? 0,
-        toElevationM: b.platform.baseElevationM ?? 0,
+        fromElevationM: a.elevationM,
+        toElevationM: b.elevationM,
     };
 }
 
 /**
  * Desplazamiento (unidades de plano) que lleva el extremo FIN al borde de la
- * plataforma de llegada — la de cota `toElevationM` más cercana, hasta 20 m.
+ * plataforma o edificación de llegada — la de cota `toElevationM` más cercana, hasta 20 m.
  * `null` si no hay ninguna o ya está conectado.
  */
 export function shiftToReachArrival(
@@ -221,15 +241,9 @@ export function shiftToReachArrival(
 ): Point2D | null {
     if (report.end.ok) return null;
     let best: { d: number; dx: number; dy: number } | null = null;
-    for (const platform of elements) {
-        if (
-            platform.type !== 'terrace_platform' ||
-            platform.visible === false ||
-            platform.vertices.length < 3 ||
-            Math.abs((platform.baseElevationM ?? 0) - report.end.elevationM) > LEVEL_TOL_M
-        ) {
-            continue;
-        }
+    for (const target of levelTargets(elements)) {
+        const platform = target.element;
+        if (Math.abs(target.elevationM - report.end.elevationM) > LEVEL_TOL_M) continue;
         if (pointInPolygon(report.end.point, platform.vertices)) return null;
         const hit = closestPointOnPolygon(report.end.point, platform.vertices, true);
         if (!hit) continue;

@@ -69,3 +69,27 @@
 - En rectángulos el resultado es idéntico al anterior (pruebas previas intactas). Sin extremos reconocibles → eje recto como antes (con su aviso).
 - Poste movido a mano: brazo hacia el borde más cercano del espacio (`armTowardSpaceDeg`).
 
+### Curvas isolux y comparación siempre visible (2026-09-26)
+- Curvas isolux ("ondas"): `v2/site/domain/isoluxContours.ts` (marching squares sobre la malla del motor V1 + unión en polilíneas, niveles 1…500 lx que cruzan la malla). En el 2D (`SiteIsoluxLayer`, botón "Curvas isolux", caché por resultado) y en los planos del PDF (`export/isoluxSvg.ts`: falsos colores general y por zona).
+- Comparación con la norma nunca vacía: `effectiveNormChecks` usa la actividad elegida o, si no hay, la SUGERIDA del catálogo exterior (marcada "sugerida"). La tabla muestra Ē (y Emín) requerido y U0 requerido con ≥/<; la cobertura (tabla de cantidad de la V1) aparece también con la sugerida. Canchas sin sugerencia (EN 12193 no cargada).
+- Curvas POR ESPACIO (2026-09-26, pedido del usuario "medir por espacio"): `areaIsoluxLevels` (serie 1-2-5 dentro del rango del espacio; si es angosto, pasos 1-2-2,5-5 lineales; máx. 8) + `areaIsolines` (curva roja discontinua del Ē exigido por la norma efectiva del espacio, `requiredLuxFor`). Mismos niveles para todos los parches del espacio. Leyenda del espacio enfocado (clic en la tabla) con sus niveles y la norma. En el PDF: plano general (por espacio) y plano útil de cada zona.
+
+### Cálculo por espacio como DIALux evo + fix 422 del PDF (2026-09-26)
+- **422 del PDF (reproducido con los datos reales del proyecto 9):** `requirementEvaluations.*.unit` vacía en la evaluación de uniformidad → ahora 'ratio' como la V1. El botón PDF muestra el primer campo rechazado si vuelve a ocurrir. Con los datos reales: 0 errores de validación y PDF de 79 páginas.
+- **Objeto de cálculo por espacio** (`SiteElement.calcSurface`): malla 'standard' = EN 12464 p = 0,2·5^log10(d) (tope 10 m; lo que usa DIALux evo, por defecto), 'fine' (~2500 pts, el criterio anterior) o 'custom' (paso propio, tope 20000 puntos) + altura del plano. Resultado por espacio: `gridMode`, `gridBasis`, `gridPoints`, `planeHeightM`.
+- **Calcular solo un espacio** (`runArea` en `useSiteLightingCalculation`): en Propiedades → "Superficie de cálculo" y botón ↻ por fila de la tabla; se integra al cálculo existente.
+- PDF: la ficha de cada espacio dice su malla (norma y paso), puntos y altura del plano.
+
+### Cableado por conexiones, rampa entre edificaciones y estacionamiento 3D (2026-09-26)
+- **Cableado por conexiones** (`domain/circuitSplit.ts`): un recorrido dibujado por varios objetos se guarda como UNA conexión por objeto (TG→P1, P1→P2…), conservando salida, fase (solo el 1.er tramo), sección, tendido por tramo; antes era un solo cable y los objetos intermedios NO quedaban conectados en el cálculo. Continuaciones también se separan. Cables viejos: botón "Separar por objetos". Borrado: papelera = solo esa conexión; "desde aquí" = esa conexión y lo que cuelga aguas abajo (`downstreamCircuitIds`, sin cruzar tableros).
+- **Rampa/escalera entre edificaciones** (`levelLink.ts`, `levelTargets`): inicio/fin se conectan a plataformas O edificaciones (cota del piso = superficie bajo el edificio + su elevación propia, `siteElementBaseElevation`); cotas sugeridas y "acercar el FIN" también.
+- **Estacionamiento invisible en 3D**: estaba dibujado DENTRO de la vereda (losa elevada 0,14 m) y su asfalto (0,08 m) quedaba tapado. Ahora calle/estacionamiento dentro de una vereda más grande se apoyan sobre ella (`raisedPavementUnder`).
+
+
+### PDF por espacios y recintos, como la V1 / DIALux evo (2026-09-26)
+- **Recintos = categorías de espacio** (`SITE_SPACE_GROUPS` en `export/siteZoneReport.ts`): Calles y veredas, Rampas y escaleras, Estacionamientos, Canchas, Techados, Plataformas y zonas, Áreas verdes, Terreno. Cada ficha lleva `roomId/roomName` del grupo.
+- **Orden del informe**: resumen → planta → falsos colores → **Lista de luminarias** (proyecto, por producto, con nombre/fabricante del catálogo) → **Lista de espacios** (compacta) → **Comparación con las normas** (una fila por espacio × norma) → **Objetos de cálculo** → por recinto: **Lista de locales**, **Lista de luminarias**, **Objetos de cálculo** y las 5 páginas de cada espacio → postes → salidas → metrado. Índice: recinto (nivel 1) y espacio (nivel 2). Nombres repetidos se numeran ("Escalera 1/2/3").
+- **Luminarias propias**: la ficha/local lista y suma solo las luminarias del espacio (`ownLuminaireIds`); las vecinas entran al cálculo y al plano y se avisan (`exterior-neighbour-luminaires`). Antes cada local listaba todas las que le aportan luz (totales ×N).
+- **Espacios sin calcular**: un espacio cubierto por completo por otro (p. ej. techados duplicados superpuestos en el proyecto 9) ya no se omite en silencio: `calculation.skipped` + aviso + nota en la lista de espacios.
+- **Visto (✓) del objeto de cálculo**: la plantilla lo dibujaba SIEMPRE (también en la V1, incluso con 0 lx); ahora solo con evaluación `pass`, "< req." con `fail`, nada sin evaluación.
+- Paginación medida en el PDF real (hoja apaisada): 9 filas por hoja en lista de espacios y objetos de cálculo. ⚠️ La V1 usa 18 filas de objetos de cálculo por hoja y probablemente recorta a partir de la 10.ª (no tocado).

@@ -213,3 +213,52 @@ export function checkAgainstNorm(
                   : 'below',
     };
 }
+
+export interface EffectiveNormCheck extends SiteNormCheck {
+    /** `true` = el cliente no eligió actividad: se compara con la SUGERIDA del catálogo exterior. */
+    suggested: boolean;
+}
+
+/**
+ * Comparación de un espacio con la norma: las actividades que el cliente
+ * eligió (por región) o, si no eligió ninguna, la actividad SUGERIDA del
+ * catálogo exterior para su tipo de espacio (marcada `suggested`). Así la
+ * tabla de comparación nunca queda vacía y siempre dice contra qué compara.
+ */
+export function effectiveNormChecks(
+    element: { type: SiteElementType; normReq?: { activities: Partial<Record<SiteNormRegion, string>> } } | undefined,
+    regions: SiteNormRegion[],
+    summary: LightingSummary | null,
+): EffectiveNormCheck[] {
+    if (!element) return [];
+    const chosen = regions
+        .filter((region) => element.normReq?.activities[region])
+        .map((region) => ({
+            ...checkAgainstNorm(region, element.normReq?.activities[region], summary),
+            suggested: false,
+        }));
+    // Solo cuentan las elegidas que existen en el catálogo cargado; si
+    // ninguna se resuelve (catálogo aún sin cargar o actividad renombrada),
+    // se compara con la sugerida en vez de quedar "sin datos".
+    const resolved = chosen.filter((check) => check.activity);
+    if (resolved.length > 0) return resolved;
+    const suggestion = suggestActivity('exterior', element.type);
+    return suggestion
+        ? [{ ...checkAgainstNorm('exterior', suggestion.key, summary), suggested: true }]
+        : [];
+}
+
+/** Ē exigido al espacio por su norma efectiva (elegida o sugerida), o null. */
+export function requiredLuxFor(
+    element: Parameters<typeof effectiveNormChecks>[0],
+    regions: SiteNormRegion[],
+    summary: LightingSummary | null,
+): { lux: number; suggested: boolean; title: string } | null {
+    const check = effectiveNormChecks(element, regions, summary).find(
+        (item) => item.activity?.illuminanceLux,
+    );
+    return check?.activity
+        ? { lux: check.activity.illuminanceLux, suggested: check.suggested, title: check.activity.title }
+        : null;
+}
+

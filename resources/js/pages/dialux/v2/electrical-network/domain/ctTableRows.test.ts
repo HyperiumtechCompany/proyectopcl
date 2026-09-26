@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { PanelCircuitSummary } from '@/pages/dialux/hooks/wireLengthCalculations';
-import { rowsForDistributionPanel, type ModuleCtCircuit } from './ctTableRows';
+import {
+    ctTreeOrder,
+    rowsForDistributionPanel,
+    type ModuleCtCircuit,
+} from './ctTableRows';
+import type {
+    ElectricalEdge,
+    ElectricalNetworkData,
+    ElectricalNode,
+} from './types';
 
 function circuit(
     values: Partial<PanelCircuitSummary> &
@@ -67,5 +76,63 @@ describe('filas CT multimódulo', () => {
         expect(
             rowsForDistributionPanel(rows, 2, 'td-2').outputRows,
         ).toHaveLength(1);
+    });
+});
+
+describe('orden de la tabla CT como árbol (TG → TD → Sub‑TD)', () => {
+    const node = (
+        id: string,
+        type: ElectricalNode['type'],
+        label = id,
+    ): ElectricalNode => ({
+        id,
+        type,
+        label,
+        position: { x: 0, y: 0 },
+    });
+    const edge = (sourceNodeId: string, targetNodeId: string): ElectricalEdge =>
+        ({
+            id: `${sourceNodeId}>${targetNodeId}`,
+            sourceNodeId,
+            targetNodeId,
+        }) as ElectricalEdge;
+
+    it('recorre en profundidad: cada TD seguido de sus Sub‑TD, atravesando el ATS', () => {
+        const data = {
+            nodes: [
+                node('svc', 'service'),
+                node('tg', 'main_panel', 'TG'),
+                node('ats', 'ats'),
+                node('td10', 'module_panel_port', 'TD-10'),
+                node('td2', 'module_panel_port', 'TD-2'),
+                node('std', 'module_panel_port', 'Sub-TD-2.1'),
+                node('stp', 'site_panel', 'ST planta'),
+                node('suelto', 'module_panel_port', 'TD-X'),
+            ],
+            edges: [
+                edge('svc', 'tg'),
+                edge('tg', 'td10'),
+                edge('tg', 'ats'),
+                edge('ats', 'td2'),
+                edge('td2', 'std'),
+                edge('tg', 'stp'),
+            ],
+        } as unknown as ElectricalNetworkData;
+        const { blocks, unreachable } = ctTreeOrder(data);
+        expect(
+            blocks.map((block) => [
+                block.nodeId,
+                block.depth,
+                block.parentPanelId,
+            ]),
+        ).toEqual([
+            ['tg', 0, null],
+            ['td2', 1, 'tg'],
+            ['std', 2, 'td2'],
+            ['stp', 1, 'tg'],
+            ['td10', 1, 'tg'],
+        ]);
+        expect(blocks[0].edgeId).toBe('svc>tg');
+        expect(unreachable).toEqual(['suelto']);
     });
 });

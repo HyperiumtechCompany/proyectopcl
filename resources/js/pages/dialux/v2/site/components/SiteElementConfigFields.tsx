@@ -296,7 +296,7 @@ function LevelLinkNotes({
                             onClick={onSuggestCotas}
                             className="rounded-md border border-cyan-500 px-2 py-1 text-[10px] font-semibold text-cyan-700 hover:bg-cyan-50 dark:text-cyan-300 dark:hover:bg-cyan-950/30"
                         >
-                            Tomar cotas de las plataformas vecinas
+                            Tomar cotas de plataformas o edificaciones vecinas
                         </button>
                     )}
                     {onReachArrival && (
@@ -305,7 +305,7 @@ function LevelLinkNotes({
                             onClick={onReachArrival}
                             className="rounded-md border border-cyan-500 px-2 py-1 text-[10px] font-semibold text-cyan-700 hover:bg-cyan-50 dark:text-cyan-300 dark:hover:bg-cyan-950/30"
                         >
-                            Acercar el FIN a la plataforma de llegada
+                            Acercar el FIN a la plataforma o edificación de llegada
                         </button>
                     )}
                 </div>

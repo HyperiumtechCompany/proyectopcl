@@ -399,6 +399,43 @@ export class SiteBuilder3D {
     }
 
     /** Losa con textura si el elemento es opaco; si el usuario le puso transparencia, la losa plana de siempre. */
+    /**
+     * Altura de la losa elevada (vereda) MÁS GRANDE que contiene a un espacio
+     * dibujado dentro de ella — mismo criterio que el cálculo (el espacio más
+     * específico va encima). 0 si no está dentro de ninguna.
+     */
+    private raisedPavementUnder(element: SiteElement): number {
+        const n = element.vertices.length || 1;
+        const center = {
+            x: element.vertices.reduce((sum, v) => sum + v.x, 0) / n,
+            y: element.vertices.reduce((sum, v) => sum + v.y, 0) / n,
+        };
+        const area = (vertices: Point2D[]) =>
+            Math.abs(
+                vertices.reduce((sum, v, i) => {
+                    const next = vertices[(i + 1) % vertices.length];
+                    return sum + v.x * next.y - next.x * v.y;
+                }, 0),
+            ) / 2;
+        const own = area(element.vertices);
+        let lift = 0;
+        for (const other of this.elementsById.values()) {
+            if (
+                other.id === element.id ||
+                other.type !== 'sidewalk' ||
+                other.visible === false ||
+                other.vertices.length < 3 ||
+                area(other.vertices) <= own ||
+                !pointInPolygon(center, other.vertices)
+            ) {
+                continue;
+            }
+            const cfg = other.config?.kind === 'sidewalk' ? other.config : undefined;
+            lift = Math.max(lift, Math.min(0.5, Math.max(0.02, cfg?.heightM ?? 0.14)));
+        }
+        return lift;
+    }
+
     private buildSurface(
         element: SiteElement,
         scaleM: number,
@@ -568,9 +605,13 @@ export class SiteBuilder3D {
                 this.buildTerracePlatform(element, scaleM);
                 return;
             case 'street':
-            case 'parking':
-                this.buildSurface(element, scaleM, 'asphalt', 0.06, 0.08);
+            case 'parking': {
+                // Dibujado DENTRO de una vereda (losa elevada): se apoya sobre
+                // ella; si no, quedaba tapado en 3D aunque se viera en 2D.
+                const lift = this.raisedPavementUnder(element);
+                this.buildSurface(element, scaleM, 'asphalt', 0.06 + lift, 0.08 + lift);
                 return;
+            }
             case 'green_area': {
                 const cfg =
                     element.config?.kind === 'green_area'

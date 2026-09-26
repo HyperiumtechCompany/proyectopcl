@@ -1,7 +1,9 @@
 import { luxColor } from '../domain/exteriorLighting';
 import type { SiteLightingCalculation } from '../domain/siteLightingCalculation';
 import { siteLuminaires } from '../domain/siteLightingCalculation';
-import type { Point2D, SiteData, SiteElement } from '../domain/types';
+import { requiredLuxFor } from '../domain/siteLightingNorms';
+import type { Point2D, SiteData, SiteElement, SiteNormRegion } from '../domain/types';
+import { isoluxSvgFragments } from './isoluxSvg';
 
 /**
  * Plano vectorial (SVG) de la Planta General para el informe PDF (D2): en
@@ -47,7 +49,12 @@ export interface SiteSvgPlan {
 
 export function renderSitePlanSvg(
     site: SiteData,
-    options: { calculation?: SiteLightingCalculation | null; title?: string } = {},
+    options: {
+        calculation?: SiteLightingCalculation | null;
+        title?: string;
+        /** Regiones normativas activas (curva del Ē exigido por espacio). */
+        regions?: SiteNormRegion[];
+    } = {},
 ): SiteSvgPlan {
     const scaleM = site.terrainScaleM || 1;
     const layerVisible = (element: SiteElement) => {
@@ -113,6 +120,21 @@ export function renderSitePlanSvg(
         }
     }
 
+    if (options.calculation) {
+        // Curvas POR ESPACIO, cada uno con sus niveles y la curva de su norma.
+        const regions = options.regions ?? [];
+        for (const area of options.calculation.areas) {
+            const element = (site.elements ?? []).find((item) => item.id === area.elementId);
+            parts.push(
+                isoluxSvgFragments(
+                    area.patches.map((patch) => patch.result),
+                    stroke * 1.2,
+                    textH * 0.7,
+                    requiredLuxFor(element, regions, area.summary)?.lux ?? null,
+                ),
+            );
+        }
+    }
     for (const circuit of site.circuits ?? []) {
         const points = circuit.waypoints.map(M);
         if (points.length >= 2) {

@@ -397,6 +397,17 @@
         $renderCalculationObjectsTable = static function ($ambients) use ($formatNumber): string {
             $rows = '';
             foreach ($ambients as $detail) {
+                // Visto solo si la evaluación normativa del ambiente lo respalda
+                // (status "pass"); "fail" marca "&lt;"; sin evaluación, nada.
+                $checkFor = static function (string $metric) use ($detail): string {
+                    $status = collect($detail['requirementEvaluations'] ?? [])->firstWhere('metric', $metric)['status'] ?? null;
+
+                    return match ($status) {
+                        'pass' => '<span class="calculation-check"></span>',
+                        'fail' => '<span style="display:block; color:#dc2626; font-weight:bold;">&lt; req.</span>',
+                        default => '',
+                    };
+                };
                 $rows .=
                     '
             <tr>
@@ -418,7 +429,9 @@
                     $formatNumber($detail['avgLux'] ?? null, 0, ' lx') .
                     '<br>(' .
                     $formatNumber($detail['targetLux'] ?? null, 0, ' lx') .
-                    ')<span class="calculation-check"></span></td>
+                    ')' .
+                    $checkFor('illuminance') .
+                    '</td>
                 <td class="number">' .
                     $formatNumber($detail['minLux'] ?? null, 1, ' lx') .
                     '</td>
@@ -429,7 +442,9 @@
                     $formatNumber($detail['uniformity'] ?? null, 2) .
                     '<br>(' .
                     $formatNumber($detail['uniformityTarget'] ?? null, 2) .
-                    ')<span class="calculation-check"></span></td>
+                    ')' .
+                    $checkFor('uniformity') .
+                    '</td>
                 <td class="number">' .
                     $formatNumber($detail['g2'] ?? null, 2) .
                     '</td>
@@ -1430,8 +1445,14 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                             </tr>
                             <tr>
                                 <td class="metric-label">Reflexiones</td>
-                                <td class="metric-value" style="white-space:normal; text-align:left; width:68%;">Cielo abierto: sin techo ni paredes (no aplica)</td>
+                                <td class="metric-value" style="white-space:normal; text-align:left; width:68%;">{{ $detail['exterior']['reflections'] ?? 'Cielo abierto: sin techo ni paredes (no aplica)' }}</td>
                             </tr>
+                            @if (!empty($detail['exterior']['luminaires']))
+                                <tr>
+                                    <td class="metric-label">Luminarias del c&aacute;lculo</td>
+                                    <td class="metric-value" style="white-space:normal; text-align:left; width:68%;">{{ $detail['exterior']['luminaires'] }}</td>
+                                </tr>
+                            @endif
                             <tr>
                                 <td class="metric-label">Factor de mantenimiento</td>
                                 <td class="metric-value" style="white-space:normal; text-align:left; width:68%;">Aplicado al flujo de cada luminaria</td>

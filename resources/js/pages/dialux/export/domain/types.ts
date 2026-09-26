@@ -495,6 +495,10 @@ export interface DialuxAmbientDetail {
         projection: string;
         /** Dónde se calcula (plano, cota, malla). */
         surface: string;
+        /** Reflectancias usadas (techo solo si el espacio está cubierto). */
+        reflections?: string;
+        /** Qué luminarias entran al cálculo (solo las del espacio / toda la escena). */
+        luminaires?: string;
     } | null;
 }
 

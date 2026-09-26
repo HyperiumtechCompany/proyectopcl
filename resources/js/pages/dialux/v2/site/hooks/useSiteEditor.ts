@@ -3,6 +3,11 @@ import { computeLinearScaleFactor } from '@/pages/dialux/geometry/calibration';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import { isBaseLockActive, isElementFrozen } from '../domain/baseLock';
 import { appendCircuitContinuation } from '../domain/circuitContinuation';
+import {
+    downstreamCircuitIds,
+    splitCircuitAtAnchors,
+    type CircuitDraft,
+} from '../domain/circuitSplit';
 import { compactCircuitTrace } from '../domain/circuitTrace';
 import { defaultCableForKind } from '../domain/feederCables';
 import { gateFrame, inwardNormal } from '../domain/gateLayout';
@@ -297,6 +302,36 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         return best ? { id: best.id, point: best.point } : null;
     };
 
+    /** Objeto cuyo anclaje de cableado está EXACTAMENTE en `point` (los puntos del cable se enganchan a su centro). */
+    const anchorIdAtPoint = (point: Point2D): string | null =>
+        nearestCircuitAnchor(point, 0.05)?.id ?? null;
+
+    /** Separa un cable guardado de corrido en una conexión por objeto recorrido (cables anteriores a este cambio). */
+    const splitCircuitAtObjects = (id: string): number => {
+        const circuit = siteData?.circuits?.find((item) => item.id === id);
+        if (!circuit) return 0;
+        const pieces = splitCircuitAtAnchors(circuit, anchorIdAtPoint);
+        if (!pieces) return 0;
+        const history = useEditorStore.getState();
+        history.beginHistoryGesture();
+        removeSiteCircuit(id);
+        pieces.forEach((piece) => addSiteCircuit(piece));
+        history.endHistoryGesture();
+        setSelectedWireId(null);
+        return pieces.length;
+    };
+
+    /** Elimina la conexión y todo lo que cuelga de ella (aguas abajo); lo anterior queda. */
+    const removeCircuitDownstream = (id: string): number => {
+        const ids = downstreamCircuitIds(siteData?.circuits ?? [], siteData?.elements ?? [], id);
+        const history = useEditorStore.getState();
+        history.beginHistoryGesture();
+        ids.forEach((circuitId) => removeSiteCircuit(circuitId));
+        history.endHistoryGesture();
+        setSelectedWireId(null);
+        return ids.length;
+    };
+
     /** Arranca el cableado de instalaciones (`draw_circuit`) — el primer clic debe enganchar un artefacto. */
     const startCircuitTool = () => {
         setPendingVertices([]);
@@ -377,7 +412,17 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
                         trace.modes,
                         targetAnchorId,
                     );
-                    if (patch) updateSiteCircuit(circuit.id, patch);
+                    if (!patch) continue;
+                    const pieces = splitCircuitAtAnchors(
+                        { ...circuit, ...patch },
+                        anchorIdAtPoint,
+                    );
+                    if (pieces) {
+                        removeSiteCircuit(circuit.id);
+                        pieces.forEach((piece) => addSiteCircuit(piece));
+                    } else {
+                        updateSiteCircuit(circuit.id, patch);
+                    }
                 }
             } finally {
                 history.endHistoryGesture();
@@ -428,7 +473,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
                       tgOutputs[0]
                   )?.id
                 : undefined);
-        addSiteCircuit({
+        const draft: CircuitDraft = {
             sourceId: pendingCircuitSourceId,
             targetId: targetAnchorId,
             waypoints: trace.waypoints,
@@ -448,7 +493,14 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
                       },
                   }
                 : {}),
-        });
+        };
+        // Una CONEXIÓN por objeto recorrido (TG→P1, P1→P2…): se puede borrar
+        // un solo tramo y cada objeto intermedio queda conectado de verdad.
+        const pieces = splitCircuitAtAnchors(draft, anchorIdAtPoint) ?? [draft];
+        const history = useEditorStore.getState();
+        history.beginHistoryGesture();
+        pieces.forEach((piece) => addSiteCircuit(piece));
+        history.endHistoryGesture();
         setSpaceWarning(null);
         setPendingModes([]);
         setPendingVertices([]);
@@ -1417,6 +1469,13 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         selectedWireId,
         selectWire,
         removeSiteCircuitWaypoint,
+        splitCircuitAtObjects,
+        removeCircuitDownstream,
+        /** El cable pasa por objetos intermedios (guardado de corrido): se puede separar. */
+        circuitHasIntermediateObjects: (id: string) => {
+            const circuit = siteData?.circuits?.find((item) => item.id === id);
+            return Boolean(circuit && splitCircuitAtAnchors(circuit, anchorIdAtPoint));
+        },
         removeFeederPathWaypoint,
         clearAllCircuits,
         clearAllFeederPaths,

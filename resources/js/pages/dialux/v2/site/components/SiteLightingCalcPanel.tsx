@@ -1,12 +1,16 @@
-import { Calculator, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
+import { Calculator, ChevronDown, ChevronUp, Eye, EyeOff, Waves } from 'lucide-react';
 import { useState } from 'react';
 import {
-    checkAgainstNorm,
+    effectiveNormChecks,
     SITE_NORM_REGIONS,
+    type EffectiveNormCheck,
 } from '../domain/siteLightingNorms';
 import { siteQuantityCheck } from '../domain/siteQuantityCheck';
 import type { SiteData } from '../domain/types';
-import type { SiteLightingCalculationState } from '../hooks/useSiteLightingCalculation';
+import {
+    useSiteLightingStore,
+    type SiteLightingCalculationState,
+} from '../hooks/useSiteLightingCalculation';
 import { activeRegions, useNormCatalogs } from './SiteNormPanels';
 
 const TYPE_LABEL: Record<string, string> = {
@@ -22,6 +26,54 @@ const TYPE_LABEL: Record<string, string> = {
     ramp: 'Rampa (cota media)',
     stair: 'Escalera (cota media)',
 };
+
+const VERDICT_CLASS = {
+    meets: 'font-semibold text-emerald-700 dark:text-emerald-300',
+    below: 'font-semibold text-red-600 dark:text-red-400',
+    'no-data': 'text-slate-400',
+} as const;
+
+const VERDICT_TEXT = { meets: '≥', below: '<', 'no-data': '?' } as const;
+
+/**
+ * Una fila de comparación (como la tabla de verificación de la V1):
+ * requerido vs. calculado para Ē (y Emín en clases P) y U0, con la norma y
+ * si la actividad fue elegida o es la SUGERIDA del catálogo exterior.
+ */
+function NormComparison({ check }: { check: EffectiveNormCheck }) {
+    const activity = check.activity;
+    const region = SITE_NORM_REGIONS.find((item) => item.id === check.region)?.label;
+    return (
+        <span className="block leading-snug">
+            <span className="text-slate-500">
+                {region}
+                {check.suggested && (
+                    <span className="ml-1 rounded bg-sky-100 px-1 text-[9px] font-semibold text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
+                        sugerida
+                    </span>
+                )}{' '}
+                {activity?.title ?? ''}
+            </span>
+            <span className="block">
+                Ē {activity?.illuminanceLux ?? '—'} lx
+                {activity?.minLux ? ` · Emín ${activity.minLux} lx` : ''}{' '}
+                <span className={VERDICT_CLASS[check.emVerdict]}>
+                    {check.emVerdict === 'no-data'
+                        ? 'sin datos'
+                        : `${VERDICT_TEXT[check.emVerdict]} norma`}
+                </span>
+                {activity?.uniformity ? (
+                    <>
+                        {' · '}U0 {activity.uniformity}{' '}
+                        <span className={VERDICT_CLASS[check.uoVerdict]}>
+                            {VERDICT_TEXT[check.uoVerdict]}
+                        </span>
+                    </>
+                ) : null}
+            </span>
+        </span>
+    );
+}
 
 const COVERAGE = {
     optimal: { label: 'Óptimo', className: 'text-emerald-700 dark:text-emerald-300' },
@@ -53,6 +105,8 @@ export function SiteLightingCalcPanel({
     lighting: SiteLightingCalculationState;
 }) {
     const [open, setOpen] = useState(true);
+    const showIsolines = useSiteLightingStore((state) => state.showIsolines);
+    const setStore = useSiteLightingStore((state) => state.set);
     const regions = activeRegions(site);
     useNormCatalogs(regions);
     const calc = lighting.calculation;
@@ -85,6 +139,21 @@ export function SiteLightingCalcPanel({
                             <Eye className="h-3.5 w-3.5" />
                         )}
                         Falsos colores
+                    </button>
+                )}
+                {calc && lighting.showIsolux && (
+                    <button
+                        type="button"
+                        onClick={() => setStore({ showIsolines: !showIsolines })}
+                        className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 font-semibold ${
+                            showIsolines
+                                ? 'border-slate-700 bg-slate-800 text-white dark:border-white/30 dark:bg-white/15'
+                                : 'border-slate-300 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10'
+                        }`}
+                        title="Curvas isolux: líneas de igual iluminancia con su valor en lx"
+                    >
+                        <Waves className="h-3.5 w-3.5" />
+                        Curvas isolux
                     </button>
                 )}
                 {lighting.stale && (
@@ -145,7 +214,9 @@ export function SiteLightingCalcPanel({
                                         Lum.
                                     </th>
                                     <th className="px-1 py-1">Cobertura</th>
-                                    <th className="px-1 py-1">Norma elegida</th>
+                                    <th className="px-1 py-1">
+                                        Comparación con la norma (requerido → calculado)
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -153,18 +224,13 @@ export function SiteLightingCalcPanel({
                                     const element = byId.get(area.elementId);
                                     const focused =
                                         lighting.focusedAreaId === area.elementId;
-                                    const checks = regions
-                                        .filter(
-                                            (region) =>
-                                                element?.normReq?.activities[region],
-                                        )
-                                        .map((region) =>
-                                            checkAgainstNorm(
-                                                region,
-                                                element?.normReq?.activities[region],
-                                                area.summary,
-                                            ),
-                                        );
+                                    // Elegida por el cliente o, si no, la sugerida del
+                                    // catálogo exterior: la comparación nunca queda vacía.
+                                    const checks = effectiveNormChecks(
+                                        element,
+                                        regions,
+                                        area.summary,
+                                    );
                                     const quantity = siteQuantityCheck(
                                         area,
                                         checks.find(
@@ -194,8 +260,26 @@ export function SiteLightingCalcPanel({
                                                     {TYPE_LABEL[area.type] ?? area.type} ·{' '}
                                                     {fmt(area.areaM2, 0)} m² ·{' '}
                                                     {area.luminairesUsed} lum. · malla{' '}
-                                                    {fmt(area.spacingM, 2)} m · ρ{' '}
+                                                    {fmt(area.spacingM, 2)} m (
+                                                    {area.gridMode === 'standard'
+                                                        ? 'EN 12464'
+                                                        : area.gridMode === 'fine'
+                                                          ? 'fina'
+                                                          : 'propia'}
+                                                    , {area.gridPoints} pts, h {fmt(area.planeHeightM, 2)} m) · ρ{' '}
                                                     {area.groundReflectance}
+                                                    <button
+                                                        type="button"
+                                                        onClick={(event) => {
+                                                            event.stopPropagation();
+                                                            lighting.runArea(area.elementId);
+                                                        }}
+                                                        disabled={lighting.running}
+                                                        className="ml-1 rounded border border-amber-400 px-1 font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:text-amber-300"
+                                                        title="Recalcular solo este espacio"
+                                                    >
+                                                        ↻
+                                                    </button>
                                                 </span>
                                             </td>
                                             <td className="px-1 py-1 text-right font-semibold">
@@ -238,49 +322,14 @@ export function SiteLightingCalcPanel({
                                             <td className="px-1 py-1 text-[10px]">
                                                 {checks.length === 0 ? (
                                                     <span className="text-slate-400">
-                                                        Sin actividad elegida
+                                                        Sin actividad aplicable (canchas: EN 12193 no cargada)
                                                     </span>
                                                 ) : (
                                                     checks.map((check) => (
-                                                        <span
+                                                        <NormComparison
                                                             key={check.region}
-                                                            className="block"
-                                                        >
-                                                            {
-                                                                SITE_NORM_REGIONS.find(
-                                                                    (region) =>
-                                                                        region.id ===
-                                                                        check.region,
-                                                                )?.label
-                                                            }
-                                                            :{' '}
-                                                            {check.activity?.illuminanceLux ??
-                                                                '—'}{' '}
-                                                            lx
-                                                            {check.activity?.minLux
-                                                                ? ` · Emín ${check.activity.minLux}`
-                                                                : ''}{' '}
-                                                            →{' '}
-                                                            <span
-                                                                className={
-                                                                    check.emVerdict ===
-                                                                    'meets'
-                                                                        ? 'font-semibold text-emerald-700 dark:text-emerald-300'
-                                                                        : check.emVerdict ===
-                                                                            'below'
-                                                                          ? 'font-semibold text-red-600 dark:text-red-400'
-                                                                          : 'text-slate-400'
-                                                                }
-                                                            >
-                                                                {check.emVerdict ===
-                                                                'meets'
-                                                                    ? '≥ norma'
-                                                                    : check.emVerdict ===
-                                                                        'below'
-                                                                      ? '< norma'
-                                                                      : 'sin datos'}
-                                                            </span>
-                                                        </span>
+                                                            check={check}
+                                                        />
                                                     ))
                                                 )}
                                             </td>
@@ -298,7 +347,9 @@ export function SiteLightingCalcPanel({
                         cumbrera; cielo abierto: sin reflexiones). ρ del suelo
                         = estimación no normativa, solo para la luminancia. La
                         comparación con la norma es numérica, no una
-                        declaración de cumplimiento. Varias cotas: la
+                        declaración de cumplimiento; sin actividad elegida se
+                        compara con la SUGERIDA del catálogo exterior
+                        (EN 12464-2 / EN 13201-2, valores por confirmar). Varias cotas: la
                         superficie se calcula por parches, cada uno a su cota;
                         una plataforma o espacio dentro de otro se calcula
                         solo en el suyo. "Lum." y "Cobertura": método de

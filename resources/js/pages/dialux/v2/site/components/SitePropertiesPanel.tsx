@@ -22,6 +22,7 @@ import { resolveWireEndpoints } from '../domain/wireAnchors';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 import { defaultConfigFor } from '../lib/siteDefaults';
 import { SiteAutoCircuitPanel } from './SiteAutoCircuitPanel';
+import { SiteCalcSurfaceFields } from './SiteCalcSurfaceFields';
 import { SiteElementConfigFields } from './SiteElementConfigFields';
 import { POINT_ELEMENT_TYPES } from './SiteElementSymbol';
 import { SiteFeederRoutePanel } from './SiteFeederRoutePanel';
@@ -331,20 +332,44 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                                             {circuit.label ??
                                                 `${labelOf(circuit.sourceId)} → ${labelOf(circuit.targetId)}`}
                                         </span>
+                                        <span className="flex shrink-0 items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    editor.removeSiteCircuit(circuit.id);
+                                                }}
+                                                title="Eliminar SOLO esta conexión (el resto del cableado queda)"
+                                                className="text-rose-500 hover:text-rose-700"
+                                            >
+                                                <Trash2 className="h-3 w-3" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    editor.removeCircuitDownstream(circuit.id);
+                                                }}
+                                                title="Eliminar desde aquí: esta conexión y todo lo que cuelga de ella (aguas abajo)"
+                                                className="rounded border border-rose-300 px-1 text-[9px] font-semibold text-rose-600 hover:bg-rose-50 dark:border-rose-500/40 dark:text-rose-300"
+                                            >
+                                                desde aquí
+                                            </button>
+                                        </span>
+                                    </div>
+                                    {editor.circuitHasIntermediateObjects(circuit.id) && (
                                         <button
                                             type="button"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                editor.removeSiteCircuit(
-                                                    circuit.id,
-                                                );
+                                                editor.splitCircuitAtObjects(circuit.id);
                                             }}
-                                            title="Eliminar todo el cableado"
-                                            className="shrink-0 text-rose-500 hover:text-rose-700"
+                                            className="mt-1 w-full rounded border border-cyan-300 px-1.5 py-0.5 text-left text-[10px] font-semibold text-cyan-700 hover:bg-cyan-50 dark:border-cyan-500/40 dark:text-cyan-300"
+                                            title="Este cable pasa por varios objetos: sepáralo en una conexión por objeto para poder borrar un tramo y que cada objeto quede conectado en el cálculo"
                                         >
-                                            <Trash2 className="h-3 w-3" />
+                                            Separar por objetos
                                         </button>
-                                    </div>
+                                    )}
                                     {liveWaypoints.length > 2 && (
                                         <WireSegments
                                             waypoints={liveWaypoints}
@@ -1041,7 +1066,10 @@ function ElementProperties({
 
                             element.vertices.length >= 3 && (
 
-                                <OpenLightingButton />
+                                <>
+                                    <SiteCalcSurfaceFields element={element} editor={editor} />
+                                    <OpenLightingButton />
+                                </>
 
                             )}
 

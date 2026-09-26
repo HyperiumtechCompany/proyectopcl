@@ -22,6 +22,8 @@ interface SiteLightingStore {
     calculatedFor: SiteData | null;
     running: boolean;
     showIsolux: boolean;
+    /** Curvas isolux ("ondas") sobre los falsos colores. */
+    showIsolines: boolean;
     focusedAreaId: string | null;
     /** Luminarias "fantasma" de la proyección en curso (coordenadas de plano). */
     projectionPreview: { areaId: string; positions: Point2D[] } | null;
@@ -71,6 +73,7 @@ export const useSiteLightingStore = create<SiteLightingStore>((set) => ({
     calculatedFor: null,
     running: false,
     showIsolux: true,
+    showIsolines: true,
     focusedAreaId: null,
     projectionPreview: null,
     projectionAdjust: EMPTY_PROJECTION_ADJUST,
@@ -142,9 +145,53 @@ export function useSiteLightingCalculation(siteData: SiteData | undefined) {
             .finally(() => state.set({ running: false }));
     };
 
+    /**
+     * Calcula SOLO un espacio (objeto de cálculo, como en DIALux evo) y lo
+     * integra al cálculo existente: para probar un área sin recalcular toda
+     * la planta. Si no había cálculo, queda uno con ese único espacio.
+     */
+    const runArea = (areaId: string) => {
+        if (!siteData || useSiteLightingStore.getState().running) return;
+        state.set({ running: true });
+        const latest = useEditorStore.getState().project?.site ?? siteData;
+        void loadSitePhotometry(siteLightProductIds(latest))
+            .then((loaded) => {
+                const single = calculateSiteLighting(latest, loaded, new Set([areaId]));
+                const current = useSiteLightingStore.getState();
+                const previous = current.calculation;
+                const areas = previous
+                    ? [
+                          ...previous.areas.filter((area) => area.elementId !== areaId),
+                          ...single.areas,
+                      ]
+                    : single.areas;
+                // Orden de la planta (el de siempre en la tabla).
+                const order = new Map((latest.elements ?? []).map((element, index) => [element.id, index]));
+                areas.sort((a, b) => (order.get(a.elementId) ?? 0) - (order.get(b.elementId) ?? 0));
+                state.set({
+                    calculation: {
+                        areas,
+                        luminaires: single.luminaires,
+                        warnings: [...new Set([...(previous?.warnings ?? []), ...single.warnings])],
+                        skipped: [
+                            ...(previous?.skipped ?? []).filter((item) => item.elementId !== areaId),
+                            ...(single.skipped ?? []),
+                        ],
+                    },
+                    // Solo sigue "al día" si el resto ya lo estaba.
+                    calculatedFor:
+                        !previous || current.calculatedFor === latest ? latest : current.calculatedFor,
+                    focusedAreaId: areaId,
+                    showIsolux: true,
+                });
+            })
+            .finally(() => state.set({ running: false }));
+    };
+
     return {
         calculation: state.calculation,
         running: state.running,
+        runArea,
         stale:
             state.calculation !== null && state.calculatedFor !== siteData,
         run,

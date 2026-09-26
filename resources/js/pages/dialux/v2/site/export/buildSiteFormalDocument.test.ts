@@ -55,8 +55,16 @@ describe('informe PDF de la planta general (D2)', () => {
             'site-section',
             'terrain-cad',
             'terrain-cad',
+            // Lista de luminarias del proyecto, lista de espacios y objetos de cálculo (V1 / DIALux evo).
+            'luminaire-list',
             'site-section',
-            // Ficha de la zona "Cancha" con las páginas por ambiente de la V1.
+            'site-section',
+            'calculation-object-list',
+            // Recinto "Canchas deportivas": locales, luminarias y objetos de cálculo del grupo…
+            'room-ambient-list',
+            'room-luminaires',
+            'calculation-object-list',
+            // …y la ficha del espacio "Cancha" con las páginas por ambiente de la V1.
             'ambient-summary',
             'ambient-plan',
             'ambient-luminaires',
@@ -65,11 +73,10 @@ describe('informe PDF de la planta general (D2)', () => {
             'site-section',
             'site-section',
         ]);
-        expect(document.pages.map((page) => page.pageNumber)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+        expect(document.pages.map((page) => page.pageNumber)).toEqual(document.pages.map((_, index) => index + 1));
         expect(document.toc.length).toBeGreaterThanOrEqual(2);
-        for (const entry of document.toc) {
-            expect(document.pages.some((page) => page.pageNumber === entry.pageNumber && entry.title.endsWith(page.title))).toBe(true);
-        }
+        const numbers = new Set(document.pages.map((page) => page.pageNumber));
+        for (const entry of document.toc) expect(numbers.has(entry.pageNumber)).toBe(true);
     });
 
     it('todas las páginas referencian assets existentes', () => {
@@ -86,7 +93,11 @@ describe('informe PDF de la planta general (D2)', () => {
         expect(data.rows).toHaveLength(1);
         expect(data.rows[0].name).toBe('Cancha');
         expect(data.rows[0].em).toBe(calculation.areas[0].result.avg_lux.toLocaleString('es-PE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
-        expect(data.rows[0].norm).toMatch(/20 lx → (≥ norma|< norma)/);
+        expect(data.rows[0].required).toBe('20 lx · U0 0.4');
+        expect(data.rows[0].verdict).toMatch(/^(≥ norma|< norma)$/);
+        const norms = document.assets.find((asset) => asset.id === 'site-norms-0') as { data: { rows: Array<Record<string, string>> } };
+        expect(norms.data.rows[0].em).toMatch(/ \/ 20$/);
+        expect(norms.data.rows[0].emVerdict).toMatch(/^(≥ norma|< norma)$/);
         expect(JSON.stringify(document)).not.toMatch(/cumple/i);
     });
 
@@ -117,8 +128,12 @@ describe('informe PDF de la planta general (D2)', () => {
         expect(detail.luminaires[0].quantity).toBe(1);
         expect(detail.luminaires[0].powerWatts).toBe(100);
         expect(detail.complianceLabel).toMatch(/^(≥ norma|< norma)/);
-        // Nunca "Conforme": catálogo exterior pendiente de confirmar.
-        expect(detail.requirementEvaluations.every((item) => item.status === 'not-evaluated')).toBe(true);
+        // Con norma elegida se EVALÚA como la V1 (pass/fail coherente con el
+        // número), citando la fuente.
+        for (const item of detail.requirementEvaluations) {
+            expect(item.status).toBe((item.calculatedValue ?? 0) >= (item.requiredValue ?? Infinity) ? 'pass' : 'fail');
+            expect(item.source).toMatch(/EN 1(2464-2|3201-2)/);
+        }
         expect(detail.reflectionCeiling).toBeNull();
         expect(detail.ugr).toBeNull();
         const ids = new Set(document.assets.map((asset) => asset.id));
@@ -130,16 +145,87 @@ describe('informe PDF de la planta general (D2)', () => {
     });
 
     it('índice: una entrada por zona (su resumen), no por cada subpágina', () => {
-        const zoneEntries = document.toc.filter((entry) => entry.title.startsWith('Zona:'));
-        expect(zoneEntries).toHaveLength(1);
-        expect(zoneEntries[0].level).toBe(1);
+        const groupEntries = document.toc.filter((entry) => entry.title.startsWith('Recinto:'));
+        expect(groupEntries.map((entry) => [entry.title, entry.level])).toEqual([['Recinto: Canchas deportivas (1 espacio)', 1]]);
+        const zoneEntries = document.toc.filter((entry) => entry.level === 2);
+        expect(zoneEntries.map((entry) => entry.title)).toEqual(['Cancha']);
+    });
+
+    it('cada ficha se calcula y lista con SUS luminarias; las vecinas solo en modo escena', () => {
+        const withNeighbour: SiteData = {
+            ...site,
+            elements: [
+                ...site.elements,
+                square('Vereda', 'sidewalk', 30, 0, 10),
+                square('P2', 'pole', 34.7, 4.7, 0.6, {
+                    config: { kind: 'pole', heightM: 8, armLengthM: 0, armDirectionDeg: 0, fixtures: 1, lumens: 12000, wattage: 100 },
+                }),
+            ],
+        };
+        const doc = buildSiteFormalDocument({
+            site: withNeighbour,
+            projectName: 'Demo',
+            calculation: calculateSiteLighting(withNeighbour, new Map()),
+            outputRows: [],
+            regions: ['exterior'],
+        });
+        const cancha = doc.ambientDetails.find((detail) => detail.ambientName === 'Cancha')!;
+        expect(cancha.fixtureCount).toBe(1);
+        expect(cancha.luminaires.reduce((sum, item) => sum + item.quantity, 0)).toBe(1);
+        // Por defecto se calcula solo con SUS luminarias: nada de la vereda.
+        expect(cancha.fixturePositions).toHaveLength(1);
+        expect(cancha.warnings.some((w) => w.code === 'exterior-neighbour-luminaires')).toBe(false);
+        expect(cancha.exterior?.luminaires).toMatch(/^Solo las luminarias del espacio/);
+        expect(cancha.exterior?.reflections).toMatch(/^Cielo abierto/);
+        expect([cancha.reflectionCeiling, cancha.reflectionWall, cancha.reflectionFloor]).toEqual([null, null, null]);
+
+        // Modo "toda la escena": la vereda aporta y se avisa.
+        const scene: SiteData = {
+            ...withNeighbour,
+            elements: withNeighbour.elements.map((element) =>
+                element.id === 'Cancha' ? { ...element, calcSurface: { luminaires: 'all' as const } } : element,
+            ),
+        };
+        const sceneDoc = buildSiteFormalDocument({
+            site: scene,
+            projectName: 'Demo',
+            calculation: calculateSiteLighting(scene, new Map()),
+            outputRows: [],
+            regions: ['exterior'],
+        });
+        const sceneCancha = sceneDoc.ambientDetails.find((detail) => detail.ambientName === 'Cancha')!;
+        expect(sceneCancha.fixtureCount).toBe(1);
+        expect(sceneCancha.warnings.some((w) => w.code === 'exterior-neighbour-luminaires')).toBe(true);
+        const total = doc.ambientDetails.reduce((sum, detail) => sum + detail.fixtureCount, 0);
+        expect(total).toBe(doc.luminaires.reduce((sum, item) => sum + item.quantity, 0));
+    });
+
+    it('los espacios se agrupan por recinto (categoría) y el proyecto trae su lista de luminarias', () => {
+        expect(document.ambientDetails.map((detail) => [detail.roomId, detail.roomName])).toEqual([
+            ['site-group-canchas', 'Canchas deportivas'],
+        ]);
+        expect(document.luminaires.length).toBeGreaterThan(0);
+        expect(document.luminaires.reduce((sum, item) => sum + item.quantity, 0)).toBe(
+            document.ambientDetails[0].luminaires.reduce((sum, item) => sum + item.quantity, 0),
+        );
+        const list = document.pages.find((page) => page.kind === 'luminaire-list');
+        expect([list?.rowRangeStart, list?.rowRangeEnd]).toEqual([0, document.luminaires.length]);
     });
 
     it('la ficha es de un ESPACIO exterior (tipo, proyección, superficie), no de un recinto', () => {
         const [detail] = document.ambientDetails;
         expect(detail.exterior?.spaceType).toBe('Cancha deportiva');
-        expect(detail.exterior?.surface).toMatch(/^A nivel del suelo \(cota 0\.00 m\), malla de/);
-        expect(detail.exterior?.projection).toMatch(/Sin proyección: iluminada por 1 luminaria/);
+        expect(detail.exterior?.surface).toMatch(/^A nivel del suelo \(cota 0\.00 m\); malla [\d.]+ m — EN 12464/);
+        expect(detail.exterior?.projection).toMatch(/Sin proyección: 1 luminaria\(s\) propias/);
+    });
+
+    it('toda evaluación normativa lleva unidad (el servidor rechaza una vacía: error 422)', () => {
+        for (const detail of document.ambientDetails) {
+            for (const evaluation of detail.requirementEvaluations) {
+                expect(evaluation.unit.length).toBeGreaterThan(0);
+            }
+        }
+        expect(document.ambientDetails[0].requirementEvaluations.map((item) => item.unit)).toEqual(['lx', 'ratio']);
     });
 });
 

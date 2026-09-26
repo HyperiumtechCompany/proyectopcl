@@ -9,12 +9,14 @@ import {
 import type { SiteOutputRow } from '../../site/domain/siteOutputs';
 import type { EdgeCalculation } from '../domain/calculations';
 import {
+    ctTreeOrder,
     rowsForDistributionPanel,
     type ModuleCtCircuit,
 } from '../domain/ctTableRows';
 import type {
     ElectricalEdge,
     ElectricalNetworkData,
+    ElectricalNode,
     GraphIssue,
 } from '../domain/types';
 
@@ -182,28 +184,6 @@ export function ElectricalCtTable({
         feederProblems +
         circuitProblems +
         disconnected.length;
-    const moduleIds = Array.from(
-        new Set(
-            edges
-                .map((edge) => nodes.get(edge.targetNodeId)?.moduleId)
-                .filter((id): id is number => id !== undefined),
-        ),
-    );
-    const rootEdges = edges.filter(
-        (edge) => nodes.get(edge.sourceNodeId)?.type === 'main_panel',
-    );
-    const mainPanels = data.nodes.filter((node) => node.type === 'main_panel');
-    const rootPanelIds = new Set(
-        rootEdges
-            .map((edge) => nodes.get(edge.targetNodeId)?.deviceId)
-            .filter((panelId): panelId is string => Boolean(panelId)),
-    );
-    const rootDistributionSummaries = moduleCtCircuits.filter(
-        (circuit) =>
-            circuit.isPanelSummary &&
-            circuit.panelType === 'sub_panel' &&
-            rootPanelIds.has(circuit.panelId),
-    );
     // Corrige el árbol multimódulo en un solo paso, pero SOLO a nivel de
     // tablero (alimentadores TG→TD→Sub-TD de la red v2 y las filas resumen
     // "CGx" de cada módulo) — nunca las salidas individuales. La sección de
@@ -253,8 +233,7 @@ export function ElectricalCtTable({
                     (candidate) => candidate.targetNodeId === edge.sourceNodeId,
                 );
                 const bumped =
-                    parentEdge &&
-                    nextCatalogSection(parentEdge.sectionMm2);
+                    parentEdge && nextCatalogSection(parentEdge.sectionMm2);
                 if (parentEdge && bumped) {
                     onUpdateEdge(parentEdge.id, { sectionMm2: bumped });
                 }
@@ -276,15 +255,182 @@ export function ElectricalCtTable({
         setTreeFixApplied(true);
     };
 
+    // ── Tabla en el ORDEN DEL ÁRBOL, como la planilla de CT: TG con sus
+    // salidas (las de la planta) y su resumen, luego cada TD que cuelga de él
+    // con sus salidas y su CG, luego sus Sub‑TD… Las salidas de la planta van
+    // dentro de su tablero, no en una tabla aparte.
+    const tree = ctTreeOrder(data);
+    const unreachablePanels = tree.unreachable
+        .map((id) => nodes.get(id))
+        .filter((node): node is ElectricalNode => Boolean(node));
+    const siteRowsOf = (node: ElectricalNode | undefined) =>
+        node?.siteElementId
+            ? siteOutputRows.filter(
+                  (row) => row.panelElementId === node.siteElementId,
+              )
+            : [];
+    const moduleRowsOf = (node: ElectricalNode | undefined) =>
+        node?.type === 'module_panel_port' && node.moduleId !== undefined
+            ? rowsForDistributionPanel(
+                  moduleCtCircuits,
+                  node.moduleId,
+                  node.deviceId,
+              )
+            : { outputRows: [], summaryRows: [] };
+    /**
+     * Carga que cuelga de un tablero de la planta (TG / sub tablero): los CG
+     * de los TD hijos (ya acumulan su subárbol) + sus salidas de la planta +
+     * lo de sus sub tableros de planta hijos.
+     */
+    const loadsBelow = (
+        nodeId: string,
+    ): { summaries: ModuleCtCircuit[]; siteRows: SiteOutputRow[] } => {
+        const own = nodes.get(nodeId);
+        const result = {
+            summaries: [] as ModuleCtCircuit[],
+            siteRows: siteRowsOf(own),
+        };
+        for (const child of tree.blocks) {
+            if (child.parentPanelId !== nodeId) continue;
+            const childNode = nodes.get(child.nodeId);
+            if (childNode?.type === 'module_panel_port') {
+                result.summaries.push(...moduleRowsOf(childNode).summaryRows);
+            } else if (childNode?.type === 'site_panel') {
+                const nested = loadsBelow(child.nodeId);
+                result.summaries.push(...nested.summaries);
+                result.siteRows.push(...nested.siteRows);
+            }
+        }
+        return result;
+    };
+    const indent = (depth: number) => `${'↳ '.repeat(Math.min(depth, 4))}`;
+    const renderBlock = (block: (typeof tree.blocks)[number]) => {
+        const node = nodes.get(block.nodeId);
+        if (!node) return null;
+        const parent = block.parentPanelId
+            ? nodes.get(block.parentPanelId)
+            : undefined;
+        const select = () => onSelect(block.edgeId ?? node.id);
+        if (node.type === 'main_panel' || node.type === 'site_panel') {
+            const ownRows = siteRowsOf(node);
+            const loads = loadsBelow(node.id);
+            const kind = node.type === 'main_panel' ? 'TG' : 'ST planta';
+            return (
+                <Fragment key={node.id}>
+                    <tr className="bg-slate-700 font-bold text-white dark:bg-[#263650]">
+                        <td colSpan={COLS} className="px-3 py-1.5">
+                            {indent(block.depth)}
+                            {kind} {node.label}
+                            {parent
+                                ? ` · alimentado desde ${parent.label}`
+                                : ''}
+                            {' · '}
+                            {ownRows.length} salida(s) de la planta general
+                        </td>
+                    </tr>
+                    {ownRows.map((row, index) => (
+                        <CircuitRow
+                            key={`${node.id}:${row.rootConductorId}:site`}
+                            circuit={{
+                                ...row,
+                                moduleId: 0,
+                                moduleName: 'Planta general',
+                            }}
+                            onUpdate={onUpdateCircuit}
+                            readOnly
+                            description={{
+                                title: row.outputLabel,
+                                detail: `${row.loadsDetail}${row.firstTargetLabel ? ` · → ${row.firstTargetLabel}` : ''} (se edita en la planta general)`,
+                            }}
+                            panelHeader={
+                                index === 0
+                                    ? {
+                                          rowSpan: ownRows.length,
+                                          panelKind: kind,
+                                          panelLabel: node.label,
+                                          onSelect: select,
+                                      }
+                                    : undefined
+                            }
+                        />
+                    ))}
+                    <GeneralRow
+                        tgNodeId={node.id}
+                        data={data}
+                        calculations={calculations}
+                        distributionSummaries={loads.summaries}
+                        siteRows={loads.siteRows}
+                        editableSettings={node.type === 'main_panel'}
+                        onUpdate={onUpdateSettings}
+                        onUpdateEdge={onUpdateEdge}
+                    />
+                </Fragment>
+            );
+        }
+        // Tablero de un módulo (TD / Sub‑TD) con sus salidas y su CG.
+        const { outputRows, summaryRows } = moduleRowsOf(node);
+        const panelKind = parent?.type === 'main_panel' ? 'TD' : 'Sub-TD';
+        const entersModule = parent?.moduleId !== node.moduleId;
+        const panelHeader = (rowSpan: number) => ({
+            rowSpan,
+            panelKind,
+            panelLabel: `${indent(block.depth)}${node.label}`,
+            onSelect: select,
+        });
+        return (
+            <Fragment key={node.id}>
+                <tr
+                    className={
+                        entersModule
+                            ? 'bg-slate-600 font-bold text-white dark:bg-[#2c3d58]'
+                            : 'bg-slate-200 font-bold text-slate-800 dark:bg-[#344763] dark:text-white'
+                    }
+                >
+                    <td colSpan={COLS} className="px-3 py-1.5">
+                        {indent(block.depth)}
+                        {panelKind} {node.label} · {node.moduleName ?? 'Módulo'}
+                        {node.sceneName ? ` · ${node.sceneName}` : ''}
+                        {parent ? ` · alimentado desde ${parent.label}` : ''}
+                        {' · '}
+                        {outputRows.length} salida(s)
+                    </td>
+                </tr>
+                {outputRows.map((circuit, circuitIndex) => (
+                    <CircuitRow
+                        key={`${node.id}:${circuit.rootConductorId}:C`}
+                        circuit={circuit}
+                        onUpdate={onUpdateCircuit}
+                        panelHeader={
+                            circuitIndex === 0
+                                ? panelHeader(outputRows.length)
+                                : undefined
+                        }
+                    />
+                ))}
+                {summaryRows.map((circuit) => (
+                    <CircuitRow
+                        key={`${node.id}:${circuit.rootConductorId}:CG`}
+                        circuit={circuit}
+                        onUpdate={onUpdateCircuit}
+                        panelHeader={panelHeader(1)}
+                    />
+                ))}
+            </Fragment>
+        );
+    };
+
     return (
         <section className="flex min-h-0 flex-1 flex-col bg-slate-50 dark:bg-[#090c14]">
             <div className="border-b border-slate-200 bg-white px-4 py-3 dark:border-white/10 dark:bg-[#101218]">
                 <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
-                    Cálculo CT multimódulo — TG, TD, Sub‑TD y salidas
+                    Cálculo CT — árbol TG → TD → Sub‑TD → salidas (módulos y
+                    planta general)
                 </h2>
                 <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
                     Misma matriz de 36 columnas y mismas fórmulas del cálculo CT
-                    por módulo.
+                    por módulo; cada tablero con sus salidas en el orden del
+                    árbol. Las salidas de la planta se editan en la planta
+                    general (cable, sección y recorrido dibujados).
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button
@@ -321,248 +467,28 @@ export function ElectricalCtTable({
                 <table className="w-full min-w-[3500px] border-collapse text-left text-[10px] text-slate-700 dark:text-slate-200">
                     <FullHeader />
                     <tbody>
-                        {moduleIds.map((moduleId) => {
-                            const moduleEdges = edges
-                                .filter(
-                                    (edge) =>
-                                        nodes.get(edge.targetNodeId)
-                                            ?.moduleId === moduleId,
-                                )
-                                .sort((left, right) => {
-                                    const depthOf = (edge: ElectricalEdge) => {
-                                        let depth = 0;
-                                        let sourceId = edge.sourceNodeId;
-                                        const visited = new Set<string>();
-                                        while (!visited.has(sourceId)) {
-                                            visited.add(sourceId);
-                                            const parent = edges.find(
-                                                (candidate) =>
-                                                    candidate.targetNodeId ===
-                                                    sourceId,
-                                            );
-                                            if (!parent) break;
-                                            depth += 1;
-                                            sourceId = parent.sourceNodeId;
-                                        }
-                                        return depth;
-                                    };
-                                    const depthDifference =
-                                        depthOf(left) - depthOf(right);
-                                    if (depthDifference !== 0)
-                                        return depthDifference;
-                                    const leftDevice = nodes.get(
-                                        left.targetNodeId,
-                                    )?.deviceId;
-                                    const rightDevice = nodes.get(
-                                        right.targetNodeId,
-                                    )?.deviceId;
-                                    const levelOf = (deviceId?: string) =>
-                                        moduleCtCircuits.find(
-                                            (item) =>
-                                                item.moduleId === moduleId &&
-                                                item.panelId === deviceId,
-                                        )?.levelIndex ?? 0;
-                                    return (
-                                        levelOf(leftDevice) -
-                                        levelOf(rightDevice)
-                                    );
-                                });
-                            const moduleName =
-                                nodes.get(moduleEdges[0]?.targetNodeId ?? '')
-                                    ?.moduleName ?? `Módulo ${moduleId}`;
-                            const circuits = moduleCtCircuits.filter(
-                                (item) => item.moduleId === moduleId,
-                            );
-                            const principalTdCount = moduleEdges.filter(
-                                (edge) =>
-                                    nodes.get(edge.sourceNodeId)?.type ===
-                                    'main_panel',
-                            ).length;
-                            const subTdCount =
-                                moduleEdges.length - principalTdCount;
-                            return (
-                                <Fragment key={moduleId}>
-                                    <tr className="bg-slate-700 font-bold text-white dark:bg-[#263650]">
-                                        <td
-                                            colSpan={COLS}
-                                            className="px-3 py-1.5"
-                                        >
-                                            {moduleName} · {principalTdCount} TD
-                                            principal(es) · {subTdCount} Sub‑TD
-                                            ·{' '}
-                                            {
-                                                circuits.filter(
-                                                    (item) =>
-                                                        !item.isPanelSummary,
-                                                ).length
-                                            }{' '}
-                                            salida(s)
-                                        </td>
-                                    </tr>
-                                    {moduleEdges.map((edge, edgeIndex) => {
-                                        const target = nodes.get(
-                                            edge.targetNodeId,
-                                        );
-                                        const source = nodes.get(
-                                            edge.sourceNodeId,
-                                        );
-                                        const result = calcByEdge.get(edge.id);
-                                        if (!target || !result) return null;
-                                        const { outputRows, summaryRows } =
-                                            rowsForDistributionPanel(
-                                                circuits,
-                                                moduleId,
-                                                target.deviceId,
-                                            );
-                                        const rowCount =
-                                            outputRows.length +
-                                            summaryRows.length;
-                                        if (rowCount === 0) return null;
-                                        const panelKind =
-                                            source?.type === 'main_panel'
-                                                ? 'TD'
-                                                : 'Sub-TD';
-                                        const previousTarget = nodes.get(
-                                            moduleEdges[edgeIndex - 1]
-                                                ?.targetNodeId ?? '',
-                                        );
-                                        const startsLevel =
-                                            edgeIndex === 0 ||
-                                            previousTarget?.sceneId !==
-                                                target.sceneId;
-                                        return (
-                                            <Fragment key={edge.id}>
-                                                {startsLevel && (
-                                                    <tr className="bg-slate-200 font-bold text-slate-800 dark:bg-[#344763] dark:text-white">
-                                                        <td
-                                                            colSpan={COLS}
-                                                            className="px-3 py-1.5"
-                                                        >
-                                                            {target.sceneName ??
-                                                                'Sin nivel'}
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                                {outputRows.map(
-                                                    (circuit, circuitIndex) => (
-                                                        <CircuitRow
-                                                            key={`${edge.id}:${circuit.rootConductorId}:C`}
-                                                            circuit={circuit}
-                                                            onUpdate={
-                                                                onUpdateCircuit
-                                                            }
-                                                            panelHeader={
-                                                                circuitIndex ===
-                                                                0
-                                                                    ? {
-                                                                          rowSpan:
-                                                                              outputRows.length,
-                                                                          panelKind,
-                                                                          panelLabel:
-                                                                              target.label,
-                                                                          onSelect:
-                                                                              () =>
-                                                                                  onSelect(
-                                                                                      edge.id,
-                                                                                  ),
-                                                                      }
-                                                                    : undefined
-                                                            }
-                                                        />
-                                                    ),
-                                                )}
-                                                {summaryRows.map((circuit) => (
-                                                    <CircuitRow
-                                                        key={`${edge.id}:${circuit.rootConductorId}:CG`}
-                                                        circuit={circuit}
-                                                        onUpdate={
-                                                            onUpdateCircuit
-                                                        }
-                                                        panelHeader={{
-                                                            rowSpan: 1,
-                                                            panelKind,
-                                                            panelLabel:
-                                                                target.label,
-                                                            onSelect: () =>
-                                                                onSelect(
-                                                                    edge.id,
-                                                                ),
-                                                        }}
-                                                    />
-                                                ))}
-                                            </Fragment>
-                                        );
-                                    })}
-                                </Fragment>
-                            );
-                        })}
-                        {disconnected.map((node) => (
+                        {tree.blocks.map((block) => renderBlock(block))}
+                        {unreachablePanels.map((node) => (
                             <tr
                                 key={node.id}
                                 className="bg-amber-50 dark:bg-amber-950/20"
                             >
                                 <td className="px-3 py-2 font-semibold">
-                                    {node.moduleName}
+                                    {node.moduleName ?? 'Planta general'}
                                 </td>
                                 <td>—</td>
                                 <td
                                     colSpan={COLS - 2}
                                     className="px-3 py-2 text-amber-700 dark:text-amber-300"
                                 >
-                                    {node.sceneName} · {node.label}: tablero
-                                    desconectado del TG General.
+                                    {node.sceneName
+                                        ? `${node.sceneName} · `
+                                        : ''}
+                                    {node.label}: tablero desconectado del árbol
+                                    (no cuelga de ningún TG).
                                 </td>
                             </tr>
                         ))}
-                        <tr className="bg-slate-800 font-semibold text-white">
-                            <td
-                                colSpan={COLS}
-                                className="px-3 py-2 text-center"
-                            >
-                                RESUMEN GENERAL (TG) · {moduleIds.length}{' '}
-                                módulo(s) · {rootEdges.length} TD principal(es)
-                            </td>
-                        </tr>
-                        {mainPanels.map((tg) => {
-                            // Con varios TG, cada fila resumen lleva SOLO lo
-                            // que cuelga de ese TG (sus módulos y sus salidas
-                            // de la planta), con su propio alimentador.
-                            const tgPanelIds = new Set(
-                                rootEdges
-                                    .filter(
-                                        (edge) =>
-                                            mainPanels.length === 1 ||
-                                            edge.sourceNodeId === tg.id,
-                                    )
-                                    .map(
-                                        (edge) =>
-                                            nodes.get(edge.targetNodeId)
-                                                ?.deviceId,
-                                    )
-                                    .filter((panelId): panelId is string =>
-                                        Boolean(panelId),
-                                    ),
-                            );
-                            return (
-                                <GeneralRow
-                                    key={tg.id}
-                                    tgNodeId={tg.id}
-                                    data={data}
-                                    calculations={calculations}
-                                    distributionSummaries={rootDistributionSummaries.filter(
-                                        (circuit) =>
-                                            tgPanelIds.has(circuit.panelId),
-                                    )}
-                                    siteRows={siteOutputRows.filter(
-                                        (row) =>
-                                            row.panelElementId ===
-                                            tg.siteElementId,
-                                    )}
-                                    onUpdate={onUpdateSettings}
-                                    onUpdateEdge={onUpdateEdge}
-                                />
-                            );
-                        })}
                     </tbody>
                 </table>
             </div>
@@ -633,10 +559,13 @@ function GeneralRow({
     calculations,
     distributionSummaries,
     siteRows = [],
+    editableSettings = true,
     onUpdate,
     onUpdateEdge,
 }: {
     tgNodeId?: string;
+    /** Solo el TG edita los ajustes generales de la red (fp, sistema, T). */
+    editableSettings?: boolean;
     data: ElectricalNetworkData;
     calculations: EdgeCalculation[];
     distributionSummaries: ModuleCtCircuit[];
@@ -651,9 +580,7 @@ function GeneralRow({
     const tgNode =
         data.nodes.find((node) => node.id === tgNodeId) ??
         data.nodes.find((node) => node.type === 'main_panel');
-    const tgEdge = data.edges.find(
-        (edge) => edge.targetNodeId === tgNode?.id,
-    );
+    const tgEdge = data.edges.find((edge) => edge.targetNodeId === tgNode?.id);
     const tgResult = calculations.find((item) => item.edgeId === tgEdge?.id);
     // Carga del TG = sus tableros de módulo + sus salidas de la planta (ambas
     // salen del mismo motor CT V1, mismas columnas de fase).
@@ -708,20 +635,20 @@ function GeneralRow({
 
     return (
         <tr className="border-b-4 border-violet-300 bg-violet-50/80 font-semibold dark:border-violet-900 dark:bg-violet-950/20">
-            <Mono value={`${tgNode?.label ?? 'TG'} · General`} accent />
+            <Mono
+                value={`${tgNode?.label ?? 'TG'} · ${tgNode?.type === 'site_panel' ? 'Sub tablero' : 'General'}`}
+                accent
+            />
             <Mono value="CG1" accent />
             <Description
                 title={`Resumen de ${tgNode?.label ?? 'TG'}`}
-                detail={
-                    siteRows.length > 0
-                        ? `Módulos conectados + ${siteRows.length} salida(s) de la planta general`
-                        : 'Carga acumulada de todos los módulos conectados'
-                }
+                detail={`${distributionSummaries.length} tablero(s) de módulo + ${siteRows.length} salida(s) de la planta general; alimentador que llega a este tablero`}
             />
             <Mono value="0" />
             <Mono value="0" />
             <Mono value={installedPowerW.toFixed(0)} />
             <Edit
+                readOnly={!editableSettings}
                 value={data.settings.defaultPowerFactor}
                 onChange={(value) =>
                     onUpdate({ defaultPowerFactor: Math.min(1, value) })
@@ -730,20 +657,24 @@ function GeneralRow({
             <Mono value="1.00" />
             <Mono value={(installedPowerW / 1000).toFixed(2)} strong />
             <Mono value={(demandPowerW / 1000).toFixed(2)} strong />
-            <td className="px-2 py-2">
-                <select
-                    value={data.settings.phases}
-                    onChange={(event) =>
-                        onUpdate({
-                            phases: Number(event.target.value) as 1 | 3,
-                        })
-                    }
-                    className="h-8 rounded border border-slate-300 bg-white px-2 dark:border-white/15 dark:bg-[#182237]"
-                >
-                    <option value={1}>1Φ+N+T</option>
-                    <option value={3}>3Φ+N+T</option>
-                </select>
-            </td>
+            {editableSettings ? (
+                <td className="px-2 py-2">
+                    <select
+                        value={data.settings.phases}
+                        onChange={(event) =>
+                            onUpdate({
+                                phases: Number(event.target.value) as 1 | 3,
+                            })
+                        }
+                        className="h-8 rounded border border-slate-300 bg-white px-2 dark:border-white/15 dark:bg-[#182237]"
+                    >
+                        <option value={1}>1Φ+N+T</option>
+                        <option value={3}>3Φ+N+T</option>
+                    </select>
+                </td>
+            ) : (
+                <Mono value={`${tgNode?.phases ?? data.settings.phases}Φ`} />
+            )}
             <Mono value={theoreticalDesignCurrentA.toFixed(2)} />
             <Mono value={currentA.toFixed(2)} />
             <Mono value={data.settings.phases === 3 ? 'RST' : 'R'} />
@@ -752,6 +683,7 @@ function GeneralRow({
             <Mono value={phaseCurrentT.toFixed(2)} />
             <Mono value={tgResult?.ampacityA?.toFixed(2) ?? '—'} />
             <Edit
+                readOnly={!editableSettings}
                 value={data.settings.workingTemperatureC}
                 onChange={(value) => onUpdate({ workingTemperatureC: value })}
             />
@@ -762,7 +694,9 @@ function GeneralRow({
             <Conform ok={ok} />
             <Mono value={tgResult ? `${tgResult.breakerA} A` : '—'} />
             <Mono value="—" />
-            <Mono value={tgEdge ? tgEdge.horizontalLengthM.toFixed(2) : '0.00'} />
+            <Mono
+                value={tgEdge ? tgEdge.horizontalLengthM.toFixed(2) : '0.00'}
+            />
             <Mono value={tgEdge ? tgEdge.verticalLengthM.toFixed(2) : '0.00'} />
             <Mono value={tgResult ? tgResult.lengthM.toFixed(2) : '0.00'} />
             {tgEdge ? (
@@ -781,7 +715,9 @@ function GeneralRow({
             ) : (
                 <Mono value="—" />
             )}
-            <Mono value={tgResult ? tgResult.ownVoltageDropV.toFixed(2) : '0.00'} />
+            <Mono
+                value={tgResult ? tgResult.ownVoltageDropV.toFixed(2) : '0.00'}
+            />
             <Mono
                 value={`${tgResult ? tgResult.accumulatedVoltageDropPercent.toFixed(2) : '0.00'}%`}
                 strong
@@ -859,10 +795,15 @@ function CircuitRow({
     circuit,
     onUpdate,
     panelHeader,
+    readOnly = false,
+    description,
 }: {
     circuit: ModuleCtCircuit;
     onUpdate: Props['onUpdateCircuit'];
     panelHeader?: PanelHeader;
+    /** Salidas de la planta: se editan en la planta general (dibujo). */
+    readOnly?: boolean;
+    description?: { title: string; detail: string };
 }) {
     const dropPct = circuit.voltageDropPct;
     const dropV = circuit.voltageDropV;
@@ -884,22 +825,29 @@ function CircuitRow({
                 value={circuit.isPanelSummary ? 'CG1' : circuit.code}
                 accent
             />
-            <Description
-                title={
-                    circuit.isPanelSummary
-                        ? `Resumen del tablero ${circuit.panelLabel}`
-                        : circuit.rooms
-                              .map((room) => room.roomName)
-                              .join(', ') || circuit.code
-                }
-                detail={
-                    circuit.isPanelSummary
-                        ? 'Resumen de las salidas y del alimentador del tablero'
-                        : circuit.fedPanelLabels.length
-                          ? `Alimenta: ${circuit.fedPanelLabels.join(', ')}`
-                          : circuit.traversedRoomNames.join(' → ')
-                }
-            />
+            {description ? (
+                <Description
+                    title={description.title}
+                    detail={description.detail}
+                />
+            ) : (
+                <Description
+                    title={
+                        circuit.isPanelSummary
+                            ? `Resumen del tablero ${circuit.panelLabel}`
+                            : circuit.rooms
+                                  .map((room) => room.roomName)
+                                  .join(', ') || circuit.code
+                    }
+                    detail={
+                        circuit.isPanelSummary
+                            ? 'Resumen de las salidas y del alimentador del tablero'
+                            : circuit.fedPanelLabels.length
+                              ? `Alimenta: ${circuit.fedPanelLabels.join(', ')}`
+                              : circuit.traversedRoomNames.join(' → ')
+                    }
+                />
+            )}
             <Mono
                 value={
                     circuit.isPanelSummary
@@ -912,6 +860,7 @@ function CircuitRow({
                 <Mono value={circuit.forcePowerW.toFixed(0)} />
             ) : (
                 <Edit
+                    readOnly={readOnly}
                     value={circuit.forcePowerW}
                     onChange={(value) =>
                         onUpdate(circuit, { forcePowerW: value })
@@ -919,12 +868,14 @@ function CircuitRow({
                 />
             )}
             <Edit
+                readOnly={readOnly}
                 value={circuit.powerFactor}
                 onChange={(value) =>
                     onUpdate(circuit, { powerFactor: Math.min(1, value) })
                 }
             />
             <Edit
+                readOnly={readOnly}
                 value={circuit.demandFactor}
                 onChange={(value) =>
                     onUpdate(circuit, { demandFactor: Math.min(1, value) })
@@ -933,6 +884,7 @@ function CircuitRow({
             <Mono value={circuit.installedPowerKw.toFixed(2)} strong />
             <Mono value={circuit.maximumDemandKw.toFixed(2)} strong />
             <SelectCell
+                readOnly={readOnly}
                 value={circuit.phases.toString()}
                 options={[
                     ['1', '1Φ+N+T'],
@@ -945,6 +897,7 @@ function CircuitRow({
             <Mono value={circuit.theoreticalDesignCurrentA.toFixed(2)} />
             <Mono value={circuit.currentA.toFixed(2)} />
             <SelectCell
+                readOnly={readOnly}
                 value={circuit.phaseBalance}
                 options={['R', 'S', 'T', 'RS', 'ST', 'TR', 'RST'].map(
                     (value) => [value, value] as [string, string],
@@ -960,12 +913,14 @@ function CircuitRow({
             <Mono value={circuit.phaseCurrentT.toFixed(2)} />
             <Mono value={circuit.nominalCableCurrentA.toFixed(2)} />
             <Edit
+                readOnly={readOnly}
                 value={circuit.ambientTemperatureC}
                 onChange={(value) =>
                     onUpdate(circuit, { ambientTemperatureC: value })
                 }
             />
             <Edit
+                readOnly={readOnly}
                 value={circuit.groupedCircuitCount}
                 onChange={(value) =>
                     onUpdate(circuit, {
@@ -974,12 +929,14 @@ function CircuitRow({
                 }
             />
             <Edit
+                readOnly={readOnly}
                 value={circuit.groupingFactor}
                 onChange={(value) =>
                     onUpdate(circuit, { groupingFactor: value })
                 }
             />
             <Edit
+                readOnly={readOnly}
                 value={circuit.temperatureFactor}
                 onChange={(value) =>
                     onUpdate(circuit, { temperatureFactor: value })
@@ -988,11 +945,13 @@ function CircuitRow({
             <Mono value={circuit.admissibleCableCurrentA.toFixed(2)} />
             <Conform ok={circuit.capacityConforms} />
             <SelectCell
+                readOnly={readOnly}
                 value={protectionValue(circuit.itm)}
                 options={ITM_OPTIONS}
                 onChange={(value) => onUpdate(circuit, { itm: value })}
             />
             <SelectCell
+                readOnly={readOnly}
                 value={protectionValue(circuit.dif)}
                 options={DIF_OPTIONS}
                 onChange={(value) => onUpdate(circuit, { dif: value })}
@@ -1001,6 +960,7 @@ function CircuitRow({
             <Mono value={circuit.verticalLengthM.toFixed(2)} />
             <Mono value={circuit.lengthM.toFixed(2)} />
             <SelectCell
+                readOnly={readOnly}
                 value={circuit.sectionMm2.toString()}
                 options={CONDUCTOR_SECTION_OPTIONS.map((option) => [
                     option.value.toString(),
@@ -1020,6 +980,7 @@ function CircuitRow({
             />
             <Mono value={`${circuit.tubeDiameterMm} mm`} />
             <SelectCell
+                readOnly={readOnly}
                 value={circuit.conductorType}
                 options={CONDUCTOR_TYPE_OPTIONS}
                 onChange={(value) =>
@@ -1027,6 +988,7 @@ function CircuitRow({
                 }
             />
             <SelectCell
+                readOnly={readOnly}
                 value={circuit.earthSectionMm2.toString()}
                 options={EARTH_SECTION_OPTIONS}
                 onChange={(value) =>
@@ -1102,11 +1064,14 @@ function Edit({
     value,
     onChange,
     suffix,
+    readOnly = false,
 }: {
     value: number;
     onChange: (value: number) => void;
     suffix?: string;
+    readOnly?: boolean;
 }) {
+    if (readOnly) return <Mono value={`${value}${suffix ?? ''}`} />;
     return (
         <td className="bg-lime-50 px-2 py-2 dark:bg-lime-950/10">
             <label className="flex h-8 w-24 items-center rounded border border-lime-500 bg-white dark:bg-[#182237]">
@@ -1130,11 +1095,24 @@ function SelectCell({
     value,
     options,
     onChange,
+    readOnly = false,
 }: {
     value: string;
     options: Array<[string, string]>;
     onChange: (value: string) => void;
+    readOnly?: boolean;
 }) {
+    if (readOnly) {
+        return (
+            <Mono
+                value={
+                    options.find(
+                        ([optionValue]) => optionValue === value,
+                    )?.[1] ?? value
+                }
+            />
+        );
+    }
     return (
         <td className="px-2 py-2">
             <select

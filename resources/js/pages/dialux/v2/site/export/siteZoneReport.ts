@@ -8,10 +8,12 @@ import type {
     SiteLightingAreaResult,
     SiteLuminaire,
 } from '../domain/siteLightingCalculation';
-import { checkAgainstNorm, regionSource } from '../domain/siteLightingNorms';
+import { effectiveNormChecks, regionSource, type SiteNormVerdict } from '../domain/siteLightingNorms';
 import { siteElementLoadW } from '../domain/siteOutputs';
 import { siteQuantityCheck, SITE_UTILIZATION_FACTOR } from '../domain/siteQuantityCheck';
-import type { Point2D, SiteData, SiteElement, SiteNormRegion } from '../domain/types';
+import type { Point2D, SiteData, SiteElement, SiteElementType, SiteNormRegion } from '../domain/types';
+import type { LuminaireCatalogItem } from '../lib/luminaireCatalog';
+import { isoluxSvgFragments } from './isoluxSvg';
 
 /**
  * Páginas por ZONA del informe de la Planta General — las mismas páginas por
@@ -28,6 +30,43 @@ import type { Point2D, SiteData, SiteElement, SiteNormRegion } from '../domain/t
  */
 
 export const EXTERIOR_OPERATING_HOURS = 12;
+
+const pct = (value: number) => `${Math.round(value * 100)} %`;
+
+/**
+ * "Recintos" del exterior: DIALux evo agrupa los locales por edificio/planta;
+ * a cielo abierto no hay recintos, así que los espacios se agrupan por
+ * categoría (circulación, rampas y escaleras, canchas…) y cada grupo lleva
+ * sus páginas de recinto de la V1 (lista de locales, luminarias, objetos de
+ * cálculo) antes de las fichas de sus espacios.
+ */
+export interface SiteSpaceGroup {
+    id: string;
+    name: string;
+    types: SiteElementType[];
+}
+
+export const SITE_SPACE_GROUPS: SiteSpaceGroup[] = [
+    { id: 'site-group-vias', name: 'Calles y veredas', types: ['street', 'sidewalk'] },
+    { id: 'site-group-rampas', name: 'Rampas y escaleras', types: ['ramp', 'stair'] },
+    { id: 'site-group-estacionamientos', name: 'Estacionamientos', types: ['parking'] },
+    { id: 'site-group-canchas', name: 'Canchas deportivas', types: ['court'] },
+    { id: 'site-group-techados', name: 'Techados', types: ['canopy'] },
+    { id: 'site-group-plataformas', name: 'Plataformas y zonas', types: ['terrace_platform', 'custom_zone'] },
+    { id: 'site-group-verdes', name: 'Áreas verdes', types: ['green_area'] },
+    { id: 'site-group-terreno', name: 'Terreno (resto)', types: ['terrain'] },
+];
+
+const OTHER_GROUP: SiteSpaceGroup = { id: 'site-group-otros', name: 'Otros espacios', types: [] };
+
+export function spaceGroupOf(type: string): SiteSpaceGroup {
+    return SITE_SPACE_GROUPS.find((group) => (group.types as string[]).includes(type)) ?? OTHER_GROUP;
+}
+
+/** Tipo de espacio legible (para listas del informe). */
+export function spaceTypeLabel(type: string): string {
+    return SPACE_LABEL[type as SiteElementType] ?? type;
+}
 
 const LEGEND = [0, 1, 5, 10, 20, 50, 100];
 
@@ -51,6 +90,8 @@ export function renderZoneSvg(
     area: SiteLightingAreaResult,
     luminaires: SiteLuminaire[],
     mode: 'plan' | 'isolux',
+    /** Ē exigido del espacio (curva de la norma en el plano útil). */
+    requiredLux?: number | null,
 ): { svg: string; width: number; height: number } {
     const scaleM = site.terrainScaleM || 1;
     const element = (site.elements ?? []).find((item) => item.id === area.elementId);
@@ -122,6 +163,15 @@ export function renderZoneSvg(
                 parts.push(`<text x="${(cell.x + cell.w / 2).toFixed(3)}" y="${(cell.y + cell.h / 2 + size * 0.35).toFixed(3)}" font-size="${size.toFixed(3)}" text-anchor="middle" font-family="Arial, sans-serif" fill="#0f172a">${cell.value >= 10 ? Math.round(cell.value) : cell.value.toFixed(1)}</text>`);
             }
         }
+        // Curvas isolux ("ondas") sobre los falsos colores.
+        parts.push(
+            isoluxSvgFragments(
+                area.patches.map((patch) => patch.result),
+                stroke * 1.4,
+                text * 0.9,
+                requiredLux ?? null,
+            ),
+        );
         const lx = maxX + margin * 1.5;
         parts.push(`<text x="${lx}" y="${minY + text}" font-size="${text}" font-weight="bold" font-family="Arial, sans-serif">E (lx)</text>`);
         LEGEND.forEach((lux, index) => {
@@ -172,23 +222,31 @@ export function wattsPerHead(site: SiteData, all: SiteLuminaire[]): Map<string, 
 }
 
 /** Agrupa las luminarias de la zona por equipo idéntico (nombre, flujo, potencia). */
-function groupLuminaires(
+/**
+ * Luminarias agrupadas por equipo idéntico (producto + flujo + potencia),
+ * con nombre/fabricante del catálogo compartido con la V1 cuando se conoce.
+ * `zoneName` null = lista del proyecto (sin espacio).
+ */
+export function groupLuminaires(
     luminaires: SiteLuminaire[],
     watts: Map<string, number>,
     elementsById: Map<string, SiteElement>,
-    zoneName: string,
+    zoneName: string | null,
+    products?: ReadonlyMap<number, LuminaireCatalogItem>,
+    roomName: string | null = 'Planta general',
 ): DialuxLuminaireListItem[] {
     const groups = new Map<string, DialuxLuminaireListItem>();
     for (const lum of luminaires) {
         const source = elementsById.get(lum.poleId);
         const power = watts.get(lum.fixture.id) ?? null;
-        const productId = source?.config?.kind === 'pole' ? source.config.productId : undefined;
-        const name =
-            lum.sourceType === 'pole'
-                ? `Luminaria de poste${productId !== undefined ? ` (catálogo #${productId})` : ''}`
-                : lum.sourceType === 'gate'
-                  ? 'Luminaria de portón'
-                  : 'Luminaria de techado';
+        const config = source?.config as { productId?: number } | undefined;
+        const productId = config?.productId;
+        const product = productId !== undefined ? products?.get(productId) : undefined;
+        const mount =
+            lum.sourceType === 'pole' ? 'poste' : lum.sourceType === 'gate' ? 'portón' : 'techado';
+        const name = product
+            ? `${product.name} (${mount})`
+            : `Luminaria de ${mount}${productId !== undefined ? ` (catálogo #${productId})` : ''}`;
         const key = `${name}|${Math.round(lum.fixture.lumens)}|${Math.round(power ?? 0)}`;
         const current = groups.get(key);
         if (current) {
@@ -199,16 +257,18 @@ function groupLuminaires(
             id: key,
             name,
             model: lum.hasPhotometry ? 'Fotometría IES/LDT' : 'Modelo genérico (sin fotometría)',
-            brand: null,
-            articleNumber: null,
-            fixtureShape: null,
+            brand: product?.manufacturer?.slice(0, 255) ?? null,
+            articleNumber: productId !== undefined ? `#${productId}` : null,
+            fixtureShape: product?.fixtureType?.slice(0, 255) ?? null,
             shape: null,
             lumens: Math.round(lum.fixture.lumens),
             powerWatts: power !== null ? Math.round(power * 10) / 10 : null,
             efficiency: power ? Math.round((lum.fixture.lumens / power) * 10) / 10 : null,
-            roomName: 'Planta general',
+            roomName,
             ambientName: zoneName,
             quantity: 1,
+            ...(product?.cct && Number.isFinite(Number(product.cct)) ? { cct: Number(product.cct) } : {}),
+            ...(product?.criRa !== null && product?.criRa !== undefined ? { cri: product.criRa } : {}),
         });
     }
     return [...groups.values()];
@@ -244,7 +304,11 @@ const fmt = (value: unknown, digits = 1) =>
  * la proyección al colocar (`metadata.projection`); si no hubo proyección se
  * dice qué luminarias lo iluminan.
  */
-export function describeProjection(element: SiteElement | undefined, luminaires: SiteLuminaire[]): string {
+export function describeProjection(
+    element: SiteElement | undefined,
+    luminaires: SiteLuminaire[],
+    ownCount: number = luminaires.length,
+): string {
     const projection = element?.metadata?.projection as Record<string, unknown> | undefined;
     const adjusted = projection?.adjusted ? '; posiciones ajustadas a mano después de proyectar' : '';
     if (projection?.mode === 'linear') {
@@ -265,7 +329,9 @@ export function describeProjection(element: SiteElement | undefined, luminaires:
         return `Luminarias bajo la cubierta: ${fmt(lights.columns ?? 0, 0)} × ${fmt(lights.rows ?? 0, 0)} (reparto ½-1-1-½; en techo a 2 caídas, ninguna en la cumbrera).`;
     }
     if (luminaires.length === 0) return 'Sin luminarias que la iluminen.';
-    return `Sin proyección: iluminada por ${luminaires.length} luminaria(s) colocadas a mano o de espacios vecinos.`;
+    const neighbours = luminaires.length - ownCount;
+    if (ownCount === 0) return `Sin luminarias propias: la iluminan ${neighbours} luminaria(s) de espacios vecinos.`;
+    return `Sin proyección: ${ownCount} luminaria(s) propias colocadas a mano${neighbours > 0 ? ` + ${neighbours} de espacios vecinos que le aportan luz` : ''}.`;
 }
 
 export function buildZoneAmbientDetail(input: {
@@ -279,37 +345,45 @@ export function buildZoneAmbientDetail(input: {
     isoluxAssetId: string;
     calculatedAt: string;
     stale: boolean;
+    products?: ReadonlyMap<number, LuminaireCatalogItem>;
 }): DialuxAmbientDetail {
     const { site, area, luminaires } = input;
     const scaleM = site.terrainScaleM || 1;
     const elementsById = new Map((site.elements ?? []).map((element) => [element.id, element]));
     const element = elementsById.get(area.elementId);
-    const checks = input.regions
-        .filter((region) => element?.normReq?.activities[region])
-        .map((region) => checkAgainstNorm(region, element?.normReq?.activities[region], area.summary));
+    const checks = effectiveNormChecks(element, input.regions, area.summary);
     const check = checks.find((item) => item.activity?.illuminanceLux);
     const activity = check?.activity;
     const quantity = siteQuantityCheck(area, activity?.illuminanceLux);
     const source = check ? regionSource(check.region) : undefined;
     const verdict = !check
-        ? 'Sin actividad normativa elegida'
-        : `${check.emVerdict === 'meets' ? '≥ norma' : check.emVerdict === 'below' ? '< norma' : 'sin datos'} (${activity?.title ?? ''})`;
+        ? 'Sin actividad normativa aplicable'
+        : `${check.emVerdict === 'meets' ? '≥ norma' : check.emVerdict === 'below' ? '< norma' : 'sin datos'} (${activity?.title ?? ''}${check.suggested ? ', sugerida' : ''})`;
     const evaluation = (
         metric: string,
         calculatedValue: number,
         requiredValue: number | null,
+        verdict: SiteNormVerdict | undefined,
     ): RequirementEvaluation => ({
         metric,
         calculatedValue,
         operator: '>=',
         requiredValue,
-        unit: metric === 'illuminance' ? 'lx' : '',
-        // Catálogo exterior pendiente de confirmar: se muestra el número
-        // exigido, nunca "Conforme".
-        status: 'not-evaluated',
+        // Mismas unidades que la V1 (`requirementEvaluations.ts`); el servidor exige unidad no vacía.
+        unit: metric === 'illuminance' ? 'lx' : 'ratio',
+        // Mismo criterio que la V1 (`evaluateRequirementStatus`): con norma
+        // elegida (fuente citada) se evalúa; sin fuente o sin luminarias que
+        // aporten, "No evaluado". En clases P, Ēm exige además Emín.
+        status: !source || !verdict || verdict === 'no-data' ? 'not-evaluated' : verdict === 'meets' ? 'pass' : 'fail',
         ...(source ? { source: source.slice(0, 160) } : {}),
     });
-    const totalPower = luminaires.reduce((sum, lum) => sum + (input.watts.get(lum.fixture.id) ?? 0), 0);
+    // Como un local de DIALux: la ficha lista y suma SUS luminarias (dentro
+    // del contorno o proyectadas para él); las de espacios vecinos entran al
+    // cálculo y al plano, pero su potencia se cuenta en su propio espacio.
+    const ownIds = new Set(area.ownLuminaireIds ?? []);
+    const own = luminaires.filter((lum) => ownIds.has(lum.fixture.id));
+    const neighbours = luminaires.length - own.length;
+    const totalPower = own.reduce((sum, lum) => sum + (input.watts.get(lum.fixture.id) ?? 0), 0);
     const vertices = (element?.vertices ?? []).map((v) => ({ x: v.x * scaleM, y: v.y * scaleM }));
     const r = area.patches[0]?.result;
     return {
@@ -317,8 +391,9 @@ export function buildZoneAmbientDetail(input: {
         sceneId: 'site',
         sceneName: 'Planta general',
         floorIndex: 0,
-        roomId: area.elementId,
-        roomName: 'Planta general (exterior)',
+        // Recinto = categoría del espacio (ver SITE_SPACE_GROUPS).
+        roomId: spaceGroupOf(element?.type ?? area.type).id,
+        roomName: spaceGroupOf(element?.type ?? area.type).name,
         ambientName: area.label,
         activity: activity ? `${activity.title}${activity.category ? ` — ${activity.category}` : ''}` : null,
         area: area.areaM2,
@@ -337,18 +412,20 @@ export function buildZoneAmbientDetail(input: {
         ra: null,
         raRequired: activity?.ra ?? null,
         interiorHeight: 0,
-        reflectionCeiling: null,
-        reflectionWall: null,
-        reflectionFloor: null,
+        // Espacio cubierto: techo / (sin paredes) / suelo en % como la V1;
+        // a cielo abierto no hay techo ni paredes → "no usado".
+        reflectionCeiling: area.reflectances?.ceiling != null ? Math.round(area.reflectances.ceiling * 100) : null,
+        reflectionWall: area.reflectances?.ceiling != null ? 0 : null,
+        reflectionFloor: area.reflectances?.ceiling != null ? Math.round(area.reflectances.floor * 100) : null,
         maintenanceFactor: 1,
         dailyOperatingHours: EXTERIOR_OPERATING_HOURS,
         minimumDailyOperatingHours: EXTERIOR_OPERATING_HOURS - 2,
         maximumDailyOperatingHours: EXTERIOR_OPERATING_HOURS + 2,
         leni: null,
-        usefulPlaneHeight: 0,
+        usefulPlaneHeight: area.planeHeightM,
         marginalZone: 0,
-        calculationIndex: r ? `${r.grid_cols} × ${r.grid_rows}${area.patches.length > 1 ? ` (${area.patches.length} parches)` : ''}` : '-',
-        fixtureCount: luminaires.length,
+        calculationIndex: r ? `${area.gridPoints} pts${area.patches.length > 1 ? ` · ${area.patches.length} parches` : ` (${r.grid_cols}×${r.grid_rows})`}`.slice(0, 40) : '-',
+        fixtureCount: own.length,
         totalPowerWatts: Math.round(totalPower * 10) / 10,
         lumensRequired: quantity?.lumensRequired ?? 0,
         fixtureLumens: quantity?.lumensEach ?? 0,
@@ -360,8 +437,10 @@ export function buildZoneAmbientDetail(input: {
         isoluxAssetId: input.isoluxAssetId,
         requirementEvaluations: activity
             ? [
-                  evaluation('illuminance', area.result.avg_lux, activity.illuminanceLux),
-                  ...(activity.uniformity !== null ? [evaluation('uniformity', area.result.uniformity, activity.uniformity)] : []),
+                  evaluation('illuminance', area.result.avg_lux, activity.illuminanceLux, check?.emVerdict),
+                  ...(activity.uniformity !== null
+                      ? [evaluation('uniformity', area.result.uniformity, activity.uniformity, check?.uoVerdict)]
+                      : []),
               ]
             : [],
         provenance: {
@@ -384,12 +463,33 @@ export function buildZoneAmbientDetail(input: {
                       message: `La clase exige además Emín ≥ ${activity.minLux} lx (calculado ${area.result.min_lux.toFixed(2)} lx).`,
                   }]
                 : []),
+            ...(area.luminaireMode === 'all' && neighbours > 0
+                ? [{
+                      objectId: area.elementId,
+                      code: 'exterior-neighbour-luminaires',
+                      message: `Además de sus ${own.length} luminaria(s) propias, le aportan luz ${neighbours} luminaria(s) de espacios vecinos: entran al cálculo y al plano, pero se listan y suman en su propio espacio.`,
+                  }]
+                : []),
         ],
-        luminaires: groupLuminaires(luminaires, input.watts, elementsById, area.label),
+        luminaires: groupLuminaires(
+            own,
+            input.watts,
+            elementsById,
+            area.label,
+            input.products,
+            spaceGroupOf(element?.type ?? area.type).name,
+        ),
         exterior: {
             spaceType: (element ? (SPACE_LABEL[element.type] ?? element.type) : area.type).slice(0, 120),
-            projection: describeProjection(element, luminaires).slice(0, 500),
-            surface: `A nivel del suelo (cota ${area.baseElevationM.toFixed(2)} m), malla de ${area.spacingM.toFixed(2)} m${area.patches.length > 1 ? `, ${area.patches.length} parches por desnivel` : ''}`.slice(0, 255),
+            projection: describeProjection(element, luminaires, own.length).slice(0, 500),
+            reflections: (area.reflectances?.ceiling != null
+                ? `Techo ${pct(area.reflectances.ceiling)} (cara inferior de la cubierta) / sin paredes / suelo ${pct(area.reflectances.floor)} — interreflexión iterativa del motor V1 (suelo → techo → suelo)`
+                : `Cielo abierto: sin techo ni paredes, ninguna superficie devuelve luz al suelo. Suelo ${pct(area.reflectances?.floor ?? 0)} (solo para la luminancia L = E·ρ/π)`
+            ).slice(0, 255),
+            luminaires: area.luminaireMode === 'all'
+                ? 'Toda la escena: sus luminarias y la luz que llega de espacios vecinos'
+                : 'Solo las luminarias del espacio (proyectadas para él o colocadas en él), como un local de la V1',
+            surface: `${area.planeHeightM > 0 ? `Plano a ${area.planeHeightM.toFixed(2)} m sobre la superficie` : 'A nivel del suelo'} (cota ${area.baseElevationM.toFixed(2)} m); malla ${area.spacingM.toFixed(2)} m — ${area.gridBasis}; ${area.gridPoints} puntos${area.patches.length > 1 ? `, ${area.patches.length} parches por desnivel` : ''}`.slice(0, 255),
         },
         fixturePositions: luminaires.map((lum, index) => ({
             id: lum.fixture.id,

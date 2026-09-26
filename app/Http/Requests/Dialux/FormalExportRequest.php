@@ -319,6 +319,8 @@ class FormalExportRequest extends FormRequest
             'document.ambientDetails.*.exterior.spaceType' => ['required_with:document.ambientDetails.*.exterior', 'string', 'max:120'],
             'document.ambientDetails.*.exterior.projection' => ['required_with:document.ambientDetails.*.exterior', 'string', 'max:500'],
             'document.ambientDetails.*.exterior.surface' => ['required_with:document.ambientDetails.*.exterior', 'string', 'max:255'],
+            'document.ambientDetails.*.exterior.reflections' => ['nullable', 'string', 'max:255'],
+            'document.ambientDetails.*.exterior.luminaires' => ['nullable', 'string', 'max:255'],
             'document.ambientDetails.*.fixturePositions' => ['nullable', 'array', 'max:1000'],
             'document.ambientDetails.*.fixturePositions.*.id' => ['required', 'string', 'max:160'],
             'document.ambientDetails.*.fixturePositions.*.name' => ['required', 'string', 'max:255'],

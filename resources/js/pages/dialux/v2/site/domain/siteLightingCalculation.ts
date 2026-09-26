@@ -97,6 +97,33 @@ export const GROUND_REFLECTANCE: Partial<Record<SiteElementType, number>> = {
 };
 
 const DEFAULT_GROUND_REFLECTANCE = 0.2;
+
+/** Reflectancia por defecto de la cara inferior de una cubierta (la de techo de la V1: 70 %). */
+export const DEFAULT_CEILING_REFLECTANCE = 0.7;
+
+/**
+ * Cubierta del espacio (techado, cancha techada): altura libre bajo el borde
+ * sobre la superficie. Solo un espacio cubierto tiene "techo" que refleje;
+ * a cielo abierto no hay techo ni paredes (el 70/50/20 de la V1 supone un
+ * recinto cerrado).
+ */
+export function siteSpaceCover(element: SiteElement): { heightM: number } | null {
+    const config = element.config;
+    if (config?.kind === 'canopy') return { heightM: Math.max(0.5, config.heightM || 3) };
+    if (config?.kind === 'court' && config.covered) return { heightM: Math.max(0.5, config.roofHeightM || 6) };
+    return null;
+}
+
+/** Reflectancias usadas en el cálculo de un espacio (suelo siempre; techo solo si está cubierto). */
+export function siteSpaceReflectances(element: SiteElement): { floor: number; ceiling: number | null } {
+    const clamp = (value: number) => Math.min(0.95, Math.max(0, value));
+    return {
+        floor: clamp(element.calcSurface?.floorReflectance ?? GROUND_REFLECTANCE[element.type] ?? DEFAULT_GROUND_REFLECTANCE),
+        ceiling: siteSpaceCover(element)
+            ? clamp(element.calcSurface?.ceilingReflectance ?? DEFAULT_CEILING_REFLECTANCE)
+            : null,
+    };
+}
 /**
  * Radio de influencia: max(60 m, 15 × altura de la luminaria sobre el área).
  * A una distancia horizontal de 15 h la iluminancia horizontal es cos³γ ≈
@@ -439,8 +466,21 @@ export interface SiteLightingAreaResult {
     spacingM: number;
     luminairesUsed: number;
     luminairesWithoutPhotometry: number;
+    /** Malla del objeto de cálculo (DIALux evo): modo y cómo se eligió el paso. */
+    gridMode: 'standard' | 'fine' | 'custom';
+    gridBasis: string;
+    /** Altura del plano de cálculo sobre la superficie (m). */
+    planeHeightM: number;
+    /** Puntos calculados (todos los parches, sin los de otros espacios). */
+    gridPoints: number;
     /** Luminarias propias (dentro del contorno o proyectadas para ella). */
     ownLuminaires: number;
+    /** `fixture.id` de las luminarias propias (las que se listan en la ficha del espacio). */
+    ownLuminaireIds: string[];
+    /** 'own' = calculado solo con sus luminarias; 'all' = con toda la escena. */
+    luminaireMode: 'own' | 'all';
+    /** Reflectancias usadas: suelo siempre; techo solo en espacios cubiertos (null = cielo abierto). */
+    reflectances: { floor: number; ceiling: number | null };
     /** `fixture.id` de TODAS las luminarias que entraron al cálculo de esta superficie (informe por zona). */
     usedLuminaireIds: string[];
     /** Flujo mantenido (lm × Fm) de las luminarias propias. */
@@ -453,16 +493,83 @@ export interface SiteLightingPatch {
     result: LightingResult;
 }
 
+/**
+ * Espacio que no se pudo calcular porque ningún punto le pertenece: otro
+ * espacio más pequeño (o un duplicado encima) lo cubre por completo. Nunca se
+ * omite en silencio: se lista en el panel y en el informe.
+ */
+export interface SiteSkippedArea {
+    elementId: string;
+    label: string;
+    type: SiteElementType;
+    /** Espacio que lo cubre (el dueño de su centro), si se pudo identificar. */
+    coveredById?: string;
+    coveredByLabel?: string;
+}
+
 export interface SiteLightingCalculation {
     areas: SiteLightingAreaResult[];
     luminaires: number;
     warnings: string[];
+    skipped?: SiteSkippedArea[];
 }
 
 function spacingFor(widthM: number, lengthM: number): number {
     const target = Math.sqrt((widthM * lengthM) / MAX_POINTS_PER_AREA);
     const spacing = Math.max(0.5, target);
     return Math.ceil(spacing * 4) / 4; // múltiplos de 0.25 m
+}
+
+/** Tope de puntos de una malla elegida por el usuario (rendimiento). */
+const MAX_CUSTOM_POINTS = 20000;
+
+/**
+ * Tamaño máximo de la malla de cálculo según EN 12464-1:2021 (§ "Cálculo";
+ * mismo criterio en EN 12464-2 para exteriores): p = 0,2 · 5^(log10 d), con
+ * d = dimensión mayor de la superficie (m), acotado a 10 m. Es lo que usa
+ * DIALux evo en modo automático. Edición/numeral pendientes de confirmar.
+ */
+export function en12464GridSpacingM(longestSideM: number): number {
+    const d = Math.max(1, longestSideM);
+    return Math.min(10, 0.2 * 5 ** Math.log10(d));
+}
+
+export interface AreaGrid {
+    spacingM: number;
+    mode: 'standard' | 'fine' | 'custom';
+    /** Cómo se eligió el paso (para la tabla y el informe). */
+    basis: string;
+    /** Se agrandó el paso para no superar el tope de puntos. */
+    capped: boolean;
+}
+
+/** Malla del objeto de cálculo de un espacio (ver `SiteCalcSurface`). */
+export function areaGridFor(
+    surface: SiteElement['calcSurface'],
+    widthM: number,
+    lengthM: number,
+): AreaGrid {
+    const mode = surface?.grid ?? 'standard';
+    if (mode === 'fine') {
+        return { spacingM: spacingFor(widthM, lengthM), mode, basis: 'malla fina (~2500 puntos)', capped: false };
+    }
+    if (mode === 'custom' && surface?.spacingM && surface.spacingM > 0) {
+        const minForCap = Math.sqrt((widthM * lengthM) / MAX_CUSTOM_POINTS);
+        const spacingM = Math.max(0.1, surface.spacingM, minForCap);
+        return {
+            spacingM,
+            mode,
+            basis: `malla fijada ${surface.spacingM} m`,
+            capped: spacingM > surface.spacingM + 1e-9,
+        };
+    }
+    const d = Math.max(widthM, lengthM);
+    return {
+        spacingM: en12464GridSpacingM(d),
+        mode: 'standard',
+        basis: `EN 12464: p = 0,2·5^log10(${d.toFixed(1)} m)`,
+        capped: false,
+    };
 }
 
 /** = `siteFixtureProjection.PROJECTED_FOR_KEY` (sin importarlo: evita un ciclo de módulos). */
@@ -558,12 +665,55 @@ export function calculateSiteLighting(
     }
 
     const areas: SiteLightingAreaResult[] = [];
+    const skipped: SiteSkippedArea[] = [];
     const ownerAt = surfaceOwnership(site, scaleM);
     const projectedFor = new Map(
         (site.elements ?? []).map((element) => [
             element.id,
             element.metadata?.[PROJECTED_FOR_KEY] as string | undefined,
         ]),
+    );
+    // Cada luminaria pertenece a UN espacio: el que la proyectó, el techado
+    // que la lleva o, si no, el espacio donde está colocada (el más pequeño
+    // que la contiene, mismo criterio que los puntos de cálculo).
+    const surfaceIds = new Set(
+        (site.elements ?? [])
+            .filter((element) => SITE_CALCULATION_AREA_TYPES.has(element.type))
+            .map((element) => element.id),
+    );
+    // Un espacio tapado por completo por otro (p. ej. un techado duplicado
+    // encima) no tiene puntos propios: sus luminarias pasan al que lo cubre.
+    const coveredBy = new Map<string, string>();
+    for (const element of site.elements ?? []) {
+        if (!surfaceIds.has(element.id) || element.vertices.length < 3) continue;
+        const pts = element.vertices.map((v) => ({ x: v.x * scaleM, y: v.y * scaleM }));
+        const xs = pts.map((v) => v.x);
+        const ys = pts.map((v) => v.y);
+        const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+        let ownsAny = false;
+        let cover: string | undefined;
+        for (let i = 0; i < 7 && !ownsAny; i++) {
+            for (let j = 0; j < 7 && !ownsAny; j++) {
+                const p = { x: x0 + ((i + 0.5) / 7) * (x1 - x0), y: y0 + ((j + 0.5) / 7) * (y1 - y0) };
+                if (!pointInPolygon(p, pts)) continue;
+                const owner = ownerAt(p.x, p.y);
+                if (owner === element.id) ownsAny = true;
+                else cover ??= owner;
+            }
+        }
+        if (!ownsAny && cover) coveredBy.set(element.id, cover);
+    }
+    const luminaireOwner = new Map(
+        luminaires.map((lum) => {
+            const projected = projectedFor.get(lum.poleId);
+            const owner =
+                projected && surfaceIds.has(projected)
+                    ? projected
+                    : lum.sourceType === 'canopy' && surfaceIds.has(lum.poleId)
+                      ? lum.poleId
+                      : ownerAt(lum.x, lum.y);
+            return [lum.fixture.id, (owner && coveredBy.get(owner)) || owner] as const;
+        }),
     );
     for (const element of site.elements ?? []) {
         if (
@@ -574,6 +724,11 @@ export function calculateSiteLighting(
         ) {
             continue;
         }
+        const luminaireMode = element.calcSurface?.luminaires ?? 'own';
+        const own = luminaires.filter((lum) => luminaireOwner.get(lum.fixture.id) === element.id);
+        const candidates = luminaireMode === 'own' ? own : luminaires;
+        const reflectances = siteSpaceReflectances(element);
+        const cover = siteSpaceCover(element);
         const vertices = element.vertices.map((v) => ({
             x: v.x * scaleM,
             y: v.y * scaleM,
@@ -593,9 +748,35 @@ export function calculateSiteLighting(
         }
         const owns = (xM: number, yM: number) => ownerAt(xM, yM) === element.id;
         const elevationAt = surfaceElevationFn(site, element, scaleM);
-        const spacingM = spacingFor(maxX - minX, maxY - minY);
+        // Objeto de cálculo del espacio (DIALux evo): malla por norma o la
+        // elegida, y altura del plano sobre la superficie.
+        const grid = areaGridFor(element.calcSurface, maxX - minX, maxY - minY);
+        const spacingM = grid.spacingM;
+        const planeHeightM = Math.max(0, element.calcSurface?.heightM ?? 0);
+        if (grid.capped) {
+            warnings.push(
+                `${element.label}: malla ampliada a ${spacingM.toFixed(2)} m para no superar ${MAX_CUSTOM_POINTS} puntos.`,
+            );
+        }
         const plan = planPatches(vertices, { minX, maxX, minY, maxY }, owns, elevationAt);
-        if (plan.patches.length === 0) continue;
+        if (plan.patches.length === 0) {
+            const cx = vertices.reduce((sum, v) => sum + v.x, 0) / vertices.length;
+            const cy = vertices.reduce((sum, v) => sum + v.y, 0) / vertices.length;
+            const coveredById = ownerAt(cx, cy);
+            const cover = coveredById
+                ? (site.elements ?? []).find((item) => item.id === coveredById)
+                : undefined;
+            skipped.push({
+                elementId: element.id,
+                label: element.label,
+                type: element.type,
+                ...(cover ? { coveredById: cover.id, coveredByLabel: cover.label } : {}),
+            });
+            warnings.push(
+                `${element.label}: sin puntos de cálculo propios — ${cover ? `lo cubre "${cover.label}"` : 'otro espacio lo cubre'} (¿duplicado superpuesto?). Elimina el duplicado o ajusta su contorno.`,
+            );
+            continue;
+        }
         if (plan.tiled) {
             warnings.push(
                 `${element.label}: desnivel de ${plan.elevationRangeM.toFixed(2)} m — calculada en ${plan.patches.length} parches, cada uno a su propia cota.`,
@@ -609,8 +790,9 @@ export function calculateSiteLighting(
         const patches: SiteLightingPatch[] = [];
         for (const patch of plan.patches) {
             const baseM = patch.baseElevationM;
-            const nearby = luminaires.filter((lum) => {
-                const heightAbove = lum.headElevationM - baseM;
+            const nearby = candidates.filter((lum) => {
+                // Sobre el PLANO de cálculo (superficie + altura del plano).
+                const heightAbove = lum.headElevationM - baseM - planeHeightM;
                 const dx = Math.max(patch.minX - lum.x, 0, lum.x - patch.maxX);
                 const dy = Math.max(patch.minY - lum.y, 0, lum.y - patch.maxY);
                 const radius = Math.max(
@@ -638,13 +820,16 @@ export function calculateSiteLighting(
                 z: lum.headElevationM - baseM,
             }));
             const maxZ = fixtures.reduce((max, f) => Math.max(max, f.z), 0);
+            // Espacio cubierto: techo a la altura libre de la cubierta, sin
+            // paredes (ρ pared 0) → primer rebote techo↔suelo del motor V1.
+            // A cielo abierto: sin reflexiones (nada devuelve la luz al suelo).
             const room = {
                 id: `site-area-${element.id}`,
                 name: element.label,
                 vertices: patch.vertices,
-                height: maxZ + 1,
+                height: cover ? Math.max(cover.heightM, maxZ + 0.05) : maxZ + 1,
                 color: '#ffffff',
-                usefulPlaneHeight: 0,
+                usefulPlaneHeight: planeHeightM,
                 marginalZone: 0,
             } as unknown as Room;
             const raw = calculateLightingResult(
@@ -652,8 +837,13 @@ export function calculateSiteLighting(
                 fixtures,
                 spacingM,
                 buildingOcclusionBoxes(site, baseM),
-                null,
-                null,
+                reflectances.ceiling !== null
+                    ? { ceiling: reflectances.ceiling, wall: 0, floor: reflectances.floor }
+                    : null,
+                // Interreflexión iterativa como el cálculo de producción de la
+                // V1 (`productionCalculationConfig`): las luminarias apuntan
+                // abajo, la luz vuelve por suelo → techo → suelo.
+                reflectances.ceiling !== null ? { maxBounces: 100, convergenceTolerance: 1e-5 } : null,
                 null,
                 undefined,
                 1,
@@ -676,16 +866,12 @@ export function calculateSiteLighting(
             max_lux: stats.max,
             uniformity: stats.uniformity,
         };
-        // Luminarias PROPIAS de la superficie (verificación de cantidad de la
-        // V1): dentro de su contorno o proyectadas para ella.
-        const own = luminaires.filter(
-            (lum) =>
-                projectedFor.get(lum.poleId) === element.id ||
-                (lum.sourceType !== 'pole' && lum.poleId === element.id) ||
-                pointInPolygon({ x: lum.x, y: lum.y }, vertices),
-        );
-        const groundReflectance =
-            GROUND_REFLECTANCE[element.type] ?? DEFAULT_GROUND_REFLECTANCE;
+        if (luminaireMode === 'own' && own.length === 0) {
+            warnings.push(
+                `${element.label}: sin luminarias propias — proyecta luminarias para este espacio (se calcula solo con las suyas).`,
+            );
+        }
+        const groundReflectance = reflectances.floor;
         const areaM2 = polygonAreaM2(element.vertices, scaleM);
         areas.push({
             elementId: element.id,
@@ -709,10 +895,20 @@ export function calculateSiteLighting(
             spacingM,
             luminairesUsed: usedIds.size,
             luminairesWithoutPhotometry: withoutPhotometryIds.size,
+            gridMode: grid.mode,
+            gridBasis: grid.basis,
+            planeHeightM,
+            gridPoints: patches.reduce(
+                (sum, patch) => sum + patch.result.grid_values.filter((value) => value !== null).length,
+                0,
+            ),
             ownLuminaires: own.length,
+            luminaireMode,
+            reflectances,
+            ownLuminaireIds: own.map((lum) => lum.fixture.id),
             usedLuminaireIds: [...usedIds],
             ownMaintainedFluxLm: own.reduce((sum, lum) => sum + lum.fixture.lumens, 0),
         });
     }
-    return { areas, luminaires: luminaires.length, warnings };
+    return { areas, luminaires: luminaires.length, warnings, skipped };
 }
