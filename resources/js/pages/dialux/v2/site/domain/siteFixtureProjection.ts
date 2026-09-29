@@ -599,3 +599,30 @@ export function projectionAreaSize(
     const { widthM, lengthM } = areaMetres(site, area);
     return { widthM, lengthM };
 }
+
+/**
+ * Lo YA proyectado en un espacio: sus postes, la configuración de poste con
+ * que se colocaron (producto, altura, brazo…) y los parámetros guardados en
+ * `metadata.projection`. Los paneles de proyección arrancan desde aquí —
+ * no desde una propuesta nueva — para ajustar/agregar sin rehacer todo.
+ */
+export function existingProjection(
+    site: SiteData | null | undefined,
+    areaId: string,
+): {
+    poles: SiteElement[];
+    pole: PoleConfig | undefined;
+    saved: Record<string, unknown> | undefined;
+} {
+    const poles = (site?.elements ?? []).filter(
+        (element) => element.type === 'pole' && element.metadata?.[PROJECTED_FOR_KEY] === areaId,
+    );
+    const first = poles.find((element) => element.config?.kind === 'pole');
+    const area = (site?.elements ?? []).find((element) => element.id === areaId);
+    const saved = area?.metadata?.projection;
+    return {
+        poles,
+        pole: first?.config?.kind === 'pole' ? (first.config as PoleConfig) : undefined,
+        saved: saved && typeof saved === 'object' ? (saved as Record<string, unknown>) : undefined,
+    };
+}

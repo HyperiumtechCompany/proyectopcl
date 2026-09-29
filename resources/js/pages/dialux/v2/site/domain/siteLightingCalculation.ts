@@ -5,7 +5,7 @@ import type { Fixture, LightingResult, Room } from '@/pages/dialux/hooks/types';
 import type { LuminairePhotometry } from '../lib/luminaireCatalog';
 import { DEFAULT_LUMINAIRE, type LightingSummary } from './exteriorLighting';
 import { gateEntrance } from './gateLayout';
-import { rampCalcPatches, rampSideLightPoints, sideLightsOf } from './rampFootprint';
+import { calcOutlines, rampCalcPatches, rampSideLightPoints, sideLightsOf } from './rampFootprint';
 import { maskGrid, patchStats, planPatches } from './siteLightingPatches';
 import {
     canopyLightPoints,
@@ -583,10 +583,25 @@ export function areaGridFor(
     surface: SiteElement['calcSurface'],
     widthM: number,
     lengthM: number,
+    /**
+     * Ancho efectivo del espacio (m, ver `effectiveWidthM`): en una franja
+     * angosta (vereda, rampa) el paso por norma sale de su dimensión MAYOR y
+     * dejaba menos de una fila de puntos a lo ancho.
+     */
+    effectiveWidth?: number,
 ): AreaGrid {
     const mode = surface?.grid ?? 'standard';
+    // Mínimo 3 puntos a lo ancho (criterio de malla transversal de EN 13201-3:
+    // 3 puntos por carril; edición/cláusula pendientes de confirmar).
+    const acrossM =
+        effectiveWidth !== undefined && effectiveWidth > 0
+            ? Math.max(0.2, effectiveWidth / 3)
+            : Infinity;
     if (mode === 'fine') {
-        return { spacingM: spacingFor(widthM, lengthM), mode, basis: 'malla fina (~2500 puntos)', capped: false };
+        const fine = spacingFor(widthM, lengthM);
+        return fine > acrossM
+            ? { spacingM: acrossM, mode, basis: `malla fina · ≥3 puntos a lo ancho (${effectiveWidth!.toFixed(2)} m)`, capped: false }
+            : { spacingM: fine, mode, basis: 'malla fina (~2500 puntos)', capped: false };
     }
     if (mode === 'custom' && surface?.spacingM && surface.spacingM > 0) {
         const minForCap = Math.sqrt((widthM * lengthM) / MAX_CUSTOM_POINTS);
@@ -599,12 +614,51 @@ export function areaGridFor(
         };
     }
     const d = Math.max(widthM, lengthM);
+    const p = en12464GridSpacingM(d);
+    if (acrossM < p) {
+        // Tope de puntos: una franja muy larga y angosta no debe disparar la malla.
+        const minForCap = Math.sqrt((widthM * lengthM) / MAX_CUSTOM_POINTS);
+        const spacingM = Math.max(acrossM, minForCap);
+        return {
+            spacingM,
+            mode: 'standard',
+            basis: `EN 12464: p = 0,2·5^log10(${d.toFixed(1)} m) = ${p.toFixed(2)} m, reducido a ${spacingM.toFixed(2)} m para ≥3 puntos a lo ancho (ancho efectivo ${effectiveWidth!.toFixed(2)} m, criterio EN 13201-3)`,
+            capped: spacingM > acrossM + 1e-9,
+        };
+    }
     return {
-        spacingM: en12464GridSpacingM(d),
+        spacingM: p,
         mode: 'standard',
         basis: `EN 12464: p = 0,2·5^log10(${d.toFixed(1)} m)`,
         capped: false,
     };
+}
+
+/**
+ * Ancho efectivo (m) de lo que se calcula de un espacio: 2·Área/Perímetro de
+ * su contorno (en una franja larga ≈ su ancho). En rampas/escaleras por
+ * tramos, el de todos sus trozos juntos.
+ */
+export function effectiveWidthM(element: SiteElement, scaleM: number): number | undefined {
+    const outlines = calcOutlines(element, scaleM).filter((outline) => outline.length >= 3);
+    if (outlines.length === 0) return undefined;
+    // 2·ΣA/ΣP de todos los trozos (tramos + descansos): el ancho típico de
+    // paso, sin que una losa delgada de llegada fuerce una malla finísima.
+    let area = 0;
+    let perimeter = 0;
+    for (const outline of outlines) {
+        const pts = outline.map((v) => ({ x: v.x * scaleM, y: v.y * scaleM }));
+        let doubled = 0;
+        for (let i = 0; i < pts.length; i++) {
+            const a = pts[i];
+            const b = pts[(i + 1) % pts.length];
+            doubled += a.x * b.y - b.x * a.y;
+            perimeter += Math.hypot(b.x - a.x, b.y - a.y);
+        }
+        area += Math.abs(doubled / 2);
+    }
+    const width = perimeter > 0 ? (2 * area) / perimeter : 0;
+    return width > 0 ? width : undefined;
 }
 
 /** = `siteFixtureProjection.PROJECTED_FOR_KEY` (sin importarlo: evita un ciclo de módulos). */
@@ -803,7 +857,12 @@ export function calculateSiteLighting(
         const elevationAt = surfaceElevationFn(site, element, scaleM);
         // Objeto de cálculo del espacio (DIALux evo): malla por norma o la
         // elegida, y altura del plano sobre la superficie.
-        const grid = areaGridFor(element.calcSurface, maxX - minX, maxY - minY);
+        const grid = areaGridFor(
+            element.calcSurface,
+            maxX - minX,
+            maxY - minY,
+            effectiveWidthM(element, scaleM),
+        );
         const spacingM = grid.spacingM;
         const planeHeightM = Math.max(0, element.calcSurface?.heightM ?? 0);
         if (grid.capped) {

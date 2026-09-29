@@ -13,6 +13,7 @@ import {
     suggestProjectionGrid,
     type ProjectionPreviewMetrics,
 } from '../domain/siteFixtureProjection';
+import { existingProjection } from '../domain/siteFixtureProjection';
 import { findActivity, isInteriorCatalog } from '../domain/siteLightingNorms';
 import {
     applyRoofRule,
@@ -165,12 +166,23 @@ export function SiteProjectionPanel({
         : undefined;
 
     const isCanopy = element.type === 'canopy';
-    const [targetLux, setTargetLux] = useState<number | null>(null);
+    // Lo ya proyectado en este espacio (postes + parámetros guardados): el
+    // panel arranca desde ahí para ajustar o agregar; "Auto" vuelve a la propuesta.
+    const [existing] = useState(() => existingProjection(editor.siteData, element.id));
+    const saved = existing.saved?.mode === 'grid' ? existing.saved : undefined;
+    const savedNumber = (key: string) =>
+        typeof saved?.[key] === 'number' ? (saved[key] as number) : undefined;
+    const placedCount = isCanopy ? 0 : existing.poles.length;
+    const [targetLux, setTargetLux] = useState<number | null>(() => savedNumber('targetLux') ?? null);
     const target = targetLux ?? normLux ?? 20;
-    const [pole, setPole] = useState<PoleConfig>(() => ({
-        ...(defaultConfigFor('pole') as PoleConfig),
-        armLengthM: 0,
-    }));
+    const [pole, setPole] = useState<PoleConfig>(() =>
+        existing.pole
+            ? { ...existing.pole }
+            : {
+                  ...(defaultConfigFor('pole') as PoleConfig),
+                  armLengthM: 0,
+              },
+    );
     const [lights, setLights] = useState<CanopyLights>(() => ({
         ...DEFAULT_CANOPY_LIGHTS,
         ...(element.config?.kind === 'canopy'
@@ -179,13 +191,17 @@ export function SiteProjectionPanel({
         enabled: true,
     }));
     const [spacingToHeight, setSpacingToHeight] = useState(
-        DEFAULT_SPACING_TO_HEIGHT,
+        () => savedNumber('spacingToHeight') ?? DEFAULT_SPACING_TO_HEIGHT,
     );
     // null = seguir la propuesta automática; al tocar [−]/[+] queda manual.
     const [manualGrid, setManualGrid] = useState<{
         rows: number;
         columns: number;
-    } | null>(null);
+    } | null>(() => {
+        const rows = savedNumber('rows');
+        const columns = savedNumber('columns');
+        return placedCount > 0 && rows && columns ? { rows, columns } : null;
+    });
     const [metrics, setMetrics] = useState<ProjectionPreviewMetrics | null>(
         null,
     );
@@ -384,6 +400,11 @@ export function SiteProjectionPanel({
 
     return (
         <section className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-2 dark:border-amber-500/20 dark:bg-amber-500/5">
+            {placedCount > 0 && (
+                <p className="rounded-md bg-sky-100 px-2 py-1 text-[10px] leading-snug text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
+                    {`Este espacio ya tiene ${placedCount} luminarias proyectadas. Se muestra tu proyección: cambia filas/columnas (p. ej. para agregar) o sus datos y pulsa "Actualizar"; se reemplazan repartidas en todo el espacio. "Auto" vuelve a la propuesta.`}
+                </p>
+            )}
             <div className="flex items-end gap-2">
                 <div className="flex-1">
                     <NumField
@@ -491,8 +512,13 @@ export function SiteProjectionPanel({
                     type="button"
                     onClick={place}
                     className="rounded-md bg-emerald-600 px-2 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700"
+                    title={
+                        placedCount > 0
+                            ? `Reemplaza las ${placedCount} luminarias proyectadas por estas ${count}`
+                            : undefined
+                    }
                 >
-                    Colocar {count}
+                    {placedCount > 0 ? `Actualizar a ${count}` : `Colocar ${count}`}
                 </button>
             </div>
             {message && (

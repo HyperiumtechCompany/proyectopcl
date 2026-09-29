@@ -68,6 +68,14 @@ export interface ElectricalNode {
      * (R4). Ausente = la propone el balance de fases; fijada = nunca se cambia.
      */
     phase?: 'R' | 'S' | 'T';
+    /**
+     * Parámetros de cálculo PROPIOS del tablero (TG configurado en la planta,
+     * como el encabezado de su planilla V1): los hereda todo lo que cuelga de
+     * él. Ausentes = los generales de la red (`settings`).
+     */
+    workingTemperatureC?: number;
+    designFactor?: number;
+    connectionType?: 'star' | 'delta';
 }
 
 export interface ElectricalEdge {

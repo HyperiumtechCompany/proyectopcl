@@ -48,6 +48,7 @@ import {
 } from '../domain/tgPanel';
 import type { Point2D, SiteData, SiteElement } from '../domain/types';
 import { resolveWireEndpoints } from '../domain/wireAnchors';
+import { offsetSegment, wireBundleLanes } from '../domain/wireBundles';
 import { useSiteCadPlan } from '../hooks/useSiteCadPlan';
 import { CIRCUIT_COMMIT_SNAP_M } from '../hooks/useSiteEditor';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
@@ -491,6 +492,31 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
     // Para que un cable "siga" al artefacto anclado cuando se mueve
     // (resolveWireEndpoints necesita poder buscar el objeto vivo por id).
     const elementById = new Map(siteData.elements.map((el) => [el.id, el]));
+
+    // Cables que comparten un tramo (varias salidas por las mismas cajas y
+    // zanja) se dibujan en PARALELO, cada uno en su carril, para que ninguno
+    // tape al otro y cada uno se pueda seleccionar/cortar.
+    const wireLanes = wireBundleLanes(
+        (siteData.circuits ?? []).map((circuit) => ({
+            id: circuit.id,
+            points: resolveWireEndpoints(
+                circuit.waypoints,
+                circuit.sourceId,
+                circuit.targetId,
+                (id) => elementById.get(id),
+                editor.terrainScaleM,
+                circuit.tgOutputId,
+                elementById.values(),
+            ),
+        })),
+    );
+    const pxPerUnit =
+        Math.hypot(
+            toScreen({ x: 1, y: 0 }).x - toScreen({ x: 0, y: 0 }).x,
+            toScreen({ x: 1, y: 0 }).y - toScreen({ x: 0, y: 0 }).y,
+        ) || 1;
+    /** Separación entre cables paralelos: 7 px en pantalla, a cualquier zoom. */
+    const laneSpacing = 7 / pxPerUnit;
 
     /** Punto exacto del círculo del borne del símbolo TG, convertido de px a mundo solo para el dibujo 2D. */
     const tgOutputVisualWorld = (
@@ -2565,16 +2591,25 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                     mode === 'aerial' || mode === 'underground'
                                         ? mode
                                         : undefined;
-                                const d = wireSegmentPath(
+                                // Carril del tramo en su haz (cables paralelos por la misma zanja).
+                                const segLane = wireLanes.get(circuit.id)?.[i];
+                                const [segA, segB] = offsetSegment(
                                     renderWaypoints[i],
                                     wp,
+                                    segLane,
+                                    laneSpacing,
+                                );
+                                const bundled = !!segLane && segLane.lane !== 0;
+                                const d = wireSegmentPath(
+                                    segA,
+                                    segB,
                                     bowMode,
                                     circuit.route?.curveSide,
                                     circuit.route?.curveOffsetM,
                                 );
                                 const hitD = wireHitPath(
-                                    renderWaypoints[i],
-                                    wp,
+                                    segA,
+                                    segB,
                                     bowMode,
                                     circuit.route?.curveSide,
                                     circuit.route?.curveOffsetM,
@@ -2585,8 +2620,8 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                     wireSelected && bowMode
                                         ? toScreen(
                                               bowedPoint(
-                                                  renderWaypoints[i],
-                                                  wp,
+                                                  segA,
+                                                  segB,
                                                   editor.terrainScaleM,
                                                   bowMode,
                                                   0.5,
@@ -2600,8 +2635,8 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                     ? toScreen(
                                           bowMode
                                               ? bowedPoint(
-                                                    renderWaypoints[i],
-                                                    wp,
+                                                    segA,
+                                                    segB,
                                                     editor.terrainScaleM,
                                                     bowMode,
                                                     0.25,
@@ -2610,15 +2645,15 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                                 )
                                               : {
                                                     x:
-                                                        renderWaypoints[i].x +
-                                                        (wp.x -
-                                                            renderWaypoints[i]
+                                                        segA.x +
+                                                        (segB.x -
+                                                            segA
                                                                 .x) *
                                                             0.25,
                                                     y:
-                                                        renderWaypoints[i].y +
-                                                        (wp.y -
-                                                            renderWaypoints[i]
+                                                        segA.y +
+                                                        (segB.y -
+                                                            segA
                                                                 .y) *
                                                             0.25,
                                                 },
@@ -2632,8 +2667,8 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                         ? toScreen(
                                               bowMode
                                                   ? bowedPoint(
-                                                        renderWaypoints[i],
-                                                        wp,
+                                                        segA,
+                                                        segB,
                                                         editor.terrainScaleM,
                                                         bowMode,
                                                         0.5,
@@ -2644,14 +2679,14 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                                     )
                                                   : {
                                                         x:
-                                                            (renderWaypoints[i]
+                                                            (segA
                                                                 .x +
-                                                                wp.x) /
+                                                                segB.x) /
                                                             2,
                                                         y:
-                                                            (renderWaypoints[i]
+                                                            (segA
                                                                 .y +
-                                                                wp.y) /
+                                                                segB.y) /
                                                             2,
                                                     },
                                           )
@@ -2663,7 +2698,7 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                                 d={hitD}
                                                 fill="none"
                                                 stroke="transparent"
-                                                strokeWidth={12}
+                                                strokeWidth={bundled ? 7 : 12}
                                             />
                                         )}
                                         <path
@@ -2774,11 +2809,20 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                     // Rótulo de la salida en el tramo más largo (si cabe en pantalla).
                                     let best = { length: 0, x: 0, y: 0 };
                                     for (let k = 1; k < renderWaypoints.length; k++) {
-                                        const p = toScreen(renderWaypoints[k - 1]);
-                                        const q = toScreen(renderWaypoints[k]);
+                                        const lane = wireLanes.get(circuit.id)?.[k - 1];
+                                        const [a, b] = offsetSegment(
+                                            renderWaypoints[k - 1],
+                                            renderWaypoints[k],
+                                            lane,
+                                            laneSpacing,
+                                        );
+                                        const p = toScreen(a);
+                                        const q = toScreen(b);
                                         const length = Math.hypot(q.x - p.x, q.y - p.y);
+                                        // En un haz, cada rótulo en otro punto del tramo (no se tapan).
+                                        const t = 0.5 + Math.max(-0.35, Math.min(0.35, (lane?.lane ?? 0) * 0.22));
                                         if (length > best.length) {
-                                            best = { length, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+                                            best = { length, x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t };
                                         }
                                     }
                                     if (best.length < 56 && !wireSelected && !runSelected) return null;

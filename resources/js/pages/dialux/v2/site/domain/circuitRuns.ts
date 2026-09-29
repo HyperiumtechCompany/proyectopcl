@@ -1,3 +1,4 @@
+import { circuitsAfterRemovingElements } from './circuitSplit';
 import { normalizeTgOutputs } from './tgPanel';
 import type { SiteCircuit, SiteData, SiteElement } from './types';
 
@@ -181,4 +182,18 @@ export function circuitRunTag(run: CircuitRun | undefined): string | null {
     if (!run) return null;
     const output = run.outputId ? run.outputLabel : run.outputLabel.replace(/^Salida\s*/i, 'S');
     return `${run.panelLabel}·${output}`;
+}
+
+/**
+ * Cables que quedan tras borrar objetos de la planta: en una caja compartida
+ * se unen los tramos de CADA salida por separado (ver
+ * `circuitsAfterRemovingElements`); la salida se toma del recorrido real.
+ */
+export function siteCircuitsAfterRemoving(site: SiteData, removedIds: Set<string>): SiteCircuit[] {
+    const runs = circuitRuns(site);
+    return circuitsAfterRemovingElements(
+        site.circuits ?? [],
+        removedIds,
+        (circuit) => runs.get(circuit.id)?.key ?? circuit.tgOutputId,
+    );
 }

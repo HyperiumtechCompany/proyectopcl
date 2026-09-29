@@ -57,20 +57,54 @@ const OUTPUT_COLORS = [
     '#a78bfa',
 ];
 
+/**
+ * Color ÚNICO de la salida `index`: los 6 de siempre y, desde la 7ª, tonos
+ * repartidos por el ángulo áureo (no se repiten hasta las 24 salidas).
+ */
+export function tgOutputColor(index: number): string {
+    if (index < OUTPUT_COLORS.length) return OUTPUT_COLORS[index];
+    const hue = ((index - OUTPUT_COLORS.length) * 137.508 + 15) % 360;
+    const lightness = index % 2 === 0 ? 0.52 : 0.4;
+    const saturation = 0.75;
+    const a = saturation * Math.min(lightness, 1 - lightness);
+    const channel = (n: number) => {
+        const k = (n + hue / 30) % 12;
+        const value = lightness - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+        return Math.round(value * 255)
+            .toString(16)
+            .padStart(2, '0');
+    };
+    return `#${channel(0)}${channel(8)}${channel(4)}`;
+}
+
 export function createTgOutput(index: number): TgOutput {
     return {
         id: `tg-output-${index + 1}`,
         label: String(index + 1),
-        color: OUTPUT_COLORS[index % OUTPUT_COLORS.length],
+        color: tgOutputColor(index),
     };
 }
 
 export function normalizeTgOutputs(outputs?: TgOutput[]): TgOutput[] {
     const valid = outputs?.filter((output) => output.id) ?? [];
-
-    return valid.length > 0
-        ? valid.slice(0, TG_MAX_OUTPUTS)
-        : Array.from({ length: 5 }, (_, index) => createTgOutput(index));
+    if (valid.length === 0) {
+        return Array.from({ length: 5 }, (_, index) => createTgOutput(index));
+    }
+    // Cada salida con color propio: una repetida (p.ej. la 7ª creada con la
+    // paleta vieja de 6 colores) toma su color único para no confundirse.
+    const seen = new Set<string>();
+    return valid.slice(0, TG_MAX_OUTPUTS).map((output, index) => {
+        const color = (output.color ?? '').toLowerCase();
+        if (color && !seen.has(color)) {
+            seen.add(color);
+            return output;
+        }
+        let candidate = index;
+        while (seen.has(tgOutputColor(candidate).toLowerCase())) candidate += 1;
+        const unique = tgOutputColor(candidate);
+        seen.add(unique.toLowerCase());
+        return { ...output, color: unique };
+    });
 }
 
 export function resizeTgOutputs(

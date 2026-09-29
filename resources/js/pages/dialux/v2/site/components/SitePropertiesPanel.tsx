@@ -363,9 +363,19 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                                                 type="button"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
+                                                    const count =
+                                                        editor.circuitDownstreamIds(circuit.id).length;
+                                                    if (
+                                                        count > 1 &&
+                                                        !window.confirm(
+                                                            `Se eliminarán ${count} tramos de esta salida (desde aquí hasta el final). Las demás salidas no se tocan. ¿Continuar?`,
+                                                        )
+                                                    ) {
+                                                        return;
+                                                    }
                                                     editor.removeCircuitDownstream(circuit.id);
                                                 }}
-                                                title="Eliminar desde aquí: esta conexión y todo lo que cuelga de ella (aguas abajo)"
+                                                title="Eliminar desde aquí: esta conexión y lo que cuelga de ella en ESTA salida (las demás salidas no se tocan)"
                                                 className="rounded border border-rose-300 px-1 text-[9px] font-semibold text-rose-600 hover:bg-rose-50 dark:border-rose-500/40 dark:text-rose-300"
                                             >
                                                 desde aquí

@@ -108,7 +108,9 @@ function sitePanelKind(element: SiteElement): SitePanelKind | null {
 const PANEL_RANK: Record<SitePanelKind, number> = { tg: 2, sub: 1, ats: 2.5 };
 /** Transformador de la planta: punto de suministro (encima de cualquier TG). */
 const SUPPLY_RANK = 3;
-const SUPPLY_TYPES = new Set<SiteElement['type']>(['transformer']);
+// La celda de transformación (MT) ES el transformador de la subestación:
+// su cable al ATS / TG es el alimentador dibujado, con su longitud real.
+const SUPPLY_TYPES = new Set<SiteElement['type']>(['transformer', 'mt_cell_transformation']);
 
 /**
  * Longitud (m) de un cable de la planta para el cálculo — la MISMA fórmula
@@ -866,6 +868,53 @@ export function applySiteToNetwork(
             });
         }
     }
+    // 5. Configuración de cada TG de la planta (pestaña Config. del TG):
+    //    parámetros de cálculo del tablero (los hereda todo su árbol) y el
+    //    alimentador que le llega cuando no hay un cable dibujado.
+    for (const element of panels) {
+        if (panelKindById.get(element.id) !== 'tg') continue;
+        const supply = element.config?.kind === 'tg' ? element.config.supply : undefined;
+        if (!supply) continue;
+        const panel = panelNodeFor(element.id);
+        if (!panel) continue;
+        const nodePatch: Partial<ElectricalNode> = {};
+        const setNode = <K extends keyof ElectricalNode>(key: K, value: ElectricalNode[K] | undefined) => {
+            if (value !== undefined && panel[key] !== value) nodePatch[key] = value;
+        };
+        setNode('phases', supply.phases);
+        setNode('nominalVoltageV', supply.nominalVoltageV);
+        setNode('connectionType', supply.connectionType);
+        setNode('workingTemperatureC', supply.workingTemperatureC);
+        setNode('designFactor', supply.designFactor);
+        setNode('simultaneityFactor', supply.simultaneityFactor);
+        if (Object.keys(nodePatch).length > 0) {
+            nodes = nodes.map((node) => (node.id === panel.id ? { ...node, ...nodePatch } : node));
+            changed = true;
+        }
+        const incoming = edges.find((edge) => edge.targetNodeId === panel.id);
+        // Un cable dibujado manda (su longitud es la de la planta).
+        if (!incoming || incoming.siteCircuitId) continue;
+        const edgePatch: Partial<ElectricalEdge> = {};
+        if (supply.feederHorizontalM !== undefined && incoming.horizontalLengthM !== supply.feederHorizontalM) {
+            edgePatch.horizontalLengthM = Math.max(0, supply.feederHorizontalM);
+        }
+        if (supply.feederVerticalM !== undefined && incoming.verticalLengthM !== supply.feederVerticalM) {
+            edgePatch.verticalLengthM = Math.max(0, supply.feederVerticalM);
+        }
+        if (supply.feederSectionMm2 !== undefined && incoming.sectionMm2 !== supply.feederSectionMm2) {
+            edgePatch.sectionMm2 = supply.feederSectionMm2;
+        }
+        if (supply.feederConductorType && incoming.conductorType !== supply.feederConductorType) {
+            edgePatch.conductorType = supply.feederConductorType;
+        }
+        if (Object.keys(edgePatch).length > 0) {
+            edges = edges.map((edge) =>
+                edge.id === incoming.id ? { ...edge, lengthMode: 'manual', ...edgePatch } : edge,
+            );
+            changed = true;
+        }
+    }
+
     for (const edge of edges) {
         if (edge.siteCircuitId && !circuitIds.has(edge.siteCircuitId)) {
             conflicts.push({

@@ -1,6 +1,7 @@
 import { Calculator } from 'lucide-react';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
-import { areaGridFor, siteSpaceCover, siteSpaceReflectances } from '../domain/siteLightingCalculation';
+import { areaGridFor,
+    effectiveWidthM, siteSpaceCover, siteSpaceReflectances } from '../domain/siteLightingCalculation';
 import type { SiteCalcSurface, SiteElement } from '../domain/types';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 import { useSiteLightingCalculation } from '../hooks/useSiteLightingCalculation';
@@ -32,7 +33,7 @@ export function SiteCalcSurfaceFields({
     const ys = element.vertices.map((v) => v.y * scaleM);
     const widthM = Math.max(...xs) - Math.min(...xs);
     const lengthM = Math.max(...ys) - Math.min(...ys);
-    const grid = areaGridFor(surface, widthM, lengthM);
+    const grid = areaGridFor(surface, widthM, lengthM, effectiveWidthM(element, scaleM));
     const points = Math.max(1, Math.round(widthM / grid.spacingM)) * Math.max(1, Math.round(lengthM / grid.spacingM));
     const result = lighting.calculation?.areas.find((area) => area.elementId === element.id);
     const update = (patch: Partial<SiteCalcSurface>) =>

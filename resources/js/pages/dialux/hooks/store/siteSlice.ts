@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { circuitsAfterRemovingElements } from '../../v2/site/domain/circuitSplit';
+import { siteCircuitsAfterRemoving } from '../../v2/site/domain/circuitRuns';
 import type {
     FeederPath,
     FeederRoute,
@@ -170,8 +170,8 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
                         elements: state.project.site.elements.filter(
                             (item) => item.id !== id,
                         ),
-                        circuits: circuitsAfterRemovingElements(
-                            state.project.site.circuits ?? [],
+                        circuits: siteCircuitsAfterRemoving(
+                            state.project.site,
                             new Set([id]),
                         ),
                     },
@@ -190,8 +190,8 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
                         elements: state.project.site.elements.filter(
                             (item) => !drop.has(item.type),
                         ),
-                        circuits: circuitsAfterRemovingElements(
-                            state.project.site.circuits ?? [],
+                        circuits: siteCircuitsAfterRemoving(
+                            state.project.site,
                             new Set(
                                 state.project.site.elements
                                     .filter((item) => drop.has(item.type))
@@ -371,8 +371,8 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
                         elements: state.project.site.elements.filter(
                             (item) => !drop.has(item.id),
                         ),
-                        circuits: circuitsAfterRemovingElements(
-                            state.project.site.circuits ?? [],
+                        circuits: siteCircuitsAfterRemoving(
+                            state.project.site,
                             drop,
                         ),
                     },

@@ -48,7 +48,12 @@ import {
     sampleGroundElevation,
     terrainElevationPoints,
 } from '../domain/terrainSurface';
-import { normalizeTgOutputs, tgFootprintVertices } from '../domain/tgPanel';
+import {
+    normalizeTgOutputs,
+    resizeTgOutputs,
+    TG_MAX_OUTPUTS,
+    tgFootprintVertices,
+} from '../domain/tgPanel';
 import type {
     Point2D,
     PoleConfig,
@@ -420,13 +425,23 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
     };
 
     /** Elimina la conexión y todo lo que cuelga de ella (aguas abajo); lo anterior queda. */
-    const removeCircuitDownstream = (id: string): number => {
-        const ids = downstreamCircuitIds(
+    /** Lo que borraría "desde aquí": solo tramos de la MISMA salida (nunca los de otras salidas que comparten una caja). */
+    const circuitDownstreamIds = (id: string): string[] => {
+        const startRun = runsByCircuit.get(id);
+        return downstreamCircuitIds(
             siteData?.circuits ?? [],
             siteData?.elements ?? [],
             id,
-            runsByCircuit.get(id)?.upstreamNodeOf[id],
+            startRun?.upstreamNodeOf[id],
+            (circuitId) => {
+                const run = runsByCircuit.get(circuitId);
+                return startRun ? run?.key === startRun.key : !run;
+            },
         );
+    };
+
+    const removeCircuitDownstream = (id: string): number => {
+        const ids = circuitDownstreamIds(id);
         const history = useEditorStore.getState();
         history.beginHistoryGesture();
         ids.forEach((circuitId) => removeSiteCircuit(circuitId));
@@ -670,7 +685,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
                 .map((circuit) => circuit.tgOutputId)
                 .filter((id): id is string => Boolean(id)),
         );
-        const tgOutputId =
+        let tgOutputId =
             pendingCircuitTgOutputId ??
             (tg
                 ? (
@@ -678,6 +693,24 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
                       tgOutputs[0]
                   )?.id
                 : undefined);
+        // Cada cable nuevo desde el TG es una salida INDEPENDIENTE: si la
+        // propuesta ya está ocupada, toma una libre y, si no quedan, agrega
+        // una salida nueva al TG (antes se repetía la salida 1: mismo color y
+        // el cálculo los tomaba como un solo circuito).
+        let grownOutputs: ReturnType<typeof normalizeTgOutputs> | null = null;
+        if (tg && tgOutputId && usedOutputs.has(tgOutputId)) {
+            const free = tgOutputs.find((output) => !usedOutputs.has(output.id));
+            if (free) {
+                tgOutputId = free.id;
+            } else if (tgOutputs.length < TG_MAX_OUTPUTS) {
+                grownOutputs = resizeTgOutputs(tgOutputs, tgOutputs.length + 1);
+                const added = grownOutputs[grownOutputs.length - 1];
+                if (tgOutputs.some((output) => output.id === added.id)) {
+                    added.id = `${added.id}-${Date.now().toString(36)}`;
+                }
+                tgOutputId = added.id;
+            }
+        }
         const draft: CircuitDraft = {
             sourceId: pendingCircuitSourceId,
             targetId: targetAnchorId,
@@ -704,6 +737,15 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         const pieces = splitCircuitAtAnchors(draft, anchorIdAtPoint) ?? [draft];
         const history = useEditorStore.getState();
         history.beginHistoryGesture();
+        if (tg && grownOutputs) {
+            const config = tg.config?.kind === 'tg' ? tg.config : undefined;
+            updateSiteElement(tg.id, {
+                config: {
+                    ...(config ?? (defaultConfigFor('tg_location') as TgConfig)),
+                    outputs: grownOutputs,
+                },
+            });
+        }
         pieces.forEach((piece) => addSiteCircuit(piece));
         history.endHistoryGesture();
         setSpaceWarning(null);
@@ -1792,6 +1834,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         startCircuitReroute,
         pendingRerouteCircuitId,
         circuitRuns: runsByCircuit,
+        circuitDownstreamIds,
         setCircuitRunColor,
         setCircuitRunOutput,
         addCircuitVertex,

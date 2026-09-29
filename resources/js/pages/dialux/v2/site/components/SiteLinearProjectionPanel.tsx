@@ -1,5 +1,6 @@
 import { Minus, Plus, Target, Wand2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { existingProjection } from '../domain/siteFixtureProjection';
 import { findActivity, isInteriorCatalog } from '../domain/siteLightingNorms';
 import type {
     LinearArrangement,
@@ -75,20 +76,40 @@ export function SiteLinearProjectionPanel({
         : undefined;
     const pedestrian = PEDESTRIAN.has(element.type);
 
-    const [targetLux, setTargetLux] = useState<number | null>(null);
+    // Lo ya proyectado en este espacio: el panel arranca desde ahí (misma
+    // cantidad, poste, producto, disposición…) para ajustar o AGREGAR postes
+    // sin rehacer todo; "Auto" vuelve a la propuesta.
+    const [existing] = useState(() => existingProjection(editor.siteData, element.id));
+    const saved = existing.saved?.mode === 'linear' ? existing.saved : undefined;
+    const savedNumber = (key: string) =>
+        typeof saved?.[key] === 'number' ? (saved[key] as number) : undefined;
+    const [targetLux, setTargetLux] = useState<number | null>(() => savedNumber('targetLux') ?? null);
     const target = targetLux ?? normLux ?? (pedestrian ? 10 : 15);
-    const [pole, setPole] = useState<PoleConfig>(() => ({
-        ...(defaultConfigFor('pole') as PoleConfig),
-        heightM: pedestrian ? 4 : 8,
-        armLengthM: pedestrian ? 0 : 1.5,
-    }));
-    const [spacingToHeight, setSpacingToHeight] = useState(
-        DEFAULT_LINEAR_SPACING_TO_HEIGHT,
+    const [pole, setPole] = useState<PoleConfig>(() =>
+        existing.pole
+            ? { ...existing.pole }
+            : {
+                  ...(defaultConfigFor('pole') as PoleConfig),
+                  heightM: pedestrian ? 4 : 8,
+                  armLengthM: pedestrian ? 0 : 1.5,
+              },
     );
-    const [arrangement, setArrangement] = useState<LinearArrangement | 'auto'>('auto');
-    const [side, setSide] = useState<0 | 1>(0);
-    const [placement, setPlacement] = useState<'outside' | 'inside'>('outside');
-    const [manualCount, setManualCount] = useState<number | null>(null);
+    const [spacingToHeight, setSpacingToHeight] = useState(
+        () => savedNumber('spacingToHeight') ?? DEFAULT_LINEAR_SPACING_TO_HEIGHT,
+    );
+    const [arrangement, setArrangement] = useState<LinearArrangement | 'auto'>(() =>
+        saved && ['single', 'staggered', 'opposite'].includes(String(saved.arrangement))
+            ? (saved.arrangement as LinearArrangement)
+            : 'auto',
+    );
+    const [side, setSide] = useState<0 | 1>(() => (savedNumber('side') === 1 ? 1 : 0));
+    const [placement, setPlacement] = useState<'outside' | 'inside'>(() =>
+        saved?.placement === 'inside' ? 'inside' : 'outside',
+    );
+    const [manualCount, setManualCount] = useState<number | null>(() =>
+        existing.poles.length > 0 ? existing.poles.length : null,
+    );
+    const placedCount = existing.poles.length;
     const [metrics, setMetrics] = useState<LinearPreviewMetrics | null>(null);
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
@@ -249,6 +270,11 @@ export function SiteLinearProjectionPanel({
     }
     return (
         <section className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-2 dark:border-amber-500/20 dark:bg-amber-500/5">
+            {placedCount > 0 && (
+                <p className="rounded-md bg-sky-100 px-2 py-1 text-[10px] leading-snug text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
+                    {`Este espacio ya tiene ${placedCount} postes proyectados. Se muestra tu proyección: cambia la cantidad con − / + (p. ej. para agregar postes) o sus datos y pulsa "Actualizar"; los postes se reemplazan repartidos en todo el espacio. "Auto" vuelve a la propuesta.`}
+                </p>
+            )}
             <div className="flex items-end gap-2">
                 <div className="flex-1">
                     <NumField
@@ -399,8 +425,15 @@ export function SiteLinearProjectionPanel({
                     type="button"
                     onClick={place}
                     className="rounded-md bg-emerald-600 px-2 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700"
+                    title={
+                        placedCount > 0
+                            ? `Reemplaza los ${placedCount} postes proyectados por estos ${layout.positions.length} (mismo espacio)`
+                            : undefined
+                    }
                 >
-                    Colocar {layout.positions.length}
+                    {placedCount > 0
+                        ? `Actualizar a ${layout.positions.length}`
+                        : `Colocar ${layout.positions.length}`}
                 </button>
             </div>
             {message && (

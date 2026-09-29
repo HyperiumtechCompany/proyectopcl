@@ -205,7 +205,7 @@ function optimizeOnce(
                 phases,
                 material,
                 powerFactor: calc.powerFactor ?? settings.defaultPowerFactor,
-                temperatureC: settings.workingTemperatureC,
+                temperatureC: calc.temperatureC ?? settings.workingTemperatureC,
             });
             if (dropPercent > settings.feederDropLimitPercent + 1e-12) continue;
             result.push({

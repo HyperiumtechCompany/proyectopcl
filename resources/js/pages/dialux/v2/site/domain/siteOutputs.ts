@@ -217,6 +217,11 @@ export function buildSitePanelScene(
     }
 
     const scene = blankScene(`site-${panel.id}`, panel.label);
+    // Acometida y cálculo configurados en el TG (pestaña Config. de la planta).
+    const supply =
+        panel.type === 'tg_location' && panel.config?.kind === 'tg'
+            ? panel.config.supply
+            : undefined;
     const devices: ElectricalDevice[] = [
         {
             id: panel.id,
@@ -226,11 +231,15 @@ export function buildSitePanelScene(
             label: panel.label || 'TG',
             mountingHeight: 0,
             properties: {
-                voltage: `${settings.nominalVoltageV}V`,
-                phases: settings.phases === 3 ? '3Φ' : '1Φ',
-                connectionType: settings.connectionType,
+                voltage: `${supply?.nominalVoltageV ?? settings.nominalVoltageV}V`,
+                phases: (supply?.phases ?? settings.phases) === 3 ? '3Φ' : '1Φ',
+                connectionType: supply?.connectionType ?? settings.connectionType,
                 defaultPowerFactor: settings.defaultPowerFactor,
-                designFactor: settings.designFactor ?? 1.25,
+                designFactor: supply?.designFactor ?? settings.designFactor ?? 1.25,
+                // Temperatura de trabajo del TG (ρ del cobre); sin ella, la de la V1 (40 °C).
+                ...(supply?.workingTemperatureC !== undefined
+                    ? { workingTemperatureC: supply.workingTemperatureC }
+                    : {}),
                 // La caída de aguas arriba se suma en % después (ver
                 // `analyzeSiteOutputs`): el motor V1 mezclaría la base de
                 // línea (3Φ) con la de fase de sus circuitos 1Φ.

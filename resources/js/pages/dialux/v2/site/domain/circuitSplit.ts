@@ -78,9 +78,18 @@ export function downstreamCircuitIds(
      * origen dibujado — mal si el tramo se dibujó al revés (del poste al TG).
      */
     upstreamNodeId?: string,
+    /**
+     * ¿La conexión es de la MISMA salida que el tramo borrado? (de
+     * `circuitRuns`). Una caja de pase la comparten varias salidas del TG:
+     * sin esto, borrar una salida se llevaba todas las que pasan por la caja.
+     */
+    sameOutput?: (circuitId: string) => boolean,
 ): string[] {
     const start = circuits.find((circuit) => circuit.id === circuitId);
     if (!start) return [];
+    const follows = (circuit: SiteCircuit) =>
+        (sameOutput ? sameOutput(circuit.id) : true) &&
+        !(start.tgOutputId && circuit.tgOutputId && circuit.tgOutputId !== start.tgOutputId);
     const typeOf = new Map(elements.map((element) => [element.id, element.type]));
     const result = new Set<string>([start.id]);
     const upstream = upstreamNodeId === start.targetId ? start.targetId : start.sourceId;
@@ -95,6 +104,7 @@ export function downstreamCircuitIds(
         for (const circuit of circuits) {
             if (result.has(circuit.id)) continue;
             if (circuit.sourceId !== node && circuit.targetId !== node) continue;
+            if (!follows(circuit)) continue;
             result.add(circuit.id);
             queue.push(circuit.sourceId === node ? circuit.targetId : circuit.sourceId);
         }
@@ -141,14 +151,44 @@ export function reroutedCircuitDraft(
 export function circuitsAfterRemovingElements(
     circuits: SiteCircuit[],
     removedIds: Set<string>,
+    /**
+     * Salida a la que pertenece cada cable (clave de `circuitRuns`). Una caja
+     * COMPARTIDA por varias salidas se quita uniendo los dos tramos de CADA
+     * salida por separado — nunca se borran las salidas que pasan por ella.
+     */
+    outputOf: (circuit: SiteCircuit) => string | undefined = (circuit) => circuit.tgOutputId,
 ): SiteCircuit[] {
     let result = circuits;
     for (const node of removedIds) {
         const touching = result.filter(
             (circuit) => circuit.sourceId === node || circuit.targetId === node,
         );
-        if (touching.length !== 2) continue;
-        const [first, second] = touching;
+        const groups = new Map<string, SiteCircuit[]>();
+        if (touching.length === 2) {
+            groups.set('', touching);
+        } else {
+            for (const circuit of touching) {
+                const key = outputOf(circuit) ?? `sin-salida:${circuit.id}`;
+                groups.set(key, [...(groups.get(key) ?? []), circuit]);
+            }
+        }
+        for (const pair of groups.values()) {
+            if (pair.length === 2) result = mergeAtNode(result, pair[0], pair[1], node);
+        }
+    }
+    return result.filter(
+        (circuit) => !removedIds.has(circuit.sourceId) && !removedIds.has(circuit.targetId),
+    );
+}
+
+/** Une dos tramos que se encuentran en `node` (objeto que se quita) en un solo cable. */
+function mergeAtNode(
+    result: SiteCircuit[],
+    first: SiteCircuit,
+    second: SiteCircuit,
+    node: string,
+): SiteCircuit[] {
+    {
         const otherOf = (circuit: SiteCircuit) =>
             circuit.sourceId === node ? circuit.targetId : circuit.sourceId;
         if (
@@ -157,7 +197,7 @@ export function circuitsAfterRemovingElements(
             // (varias cajas seguidas borradas se unen una tras otra)
             otherOf(first) === otherOf(second)
         ) {
-            continue;
+            return result;
         }
         // `first` orientado HACIA el nodo, `second` DESDE el nodo.
         const into =
@@ -197,11 +237,8 @@ export function circuitsAfterRemovingElements(
             ...(out.interiorLengthM !== undefined ? { interiorLengthM: out.interiorLengthM } : {}),
         };
         const dropId = keep.id === first.id ? second.id : first.id;
-        result = result
+        return result
             .filter((circuit) => circuit.id !== dropId)
             .map((circuit) => (circuit.id === keep.id ? merged : circuit));
     }
-    return result.filter(
-        (circuit) => !removedIds.has(circuit.sourceId) && !removedIds.has(circuit.targetId),
-    );
 }

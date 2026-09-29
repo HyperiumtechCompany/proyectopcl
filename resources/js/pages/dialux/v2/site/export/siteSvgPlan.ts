@@ -6,6 +6,7 @@ import { siteLuminaires } from '../domain/siteLightingCalculation';
 import { requiredLuxFor } from '../domain/siteLightingNorms';
 import type { Point2D, SiteData, SiteElement, SiteNormRegion } from '../domain/types';
 import { resolveWireEndpoints } from '../domain/wireAnchors';
+import { offsetPolyline, wireBundleLanes } from '../domain/wireBundles';
 import { isoluxSvgFragments, svgClipToPolygons } from './isoluxSvg';
 
 /**
@@ -152,8 +153,9 @@ export function renderSitePlanSvg(
     const runs = circuitRuns(site);
     const byId = (id: string) => (site.elements ?? []).find((element) => element.id === id);
     const tags: string[] = [];
-    for (const circuit of site.circuits ?? []) {
-        const live = resolveWireEndpoints(
+    const wires = (site.circuits ?? []).map((circuit) => ({
+        circuit,
+        points: resolveWireEndpoints(
             circuit.waypoints,
             circuit.sourceId,
             circuit.targetId,
@@ -161,8 +163,13 @@ export function renderSitePlanSvg(
             scaleM,
             circuit.tgOutputId,
             site.elements ?? [],
-        );
-        const points = live.map(M);
+        ).map(M),
+    }));
+    // Cables por la misma zanja/cajas: en paralelo, cada salida visible con su color.
+    const lanes = wireBundleLanes(wires.map((wire) => ({ id: wire.circuit.id, points: wire.points })));
+    for (const { circuit, points: centerline } of wires) {
+        const circuitLanes = lanes.get(circuit.id);
+        const points = offsetPolyline(centerline, circuitLanes, stroke * 3);
         if (points.length < 2) continue;
         const run = runs.get(circuit.id);
         const color = circuitColor(circuit, run, '#0e7490');
@@ -172,8 +179,14 @@ export function renderSitePlanSvg(
         let best = { length: 0, x: 0, y: 0 };
         for (let k = 1; k < points.length; k++) {
             const length = Math.hypot(points[k].x - points[k - 1].x, points[k].y - points[k - 1].y);
+            // En un haz, cada rótulo en otro punto del tramo (no se tapan).
+            const t = 0.5 + Math.max(-0.35, Math.min(0.35, (circuitLanes?.[k - 1]?.lane ?? 0) * 0.22));
             if (length > best.length) {
-                best = { length, x: (points[k].x + points[k - 1].x) / 2, y: (points[k].y + points[k - 1].y) / 2 };
+                best = {
+                    length,
+                    x: points[k - 1].x + (points[k].x - points[k - 1].x) * t,
+                    y: points[k - 1].y + (points[k].y - points[k - 1].y) * t,
+                };
             }
         }
         const size = textH * 0.5;

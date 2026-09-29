@@ -124,6 +124,7 @@ import type {
     TransformerConfig,
 } from '../domain/types';
 import { resolveWireEndpoints } from '../domain/wireAnchors';
+import { offsetPolyline, wireBundleLanes, type WireLane } from '../domain/wireBundles';
 import type { LuminairePhotometry } from '../lib/luminaireCatalog';
 import {
     buildCanopyMeshes,
@@ -630,9 +631,29 @@ export class SiteBuilder3D {
 
         // Cada conexión con el color de SU salida, aunque no toque el TG (pasa por cajas).
         const runs = circuitRuns(siteData);
+        // Cables por la misma zanja/cajas: en paralelo (no un tubo dentro de otro).
+        const lanes = wireBundleLanes(
+            (siteData.circuits ?? []).map((circuit) => ({
+                id: circuit.id,
+                points: resolveWireEndpoints(
+                    circuit.waypoints,
+                    circuit.sourceId,
+                    circuit.targetId,
+                    (id) => this.elementsById.get(id),
+                    scaleM,
+                    circuit.tgOutputId,
+                    this.elementsById.values(),
+                ),
+            })),
+        );
         for (const circuit of siteData.circuits ?? []) {
             try {
-                this.buildCircuit(circuit, scaleM, circuitColor(circuit, runs.get(circuit.id)));
+                this.buildCircuit(
+                    circuit,
+                    scaleM,
+                    circuitColor(circuit, runs.get(circuit.id)),
+                    lanes.get(circuit.id),
+                );
             } catch (error) {
                 console.warn(
                     `No se pudo construir el cableado de instalaciones ${circuit.id}`,
@@ -3749,19 +3770,29 @@ export class SiteBuilder3D {
      * alimentador, pero SIN color por estado de caída de tensión (no entra hoy a
      * ese cálculo) y con un tubo más delgado, propio de un circuito ramal.
      */
-    private buildCircuit(circuit: SiteCircuit, scaleM: number, color: string) {
+    private buildCircuit(
+        circuit: SiteCircuit,
+        scaleM: number,
+        color: string,
+        lanes?: WireLane[],
+    ) {
         if (circuit.waypoints.length < 2) return;
         // El extremo sigue el centro ACTUAL del artefacto anclado (no el
         // punto guardado al dibujar) — así el cable sigue al objeto al
         // moverlo, igual que en el plano 2D.
-        const waypoints = resolveWireEndpoints(
-            circuit.waypoints,
-            circuit.sourceId,
-            circuit.targetId,
-            (id) => this.elementsById.get(id),
-            scaleM,
-            circuit.tgOutputId,
-            this.elementsById.values(),
+        const waypoints = offsetPolyline(
+            resolveWireEndpoints(
+                circuit.waypoints,
+                circuit.sourceId,
+                circuit.targetId,
+                (id) => this.elementsById.get(id),
+                scaleM,
+                circuit.tgOutputId,
+                this.elementsById.values(),
+            ),
+            lanes,
+            // 12 cm entre cables del mismo haz.
+            0.12 / Math.max(scaleM, 1e-9),
         );
         const points = this.hasRoutedModes(circuit)
             ? this.aerialFeederPoints({ ...circuit, waypoints }, scaleM)

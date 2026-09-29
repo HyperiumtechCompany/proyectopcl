@@ -237,6 +237,33 @@ export interface TgConfig {
     heightM: number;
     /** Salidas visibles y editables del tablero en el esquema 2D. */
     outputs?: TgOutput[];
+    /** Acometida y parámetros de cálculo del TG (encabezado de su planilla CT, como la V1). */
+    supply?: TgSupplyConfig;
+}
+
+/**
+ * Datos con los que Red y CT calcula la caída de tensión de un TG de la
+ * planta. Todo lo que cuelga del TG hereda sus parámetros de cálculo.
+ * Ausente = los generales de la red.
+ */
+export interface TgSupplyConfig {
+    phases?: 1 | 3;
+    nominalVoltageV?: number;
+    connectionType?: 'star' | 'delta';
+    /** Temperatura de trabajo del conductor, °C (define ρ). */
+    workingTemperatureC?: number;
+    /** Factor de diseño de la corriente (Id = In × f). */
+    designFactor?: number;
+    /** Factor de simultaneidad del tablero (0 < fs ≤ 1). */
+    simultaneityFactor?: number;
+    /**
+     * Alimentador que LLEGA al TG (medidor/suministro → TG) cuando no hay un
+     * cable dibujado en la planta: longitud horizontal y vertical, m.
+     */
+    feederHorizontalM?: number;
+    feederVerticalM?: number;
+    feederSectionMm2?: number;
+    feederConductorType?: string;
 }
 
 export interface TgOutput {

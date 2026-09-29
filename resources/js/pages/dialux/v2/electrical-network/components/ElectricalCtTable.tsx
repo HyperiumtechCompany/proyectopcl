@@ -139,6 +139,12 @@ export function ElectricalCtTable({
 }: Props) {
     const [treeFixApplied, setTreeFixApplied] = useState(false);
     const nodes = new Map(data.nodes.map((node) => [node.id, node]));
+    // Numeración de TG como en la planilla: con varios TG de nombre genérico → TG-1, TG-2…
+    const mainPanels = data.nodes.filter((node) => node.type === 'main_panel');
+    const labelOf = (node: ElectricalNode) =>
+        node.type === 'main_panel' && mainPanels.length > 1 && /^TG$/i.test(node.label.trim())
+            ? `TG-${mainPanels.indexOf(node) + 1}`
+            : node.label;
     const calcByEdge = new Map(calculations.map((item) => [item.edgeId, item]));
     const portIds = new Set(
         data.nodes
@@ -172,6 +178,20 @@ export function ElectricalCtTable({
     // del TG, evaluar cada salida individualmente generaría ruido que no
     // escala. Si un tablero incumple, eso ya se refleja en su propia fila
     // resumen y se arrastra hacia arriba (TD → TG) por la cascada de ΔU.
+    // Alimentadores SIN DATOS (sin longitud o sin demanda): "Corregir
+    // automáticamente" no los puede resolver — falta un dato, no una sección.
+    const missingDataEdges = data.edges.filter(
+        (edge) => (calcByEdge.get(edge.id)?.status ?? 'incomplete') === 'incomplete',
+    );
+    const missingDataLabels = missingDataEdges.map((edge) => {
+        const from = nodes.get(edge.sourceNodeId);
+        const to = nodes.get(edge.targetNodeId);
+        const why =
+            (calcByEdge.get(edge.id)?.lengthM ?? 0) <= 0
+                ? 'sin longitud'
+                : 'sin demanda';
+        return `${from ? labelOf(from) : '?'} → ${to ? labelOf(to) : '?'} (${why})`;
+    });
     const circuitProblems = moduleCtCircuits.filter(
         (item) =>
             item.isPanelSummary &&
@@ -304,12 +324,6 @@ export function ElectricalCtTable({
         return result;
     };
     const indent = (depth: number) => `${'↳ '.repeat(Math.min(depth, 4))}`;
-    // Numeración de TG como en la planilla: con varios TG de nombre genérico → TG-1, TG-2…
-    const mainPanels = data.nodes.filter((node) => node.type === 'main_panel');
-    const labelOf = (node: ElectricalNode) =>
-        node.type === 'main_panel' && mainPanels.length > 1 && /^TG$/i.test(node.label.trim())
-            ? `TG-${mainPanels.indexOf(node) + 1}`
-            : node.label;
     /** Salidas de la planta de un tablero (TG / sub tablero de planta), filas C-1… */
     const renderSiteOutputs = (node: ElectricalNode, kind: string, select: () => void) => {
         const ownRows = siteRowsOf(node);
@@ -529,7 +543,14 @@ export function ElectricalCtTable({
                         >
                             {problems === 0
                                 ? 'Todo el árbol multimódulo está dentro de los límites configurados.'
-                                : `${problems} incidencia(s) siguen sin cumplir — vuelve a pulsar "Corregir automáticamente" (subir un alimentador cambia la caída heredada de sus hijos) o revisa el calibre máximo disponible.`}
+                                : problems > missingDataEdges.length
+                                  ? `${problems - missingDataEdges.length} incidencia(s) siguen sin cumplir — vuelve a pulsar "Corregir automáticamente" (subir un alimentador cambia la caída heredada de sus hijos) o revisa el calibre máximo disponible.`
+                                  : 'Las secciones ya cumplen; lo que queda son datos faltantes (ver abajo).'}
+                        </p>
+                    )}
+                    {missingDataEdges.length > 0 && (
+                        <p className="w-full text-[10px] font-semibold text-rose-600 dark:text-rose-400">
+                            {`Faltan datos para calcular (el botón no los puede corregir): ${missingDataLabels.join(' · ')}. Define la longitud del alimentador en la planta general (TG → Config. → Acometida y cálculo, o dibujando el cable) o en el diagrama de red.`}
                         </p>
                     )}
                 </div>

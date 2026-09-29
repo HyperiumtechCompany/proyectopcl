@@ -41,6 +41,8 @@ export interface EdgeCalculation {
     accumulatedVoltageDropV: number;
     status: 'complete' | 'warning' | 'non_compliant' | 'incomplete';
     warnings: string[];
+    /** Temperatura de trabajo con la que se evaluó (heredada del tablero; la usa el optimizador R5). */
+    temperatureC?: number;
     /** Tensión, sistema y cos φ con que se evaluó el tramo (los usa el optimizador R5). */
     voltageV?: number;
     phases?: 1 | 3;
@@ -161,11 +163,37 @@ export function calculateElectricalNetwork(
      * VOLTIOS de ambas bases sobrestimaba la caída (auditoría
      * `dialux-electrical-reviewer`, Fase 6).
      */
-    const walk = (nodeId: string, upstreamPercent: number): void => {
+    /**
+     * Parámetros de cálculo que HEREDA cada tramo: los del tablero que lo
+     * recibe si los define (p.ej. el TG configurado en la planta, como el
+     * encabezado de su planilla V1), si no los de su tablero padre y, al
+     * final, los generales de la red.
+     */
+    interface CalcParams {
+        temperatureC: number;
+        designFactor: number;
+        connectionType: 'star' | 'delta';
+    }
+    const rootParams: CalcParams = {
+        temperatureC: network.settings.workingTemperatureC,
+        designFactor: network.settings.designFactor ?? 1.25,
+        connectionType: network.settings.connectionType,
+    };
+    const walk = (
+        nodeId: string,
+        upstreamPercent: number,
+        inherited: CalcParams = rootParams,
+    ): void => {
         if (walked.has(nodeId)) return;
         walked.add(nodeId);
         for (const edge of children.get(nodeId) ?? []) {
             const load = loadAt(edge.targetNodeId);
+            const receiver = nodeById.get(edge.targetNodeId);
+            const params: CalcParams = {
+                temperatureC: receiver?.workingTemperatureC ?? inherited.temperatureC,
+                designFactor: receiver?.designFactor ?? inherited.designFactor,
+                connectionType: receiver?.connectionType ?? inherited.connectionType,
+            };
             const powerFactor =
                 edge.powerFactor ?? network.settings.defaultPowerFactor;
             // El % de caída de tensión se define contra el voltaje NOMINAL
@@ -189,7 +217,7 @@ export function calculateElectricalNetwork(
                 targetNode?.nominalVoltageV ||
                 (edgePhases === 1 &&
                 network.settings.phases === 3 &&
-                network.settings.connectionType === 'star'
+                params.connectionType === 'star'
                     ? network.settings.nominalVoltageV / Math.sqrt(3)
                     : network.settings.nominalVoltageV);
             const currentA = circuitCurrent(
@@ -199,7 +227,7 @@ export function calculateElectricalNetwork(
                 powerFactor,
             );
             const designCurrentA =
-                currentA * (network.settings.designFactor ?? 1.25);
+                currentA * params.designFactor;
             const lengthM = edge.horizontalLengthM + edge.verticalLengthM;
             const material =
                 edge.conductorMaterial === 'copper' ? 'cobre' : 'aluminio';
@@ -226,7 +254,7 @@ export function calculateElectricalNetwork(
                     phases: edgePhases,
                     material,
                     powerFactor,
-                    temperatureC: network.settings.workingTemperatureC,
+                    temperatureC: params.temperatureC,
                 });
             // % acumulado exacto (ver `walk`); los voltios acumulados se
             // expresan en la base de ESTE tramo (la del tablero que lo
@@ -246,14 +274,22 @@ export function calculateElectricalNetwork(
             });
             const breaker = selectBreaker(designCurrentA);
             const warnings: string[] = [];
-            if (lengthM <= 0) {
+            // Suministro → Medidor en 0 m = medidor en el punto de suministro
+            // (acometida de la concesionaria): válido, no es un dato faltante.
+            const meterAtSupply =
+                lengthM <= 0 &&
+                nodeById.get(edge.sourceNodeId)?.type === 'service' &&
+                receiver?.type === 'meter';
+            if (lengthM <= 0 && !meterAtSupply) {
                 warnings.push(
                     'Falta definir la longitud del alimentador para calcular la caída de tensión.',
                 );
             }
             if (load.demand <= 0) {
                 warnings.push(
-                    'El módulo todavía no publica máxima demanda. Guarda o recalcula su documento eléctrico.',
+                    targetPort
+                        ? 'El módulo todavía no publica máxima demanda. Guarda o recalcula su documento eléctrico.'
+                        : `${receiver?.label ?? 'El tablero'} todavía no tiene carga: cablea sus salidas en la planta general o conéctale un módulo.`,
                 );
             }
             if (!selected && catalog.length === 0) {
@@ -314,7 +350,7 @@ export function calculateElectricalNetwork(
                 accumulatedVoltageDropPercent: accumulatedPercent,
                 accumulatedVoltageDropV: accumulatedV,
                 status:
-                    lengthM <= 0 || load.demand <= 0
+                    (lengthM <= 0 && !meterAtSupply) || load.demand <= 0
                         ? 'incomplete'
                         : warnings.length > 0
                           ? 'non_compliant'
@@ -326,8 +362,9 @@ export function calculateElectricalNetwork(
                 voltageV: edgeVoltageV,
                 phases: edgePhases,
                 powerFactor,
+                temperatureC: params.temperatureC,
             });
-            walk(edge.targetNodeId, accumulatedPercent);
+            walk(edge.targetNodeId, accumulatedPercent, params);
         }
     };
     for (const root of roots) walk(root, 0);

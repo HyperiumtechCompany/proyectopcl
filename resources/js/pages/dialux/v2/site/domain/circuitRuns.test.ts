@@ -198,3 +198,51 @@ describe('caja compartida más adelante del recorrido', () => {
         expect(runs.get('bp')?.outputLabel).toBe('2');
     });
 });
+
+describe('14 salidas del TG por una caja compartida (caso del usuario)', () => {
+    // TG → caja (14 cables, una salida cada uno) → un poste por salida.
+    const outputs = Array.from({ length: 14 }, (_, i) => `tg-output-${i + 1}`);
+    const elements = [
+        el('tg', 'tg_location', 0),
+        el('caja', 'pull_box', 10),
+        ...outputs.map((_, i) => el(`p${i + 1}`, 'pole', 20 + i)),
+    ];
+    const circuits = outputs.flatMap((output, i) => [
+        wire(`t${i + 1}`, 'tg', 'caja', { tgOutputId: output }),
+        wire(`c${i + 1}`, 'caja', `p${i + 1}`, { tgOutputId: output }),
+    ]);
+    const plant = site(elements, circuits);
+
+    it('"eliminar desde aquí" en una salida borra SOLO esa salida', async () => {
+        const { downstreamCircuitIds } = await import('./circuitSplit');
+        const runs = circuitRuns(plant);
+        const start = runs.get('t3')!;
+        const ids = downstreamCircuitIds(circuits, elements, 't3', start.upstreamNodeOf.t3, (id) => runs.get(id)?.key === start.key);
+        expect(ids.sort()).toEqual(['c3', 't3']);
+        // Aun sin conocer los recorridos, la salida distinta de cada cable lo protege.
+        expect(downstreamCircuitIds(circuits, elements, 't3').sort()).toEqual(['c3', 't3']);
+    });
+
+    it('borrar la caja compartida une los tramos de CADA salida (no borra ninguna)', async () => {
+        const { siteCircuitsAfterRemoving } = await import('./circuitRuns');
+        const after = siteCircuitsAfterRemoving(plant, new Set(['caja']));
+        expect(after).toHaveLength(14);
+        for (let i = 1; i <= 14; i++) {
+            const cable = after.find((circuit) => circuit.tgOutputId === `tg-output-${i}`)!;
+            expect(cable).toMatchObject({ sourceId: 'tg', targetId: `p${i}` });
+        }
+    });
+
+    it('cada salida tiene un color distinto (también las guardadas con la paleta vieja)', async () => {
+        const { normalizeTgOutputs, tgOutputColor } = await import('./tgPanel');
+        const colors = Array.from({ length: 24 }, (_, i) => tgOutputColor(i).toLowerCase());
+        expect(new Set(colors).size).toBe(24);
+        expect(colors.every((color) => /^#[0-9a-f]{6}$/.test(color))).toBe(true);
+        // Paleta vieja: la 7ª repetía el color de la 1ª.
+        const old = Array.from({ length: 14 }, (_, i) => ({ id: `tg-output-${i + 1}`, label: String(i + 1), color: colors[i % 6] }));
+        const fixed = normalizeTgOutputs(old);
+        expect(new Set(fixed.map((output) => output.color.toLowerCase())).size).toBe(14);
+        // Las 6 primeras conservan su color.
+        expect(fixed.slice(0, 6).map((output) => output.color)).toEqual(old.slice(0, 6).map((output) => output.color));
+    });
+});

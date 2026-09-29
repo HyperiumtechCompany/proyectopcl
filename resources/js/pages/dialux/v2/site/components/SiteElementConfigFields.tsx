@@ -90,10 +90,14 @@ import { defaultConfigFor, SUB_PANEL_MOUNT_STYLE } from '../lib/siteDefaults';
 import { LightProductSelect } from './LightProductSelect';
 import { PoleLuminairePanel } from './PoleLuminairePanel';
 import { useSitePaletteStore } from './SitePalette';
+import { TgSupplyFields } from './TgSupplyFields';
 
 const input =
     'mt-1 h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white';
 const field = 'text-[11px] text-slate-500';
+
+/** Lo que alimenta a un TG por un cable dibujado (su longitud sale del recorrido). */
+const TG_UPSTREAM_TYPES = new Set<string>(['ats', 'transformer', 'generator', 'mt_cell_transformation']);
 
 function Num({
     label,
@@ -1607,6 +1611,19 @@ export function SiteElementConfigFields({
                         </div>
                     ))}
                 </div>
+                <TgSupplyFields
+                    supply={t.supply}
+                    settings={editor.networkSettings}
+                    hasDrawnFeeder={(editor.siteData?.circuits ?? []).some((circuit) => {
+                        if (circuit.sourceId !== element.id && circuit.targetId !== element.id) {
+                            return false;
+                        }
+                        const otherId = circuit.sourceId === element.id ? circuit.targetId : circuit.sourceId;
+                        const other = editor.siteData?.elements.find((item) => item.id === otherId);
+                        return !!other && TG_UPSTREAM_TYPES.has(other.type);
+                    })}
+                    onChange={(supply) => set({ ...t, supply })}
+                />
             </div>
         );
     }
