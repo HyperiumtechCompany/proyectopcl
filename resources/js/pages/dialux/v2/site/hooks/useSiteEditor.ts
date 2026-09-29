@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { computeLinearScaleFactor } from '@/pages/dialux/geometry/calibration';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import { isBaseLockActive, isElementFrozen } from '../domain/baseLock';
+import { blockFeedOrigin, proposeBlockCableRoute } from '../domain/blockConnection';
 import { appendCircuitContinuation } from '../domain/circuitContinuation';
 import {
     downstreamCircuitIds,
@@ -87,6 +88,10 @@ const CIRCUIT_ANCHOR_TYPES = new Set<SiteElementType>([
     'transformer',
     'gate',
     'canopy',
+    // Balizas de rampas/escaleras y luces subacuáticas de piscinas: se cablean como cargas.
+    'ramp',
+    'stair',
+    'pool',
     'building_block',
     'sub_panel',
     'ats',
@@ -1471,6 +1476,87 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         removeSiteCircuitWaypoint,
         splitCircuitAtObjects,
         removeCircuitDownstream,
+        /**
+         * Conexión guiada (C1): cable del tablero de la planta al edificio,
+         * subterráneo, con el recorrido propuesto (recto o en L sin cruzar
+         * otros edificios) hasta su acometida. Devuelve el id del cable o null.
+         */
+        connectBlockToPanel: (blockId: string, panelId: string, tgOutputId?: string): string | null => {
+            const block = siteData?.elements.find((item) => item.id === blockId);
+            if (!block || !siteData) return null;
+            // Por la caja de pase ya cableada desde el tablero más cercana al
+            // edificio (TG → … → caja → edificio): el alimentador suma todo el
+            // recorrido real. Sin cajas, directo desde el tablero.
+            const origin = blockFeedOrigin(siteData, panelId, block, terrainScaleM);
+            if (!origin) return null;
+            const from = elementBox(origin.element, terrainScaleM).center;
+            const route = proposeBlockCableRoute(from, block, siteData.elements, terrainScaleM, [origin.element.id]);
+            const before = new Set((siteData.circuits ?? []).map((item) => item.id));
+            addSiteCircuit({
+                sourceId: origin.element.id,
+                targetId: blockId,
+                waypoints: route.waypoints,
+                wireCount: 4,
+                wastePct: 5,
+                ...(tgOutputId && !origin.viaPassThrough ? { tgOutputId } : {}),
+                segmentModes: route.waypoints.slice(1).map(() => 'underground' as const),
+                route: { kind: 'underground', depthM: 0.6 },
+            });
+            const created = (useEditorStore.getState().project?.site?.circuits ?? []).find(
+                (item) => !before.has(item.id),
+            );
+            if (created) selectWire({ kind: 'circuit', id: created.id });
+            return created?.id ?? null;
+        },
+        /**
+         * Re-traza un cable tablero → edificio que va directo por la planta
+         * para que salga de la caja de pase ya cableada más cercana (conserva
+         * sección, conductor y recorrido interior). Devuelve el id nuevo o null.
+         */
+        rerouteBlockCableViaPassThrough: (circuitId: string): string | null => {
+            const circuit = siteData?.circuits?.find((item) => item.id === circuitId);
+            if (!circuit || !siteData) return null;
+            const blockId = [circuit.sourceId, circuit.targetId].find(
+                (id) => siteData.elements.find((item) => item.id === id)?.type === 'building_block',
+            );
+            const panelId = circuit.sourceId === blockId ? circuit.targetId : circuit.sourceId;
+            const block = siteData.elements.find((item) => item.id === blockId);
+            if (!block) return null;
+            const origin = blockFeedOrigin(siteData, panelId, block, terrainScaleM);
+            if (!origin?.viaPassThrough) return null;
+            const from = elementBox(origin.element, terrainScaleM).center;
+            const route = proposeBlockCableRoute(from, block, siteData.elements, terrainScaleM, [origin.element.id]);
+            const history = useEditorStore.getState();
+            history.beginHistoryGesture();
+            removeSiteCircuit(circuit.id);
+            const before = new Set((useEditorStore.getState().project?.site?.circuits ?? []).map((item) => item.id));
+            addSiteCircuit({
+                sourceId: origin.element.id,
+                targetId: block.id,
+                waypoints: route.waypoints,
+                wireCount: circuit.wireCount,
+                wastePct: circuit.wastePct,
+                segmentModes: route.waypoints.slice(1).map(() => 'underground' as const),
+                route: { ...(circuit.route ?? {}), kind: 'underground', depthM: circuit.route?.depthM ?? 0.6 },
+                ...(circuit.sectionMm2 !== undefined ? { sectionMm2: circuit.sectionMm2 } : {}),
+                ...(circuit.conductorType ? { conductorType: circuit.conductorType } : {}),
+                ...(circuit.interiorLengthM !== undefined ? { interiorLengthM: circuit.interiorLengthM } : {}),
+                ...(circuit.modulePanelId ? { modulePanelId: circuit.modulePanelId } : {}),
+            });
+            history.endHistoryGesture();
+            const created = (useEditorStore.getState().project?.site?.circuits ?? []).find((item) => !before.has(item.id));
+            if (created) selectWire({ kind: 'circuit', id: created.id });
+            return created?.id ?? null;
+        },
+        /** Desde dónde conviene derivar el cable al edificio (caja de pase o tablero). */
+        blockFeedOrigin: (panelId: string, blockId: string) => {
+            const block = siteData?.elements.find((item) => item.id === blockId);
+            return block && siteData ? blockFeedOrigin(siteData, panelId, block, terrainScaleM) : null;
+        },
+        /** Avisos del puente planta → red (bloque sin módulo, módulo sin tablero…). */
+        bridgeConflicts: liveNetwork.conflicts,
+        /** Sistema y límites de ΔU de la red (ausente sin red cargada). */
+        networkSettings: liveNetwork.settings,
         /** El cable pasa por objetos intermedios (guardado de corrido): se puede separar. */
         circuitHasIntermediateObjects: (id: string) => {
             const circuit = siteData?.circuits?.find((item) => item.id === id);

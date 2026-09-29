@@ -1,16 +1,98 @@
-import { Upload } from 'lucide-react';
+import { ImagePlus, Replace, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import {
     DEFAULT_LUMINAIRE,
     lumensForTargetLux,
     type LuminaireSource,
 } from '../domain/exteriorLighting';
-import type { PoleConfig } from '../domain/types';
+import type { PoleArmStyle, PoleConfig, PoleHeadStyle } from '../domain/types';
 import {
     useLuminaireCatalog,
     useLuminairePhotometry,
 } from '../hooks/useLuminaireCatalog';
-import { importLuminaireFile } from '../lib/luminaireCatalog';
+import { importLuminaireFile, type LuminaireCatalogItem } from '../lib/luminaireCatalog';
+
+/** Tipos de poste habituales (fotos de referencia: báculo, doble brazo, acodado…). */
+const POLE_PRESETS: Array<{
+    id: string;
+    label: string;
+    patch: Partial<PoleConfig>;
+}> = [
+    { id: 'straight', label: 'Brazo recto', patch: { armStyle: 'straight', headStyle: 'street', fixtures: 1 } },
+    { id: 'curved', label: 'Báculo curvo', patch: { armStyle: 'curved', headStyle: 'street', fixtures: 1 } },
+    { id: 'double', label: 'Doble brazo (T)', patch: { armStyle: 'straight', headStyle: 'street', fixtures: 2 } },
+    { id: 'double-curved', label: 'Doble báculo', patch: { armStyle: 'curved', headStyle: 'street', fixtures: 2 } },
+    { id: 'bracket', label: 'Acodado con tirante', patch: { armStyle: 'bracket', headStyle: 'street', fixtures: 1 } },
+    { id: 'globe', label: 'Farol (esfera)', patch: { armLengthM: 0, headStyle: 'globe', fixtures: 1 } },
+    { id: 'flood', label: 'Proyector', patch: { headStyle: 'flood' } },
+    { id: 'bollard', label: 'Bolardo (1 m)', patch: { mount: 'bollard', heightM: 1, armLengthM: 0, fixtures: 1 } },
+    { id: 'inground', label: 'Empotrada en piso', patch: { mount: 'inground', heightM: 0, armLengthM: 0, fixtures: 1 } },
+];
+
+const ARM_LABEL: Record<PoleArmStyle, string> = {
+    straight: 'Recto',
+    curved: 'Curvo (báculo)',
+    bracket: 'Acodado con tirante',
+};
+const HEAD_LABEL: Record<PoleHeadStyle, string> = {
+    street: 'Alumbrado público LED',
+    globe: 'Farol esférico',
+    flood: 'Proyector',
+};
+
+/** Medidas del cuerpo de la luminaria (m) tomadas de su ficha LDT/IES. */
+function headSizeOf(item: LuminaireCatalogItem | undefined): PoleConfig['headSizeM'] {
+    const d = item?.dimensions;
+    return d ? { length: d.length, width: d.width || d.length * 0.4, height: d.height } : undefined;
+}
+
+/** Ficha del producto: foto y datos de su archivo LDT/IES. */
+function ProductCard({ item }: { item: LuminaireCatalogItem }) {
+    const rows: Array<[string, string | null]> = [
+        ['Fabricante', item.manufacturer],
+        ['N.º artículo', item.articleNumber],
+        ['Flujo', item.totalLumens ? `${Math.round(item.totalLumens).toLocaleString('es-PE')} lm` : null],
+        ['Potencia', item.powerWatts ? `${item.powerWatts} W` : null],
+        ['Eficacia', item.efficacyLmW ? `${Math.round(item.efficacyLmW)} lm/W` : null],
+        ['CCT', item.cct ? `${item.cct} K` : null],
+        ['IRC (Ra)', item.criRa ? String(item.criRa) : null],
+        ['Haz (50 %)', item.beamAngle50 ? `${Math.round(item.beamAngle50)}°` : null],
+        ['Distribución', item.distributionType],
+        [
+            'Medidas',
+            item.dimensions
+                ? `${Math.round(item.dimensions.length * 1000)} × ${Math.round(item.dimensions.width * 1000)} × ${Math.round(item.dimensions.height * 1000)} mm`
+                : null,
+        ],
+        ['Archivo', item.sourceFormat ? item.sourceFormat.toUpperCase() : null],
+    ];
+    return (
+        <div className="flex gap-2 rounded-md border border-slate-200 bg-white p-1.5 dark:border-white/10 dark:bg-slate-950/40">
+            {item.imageUrl ? (
+                <img
+                    src={item.imageUrl}
+                    alt={item.name}
+                    className="h-20 w-20 shrink-0 rounded object-contain bg-slate-50 dark:bg-white/5"
+                />
+            ) : (
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded bg-slate-100 text-center text-[9px] text-slate-400 dark:bg-white/5">
+                    Sin foto
+                </div>
+            )}
+            <dl className="grid min-w-0 flex-1 grid-cols-[auto_1fr] gap-x-2 text-[10px] leading-tight">
+                {rows
+                    .filter(([, value]) => value)
+                    .map(([label, value]) => (
+                        <div key={label} className="contents">
+                            <dt className="text-slate-400">{label}</dt>
+                            <dd className="truncate text-slate-700 dark:text-slate-200">{value}</dd>
+                        </div>
+                    ))}
+            </dl>
+        </div>
+    );
+}
 
 const input =
     'mt-1 h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white';
@@ -66,7 +148,11 @@ export function PoleLuminairePanel({ config, onPatch, count = 1 }: Props) {
     const [targetLux, setTargetLux] = useState(10);
     const [message, setMessage] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [pendingImage, setPendingImage] = useState<File | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
+    const imageRef = useRef<HTMLInputElement>(null);
+    const siteElements = useEditorStore((state) => state.project?.site?.elements);
+    const updateSiteElement = useEditorStore((state) => state.updateSiteElement);
 
     const product = catalog.items.find((item) => item.id === config.productId);
     const photometry = useLuminairePhotometry(
@@ -123,13 +209,47 @@ export function PoleLuminairePanel({ config, onPatch, count = 1 }: Props) {
 
     const pick = (id: number) => {
         // Con producto, el flujo por defecto es el de su ficha (se puede sobrescribir).
+        const item = catalog.items.find((candidate) => candidate.id === id);
         onPatch({
             productId: id,
             lumens: undefined,
             wattage: undefined,
-            resolvedWatts: catalog.items.find((item) => item.id === id)?.powerWatts ?? undefined,
+            resolvedWatts: item?.powerWatts ?? undefined,
+            headSizeM: headSizeOf(item),
         });
         setMessage(null);
+    };
+
+    // Reemplazar la luminaria actual en TODOS los postes de la planta que la
+    // usan (mismo producto, o la genérica), en un solo paso de deshacer.
+    const sameLuminaire = (siteElements ?? []).filter(
+        (element) =>
+            element.type === 'pole' &&
+            element.config?.kind === 'pole' &&
+            element.config.productId === config.productId,
+    );
+    const [replaceWith, setReplaceWith] = useState<number | ''>('');
+    const replaceAll = () => {
+        if (replaceWith === '') return;
+        const item = catalog.items.find((candidate) => candidate.id === replaceWith);
+        const history = useEditorStore.getState();
+        history.beginHistoryGesture();
+        for (const element of sameLuminaire) {
+            if (element.config?.kind !== 'pole') continue;
+            updateSiteElement(element.id, {
+                config: {
+                    ...element.config,
+                    productId: replaceWith,
+                    lumens: undefined,
+                    wattage: undefined,
+                    resolvedWatts: item?.powerWatts ?? undefined,
+                    headSizeM: headSizeOf(item),
+                },
+            });
+        }
+        history.endHistoryGesture();
+        setMessage(`Reemplazada en ${sameLuminaire.length} poste(s) por "${item?.name ?? ''}".`);
+        setReplaceWith('');
     };
 
     const onFile = async (file: File | undefined) => {
@@ -137,13 +257,15 @@ export function PoleLuminairePanel({ config, onPatch, count = 1 }: Props) {
         setBusy(true);
         setMessage(null);
         try {
-            const { item, warnings } = await importLuminaireFile(file);
+            const { item, warnings } = await importLuminaireFile(file, pendingImage ?? undefined);
             catalog.reload();
+            setPendingImage(null);
             onPatch({
                 productId: item.id,
                 lumens: undefined,
                 wattage: undefined,
                 resolvedWatts: item.powerWatts ?? undefined,
+                headSizeM: headSizeOf(item),
             });
             setMessage(
                 `Importada "${item.name}" al catálogo compartido (también disponible en el editor de interiores).${
@@ -163,9 +285,81 @@ export function PoleLuminairePanel({ config, onPatch, count = 1 }: Props) {
     return (
         <div className="grid gap-2 rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-white/10 dark:bg-white/5">
             <p className="text-[10px] font-bold tracking-wide text-slate-500 uppercase">
-                Luminaria{count > 1 ? ` · ${count} postes` : ''}
+                Tipo de poste{count > 1 ? ` · ${count} postes` : ''}
+            </p>
+            <div className="flex flex-wrap gap-1">
+                {POLE_PRESETS.map((preset) => (
+                    <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() =>
+                            onPatch({
+                                ...(preset.patch.mount ? {} : { mount: 'pole' as const, heightM: Math.max(3, config.heightM) }),
+                                ...preset.patch,
+                                // Con brazo: al menos 1,5 m si no tenía.
+                                ...(preset.patch.armLengthM === undefined &&
+                                preset.id !== 'flood' &&
+                                (config.armLengthM ?? 0) <= 0
+                                    ? { armLengthM: 1.5 }
+                                    : {}),
+                            })
+                        }
+                        className="rounded border border-slate-300 px-1.5 py-0.5 text-[10px] text-slate-600 hover:border-cyan-500 hover:text-cyan-700 dark:border-slate-700 dark:text-slate-300"
+                    >
+                        {preset.label}
+                    </button>
+                ))}
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+                <label className={field}>
+                    Brazo
+                    <select
+                        className={input}
+                        value={config.armStyle ?? 'straight'}
+                        onChange={(e) => onPatch({ armStyle: e.target.value as PoleArmStyle })}
+                    >
+                        {Object.entries(ARM_LABEL).map(([value, label]) => (
+                            <option key={value} value={value}>
+                                {label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <label className={field}>
+                    Cuerpo de la luminaria
+                    <select
+                        className={input}
+                        value={config.headStyle ?? ((config.armLengthM ?? 0) > 0 ? 'street' : 'globe')}
+                        onChange={(e) => onPatch({ headStyle: e.target.value as PoleHeadStyle })}
+                    >
+                        {Object.entries(HEAD_LABEL).map(([value, label]) => (
+                            <option key={value} value={value}>
+                                {label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <NumField
+                    label="Luminarias por poste"
+                    value={fixtures}
+                    step={1}
+                    min={1}
+                    onChange={(value) => onPatch({ fixtures: Math.max(1, Math.min(4, Math.round(value))) })}
+                />
+                <NumField
+                    label="Largo del brazo (m)"
+                    value={config.armLengthM ?? 0}
+                    step={0.25}
+                    min={0}
+                    onChange={(value) => onPatch({ armLengthM: Math.max(0, value) })}
+                />
+            </div>
+
+            <p className="mt-1 text-[10px] font-bold tracking-wide text-slate-500 uppercase">
+                Luminaria
             </p>
 
+            {product && <ProductCard item={product} />}
             <div className="text-[11px]">
                 {product ? (
                     <div className="flex items-start justify-between gap-2">
@@ -229,7 +423,14 @@ export function PoleLuminairePanel({ config, onPatch, count = 1 }: Props) {
                                 : 'text-slate-700 dark:text-slate-300'
                         }`}
                     >
-                        <span className="font-semibold">{item.name}</span>
+                        <span className="flex items-center gap-1.5">
+                            {item.imageUrl ? (
+                                <img src={item.imageUrl} alt="" className="h-6 w-6 shrink-0 rounded object-contain" />
+                            ) : (
+                                <span className="h-6 w-6 shrink-0 rounded bg-slate-100 dark:bg-white/5" />
+                            )}
+                            <span className="font-semibold">{item.name}</span>
+                        </span>
                         <span className="block text-slate-400">
                             {[
                                 item.manufacturer,
@@ -265,7 +466,56 @@ export function PoleLuminairePanel({ config, onPatch, count = 1 }: Props) {
                     className="hidden"
                     onChange={(e) => void onFile(e.target.files?.[0])}
                 />
+                <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => imageRef.current?.click()}
+                    title="Foto del producto que se guarda junto con el LDT/IES al importarlo"
+                    className="flex min-w-0 items-center gap-1 rounded-md border border-dashed border-slate-300 px-2 py-1 text-[10px] text-slate-500 hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-white/5"
+                >
+                    <ImagePlus className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{pendingImage ? pendingImage.name : 'Foto (opcional)'}</span>
+                </button>
+                <input
+                    ref={imageRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => setPendingImage(e.target.files?.[0] ?? null)}
+                />
             </div>
+            {sameLuminaire.length > 1 && (
+                <div className="flex items-end gap-1">
+                    <label className={`${field} min-w-0 flex-1`}>
+                        Reemplazar en los {sameLuminaire.length} postes con{' '}
+                        {product ? `"${product.name}"` : 'la genérica'}
+                        <select
+                            className={input}
+                            value={replaceWith}
+                            onChange={(e) => setReplaceWith(e.target.value ? Number(e.target.value) : '')}
+                        >
+                            <option value="">Elegir luminaria…</option>
+                            {catalog.items
+                                .filter((item) => item.id !== config.productId)
+                                .map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                        {item.name}
+                                        {item.totalLumens ? ` · ${Math.round(item.totalLumens)} lm` : ''}
+                                    </option>
+                                ))}
+                        </select>
+                    </label>
+                    <button
+                        type="button"
+                        disabled={replaceWith === ''}
+                        onClick={replaceAll}
+                        className="flex h-8 items-center gap-1 rounded-md bg-cyan-600 px-2 text-[10px] font-semibold text-white hover:bg-cyan-700 disabled:opacity-40"
+                    >
+                        <Replace className="h-3 w-3" />
+                        Reemplazar
+                    </button>
+                </div>
+            )}
             {message && (
                 <p className="text-[10px] text-slate-500">{message}</p>
             )}

@@ -269,18 +269,74 @@ function Glyph({
                     <circle cx={4} cy={0} r={7} {...common} />
                 </>
             );
-        case 'pole':
-            // Luminaria sobre poste: círculo con centro y rayos cortos.
+        case 'pole': {
+            const pole = config?.kind === 'pole' ? config : undefined;
+            if (pole?.mount === 'bollard') {
+                // Bolardo: cuerpo cuadrado con la luminaria al centro.
+                return (
+                    <>
+                        <rect x={-4.5} y={-4.5} width={9} height={9} rx={1.5} {...common} />
+                        <circle r={2} fill={stroke} stroke="none" />
+                    </>
+                );
+            }
+            if (pole?.mount === 'inground') {
+                // Empotrada en piso: círculo con cruz (emite hacia arriba).
+                return (
+                    <>
+                        <circle r={4.5} {...common} />
+                        <line x1={-3.2} y1={-3.2} x2={3.2} y2={3.2} {...common} />
+                        <line x1={-3.2} y1={3.2} x2={3.2} y2={-3.2} {...common} />
+                    </>
+                );
+            }
+            const armLen = pole?.armLengthM ?? 0;
+            if (!pole || armLen <= 0) {
+                // Sin brazo (farol / proyector sobre el fuste): círculo con rayos.
+                return (
+                    <>
+                        <circle r={7} {...common} />
+                        <circle r={1.6} fill={stroke} stroke="none" />
+                        <line x1={0} y1={-11} x2={0} y2={-8} {...common} />
+                        <line x1={0} y1={8} x2={0} y2={11} {...common} />
+                        <line x1={-11} y1={0} x2={-8} y2={0} {...common} />
+                        <line x1={8} y1={0} x2={11} y2={0} {...common} />
+                    </>
+                );
+            }
+            // Con brazo(s): fuste + un brazo por luminaria hacia donde apunta
+            // (misma convención que el cálculo y el 3D) y la forma de la cabeza.
+            const count = Math.max(1, pole.fixtures);
+            const dir = ((pole.armDirectionDeg ?? 0) * Math.PI) / 180;
+            const head = pole.headStyle ?? 'street';
+            const reach = 10;
             return (
                 <>
-                    <circle r={7} {...common} />
-                    <circle r={1.6} fill={stroke} stroke="none" />
-                    <line x1={0} y1={-11} x2={0} y2={-8} {...common} />
-                    <line x1={0} y1={8} x2={0} y2={11} {...common} />
-                    <line x1={-11} y1={0} x2={-8} y2={0} {...common} />
-                    <line x1={8} y1={0} x2={11} y2={0} {...common} />
+                    <circle r={3.2} {...common} />
+                    <circle r={1.2} fill={stroke} stroke="none" />
+                    {Array.from({ length: count }, (_, i) => {
+                        const ang = count === 1 ? dir : dir + (i * 2 * Math.PI) / count;
+                        const deg = (Math.atan2(Math.cos(ang), Math.sin(ang)) * 180) / Math.PI;
+                        return (
+                            <g key={i} transform={`rotate(${deg})`}>
+                                {pole.armStyle === 'curved' ? (
+                                    <path d={`M3 0 Q${reach * 0.55} -3.5 ${reach} 0`} {...common} fill="none" />
+                                ) : (
+                                    <line x1={3} y1={0} x2={reach} y2={0} {...common} />
+                                )}
+                                {head === 'globe' ? (
+                                    <circle cx={reach + 2.5} cy={0} r={2.8} {...common} fill={stroke} fillOpacity={0.25} />
+                                ) : head === 'flood' ? (
+                                    <path d={`M${reach} -2.5 L${reach + 5} -4 L${reach + 5} 4 L${reach} 2.5 Z`} {...common} fill={stroke} fillOpacity={0.25} />
+                                ) : (
+                                    <rect x={reach - 1} y={-2.2} width={7} height={4.4} rx={1.2} {...common} fill={stroke} fillOpacity={0.25} />
+                                )}
+                            </g>
+                        );
+                    })}
                 </>
             );
+        }
         case 'outlet':
             // Tomacorriente exterior: caja IP65 (tapa abisagrada) con dos pines + tierra.
             return (

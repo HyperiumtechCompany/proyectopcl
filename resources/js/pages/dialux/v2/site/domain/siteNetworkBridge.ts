@@ -8,7 +8,7 @@ import type {
 import { feederLengthBreakdown } from './aerialCableGeometry';
 import { cableWaypointElevations } from './cableElevation';
 import type { SiteCircuit, SiteData, SiteElement } from './types';
-import { resolveWireEndpoints } from './wireAnchors';
+import { PASS_THROUGH_TYPES, resolveWireEndpoints } from './wireAnchors';
 
 /**
  * Puente Planta General → Red y CT (Fase 2 del plan
@@ -127,6 +127,7 @@ export function siteCircuitLengthM(
         (id) => elements.find((element) => element.id === id),
         scaleM,
         circuit.tgOutputId,
+        elements,
     );
     return feederLengthBreakdown(
         waypoints,
@@ -608,7 +609,8 @@ export function applySiteToNetwork(
             circuit,
             upstream,
             target,
-            siteCircuitLengthM(circuit, elements, scaleM),
+            // Exterior (acometida en la fachada) + interior hasta el tablero.
+            siteCircuitLengthM(circuit, elements, scaleM) + Math.max(0, circuit.interiorLengthM ?? 0),
             options.panelVerticalM?.(chosen.panelId) ?? 0,
             `${upstream.label} → ${moduleName}: ${target.label}`,
         );
@@ -636,7 +638,20 @@ export function applySiteToNetwork(
     };
 
     const circuitIds = new Set<string>();
-    for (const circuit of site.circuits ?? []) {
+    // Tramos por cajas de pase / buzones → un solo alimentador por destino.
+    const chains = passThroughFeederChains(
+        site.circuits ?? [],
+        elements,
+        (id) => rankOf(id) > 0 || blockById.has(id),
+        (id) => rankOf(id) > 0,
+    );
+    const chainPieceIds = new Set(chains.flatMap((chain) => chain.pieceIds));
+    const feederCircuits = [
+        ...(site.circuits ?? []).filter((circuit) => !chainPieceIds.has(circuit.id)),
+        ...chains.map((chain) => chain.circuit),
+    ];
+    for (const circuit of site.circuits ?? []) circuitIds.add(circuit.id);
+    for (const circuit of feederCircuits) {
         circuitIds.add(circuit.id);
         const sourceRank = rankOf(circuit.sourceId);
         const targetRank = rankOf(circuit.targetId);
@@ -834,4 +849,98 @@ export function applySiteToNetwork(
         addedEdges,
         conflicts,
     };
+}
+
+export { PASS_THROUGH_TYPES } from './wireAnchors';
+
+/**
+ * Une en UN alimentador los tramos que van de un tablero a un destino
+ * (edificio de módulo o tablero) pasando por cajas de pase / buzones — como
+ * se tiende en obra: TG → caja → caja → edificio. Cada cadena devuelve un
+ * cable "virtual" con los puntos de todos los tramos en orden (su id es el
+ * del ÚLTIMO tramo, el que llega al destino) y la lista de tramos usados.
+ * `isEndpoint` = tablero, suministro o edificio (fin de la cadena).
+ */
+export function passThroughFeederChains(
+    circuits: SiteCircuit[],
+    elements: SiteElement[],
+    isEndpoint: (elementId: string) => boolean,
+    /** Dónde puede EMPEZAR una cadena (tableros/suministros; nunca un edificio). */
+    isSource: (elementId: string) => boolean = isEndpoint,
+): Array<{ circuit: SiteCircuit; pieceIds: string[] }> {
+    const seenChains = new Set<string>();
+    const typeOf = new Map(elements.map((element) => [element.id, element.type]));
+    const isPass = (id: string) => PASS_THROUGH_TYPES.has(typeOf.get(id) as SiteElement['type']);
+    const touching = new Map<string, SiteCircuit[]>();
+    for (const circuit of circuits) {
+        for (const id of [circuit.sourceId, circuit.targetId]) {
+            touching.set(id, [...(touching.get(id) ?? []), circuit]);
+        }
+    }
+    /** El tramo orientado para salir de `from`. */
+    const oriented = (circuit: SiteCircuit, from: string) =>
+        circuit.sourceId === from
+            ? { to: circuit.targetId, waypoints: circuit.waypoints, modes: circuit.segmentModes }
+            : {
+                  to: circuit.sourceId,
+                  waypoints: [...circuit.waypoints].reverse(),
+                  modes: circuit.segmentModes ? [...circuit.segmentModes].reverse() : undefined,
+              };
+    const chains: Array<{ circuit: SiteCircuit; pieceIds: string[] }> = [];
+    for (const start of circuits) {
+        for (const origin of [start.sourceId, start.targetId]) {
+            const other = origin === start.sourceId ? start.targetId : start.sourceId;
+            if (!isSource(origin) || !isPass(other)) continue;
+            // Recorrido en profundidad por las cajas (cada rama es un alimentador).
+            const walk = (
+                piece: SiteCircuit,
+                from: string,
+                path: SiteCircuit[],
+                points: SiteCircuit['waypoints'],
+                modes: NonNullable<SiteCircuit['segmentModes']>,
+                visited: Set<string>,
+            ) => {
+                const step = oriented(piece, from);
+                const nextPoints = points.length === 0 ? step.waypoints : [...points, ...step.waypoints.slice(1)];
+                const stepModes = step.modes ?? step.waypoints.slice(1).map(() => piece.route?.kind === 'aerial' ? ('aerial' as const) : ('underground' as const));
+                const nextModes = [...modes, ...stepModes];
+                const nextPath = [...path, piece];
+                if (isEndpoint(step.to)) {
+                    if (step.to === origin) return;
+                    // Tablero ↔ tablero se encuentra desde ambos extremos: una sola vez.
+                    const key = nextPath.map((item) => item.id).sort().join('|');
+                    if (seenChains.has(key)) return;
+                    seenChains.add(key);
+                    const last = piece;
+                    chains.push({
+                        circuit: {
+                            ...start,
+                            ...(last.sectionMm2 !== undefined ? { sectionMm2: last.sectionMm2 } : {}),
+                            ...(last.conductorType ? { conductorType: last.conductorType } : {}),
+                            ...(last.interiorLengthM !== undefined ? { interiorLengthM: last.interiorLengthM } : {}),
+                            ...(last.modulePanelId ? { modulePanelId: last.modulePanelId } : {}),
+                            id: last.id,
+                            sourceId: origin,
+                            targetId: step.to,
+                            waypoints: nextPoints,
+                            // Sin tendido definido en ningún tramo: tampoco en la cadena (tendido plano).
+                            ...(nextPath.some((item) => item.segmentModes || item.route?.kind)
+                                ? { segmentModes: nextModes }
+                                : { segmentModes: undefined }),
+                        },
+                        pieceIds: nextPath.map((item) => item.id),
+                    });
+                    return;
+                }
+                if (!isPass(step.to) || visited.has(step.to)) return;
+                const seen = new Set(visited).add(step.to);
+                for (const next of touching.get(step.to) ?? []) {
+                    if (next.id === piece.id || nextPath.some((item) => item.id === next.id)) continue;
+                    walk(next, step.to, nextPath, nextPoints, nextModes, seen);
+                }
+            };
+            walk(start, origin, [], [], [], new Set([origin]));
+        }
+    }
+    return chains;
 }

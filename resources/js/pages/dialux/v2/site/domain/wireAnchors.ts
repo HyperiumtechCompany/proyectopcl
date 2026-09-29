@@ -1,6 +1,24 @@
+import { closestPointOnPolygon } from './geometry';
 import { elementBox } from './layoutFit';
 import { tgOutputPlanOffset } from './tgPanel';
 import type { Point2D, SiteElement } from './types';
+
+/**
+ * Acometida de un edificio: el cable llega a su FACHADA (el punto del
+ * contorno más cercano al tramo anterior), no a su centro. El recorrido
+ * dentro del edificio hasta su tablero se declara aparte en el cable
+ * (`SiteCircuit.interiorLengthM`). Sin contorno válido, su centro.
+ */
+export function buildingEntryPoint(block: SiteElement, from: Point2D): Point2D {
+    if (block.vertices.length < 3) return from;
+    return closestPointOnPolygon(from, block.vertices, true)?.point ?? from;
+}
+
+/** Cajas de pase / buzones: el cable pasa por ellas sin ser una carga ni un tablero. */
+export const PASS_THROUGH_TYPES = new Set<SiteElement['type']>(['pull_box', 'cable_vault']);
+
+/** Tolerancia (m) para reconocer que un punto del cable está sobre una caja de pase. */
+const PASS_THROUGH_SNAP_M = 0.3;
 
 /** Centro del artefacto, corrido a la salida concreta del TG si aplica (mismo criterio en 2D y 3D). */
 function anchorPointFor(
@@ -41,22 +59,54 @@ export function resolveWireEndpoints(
     elementById: (id: string) => SiteElement | undefined,
     scaleM: number,
     tgOutputId?: string,
+    /** Elementos de la planta: para reconocer las cajas de pase por donde pasa el cable. */
+    elements?: Iterable<SiteElement>,
 ): Point2D[] {
     if (waypoints.length === 0) return waypoints;
     let resolved = waypoints;
+    const passThroughs = elements ? [...elements].filter((element) => PASS_THROUGH_TYPES.has(element.type)) : [];
+    /**
+     * El extremo dibujado normalmente ES el objeto (y se reemplaza por su
+     * anclaje vivo, así el cable lo sigue si se mueve). Pero si ese punto
+     * está sobre OTRA caja de pase / buzón, el cable pasa por ella a
+     * propósito: se conserva y se agrega el tramo final (antes se
+     * reemplazaba y el cable saltaba por donde no va).
+     */
+    const isAtObject = (point: Point2D, element: SiteElement) =>
+        !passThroughs.some((box) => {
+            if (box.id === element.id) return false;
+            const c = elementBox(box, scaleM).center;
+            return Math.hypot(point.x - c.x, point.y - c.y) * scaleM <= PASS_THROUGH_SNAP_M;
+        });
     const source = elementById(sourceId);
     if (source) {
-        const point = anchorPointFor(source, scaleM, tgOutputId);
-        if (point.x !== resolved[0].x || point.y !== resolved[0].y) {
+        const first = resolved[0];
+        const next = resolved.length > 1 ? resolved[1] : first;
+        const keep = resolved.length > 1 && !isAtObject(first, source);
+        const from = keep ? first : next;
+        const point =
+            source.type === 'building_block' && resolved.length > 1
+                ? buildingEntryPoint(source, from)
+                : anchorPointFor(source, scaleM, tgOutputId);
+        if (keep) {
+            resolved = [point, ...resolved];
+        } else if (point.x !== first.x || point.y !== first.y) {
             resolved = [point, ...resolved.slice(1)];
         }
     }
     if (resolved.length > 1) {
         const target = elementById(targetId);
         if (target) {
-            const point = anchorPointFor(target, scaleM, tgOutputId);
             const last = resolved[resolved.length - 1];
-            if (point.x !== last.x || point.y !== last.y) {
+            const keep = !isAtObject(last, target);
+            const from = keep ? last : resolved[resolved.length - 2];
+            const point =
+                target.type === 'building_block'
+                    ? buildingEntryPoint(target, from)
+                    : anchorPointFor(target, scaleM, tgOutputId);
+            if (keep) {
+                resolved = [...resolved, point];
+            } else if (point.x !== last.x || point.y !== last.y) {
                 resolved = [...resolved.slice(0, -1), point];
             }
         }

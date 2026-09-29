@@ -1,9 +1,10 @@
 import { luxColor } from '../domain/exteriorLighting';
+import { calcOutlines } from '../domain/rampFootprint';
 import type { SiteLightingCalculation } from '../domain/siteLightingCalculation';
 import { siteLuminaires } from '../domain/siteLightingCalculation';
 import { requiredLuxFor } from '../domain/siteLightingNorms';
 import type { Point2D, SiteData, SiteElement, SiteNormRegion } from '../domain/types';
-import { isoluxSvgFragments } from './isoluxSvg';
+import { isoluxSvgFragments, svgClipToPolygons } from './isoluxSvg';
 
 /**
  * Plano vectorial (SVG) de la Planta General para el informe PDF (D2): en
@@ -101,6 +102,11 @@ export function renderSitePlanSvg(
     // Falsos colores del motor V1 (un parche por cota).
     if (options.calculation) {
         for (const area of options.calculation.areas) {
+            // Recortado al contorno del espacio (nada fuera de lo calculado).
+            const areaElement = (site.elements ?? []).find((element) => element.id === area.elementId);
+            const outlines = areaElement ? calcOutlines(areaElement, scaleM).map((polygon) => polygon.map(M)) : [];
+            const clip = svgClipToPolygons(outlines);
+            if (clip.def) parts.push(clip.def, `<g${clip.attr}>`);
             for (const patch of area.patches) {
                 const r = patch.result;
                 const ox = r.grid_origin_x ?? 0;
@@ -117,6 +123,7 @@ export function renderSitePlanSvg(
                     );
                 });
             }
+            if (clip.def) parts.push('</g>');
         }
     }
 
@@ -131,6 +138,7 @@ export function renderSitePlanSvg(
                     stroke * 1.2,
                     textH * 0.7,
                     requiredLuxFor(element, regions, area.summary)?.lux ?? null,
+                    element ? calcOutlines(element, scaleM).map((polygon) => polygon.map(M)) : undefined,
                 ),
             );
         }

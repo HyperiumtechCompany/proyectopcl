@@ -5,6 +5,7 @@ import type { Fixture, LightingResult, Room } from '@/pages/dialux/hooks/types';
 import type { LuminairePhotometry } from '../lib/luminaireCatalog';
 import { DEFAULT_LUMINAIRE, type LightingSummary } from './exteriorLighting';
 import { gateEntrance } from './gateLayout';
+import { rampCalcPatches, rampSideLightPoints, sideLightsOf } from './rampFootprint';
 import { maskGrid, patchStats, planPatches } from './siteLightingPatches';
 import {
     canopyLightPoints,
@@ -60,10 +61,12 @@ export const SITE_CALCULATION_AREA_TYPES = new Set<SiteElementType>([
     'custom_zone',
     'canopy',
     'terrain',
-    // Rampas y escaleras: superficie inclinada evaluada como plano horizontal
-    // a su cota media (aproximación declarada, ver `inclinedSurfaceElevationM`).
+    // Rampas y escaleras: por tramos, cada trozo a su cota real
+    // (`rampCalcPatches`); sin tramos, plano a la cota media (declarado).
     'ramp',
     'stair',
+    // Piscina: lámina de agua (las luces subacuáticas no entran: iluminan el agua).
+    'pool',
 ]);
 
 /**
@@ -94,6 +97,7 @@ export const GROUND_REFLECTANCE: Partial<Record<SiteElementType, number>> = {
     custom_zone: 0.2,
     canopy: 0.25,
     terrain: 0.15,
+    pool: 0.1,
 };
 
 const DEFAULT_GROUND_REFLECTANCE = 0.2;
@@ -202,7 +206,8 @@ export function siteElementBaseElevation(
 export interface SiteLuminaire {
     /** Objeto de la planta al que pertenece (poste, portón o techado). */
     poleId: string;
-    sourceType: 'pole' | 'gate' | 'canopy';
+    /** 'ramp'/'stair' = balizas de circulación de rampas y escaleras. */
+    sourceType: 'pole' | 'gate' | 'canopy' | 'ramp' | 'stair';
     label: string;
     x: number;
     y: number;
@@ -256,8 +261,32 @@ function attachedLuminaires(
     let points: PlacedLight[] = [];
     let lumens = 0;
     let productId: number | undefined;
-    let sourceType: 'gate' | 'canopy';
-    if (element.type === 'gate' && element.config?.kind === 'gate') {
+    let sourceType: 'gate' | 'canopy' | 'ramp' | 'stair';
+    if (element.type === 'ramp' || element.type === 'stair') {
+        // Balizas: cota ABSOLUTA de cada una (el piso varía a lo largo del tramo).
+        const lights = sideLightsOf(element);
+        if (!lights) return [];
+        const product = lights.productId !== undefined ? photometry.get(lights.productId) : undefined;
+        return rampSideLightPoints(element, scaleM).map((point, index) => ({
+            poleId: element.id,
+            sourceType: element.type as 'ramp' | 'stair',
+            label: element.label,
+            x: point.x,
+            y: point.y,
+            headElevationM: point.elevationM,
+            hasPhotometry: Boolean(product?.web),
+            fixture: exteriorFixture(
+                `${element.id}#${index}`,
+                element.label,
+                point.x,
+                point.y,
+                point.rotationDeg,
+                lights.lumens,
+                DEFAULT_LUMINAIRE.maintenance,
+                product,
+            ),
+        }));
+    } else if (element.type === 'gate' && element.config?.kind === 'gate') {
         const { lights } = gateEntrance(element.config);
         points = gateLightPoints(element, scaleM);
         lumens = lights.lumens;
@@ -306,7 +335,10 @@ export function siteLuminaires(
     const result: SiteLuminaire[] = [];
     for (const element of site.elements ?? []) {
         if (
-            (element.type === 'gate' || element.type === 'canopy') &&
+            (element.type === 'gate' ||
+                element.type === 'canopy' ||
+                element.type === 'ramp' ||
+                element.type === 'stair') &&
             element.visible !== false
         ) {
             result.push(...attachedLuminaires(site, element, photometry));
@@ -314,10 +346,13 @@ export function siteLuminaires(
         }
         if (element.type !== 'pole' || element.visible === false) continue;
         const cfg = element.config?.kind === 'pole' ? element.config : undefined;
+        // Empotrada en piso: emite hacia arriba, no ilumina el plano horizontal.
+        if (cfg?.mount === 'inground') continue;
         const shaftHeight = cfg?.heightM ?? element.heightM ?? 6;
-        const armLen = cfg?.armLengthM ?? 0;
+        // Bolardo: la luminaria va sobre su eje (sin brazo), igual que en el 3D.
+        const armLen = cfg?.mount === 'bollard' ? 0 : (cfg?.armLengthM ?? 0);
         const armDir = ((cfg?.armDirectionDeg ?? 0) * Math.PI) / 180;
-        const count = Math.max(1, cfg?.fixtures ?? 1);
+        const count = cfg?.mount === 'bollard' ? 1 : Math.max(1, cfg?.fixtures ?? 1);
         const product =
             cfg?.productId !== undefined ? photometry.get(cfg.productId) : undefined;
         const lumens =
@@ -657,6 +692,18 @@ export function calculateSiteLighting(
             'No hay luminarias en la planta general (postes, portones con luces o techados con luminarias).',
         );
     }
+    const inground = (site.elements ?? []).filter(
+        (element) =>
+            element.type === 'pole' &&
+            element.visible !== false &&
+            element.config?.kind === 'pole' &&
+            element.config.mount === 'inground',
+    ).length;
+    if (inground > 0) {
+        warnings.push(
+            `${inground} luminaria(s) empotrada(s) en piso: emiten hacia arriba (orientación/decorativas), no se evalúan en la iluminancia horizontal; sí cuentan en la carga eléctrica.`,
+        );
+    }
     const withoutPhotometry = luminaires.filter((lum) => !lum.hasPhotometry);
     if (withoutPhotometry.length > 0) {
         warnings.push(
@@ -709,7 +756,7 @@ export function calculateSiteLighting(
             const owner =
                 projected && surfaceIds.has(projected)
                     ? projected
-                    : lum.sourceType === 'canopy' && surfaceIds.has(lum.poleId)
+                    : lum.sourceType !== 'pole' && lum.sourceType !== 'gate' && surfaceIds.has(lum.poleId)
                       ? lum.poleId
                       : ownerAt(lum.x, lum.y);
             return [lum.fixture.id, (owner && coveredBy.get(owner)) || owner] as const;
@@ -740,7 +787,13 @@ export function calculateSiteLighting(
         const minY = Math.min(...ys);
         const maxY = Math.max(...ys);
         const inclinedM = inclinedSurfaceElevationM(element);
-        if (inclinedM !== undefined && element.config && 'fromElevationM' in element.config) {
+        // Rampa/escalera por tramos: cada trozo a SU cota real (no un plano medio).
+        const flightPatches = rampCalcPatches(element, scaleM);
+        if (flightPatches.length > 0) {
+            warnings.push(
+                `${element.label}: calculada por tramos (${flightPatches.length} trozos), cada uno a su cota real sobre la superficie de paso.`,
+            );
+        } else if (inclinedM !== undefined && element.config && 'fromElevationM' in element.config) {
             const rise = Math.abs(element.config.toElevationM - element.config.fromElevationM);
             warnings.push(
                 `${element.label}: superficie inclinada evaluada como plano horizontal a su cota media (${inclinedM.toFixed(2)} m); en los extremos la altura real difiere ±${(rise / 2).toFixed(2)} m (aproximación).`,
@@ -758,7 +811,10 @@ export function calculateSiteLighting(
                 `${element.label}: malla ampliada a ${spacingM.toFixed(2)} m para no superar ${MAX_CUSTOM_POINTS} puntos.`,
             );
         }
-        const plan = planPatches(vertices, { minX, maxX, minY, maxY }, owns, elevationAt);
+        const plan =
+            flightPatches.length > 0
+                ? { patches: flightPatches, tiled: false, elevationRangeM: 0 }
+                : planPatches(vertices, { minX, maxX, minY, maxY }, owns, elevationAt);
         if (plan.patches.length === 0) {
             const cx = vertices.reduce((sum, v) => sum + v.x, 0) / vertices.length;
             const cy = vertices.reduce((sum, v) => sum + v.y, 0) / vertices.length;

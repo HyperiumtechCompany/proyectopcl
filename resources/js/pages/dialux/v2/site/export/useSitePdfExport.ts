@@ -4,16 +4,20 @@ import { formalExportModule } from '@/actions/App/Http/Controllers/Dialux/Editor
 import { ensureStandardDataLoaded } from '@/pages/dialux/hooks/normativeRemoteData';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import { activeRegions } from '../components/SiteNormPanels';
+import { buildingFeedRows } from '../domain/blockConnection';
 import { regionStandard } from '../domain/siteLightingNorms';
 import type { SiteOutputRow } from '../domain/siteOutputs';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 import { useSiteLightingStore } from '../hooks/useSiteLightingCalculation';
 import {
     loadLuminaireCatalog,
+    loadLuminairePhotometry,
     type LuminaireCatalogItem,
+    type LuminairePhotometry,
 } from '../lib/luminaireCatalog';
 import { buildSiteFormalDocument } from './buildSiteFormalDocument';
 import { rasterizeVectorAssets } from './rasterizeAssets';
+import { buildSiteProductSheets, siteProductIds } from './siteProductSheets';
 
 /**
  * Informe PDF de la Planta General (D2): arma el documento formal en el
@@ -55,7 +59,23 @@ export function useSitePdfExport(editor: UseSiteEditorReturn) {
                         ),
                     ),
             );
+            const dropLimits = {
+                feederPercent: editor.networkSettings?.feederDropLimitPercent ?? 2.5,
+                totalPercent: editor.networkSettings?.totalDropLimitPercent ?? 4,
+            };
+            // Fotometría (la misma del cálculo) y fichas de producto de la V1.
+            const photometryEntries = await Promise.all(
+                siteProductIds(site).map(async (id) => [id, await loadLuminairePhotometry(id)] as const),
+            );
+            const photometry = new Map<number, LuminairePhotometry>();
+            for (const [id, value] of photometryEntries) if (value) photometry.set(id, value);
+            const productSheets = await buildSiteProductSheets(site);
             const built = buildSiteFormalDocument({
+                photometry,
+                productSheets: productSheets.sheets,
+                productAssets: productSheets.assets,
+                buildingFeeds: buildingFeedRows(site, editor.circuitFeeds, editor.networkPorts, dropLimits),
+                dropLimits,
                 products: new Map(catalog.map((item) => [item.id, item])),
                 site,
                 projectName,
@@ -88,6 +108,7 @@ export function useSitePdfExport(editor: UseSiteEditorReturn) {
             link.click();
             window.document.body.removeChild(link);
             URL.revokeObjectURL(url);
+            return true;
         } catch (caught) {
             let message = 'No se pudo generar el PDF.';
             if (
@@ -113,6 +134,7 @@ export function useSitePdfExport(editor: UseSiteEditorReturn) {
                 }
             }
             setError(message);
+            return false;
         } finally {
             setExporting(false);
         }

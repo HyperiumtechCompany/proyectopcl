@@ -21,6 +21,8 @@ import type { Point2D, SiteCircuit, SiteElement } from '../domain/types';
 import { resolveWireEndpoints } from '../domain/wireAnchors';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 import { defaultConfigFor } from '../lib/siteDefaults';
+import { AttachedLightsFields } from './AttachedLightsFields';
+import { BuildingConnectionPanel } from './BuildingConnectionPanel';
 import { SiteAutoCircuitPanel } from './SiteAutoCircuitPanel';
 import { SiteCalcSurfaceFields } from './SiteCalcSurfaceFields';
 import { SiteElementConfigFields } from './SiteElementConfigFields';
@@ -267,6 +269,7 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                                     ),
                                 editor.terrainScaleM,
                                 circuit.tgOutputId,
+                                editor.siteData?.elements,
                             );
                             const liveCircuit = {
                                 ...circuit,
@@ -795,6 +798,7 @@ function ElementProperties({
     const hasConfigTab =
         !!element.config ||
         element.type === 'building_block' ||
+        element.type === 'pool' ||
         // Tipos con configuración por defecto (canchas, áreas verdes, techados…) aunque el objeto sea anterior a esas opciones.
         defaultConfigFor(element.type) !== undefined ||
         NORM_AREA_TYPES.has(element.type) ||
@@ -1045,6 +1049,9 @@ function ElementProperties({
                             element={element}
                             editor={editor}
                         />
+                        {(element.type === 'ramp' || element.type === 'stair' || element.type === 'pool') && (
+                            <AttachedLightsFields element={element} editor={editor} />
+                        )}
 
                         {NORM_AREA_TYPES.has(element.type) && (
                             <SiteNormRequirementFields
@@ -1074,35 +1081,7 @@ function ElementProperties({
                             )}
 
                         {element.type === 'building_block' && (
-                            <label className="text-[11px] text-slate-500">
-                                Módulo vinculado
-                                <select
-                                    className={inputClass}
-                                    value={element.moduleId ?? ''}
-                                    onChange={(event) => {
-                                        const moduleId = event.target.value
-                                            ? Number(event.target.value)
-                                            : undefined;
-                                        const moduleName = modules.find(
-                                            (item) => item.id === moduleId,
-                                        )?.name;
-                                        editor.updateSiteElement(element.id, {
-                                            moduleId,
-                                            moduleName,
-                                        });
-                                    }}
-                                >
-                                    <option value="">Sin vincular</option>
-                                    {modules.map((module) => (
-                                        <option
-                                            key={module.id}
-                                            value={module.id}
-                                        >
-                                            {module.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
+                            <BuildingConnectionPanel element={element} editor={editor} modules={modules} />
                         )}
                     </>
                 )}

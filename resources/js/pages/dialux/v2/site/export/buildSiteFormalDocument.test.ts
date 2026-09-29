@@ -229,3 +229,83 @@ describe('informe PDF de la planta general (D2)', () => {
     });
 });
 
+
+describe('PDF: alimentadores a edificios de módulo (C3)', () => {
+    it('agrega la tabla con la ΔU de punta a punta y el estado, sin "cumple"', () => {
+        const doc = buildSiteFormalDocument({
+            site,
+            projectName: 'Demo',
+            calculation: null,
+            outputRows: [],
+            regions: ['exterior'],
+            dropLimits: { feederPercent: 2.5, totalPercent: 4 },
+            buildingFeeds: [
+                {
+                    blockId: 'b',
+                    blockLabel: 'Pabellón A',
+                    moduleName: 'Módulo 1',
+                    panelLabel: 'TD-01',
+                    fromLabel: 'TG',
+                    lengthM: 48.2,
+                    interiorLengthM: 6,
+                    sectionMm2: 16,
+                    conductorType: 'N2XOH',
+                    feederPercent: 1.4,
+                    worstCircuit: { code: 'C-4', panelLabel: 'TD-01', percent: 2.9 },
+                    totalPercent: 4.3,
+                    withinLimits: false,
+                },
+            ],
+        });
+        const page = doc.pages.find((item) => item.id === 'page-building-feeds');
+        expect(page?.kind).toBe('site-section');
+        const table = doc.assets.find((asset) => asset.id === 'site-building-feeds') as { data: { rows: Array<Record<string, string>> } };
+        expect(table.data.rows[0]).toMatchObject({ module: 'Módulo 1 · TD-01', total: '4.30', status: 'Fuera del límite' });
+        expect(JSON.stringify(table)).not.toMatch(/cumple/i);
+    });
+});
+
+describe('informe formal: espacios con alumbrado, ficha de producto y modelo real', () => {
+    const lit: SiteData = {
+        ...site,
+        elements: [
+            ...site.elements.map((element) =>
+                element.id === 'P1' && element.config?.kind === 'pole'
+                    ? { ...element, config: { ...element.config, productId: 63 } }
+                    : element,
+            ),
+            // Espacio SIN luminarias propias.
+            square('Patio vacío', 'custom_zone', 60, 0, 10),
+        ],
+    };
+    const web = { c_angles: [0, 90, 180, 270], gamma_angles: [0, 45, 90], candela: [[500, 300, 0], [500, 300, 0], [500, 300, 0], [500, 300, 0]], reference_lumens: 12000 };
+    const photometry = new Map([[63, { id: 63, totalLumens: 12000, web }]]);
+    const doc = buildSiteFormalDocument({
+        site: lit,
+        projectName: 'Demo',
+        calculation: calculateSiteLighting(lit, photometry),
+        outputRows: [],
+        regions: ['exterior'],
+        photometry,
+        productSheets: new Map([[63, { polarDiagramAssetId: 'site-prod-63-polar', technicalTable: [{ label: 'Flujo luminoso', value: '12.000 lm' }] }]]),
+        productAssets: [{ id: 'site-prod-63-polar', title: 'polar', purpose: 'ambient-catalog', kind: 'vector', mimeType: 'image/svg+xml', svg: '<svg/>', width: 640, height: 520 }],
+    });
+
+    it('solo los espacios con luminarias llevan ficha; el vacío se lista como "Sin alumbrado proyectado"', () => {
+        expect(doc.ambientDetails.map((detail) => detail.ambientName)).toEqual(['Cancha']);
+        const rows = (doc.assets.find((asset) => asset.id === 'site-areas') as { data: { rows: Array<Record<string, string>> } }).data.rows;
+        expect(rows.find((row) => row.name === 'Patio vacío')?.verdict).toBe('Sin alumbrado proyectado');
+        expect(doc.pages.some((page) => page.title === 'Patio vacío')).toBe(false);
+    });
+
+    it('la lista de luminarias usa la fotometría real y hay una ficha de producto por producto', () => {
+        const item = doc.luminaires[0] as (typeof doc.luminaires)[number] & { polarDiagramAssetId?: string };
+        expect(item.model).toMatch(/^Fotometría/);
+        expect(item.polarDiagramAssetId).toBe('site-prod-63-polar');
+        expect(item.reportData?.technical_table?.[0]).toEqual({ label: 'Flujo luminoso', value: '12.000 lm' });
+        const sheet = doc.pages.find((page) => page.kind === 'product-sheet');
+        expect(sheet?.sectionId).toBe(`product-sheet:${item.id}`);
+        expect(sheet?.assetIds).toContain('site-prod-63-polar');
+        expect(doc.assets.some((asset) => asset.id === 'site-prod-63-polar')).toBe(true);
+    });
+});

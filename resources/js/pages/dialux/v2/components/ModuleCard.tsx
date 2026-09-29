@@ -12,14 +12,14 @@ import { show as showElectricalNetwork } from '@/actions/App/Http/Controllers/Di
 import { show } from '@/actions/App/Http/Controllers/Dialux/V2/ModuleController';
 import type { DialuxV2Module, ModuleStatus } from '../types';
 
-const statusLabels: Record<ModuleStatus, string> = {
+export const statusLabels: Record<ModuleStatus, string> = {
     draft: 'Borrador',
     in_progress: 'En progreso',
     completed: 'Completado',
     archived: 'Archivado',
 };
 
-const statusColors: Record<ModuleStatus, string> = {
+export const statusColors: Record<ModuleStatus, string> = {
     draft: 'bg-zinc-500',
     in_progress: 'bg-amber-500',
     completed: 'bg-emerald-500',

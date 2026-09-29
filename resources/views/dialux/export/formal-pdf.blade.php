@@ -1511,10 +1511,25 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                             $planAsset = collect($pageAssets)->firstWhere('id', $detail['planAssetId'] ?? null);
                             $isoluxAsset = collect($pageAssets)->firstWhere('id', $detail['isoluxAssetId'] ?? null);
                             $hasBoth = is_array($planAsset) && is_array($isoluxAsset);
+                            // Espacio exterior alargado (vereda, calle): dos columnas lo
+                            // achican; se apilan a ancho completo (v2, no afecta a la V1).
+                            $planAspect = is_array($planAsset) && ($planAsset['height'] ?? 0) > 0
+                                ? ($planAsset['width'] ?? 0) / $planAsset['height']
+                                : 1;
+                            $stackPlans = $hasBoth && !empty($detail['exterior']) && $planAspect > 1.6;
                         @endphp
 
                         {{-- Gráficos: plan + isolux en 2 columnas, o solo uno si el otro no existe --}}
-                        @if ($hasBoth)
+                        @if ($stackPlans)
+                            <div class="ambient-plan-col-label">Plano de luminarias</div>
+                            <div class="ambient-asset-container" style="height:62mm;">
+                                {!! $renderAsset($planAsset, 184, 60, true) !!}
+                            </div>
+                            <div class="ambient-plan-col-label" style="margin-top:2mm;">Plano &uacute;til &mdash; Isolux (lx)</div>
+                            <div class="ambient-asset-container" style="height:62mm;">
+                                {!! $renderAsset($isoluxAsset, 184, 60, true) !!}
+                            </div>
+                        @elseif ($hasBoth)
                             <div class="ambient-plan-grid">
                                 <div class="ambient-plan-left-col">
                                     <div class="ambient-plan-col-label">Plano de luminarias</div>
@@ -1658,8 +1673,9 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
 
                         {{-- Plano útil / Iluminancia perpendicular (sub-sección 5, fullplan) --}}
                     @elseif ($page['kind'] === 'ambient-useful-plane')
+                        {{-- Espacio exterior (v2): se gira si así llena mejor la hoja (veredas largas y angostas). --}}
                         <div class="terrain-full-page">
-                            {!! $renderAsset(collect($pageAssets)->first(), 188, 226, true) !!}
+                            {!! $renderAsset(collect($pageAssets)->first(), 188, 226, true, !empty($page['ambientDetail']['exterior'])) !!}
                         </div>
 
                         {{-- Anexo comparativo de escenas lumínicas (Fase 13, §11: "anexos

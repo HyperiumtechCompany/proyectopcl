@@ -29,6 +29,7 @@ import {
     suggestCotasFromPlatforms,
     type LevelLinkReport,
 } from '../domain/levelLink';
+import { normalizeFlightRises } from '../domain/rampFootprint';
 import { platformCotasUnder, stairAsRampConfig } from '../domain/rampLayout';
 import {
     evaluatePlatformRetention,
@@ -1052,12 +1053,6 @@ export function SiteElementConfigFields({
                     onChange={(heightM) => set({ ...p, heightM })}
                 />
                 <Num
-                    label="Largo de brazo (m, 0 = sin brazo)"
-                    value={p.armLengthM}
-                    min={0}
-                    onChange={(armLengthM) => set({ ...p, armLengthM })}
-                />
-                <Num
                     label="Dirección del brazo (°)"
                     value={p.armDirectionDeg}
                     step={15}
@@ -1065,15 +1060,7 @@ export function SiteElementConfigFields({
                         set({ ...p, armDirectionDeg })
                     }
                 />
-                <Num
-                    label="N.º de luminarias"
-                    value={p.fixtures}
-                    step={1}
-                    min={1}
-                    onChange={(fixtures) =>
-                        set({ ...p, fixtures: Math.round(fixtures) })
-                    }
-                />
+                {/* Largo del brazo, n.º de luminarias y tipo de poste: en el panel de abajo. */}
                 <PoleLuminairePanel
                     config={p}
                     onPatch={(patch) => set({ ...p, ...patch })}
@@ -1998,13 +1985,28 @@ export function SiteElementConfigFields({
                         flights.reduce((acc, f) => acc + f.riseM, 0) -
                             (r.toElevationM - r.fromElevationM),
                     ) > 0.005 && (
-                        <button
-                            type="button"
-                            onClick={adjustLastFlight}
-                            className="rounded-md border border-amber-500 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"
-                        >
-                            Ajustar último tramo a la cota destino
-                        </button>
+                        <>
+                            <p className="text-[10px] text-amber-700 dark:text-amber-300">
+                                Los tramos suben{' '}
+                                {flights.reduce((acc, f) => acc + f.riseM, 0).toFixed(2)} m pero el desnivel es{' '}
+                                {(r.toElevationM - r.fromElevationM).toFixed(2)} m. El 3D ya los reparte para llegar a la
+                                plataforma; guarda el ajuste con uno de estos botones.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => set(normalizeFlightRises(r))}
+                                className="rounded-md bg-amber-500 py-1 text-[11px] font-semibold text-white hover:bg-amber-600"
+                            >
+                                Repartir el desnivel entre todos los tramos
+                            </button>
+                            <button
+                                type="button"
+                                onClick={adjustLastFlight}
+                                className="rounded-md border border-amber-500 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"
+                            >
+                                Ajustar solo el último tramo
+                            </button>
+                        </>
                     )}
                 <label className={field}>
                     Estructura

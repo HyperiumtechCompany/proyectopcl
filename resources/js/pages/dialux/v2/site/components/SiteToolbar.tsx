@@ -16,6 +16,7 @@ import { buildSiteDxf } from '../domain/siteDxfExport';
 import { useSitePdfExport } from '../export/useSitePdfExport';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 import { GeoSearchPanel } from './GeoSearchPanel';
+import { SiteExportCheckDialog } from './SiteExportCheckDialog';
 
 interface Props {
     editor: UseSiteEditorReturn;
@@ -31,6 +32,7 @@ export function SiteToolbar({ editor }: Props) {
     const location = editor.siteData?.location;
     const projectName = useEditorStore((state) => state.project?.name ?? '');
     const pdf = useSitePdfExport(editor);
+    const [exportCheckOpen, setExportCheckOpen] = useState(false);
 
     return (
         <div className="relative flex shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-[#0d0f14]">
@@ -165,7 +167,8 @@ export function SiteToolbar({ editor }: Props) {
                 <button
                     type="button"
                     disabled={!editor.siteData || pdf.exporting}
-                    onClick={() => void pdf.exportPdf()}
+                    // Primero la revisión: qué falta configurar antes de exportar.
+                    onClick={() => setExportCheckOpen(true)}
                     className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-semibold text-slate-600 disabled:opacity-50 dark:border-white/10 dark:text-slate-300"
                     title={pdf.error ?? 'Informe PDF de la planta general (estilo DIALux): planos, falsos colores, superficies, luminarias, salidas y metrado'}
                 >
@@ -176,6 +179,19 @@ export function SiteToolbar({ editor }: Props) {
                     <span className="max-w-48 truncate text-[10px] text-red-600" title={pdf.error}>
                         {pdf.error}
                     </span>
+                )}
+                {exportCheckOpen && (
+                    <SiteExportCheckDialog
+                        editor={editor}
+                        exporting={pdf.exporting}
+                        error={pdf.error}
+                        onClose={() => setExportCheckOpen(false)}
+                        onExport={() => {
+                            void pdf.exportPdf().then((ok) => {
+                                if (ok) setExportCheckOpen(false);
+                            });
+                        }}
+                    />
                 )}
                 <button
                     type="button"

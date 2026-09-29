@@ -186,7 +186,34 @@ export interface PoleConfig {
      * `wattage` ausentes toman los de su ficha.
      */
     productId?: number;
+    /**
+     * Forma del brazo (solo visual; la cabeza queda siempre en
+     * `armLengthM` / `heightM`, que es lo que usa el cálculo):
+     * 'straight' = recto, 'curved' = báculo curvo (cayado),
+     * 'bracket' = acodado con tirante. Por defecto 'straight'.
+     */
+    armStyle?: PoleArmStyle;
+    /**
+     * Cuerpo de la luminaria: 'street' = alumbrado público LED (cabeza
+     * plana), 'globe' = farol esférico, 'flood' = proyector. Por defecto
+     * 'street' con brazo y 'globe' sin brazo.
+     */
+    headStyle?: PoleHeadStyle;
+    /** Medidas del cuerpo de la luminaria (m), de la ficha LDT/IES del producto elegido. */
+    headSizeM?: { length: number; width: number; height: number };
+    /**
+     * Montaje: 'pole' = poste (por defecto); 'bollard' = bolardo/baliza de
+     * piso (0,5–1,5 m, ilumina el suelo alrededor); 'inground' = empotrada
+     * en el piso (emite hacia arriba: orientación/decorativa, NO entra al
+     * cálculo de iluminancia horizontal; sí al 3D y a la carga eléctrica).
+     */
+    mount?: PoleMount;
 }
+
+export type PoleMount = 'pole' | 'bollard' | 'inground';
+
+export type PoleArmStyle = 'straight' | 'curved' | 'bracket';
+export type PoleHeadStyle = 'street' | 'globe' | 'flood';
 
 export interface TransformerConfig {
     kind: 'transformer';
@@ -351,8 +378,46 @@ export interface FenceConfig {
     closed?: boolean;
 }
 
+/**
+ * Balizas de circulación en rampas y escaleras: 'wall' = empotradas en el
+ * sardinel/muro lateral a `heightM` (0,30 m por defecto) sobre el piso de
+ * paso, iluminando la huella; 'bollard' = balizas tipo bolardo (1 m) al
+ * costado. Se reparten cada `spacingM` a lo largo de cada tramo y descanso.
+ */
+export interface SideLights {
+    enabled: boolean;
+    mode: 'wall' | 'bollard';
+    spacingM: number;
+    sides: 'both' | 'left' | 'right';
+    /** Flujo (lm) y potencia (W) de CADA baliza. */
+    lumens: number;
+    wattage: number;
+    /** Altura sobre el piso de paso (m); por defecto 0,30 (muro) o 1,00 (bolardo). */
+    heightM?: number;
+    productId?: number;
+}
+
+/**
+ * Piscina: profundidad del vaso y luminarias SUBACUÁTICAS en las paredes
+ * (iluminan el agua: van al 3D y a la carga eléctrica; no al cálculo de
+ * iluminancia horizontal, que es de la lámina de agua y la playa).
+ */
+export interface PoolConfig {
+    kind: 'pool';
+    depthM?: number;
+    lights?: {
+        enabled: boolean;
+        count: number;
+        lumens: number;
+        wattage: number;
+        productId?: number;
+    };
+}
+
 export interface StairConfig {
     kind: 'stair';
+    /** Balizas de circulación. */
+    lights?: SideLights;
     fromElevationM: number;
     toElevationM: number;
     widthM: number;
@@ -399,6 +464,8 @@ export type RampShape = 'straight' | 'spiral';
 
 export interface RampConfig {
     kind: 'ramp';
+    /** Balizas de circulación. */
+    lights?: SideLights;
     /** Altura de la baranda (m). Ausente = la de referencia (0.90 m). */
     handrailHeightM?: number;
     fromElevationM: number;
@@ -537,6 +604,7 @@ export type SiteElementConfig =
     | FenceConfig
     | StairConfig
     | RampConfig
+    | PoolConfig
     | TerracePlatformConfig;
 
 /** Región normativa que el cliente elige para verificar la iluminación de sus espacios (v1: EN 12464-1, IES HB-10, RNE EM.010). */
@@ -649,6 +717,13 @@ export interface FeederPath {
  * como un primer paso de instalación.
  */
 export interface SiteCircuit {
+    /**
+     * Recorrido DENTRO del edificio (m) cuando el cable llega a un bloque de
+     * módulo: de la acometida (fachada) a su tablero. Se suma a la longitud
+     * horizontal del alimentador en Red y CT (la subida del tablero ya se
+     * cuenta aparte). 0 / ausente = no declarado.
+     */
+    interiorLengthM?: number;
     id: string;
     sourceId: string; // → SiteElement.id (extremo inicial)
     targetId: string; // → SiteElement.id (extremo final)

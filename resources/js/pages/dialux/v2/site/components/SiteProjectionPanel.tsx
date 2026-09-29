@@ -211,7 +211,8 @@ export function SiteProjectionPanel({
                 targetLux: target,
                 lumensEach: (pole.lumens ?? 3000) * Math.max(1, pole.fixtures),
                 maintenanceFactor: pole.maintenanceFactor ?? 0.8,
-                mountingHeightM: pole.heightM,
+                // Empotradas en piso (0 m): la separación se toma sobre 1 m.
+                mountingHeightM: Math.max(1, pole.heightM),
                 spacingToHeight,
             });
     const requested = {
@@ -506,13 +507,44 @@ export function SiteProjectionPanel({
                 </summary>
                 <div className="mt-1.5 grid grid-cols-2 gap-1.5 pb-1">
                     {!isCanopy && (
+                        <label className="col-span-2 text-[10px] text-slate-500">
+                            Tipo de luminaria
+                            <select
+                                className="mt-0.5 h-7 w-full rounded border border-slate-300 bg-white px-1.5 text-[11px] text-slate-800 dark:border-white/15 dark:bg-slate-900 dark:text-slate-100"
+                                value={pole.mount ?? 'pole'}
+                                onChange={(event) => {
+                                    const mount = event.target.value as NonNullable<PoleConfig['mount']>;
+                                    setPole({
+                                        ...pole,
+                                        mount,
+                                        ...(mount === 'pole'
+                                            ? { heightM: Math.max(2, pole.heightM) }
+                                            : mount === 'bollard'
+                                              ? { heightM: 1, armLengthM: 0, fixtures: 1 }
+                                              : { heightM: 0, armLengthM: 0, fixtures: 1 }),
+                                    });
+                                }}
+                            >
+                                <option value="pole">Poste (≥ 2 m)</option>
+                                <option value="bollard">Bolardo / baliza de piso (0,5–1,5 m)</option>
+                                <option value="inground">Empotrada en piso (orientación, no ilumina el suelo)</option>
+                            </select>
+                        </label>
+                    )}
+                    {!isCanopy && pole.mount !== 'inground' && (
                         <NumField
                             label="Altura montaje (m)"
                             value={pole.heightM}
-                            step={0.5}
-                            min={2}
+                            step={pole.mount === 'bollard' ? 0.1 : 0.5}
+                            min={pole.mount === 'bollard' ? 0.5 : 2}
                             onChange={(heightM) =>
-                                setPole({ ...pole, heightM: Math.max(2, heightM) })
+                                setPole({
+                                    ...pole,
+                                    heightM:
+                                        pole.mount === 'bollard'
+                                            ? Math.min(1.5, Math.max(0.5, heightM))
+                                            : Math.max(2, heightM),
+                                })
                             }
                         />
                     )}
@@ -558,6 +590,7 @@ export function SiteProjectionPanel({
                                     })
                                 }
                             />
+                            {(pole.mount ?? 'pole') === 'pole' && (
                             <NumField
                                 label="Brazo (m)"
                                 value={pole.armLengthM}
@@ -566,6 +599,7 @@ export function SiteProjectionPanel({
                                     setPole({ ...pole, armLengthM: Math.max(0, armLengthM) })
                                 }
                             />
+                            )}
                         </>
                     )}
                     <LightProductSelect

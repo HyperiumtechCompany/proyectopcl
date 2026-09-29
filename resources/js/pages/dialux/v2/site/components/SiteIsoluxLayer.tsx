@@ -4,6 +4,7 @@ import {
     formatIsoluxLevel,
     labelPoint,
 } from '../domain/isoluxContours';
+import { calcOutlines } from '../domain/rampFootprint';
 import type { SiteLightingAreaResult } from '../domain/siteLightingCalculation';
 import type { SiteLightingCalculation } from '../domain/siteLightingCalculation';
 import { requiredLuxFor } from '../domain/siteLightingNorms';
@@ -54,8 +55,41 @@ export function IsoluxLayer({
         return `${p.x},${p.y}`;
     };
 
+    // Contorno de cada espacio (planta): TODO lo del espacio (falsos colores y
+    // curvas) se recorta a él — antes las celdas de borde y las curvas
+    // sobresalían hasta media celda y se veían corridas respecto del dibujo.
+    // En rampas/escaleras, sus tramos (lo que realmente se calcula).
+    const outlinesOf = (elementId: string) => {
+        const element = site?.elements.find((item) => item.id === elementId);
+        return element ? calcOutlines(element, scaleM) : [];
+    };
+    const clipId = (elementId: string) => `iso-clip-${elementId}`;
+    const clipOf = (elementId: string) =>
+        outlinesOf(elementId).length > 0 ? `url(#${clipId(elementId)})` : undefined;
+
     return (
         <g className="pointer-events-none" aria-hidden>
+            <defs>
+                {areas.map((area) => {
+                    const outlines = outlinesOf(area.elementId);
+                    if (outlines.length === 0) return null;
+                    return (
+                        <clipPath key={area.elementId} id={clipId(area.elementId)}>
+                            {outlines.map((outline, index) => (
+                                <polygon
+                                    key={index}
+                                    points={outline
+                                        .map((v) => {
+                                            const p = toScreen(v);
+                                            return `${p.x},${p.y}`;
+                                        })
+                                        .join(' ')}
+                                />
+                            ))}
+                        </clipPath>
+                    );
+                })}
+            </defs>
             {areas.flatMap((area) =>
                 area.patches.map((patch, patchIndex) => ({ area, patch, patchIndex })),
             ).map(({ area, patch, patchIndex }) => {
@@ -66,7 +100,7 @@ export function IsoluxLayer({
                 const ch = r.grid_cell_height ?? 0;
                 if (cw <= 0 || ch <= 0) return null;
                 return (
-                    <g key={`${area.elementId}:${patchIndex}`}>
+                    <g key={`${area.elementId}:${patchIndex}`} clipPath={clipOf(area.elementId)}>
                         {r.grid_values.map((value, index) => {
                             if (value === null) return null;
                             const row = Math.floor(index / r.grid_cols);
@@ -92,9 +126,13 @@ export function IsoluxLayer({
                     const required = site
                         ? requiredLuxFor(element, activeRegions(site), area.summary)
                         : null;
+                    const outlinesM = outlinesOf(area.elementId).map((outline) =>
+                        outline.map((v) => ({ x: v.x * scaleM, y: v.y * scaleM })),
+                    );
                     const iso = areaIsolines(
                         area.patches.map((patch) => patch.result),
                         required?.lux ?? null,
+                        outlinesM.length > 0 ? outlinesM : undefined,
                     );
                     return iso.lines.map((line, lineIndex) => {
                         const points = line.points.map((p) => screen(p.x, p.y)).join(' ');
@@ -103,6 +141,7 @@ export function IsoluxLayer({
                         return (
                             <g key={`iso-${area.elementId}-${lineIndex}`}>
                                 <polyline
+                                    clipPath={clipOf(area.elementId)}
                                     points={points}
                                     fill="none"
                                     stroke={line.required ? '#dc2626' : '#0f172a'}

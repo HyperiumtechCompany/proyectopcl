@@ -6,6 +6,7 @@ import type {
     DialuxTocEntry,
 } from '@/pages/dialux/export/domain/types';
 import { DIALUX_FORMAL_DOCUMENT_SCHEMA_VERSION } from '@/pages/dialux/export/domain/types';
+import type { BuildingFeedRow } from '../domain/blockConnection';
 import { summarizeSiteForDxf } from '../domain/siteDxfExport';
 import type { SiteLightingCalculation } from '../domain/siteLightingCalculation';
 import { siteLuminaires } from '../domain/siteLightingCalculation';
@@ -20,7 +21,7 @@ import type { SiteOutputRow } from '../domain/siteOutputs';
 import { siteElementLoadW } from '../domain/siteOutputs';
 import { siteQuantityCheck } from '../domain/siteQuantityCheck';
 import type { SiteData, SiteElement, SiteNormRegion } from '../domain/types';
-import type { LuminaireCatalogItem } from '../lib/luminaireCatalog';
+import type { LuminaireCatalogItem, LuminairePhotometry } from '../lib/luminaireCatalog';
 import { renderSitePlanSvg } from './siteSvgPlan';
 import {
     buildZoneAmbientDetail,
@@ -74,6 +75,7 @@ const TYPE_LABEL: Partial<Record<SiteElement['type'], string>> = {
     terrain: 'Terreno',
     ramp: 'Rampa',
     stair: 'Escalera',
+    pool: 'Piscina',
 };
 
 export interface SiteReportInput {
@@ -87,6 +89,25 @@ export interface SiteReportInput {
     generatedAt?: Date;
     /** Catálogo de luminarias (compartido con la V1): nombre, fabricante, CCT, IRC. */
     products?: ReadonlyMap<number, LuminaireCatalogItem>;
+    /** Alimentadores planta → edificio de módulo, con la ΔU de punta a punta (`buildingFeedRows`). */
+    buildingFeeds?: BuildingFeedRow[];
+    /** Límites de ΔU configurados en la red (%), para el texto del informe. */
+    dropLimits?: { feederPercent: number; totalPercent: number };
+    /** Fotometría (LDT/IES) de los productos usados — la misma del cálculo. */
+    photometry?: ReadonlyMap<number, LuminairePhotometry>;
+    /** Ficha de producto por productId: ids de sus assets (curva polar, foto, logo) y tabla técnica. */
+    productSheets?: ReadonlyMap<number, ProductSheetData>;
+    /** Assets de las fichas de producto (curvas polares, fotos). */
+    productAssets?: DialuxExportAsset[];
+}
+
+export interface ProductSheetData {
+    polarDiagramAssetId?: string;
+    productPhotoAssetId?: string;
+    brandLogoAssetId?: string;
+    cct?: number | null;
+    cri?: number | null;
+    technicalTable: Array<{ label: string; value: string }>;
 }
 
 function table(
@@ -212,9 +233,26 @@ export function buildSiteFormalDocument(input: SiteReportInput): DialuxFormalDoc
     if (isolux) page('page-isolux', 'terrain-cad', 'isolux', 'Falsos colores', ['site-isolux-svg']);
 
     // ── Luminarias del proyecto (lista de la V1 / DIALux evo: por producto).
-    const allLuminaires = siteLuminaires(site, new Map());
+    // Con la MISMA fotometría del cálculo (antes se armaba sin ella y toda
+    // luminaria figuraba como "modelo genérico" aunque tuviera su LDT).
+    const allLuminaires = siteLuminaires(site, input.photometry ?? new Map());
     const watts = wattsPerHead(site, allLuminaires);
-    const projectLuminaires = groupLuminaires(allLuminaires, watts, byId, null, input.products, 'Planta general');
+    const projectLuminaires = groupLuminaires(allLuminaires, watts, byId, null, input.products, 'Planta general').map(
+        (item) => {
+            const sheet = item.productId !== undefined ? input.productSheets?.get(item.productId) : undefined;
+            if (!sheet) return item;
+            return {
+                ...item,
+                ...(sheet.polarDiagramAssetId ? { polarDiagramAssetId: sheet.polarDiagramAssetId } : {}),
+                ...(sheet.productPhotoAssetId ? { productPhotoAssetId: sheet.productPhotoAssetId } : {}),
+                ...(sheet.brandLogoAssetId ? { brandLogoAssetId: sheet.brandLogoAssetId } : {}),
+                ...(sheet.cct ? { cct: sheet.cct } : {}),
+                ...(sheet.cri ? { cri: sheet.cri } : {}),
+                reportData: { technical_table: sheet.technicalTable },
+            };
+        },
+    );
+    assets.push(...(input.productAssets ?? []));
     chunks(projectLuminaires.length, LUMINAIRE_ROWS_PER_PAGE).forEach((range, index) =>
         page(
             `page-luminaire-list-${index}`,
@@ -228,6 +266,27 @@ export function buildSiteFormalDocument(input: SiteReportInput): DialuxFormalDoc
             { rowRangeStart: range.start, rowRangeEnd: range.end, ...(index > 0 ? { toc: false } : {}) },
         ),
     );
+    // Ficha de producto (como la V1 / DIALux evo): una por PRODUCTO del
+    // catálogo usado (foto, curva polar del LDT, datos técnicos). Las
+    // genéricas no tienen ficha: se listan con su flujo y haz declarados.
+    const sheetDone = new Set<number>();
+    for (const item of projectLuminaires) {
+        if (item.productId === undefined || sheetDone.has(item.productId)) continue;
+        sheetDone.add(item.productId);
+        page(
+            `page-product-sheet-${item.productId}`,
+            'product-sheet',
+            `product-sheet:${item.id}` as DialuxDocumentPage['sectionId'],
+            'Ficha de producto',
+            [item.brandLogoAssetId, item.productPhotoAssetId, item.polarDiagramAssetId].filter(
+                (id): id is string => Boolean(id),
+            ),
+            [],
+            item.name,
+            null,
+            { toc: { title: `Ficha de producto: ${item.name}`.slice(0, 255), level: 1 } },
+        );
+    }
 
     // ── Espacios (locales), agrupados por recinto (categoría), y objetos de cálculo.
     if (calculation && calculation.areas.length > 0) {
@@ -247,6 +306,11 @@ export function buildSiteFormalDocument(input: SiteReportInput): DialuxFormalDoc
                 labelSeen.set(area.label, k);
                 return { ...area, label: `${area.label} ${k}` };
             });
+        // Espacio con alumbrado proyectado: tiene luminarias propias (o se
+        // calcula con toda la escena y alguna le llega). Solo esos llevan
+        // ficha y comparación con la norma; el resto se lista como tal.
+        const isLit = (area: (typeof areas)[number]) =>
+            area.ownLuminaires > 0 || (area.luminaireMode === 'all' && area.luminairesUsed > 0);
         const verdictOf = (value: SiteNormVerdict | undefined) =>
             value === 'meets' ? '≥ norma' : value === 'below' ? '< norma' : 'sin datos';
         const normRows: Array<Record<string, string>> = [];
@@ -255,7 +319,7 @@ export function buildSiteFormalDocument(input: SiteReportInput): DialuxFormalDoc
             const checks = effectiveNormChecks(element, input.regions, area.summary);
             const first = checks.find((check) => check.activity?.illuminanceLux);
             const quantity = siteQuantityCheck(area, first?.activity?.illuminanceLux);
-            for (const check of checks) {
+            for (const check of isLit(area) ? checks : []) {
                 normRows.push({
                     name: area.label,
                     norm: SITE_NORM_REGIONS.find((region) => region.id === check.region)?.label ?? check.region,
@@ -279,7 +343,7 @@ export function buildSiteFormalDocument(input: SiteReportInput): DialuxFormalDoc
                 required: first?.activity
                     ? `${first.activity.illuminanceLux} lx${first.activity.uniformity ? ` · U0 ${first.activity.uniformity}` : ''}${first.suggested ? ' *' : ''}`
                     : '-',
-                verdict: first ? verdictOf(first.emVerdict) : 'Sin actividad',
+                verdict: !isLit(area) ? 'Sin alumbrado proyectado' : first ? verdictOf(first.emVerdict) : 'Sin actividad',
                 lum: quantity && Number.isFinite(quantity.exactQuantity)
                     ? `${area.ownLuminaires} / ${n(quantity.exactQuantity, 1)}`
                     : String(area.ownLuminaires),
@@ -318,7 +382,7 @@ export function buildSiteFormalDocument(input: SiteReportInput): DialuxFormalDoc
                 [
                     ...(index === 0
                         ? [
-                              'Cada espacio exterior (calle, vereda, rampa, escalera, cancha, techado, plataforma…) es un local con su propio objeto de cálculo, agrupado por recinto (categoría) como los locales de DIALux evo. "Exigido": primera norma elegida (* = actividad sugerida por el tipo de espacio); el detalle por norma va en "Comparación con las normas".',
+                              'Cada espacio exterior (calle, vereda, rampa, escalera, cancha, techado, plataforma…) es un local con su propio objeto de cálculo, agrupado por recinto (categoría) como los locales de DIALux evo. "Exigido": primera norma elegida (* = actividad sugerida por el tipo de espacio); el detalle por norma va en "Comparación con las normas". Los espacios "Sin alumbrado proyectado" no tienen luminarias propias: se listan, pero no llevan ficha ni comparación normativa.',
                           ]
                         : []),
                     ...(last && skipped.length > 0
@@ -368,7 +432,7 @@ export function buildSiteFormalDocument(input: SiteReportInput): DialuxFormalDoc
 
         // Fichas por espacio: las 5 páginas por ambiente de la V1.
         const zonePages = new Map<string, () => void>();
-        for (const area of areas) {
+        for (const area of areas.filter(isLit)) {
             const luminaires = zoneLuminaires(area, allLuminaires);
             const planId = `zone-plan-${area.elementId}`;
             const isoluxId = `zone-isolux-${area.elementId}`;
@@ -468,7 +532,7 @@ export function buildSiteFormalDocument(input: SiteReportInput): DialuxFormalDoc
         if (heads.length === 0) continue;
         const cfg = element.config?.kind === 'pole' ? element.config : undefined;
         const lumens = heads.reduce((sum, head) => sum + head.fixture.lumens, 0);
-        const watts = siteElementLoadW(element).watts;
+        const watts = siteElementLoadW(element, site.terrainScaleM || 1).watts;
         const key = `${element.type}|${cfg?.productId ?? ''}|${cfg?.heightM ?? ''}|${Math.round(lumens)}|${watts}`;
         const label =
             element.type === 'pole'
@@ -497,6 +561,39 @@ export function buildSiteFormalDocument(input: SiteReportInput): DialuxFormalDoc
         ], lumRows),
     );
     page('page-luminaires', 'site-section', 'luminaire-list', 'Postes y soportes', ['site-luminaires']);
+
+    // ── Alimentadores a edificios de módulo: ΔU de punta a punta (C3).
+    if ((input.buildingFeeds ?? []).length > 0) {
+        const limits = input.dropLimits ?? { feederPercent: 2.5, totalPercent: 4 };
+        assets.push(
+            table('site-building-feeds', 'Alimentadores a edificios (módulos)', [
+                ['building', 'Edificio'],
+                ['module', 'Módulo / tablero'],
+                ['from', 'Desde'],
+                ['length', 'L total (m)'],
+                ['interior', 'L interior (m)'],
+                ['cable', 'Conductor'],
+                ['feeder', 'ΔU alimentador %'],
+                ['worst', 'Circuito más desfavorable'],
+                ['total', 'ΔU punta a punta %'],
+                ['status', 'Estado'],
+            ], (input.buildingFeeds ?? []).map((row) => ({
+                building: row.blockLabel,
+                module: `${row.moduleName} · ${row.panelLabel}`,
+                from: row.fromLabel,
+                length: n(row.lengthM, 1),
+                interior: n(row.interiorLengthM, 1),
+                cable: `${n(row.sectionMm2, 1)} mm² ${row.conductorType}`,
+                feeder: n(row.feederPercent, 2),
+                worst: row.worstCircuit ? `${row.worstCircuit.code} (${row.worstCircuit.panelLabel}) ${n(row.worstCircuit.percent, 2)} %` : 'Sin datos del módulo',
+                total: row.totalPercent === null ? '-' : n(row.totalPercent, 2),
+                status: row.withinLimits ? 'Dentro del límite' : 'Fuera del límite',
+            }))),
+        );
+        page('page-building-feeds', 'site-section', 'technical-appendix', 'Alimentadores a edificios (módulos)', ['site-building-feeds'], [
+            `L total = recorrido exterior hasta la acometida (fachada) + recorrido interior declarado + subida al tablero, con desperdicio. ΔU del alimentador: IEC 60364-5-52 Anexo G, acumulada desde el suministro. Punta a punta = alimentador + circuito más desfavorable del módulo (motor CT de la V1). Límites configurados: ${n(limits.feederPercent, 1)} % alimentador / ${n(limits.totalPercent, 1)} % total (referencia CNE-Utilización 050-102, edición sin confirmar).`,
+        ]);
+    }
 
     // ── Salidas de tableros (motor CT de la V1).
     if (input.outputRows.length > 0) {

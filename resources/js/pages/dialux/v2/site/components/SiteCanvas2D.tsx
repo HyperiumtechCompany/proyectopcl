@@ -2148,7 +2148,7 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                                     )}
                                                     className="pointer-events-none font-bold"
                                                 >
-                                                    {`${feed.toLabel} · desde ${feed.fromLabel}`}
+                                                    {`${feed.moduleName ? `${feed.moduleName}: ` : ''}${feed.toLabel} · desde ${feed.fromLabel}`}
                                                     {status !== 'incomplete' &&
                                                     feed.calculation
                                                         ? ` · ΔU ${feed.calculation.accumulatedVoltageDropPercent.toFixed(1)} %`
@@ -2156,6 +2156,26 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                                 </text>
                                             );
                                         })}
+                                {showShapeLabel &&
+                                    element.type === 'building_block' &&
+                                    element.moduleId &&
+                                    !(siteData.circuits ?? []).some(
+                                        (circuit) =>
+                                            (circuit.sourceId === element.id || circuit.targetId === element.id) &&
+                                            editor.circuitFeeds[circuit.id],
+                                    ) && (
+                                        // Vinculado a un módulo pero sin cable desde un tablero de la planta.
+                                        <text
+                                            x={labelPos.x}
+                                            y={labelPos.y + LABEL_PX + 3}
+                                            textAnchor="middle"
+                                            fontSize={LABEL_PX - 2}
+                                            fill="#d97706"
+                                            className="pointer-events-none font-bold"
+                                        >
+                                            {`${element.moduleName ?? 'Módulo'} · sin cable desde el tablero`}
+                                        </text>
+                                    )}
                                 {selectedSingle &&
                                     editor.activeTool === 'select' &&
                                     !editor.isFrozen(element) &&
@@ -2473,6 +2493,7 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                         (id) => elementById.get(id),
                         editor.terrainScaleM,
                         circuit.tgOutputId,
+                        elementById.values(),
                     );
                     const visualWaypoints = [...liveWaypoints];
                     const circuitElevations = cableWaypointElevations(

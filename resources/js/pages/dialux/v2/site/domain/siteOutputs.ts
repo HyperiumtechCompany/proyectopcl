@@ -13,6 +13,7 @@ import {
 import type { ElectricalNetworkData } from '../../electrical-network/domain/types';
 import { poleInstalledPowerW } from './exteriorLightingPort';
 import { gateEntrance, gateLightsPowerW } from './gateLayout';
+import { rampSideLightPoints, sideLightsOf } from './rampFootprint';
 import { canopyLightCount, canopyLights } from './siteLightPlacement';
 import { siteCircuitLengthM } from './siteNetworkBridge';
 import { normalizeTgOutputs } from './tgPanel';
@@ -53,7 +54,11 @@ const V1_SLACK_PER_CONDUCTOR_M = 0.1;
 const PANEL_TYPES = new Set<SiteElement['type']>(['tg_location', 'sub_panel']);
 const PHASE_ROTATION = ['R', 'S', 'T'] as const;
 
-export function siteElementLoadW(element: SiteElement): {
+export function siteElementLoadW(
+    element: SiteElement,
+    /** Escala del plano: la cantidad de balizas de una rampa/escalera depende de su largo real. */
+    scaleM = 1,
+): {
     watts: number;
     estimated: boolean;
 } {
@@ -66,6 +71,20 @@ export function siteElementLoadW(element: SiteElement): {
         const lights = canopyLights(element);
         return {
             watts: lights ? canopyLightCount(lights) * lights.wattage : 0,
+            estimated: false,
+        };
+    }
+    if (element.type === 'ramp' || element.type === 'stair') {
+        const lights = sideLightsOf(element);
+        return {
+            watts: lights ? rampSideLightPoints(element, scaleM).length * lights.wattage : 0,
+            estimated: false,
+        };
+    }
+    if (element.type === 'pool') {
+        const lights = element.config?.kind === 'pool' ? element.config.lights : undefined;
+        return {
+            watts: lights?.enabled ? Math.max(0, lights.count) * lights.wattage : 0,
             estimated: false,
         };
     }
@@ -240,7 +259,7 @@ export function buildSitePanelScene(
     const usedCircuits = new Set<string>();
 
     const addNode = (element: SiteElement, x: number) => {
-        const load = siteElementLoadW(element);
+        const load = siteElementLoadW(element, scaleM);
         if (
             load.watts > 0 &&
             (element.type === 'pole' ||
@@ -399,9 +418,13 @@ export function analyzeSiteOutputs(
         const built = buildSitePanelScene(site, panel, settings);
         const upstreamPercent = upstreamVoltageDropPercent(panel.id);
         if ((built.scene.conductors ?? []).length === 0) continue;
+        // Solo salidas CON carga: un cable que solo llega a una caja de pase
+        // (reserva) o que alimenta un edificio/tablero (eso es un alimentador
+        // de la red, no una salida) no es un circuito de la planilla.
         const panelRows = calculatePanelCircuitSummaries(built.scene).filter(
-            (row) => !row.isPanelSummary,
+            (row) => !row.isPanelSummary && row.installedPowerW > 0,
         );
+        let outputNumber = 0;
         let installed = 0;
         let demand = 0;
         for (const row of panelRows) {
@@ -428,8 +451,11 @@ export function analyzeSiteOutputs(
             const ownPercent = base > 0 ? (row.voltageDropV / base) * 100 : 0;
             const accumulatedPercent = upstreamPercent + ownPercent;
             const upstreamV = (upstreamPercent / 100) * base;
+            outputNumber += 1;
             rows.push({
                 ...row,
+                // Numeración correlativa de la planilla: C-1, C-2… por tablero.
+                code: `C-${outputNumber}`,
                 upstreamVoltageDropV: upstreamV,
                 voltageDropV: row.voltageDropV + upstreamV,
                 voltageDropPct: accumulatedPercent,

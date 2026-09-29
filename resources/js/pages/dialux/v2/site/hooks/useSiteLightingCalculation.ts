@@ -1,14 +1,12 @@
 import { create } from 'zustand';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
-import {
-    calculateSiteLighting,
-    type SiteLightingCalculation,
-} from '../domain/siteLightingCalculation';
+import type { SiteLightingCalculation } from '../domain/siteLightingCalculation';
 import type { Point2D, SiteData } from '../domain/types';
 import {
     loadLuminairePhotometry,
     type LuminairePhotometry,
 } from '../lib/luminaireCatalog';
+import { calculateSiteLightingAsync } from '../lib/siteLightingWorkerClient';
 import { useLuminairePhotometry } from './useLuminaireCatalog';
 
 /**
@@ -134,10 +132,12 @@ export function useSiteLightingCalculation(siteData: SiteData | undefined) {
         // justo después de colocar luminarias las incluye con su IES/LDT real,
         // nunca con el modelo genérico por una carrera de carga.
         const latest = useEditorStore.getState().project?.site ?? siteData;
+        // En un Web Worker: la interfaz sigue respondiendo mientras calcula.
         void loadSitePhotometry(siteLightProductIds(latest))
-            .then((loaded) => {
+            .then((loaded) => calculateSiteLightingAsync(latest, loaded))
+            .then((calculation) => {
                 state.set({
-                    calculation: calculateSiteLighting(latest, loaded),
+                    calculation,
                     calculatedFor: latest,
                     showIsolux: true,
                 });
@@ -155,8 +155,8 @@ export function useSiteLightingCalculation(siteData: SiteData | undefined) {
         state.set({ running: true });
         const latest = useEditorStore.getState().project?.site ?? siteData;
         void loadSitePhotometry(siteLightProductIds(latest))
-            .then((loaded) => {
-                const single = calculateSiteLighting(latest, loaded, new Set([areaId]));
+            .then((loaded) => calculateSiteLightingAsync(latest, loaded, new Set([areaId])))
+            .then((single) => {
                 const current = useSiteLightingStore.getState();
                 const previous = current.calculation;
                 const areas = previous

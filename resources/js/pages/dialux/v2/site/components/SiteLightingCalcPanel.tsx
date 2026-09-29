@@ -181,14 +181,18 @@ export function SiteLightingCalcPanel({
             </div>
             {calc && open && (
                 <div className="max-h-72 overflow-auto p-2">
-                    {calc.warnings.map((warning) => (
-                        <p
-                            key={warning}
-                            className="mb-1 rounded bg-amber-50 px-2 py-1 text-[10px] text-amber-800 dark:bg-amber-500/10 dark:text-amber-300"
-                        >
-                            {warning}
-                        </p>
-                    ))}
+                    {/* Espacios con el mismo nombre repiten el aviso: se agrupan con su cantidad. */}
+                    {[...calc.warnings.reduce((counts, warning) => counts.set(warning, (counts.get(warning) ?? 0) + 1), new Map<string, number>())].map(
+                        ([warning, times]) => (
+                            <p
+                                key={warning}
+                                className="mb-1 rounded bg-amber-50 px-2 py-1 text-[10px] text-amber-800 dark:bg-amber-500/10 dark:text-amber-300"
+                            >
+                                {warning}
+                                {times > 1 ? ` (×${times})` : ''}
+                            </p>
+                        ),
+                    )}
                     {calc.areas.length === 0 ? (
                         <p className="px-1 py-2 text-slate-500">
                             No hay superficies de cálculo: dibuja canchas,

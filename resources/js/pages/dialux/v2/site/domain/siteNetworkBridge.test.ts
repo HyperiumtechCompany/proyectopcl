@@ -369,6 +369,50 @@ describe('applySiteToNetwork · cable a un bloque de módulo (Fase 3)', () => {
         expect(calc.find((item) => item.edgeId === feeder?.id)?.demandPowerW).toBe(8000);
     });
 
+    it('longitud = hasta la ACOMETIDA (fachada) + recorrido interior declarado; la subida aparte', () => {
+        const withInterior = { ...cable('c1', 'tg1', 'blk', 50), interiorLengthM: 12 };
+        const result = applySiteToNetwork(
+            baseNetwork(),
+            site([panel('tg1', 'tg_location', 0), block(7)], [withInterior]),
+            { ports: [port('td')], panelVerticalM: () => 2 },
+        );
+        const feeder = result.data.edges.find((edge) => edge.siteCircuitId === 'c1');
+        // TG en x=0 → fachada del bloque en x=40 (no su centro, x=50) + 12 m dentro.
+        expect(feeder?.horizontalLengthM).toBeCloseTo(40 + 12, 6);
+        expect(feeder?.verticalLengthM).toBe(2);
+    });
+
+    it('TG → caja de pase → edificio es UN alimentador con la longitud de ambos tramos', () => {
+        const box: SiteElement = { ...panel('caja', 'tg_location', 20), type: 'pull_box', label: 'Caja de pase' };
+        const piece = (id: string, sourceId: string, targetId: string, from: number, to: number): SiteCircuit => ({
+            id,
+            sourceId,
+            targetId,
+            waypoints: [
+                { x: from, y: 0 },
+                { x: to, y: 0 },
+            ],
+            calculatedLengthM: Math.abs(to - from),
+            wireCount: 4,
+            wastePct: 0,
+        });
+        const result = applySiteToNetwork(
+            baseNetwork(),
+            site(
+                [panel('tg1', 'tg_location', 0), box, block(7)],
+                // El segundo tramo está guardado al revés (edificio → caja): se orienta solo.
+                [piece('c1', 'tg1', 'caja', 0, 20), { ...piece('c2', 'blk', 'caja', 50, 20), interiorLengthM: 5 }],
+            ),
+            { ports: [port('td')], panelVerticalM: () => 2 },
+        );
+        const feeders = result.data.edges.filter((edge) => edge.lengthMode === 'site');
+        expect(feeders).toHaveLength(1);
+        // Llega por la caja: 20 m + de la caja a la fachada (x=40) 20 m + 5 m dentro; la subida aparte.
+        expect(feeders[0]).toMatchObject({ siteCircuitId: 'c2', sourceNodeId: 'tg', verticalLengthM: 2 });
+        expect(feeders[0].horizontalLengthM).toBeCloseTo(45, 6);
+        expect(result.conflicts.filter((conflict) => conflict.code === 'block-unlinked')).toEqual([]);
+    });
+
     it('reutiliza el alimentador que ya tenía el módulo (conserva su sección) y cambia su origen', () => {
         const imported: ElectricalNetworkData = {
             ...baseNetwork(),

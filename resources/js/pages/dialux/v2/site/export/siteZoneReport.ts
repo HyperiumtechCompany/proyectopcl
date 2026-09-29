@@ -4,6 +4,7 @@ import type {
     RequirementEvaluation,
 } from '@/pages/dialux/export/domain/types';
 import { luxColor } from '../domain/exteriorLighting';
+import { calcOutlines } from '../domain/rampFootprint';
 import type {
     SiteLightingAreaResult,
     SiteLuminaire,
@@ -13,7 +14,7 @@ import { siteElementLoadW } from '../domain/siteOutputs';
 import { siteQuantityCheck, SITE_UTILIZATION_FACTOR } from '../domain/siteQuantityCheck';
 import type { Point2D, SiteData, SiteElement, SiteElementType, SiteNormRegion } from '../domain/types';
 import type { LuminaireCatalogItem } from '../lib/luminaireCatalog';
-import { isoluxSvgFragments } from './isoluxSvg';
+import { isoluxSvgFragments, svgClipToPolygons } from './isoluxSvg';
 
 /**
  * Páginas por ZONA del informe de la Planta General — las mismas páginas por
@@ -51,6 +52,7 @@ export const SITE_SPACE_GROUPS: SiteSpaceGroup[] = [
     { id: 'site-group-rampas', name: 'Rampas y escaleras', types: ['ramp', 'stair'] },
     { id: 'site-group-estacionamientos', name: 'Estacionamientos', types: ['parking'] },
     { id: 'site-group-canchas', name: 'Canchas deportivas', types: ['court'] },
+    { id: 'site-group-piscinas', name: 'Piscinas', types: ['pool'] },
     { id: 'site-group-techados', name: 'Techados', types: ['canopy'] },
     { id: 'site-group-plataformas', name: 'Plataformas y zonas', types: ['terrace_platform', 'custom_zone'] },
     { id: 'site-group-verdes', name: 'Áreas verdes', types: ['green_area'] },
@@ -96,6 +98,10 @@ export function renderZoneSvg(
     const scaleM = site.terrainScaleM || 1;
     const element = (site.elements ?? []).find((item) => item.id === area.elementId);
     const polygon = (element?.vertices ?? []).map((v) => ({ x: v.x * scaleM, y: v.y * scaleM }));
+    // Lo que se CALCULA (en rampas/escaleras: sus tramos), en metros.
+    const calcPolygons = element
+        ? calcOutlines(element, scaleM).map((outline) => outline.map((v) => ({ x: v.x * scaleM, y: v.y * scaleM })))
+        : [polygon];
     const points = [...polygon, ...luminaires.map((lum) => ({ x: lum.x, y: lum.y }))];
     const minX = Math.min(...points.map((p) => p.x));
     const maxX = Math.max(...points.map((p) => p.x));
@@ -122,6 +128,15 @@ export function renderZoneSvg(
         parts.push(`<polygon points="${pts(poly)}" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="${stroke}"/>`);
     }
     parts.push(`<polygon points="${pts(polygon)}" fill="${mode === 'plan' ? '#e0f2fe' : 'none'}" stroke="#0f172a" stroke-width="${stroke * 2}"/>`);
+    // Rampas/escaleras: lo que se calcula son sus tramos y descansos (la
+    // superficie de paso), no todo el polígono dibujado: se dibujan encima.
+    const flightSpace = (element?.type === 'ramp' || element?.type === 'stair') && calcPolygons[0] !== polygon;
+    const flightOutlines = () =>
+        calcPolygons.map(
+            (outline) =>
+                `<polygon points="${pts(outline)}" fill="${mode === 'plan' ? '#bae6fd' : 'none'}" stroke="#0369a1" stroke-width="${stroke * 1.2}"/>`,
+        );
+    if (flightSpace && mode === 'plan') parts.push(...flightOutlines());
 
     const cells = area.patches.flatMap((patch) => {
         const r = patch.result;
@@ -148,9 +163,14 @@ export function renderZoneSvg(
             parts.push(`<circle cx="${(cell.x + cell.w / 2).toFixed(3)}" cy="${(cell.y + cell.h / 2).toFixed(3)}" r="${(Math.min(cell.w, cell.h) * 0.12).toFixed(3)}" fill="#0369a1"/>`);
         });
     } else {
+        // Falsos colores recortados al contorno del espacio (nada fuera de lo calculado).
+        const clip = svgClipToPolygons(calcPolygons);
+        if (clip.def) parts.push(clip.def, `<g${clip.attr}>`);
         for (const cell of cells) {
             parts.push(`<rect x="${cell.x.toFixed(3)}" y="${cell.y.toFixed(3)}" width="${cell.w.toFixed(3)}" height="${cell.h.toFixed(3)}" ${luxFill(cell.value)}/>`);
         }
+        if (clip.def) parts.push('</g>');
+        if (flightSpace) parts.push(...flightOutlines());
         // Valor en lx de los puntos (como el plano útil de DIALux): todos si la
         // malla es chica; si no, uno de cada k por fila y columna (~400 rótulos).
         if (cells.length > 0) {
@@ -170,6 +190,7 @@ export function renderZoneSvg(
                 stroke * 1.4,
                 text * 0.9,
                 requiredLux ?? null,
+                calcPolygons,
             ),
         );
         const lx = maxX + margin * 1.5;
@@ -216,7 +237,7 @@ export function wattsPerHead(site: SiteData, all: SiteLuminaire[]): Map<string, 
     const result = new Map<string, number>();
     for (const lum of all) {
         const source = elementsById.get(lum.poleId);
-        if (source) result.set(lum.fixture.id, siteElementLoadW(source).watts / Math.max(1, heads.get(lum.poleId) ?? 1));
+        if (source) result.set(lum.fixture.id, siteElementLoadW(source, site.terrainScaleM || 1).watts / Math.max(1, heads.get(lum.poleId) ?? 1));
     }
     return result;
 }
@@ -234,16 +255,26 @@ export function groupLuminaires(
     zoneName: string | null,
     products?: ReadonlyMap<number, LuminaireCatalogItem>,
     roomName: string | null = 'Planta general',
-): DialuxLuminaireListItem[] {
-    const groups = new Map<string, DialuxLuminaireListItem>();
+): Array<DialuxLuminaireListItem & { productId?: number }> {
+    const groups = new Map<string, DialuxLuminaireListItem & { productId?: number }>();
     for (const lum of luminaires) {
         const source = elementsById.get(lum.poleId);
         const power = watts.get(lum.fixture.id) ?? null;
-        const config = source?.config as { productId?: number } | undefined;
-        const productId = config?.productId;
+        const config = source?.config as { productId?: number; lights?: { productId?: number } } | undefined;
+        // Balizas de rampa/escalera y luces de portón/techado: su producto va en `lights`.
+        const productId = lum.sourceType === 'pole' ? config?.productId : (config?.lights?.productId ?? config?.productId);
         const product = productId !== undefined ? products?.get(productId) : undefined;
+        const poleMount = (source?.config as { mount?: string } | undefined)?.mount;
         const mount =
-            lum.sourceType === 'pole' ? 'poste' : lum.sourceType === 'gate' ? 'portón' : 'techado';
+            lum.sourceType === 'pole'
+                ? poleMount === 'bollard'
+                    ? 'bolardo'
+                    : 'poste'
+                : lum.sourceType === 'gate'
+                  ? 'portón'
+                  : lum.sourceType === 'canopy'
+                    ? 'techado'
+                    : 'baliza';
         const name = product
             ? `${product.name} (${mount})`
             : `Luminaria de ${mount}${productId !== undefined ? ` (catálogo #${productId})` : ''}`;
@@ -256,9 +287,14 @@ export function groupLuminaires(
         groups.set(key, {
             id: key,
             name,
-            model: lum.hasPhotometry ? 'Fotometría IES/LDT' : 'Modelo genérico (sin fotometría)',
+            model: product
+                ? `Fotometría ${(product.sourceFormat ?? 'LDT/IES').toUpperCase()}`
+                : productId !== undefined
+                  ? 'Fotometría LDT/IES'
+                  : 'Genérica (lm + haz, sin LDT)',
             brand: product?.manufacturer?.slice(0, 255) ?? null,
-            articleNumber: productId !== undefined ? `#${productId}` : null,
+            articleNumber: product?.articleNumber?.slice(0, 255) ?? null,
+            ...(productId !== undefined ? { productId } : {}),
             fixtureShape: product?.fixtureType?.slice(0, 255) ?? null,
             shape: null,
             lumens: Math.round(lum.fixture.lumens),
@@ -286,6 +322,7 @@ const SPACE_LABEL: Partial<Record<SiteElement['type'], string>> = {
     terrain: 'Terreno (resto no cubierto por otros espacios)',
     ramp: 'Rampa',
     stair: 'Escalera',
+    pool: 'Piscina (lámina de agua)',
 };
 
 const ARRANGEMENT_LABEL: Record<string, string> = {
@@ -494,7 +531,7 @@ export function buildZoneAmbientDetail(input: {
         fixturePositions: luminaires.map((lum, index) => ({
             id: lum.fixture.id,
             name: `${index + 1}. ${lum.label}`.slice(0, 255),
-            productName: lum.hasPhotometry ? 'Fotometría IES/LDT' : 'Modelo genérico',
+            productName: lum.hasPhotometry ? 'Fotometría IES/LDT' : 'Genérica (sin LDT)',
             x: Math.round(lum.x * 100) / 100,
             y: Math.round(lum.y * 100) / 100,
             mountingHeight: Math.round((lum.headElevationM - area.baseElevationM) * 100) / 100,

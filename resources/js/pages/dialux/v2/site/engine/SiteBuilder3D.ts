@@ -16,6 +16,7 @@ import {
     type ArcRotateCamera,
     type Scene,
 } from '@babylonjs/core';
+import polygonClipping, { type Polygon as ClipPolygon, type Ring as ClipRing } from 'polygon-clipping';
 import { House3DBuilder } from '@/pages/dialux/engine/House3DBuilder';
 import type { LightingResult } from '@/pages/dialux/hooks/types';
 import type { Scene as EditorScene } from '@/pages/dialux/hooks/useEditorStore';
@@ -62,6 +63,14 @@ import {
 } from '../domain/layoutFit';
 import { pickSpreadSources } from '../domain/lightPicker';
 import { platformGroundAt, PLATFORM_EDGE_ON_M } from '../domain/platformGround';
+import {
+    arrivalBridge,
+    normalizeFlightRises,
+    poolLightPoints,
+    rampPlanSegments,
+    rampSideLightPoints,
+    sideLightsOf,
+} from '../domain/rampFootprint';
 import {
     buildSpiralRampPolyline,
     buildStraightRampLayout,
@@ -436,6 +445,73 @@ export class SiteBuilder3D {
         return lift;
     }
 
+    /**
+     * Demarcación del estacionamiento (líneas blancas): borde y cajones a lo
+     * largo de su lado mayor — perpendiculares de 2,5 m si el fondo alcanza
+     * (≥ 4,5 m), en paralelo de 6 m si es una franja angosta. Solo visual.
+     */
+    private buildParkingMarkings(element: SiteElement, scaleM: number, topY: number) {
+        const node = this.elementNodes.get(element.id);
+        const pts = element.vertices.filter(
+            (v, i, all) => i === 0 || Math.hypot(v.x - all[i - 1].x, v.y - all[i - 1].y) * scaleM > 0.05,
+        );
+        if (!node || pts.length < 3) return;
+        const center = centroid(element.vertices);
+        const local = (x: number, y: number) => new Vector3((x - center.x) * scaleM, topY, -(y - center.y) * scaleM);
+        const mat = this.matFor('#f8fafc', 1, 0.1);
+        let index = 0;
+        const stripe = (a: Vector3, b: Vector3) => {
+            const length = Vector3.Distance(a, b);
+            if (length < 0.2) return;
+            const line = MeshBuilder.CreateBox(
+                `site_parking_line_${element.id}_${index++}`,
+                { width: 0.1, height: 0.01, depth: length },
+                this.scene,
+            );
+            line.position = Vector3.Center(a, b);
+            line.rotation.y = Math.atan2(b.x - a.x, b.z - a.z);
+            line.material = mat;
+            line.parent = node;
+        };
+        // Borde.
+        pts.forEach((v, i) => {
+            const w = pts[(i + 1) % pts.length];
+            stripe(local(v.x, v.y), local(w.x, w.y));
+        });
+        // Eje = lado más largo; fondo = distancia máxima de los vértices a ese lado.
+        let best = { i: 0, len: 0 };
+        pts.forEach((v, i) => {
+            const w = pts[(i + 1) % pts.length];
+            const len = Math.hypot(w.x - v.x, w.y - v.y) * scaleM;
+            if (len > best.len) best = { i, len };
+        });
+        const a = pts[best.i];
+        const b = pts[(best.i + 1) % pts.length];
+        const ux = ((b.x - a.x) * scaleM) / best.len;
+        const uy = ((b.y - a.y) * scaleM) / best.len;
+        let depth = 0;
+        let side = 1;
+        for (const v of pts) {
+            const d = ((v.x - a.x) * scaleM) * -uy + ((v.y - a.y) * scaleM) * ux;
+            if (Math.abs(d) > Math.abs(depth)) {
+                depth = d;
+                side = Math.sign(d) || 1;
+            }
+        }
+        const fondo = Math.abs(depth);
+        if (fondo < 2) return;
+        const perpendicular = fondo >= 4.5;
+        const pitch = perpendicular ? 2.5 : 6;
+        const stall = perpendicular ? Math.min(5, fondo) : Math.min(2.5, fondo);
+        for (let t = pitch; t < best.len - 0.3; t += pitch) {
+            const px = a.x + (ux * t) / scaleM;
+            const py = a.y + (uy * t) / scaleM;
+            const qx = px + (-uy * side * stall) / scaleM;
+            const qy = py + (ux * side * stall) / scaleM;
+            stripe(local(px, py), local(qx, qy));
+        }
+    }
+
     private buildSurface(
         element: SiteElement,
         scaleM: number,
@@ -610,6 +686,7 @@ export class SiteBuilder3D {
                 // ella; si no, quedaba tapado en 3D aunque se viera en 2D.
                 const lift = this.raisedPavementUnder(element);
                 this.buildSurface(element, scaleM, 'asphalt', 0.06 + lift, 0.08 + lift);
+                if (element.type === 'parking') this.buildParkingMarkings(element, scaleM, 0.085 + lift);
                 return;
             }
             case 'green_area': {
@@ -1663,10 +1740,15 @@ export class SiteBuilder3D {
         // dibujadas con opacidad 70 % guardada también salen sólidas en 3D).
         let lowestY = 0;
         for (const p of bottomRing) if (p.y < lowestY) lowestY = p.y;
-        // Escaleras/rampas que BAJAN desde esta plataforma y quedan enteras dentro de ella: su
-        // huella se recorta de la plataforma (hueco), para que los peldaños no queden enterrados
-        // bajo la losa ni la plataforma sobre "restos" alrededor de la escalera.
-        const holes: Vector3[][] = [];
+        // Escaleras/rampas que BAJAN desde esta plataforma y la PISAN (enteras
+        // dentro o cruzando su borde, el caso habitual: la escalera sube desde
+        // abajo y termina en la plataforma): su huella se RESTA de la
+        // plataforma (booleana con polygon-clipping). Sin esto los primeros
+        // peldaños quedaban enterrados en el bloque macizo de la plataforma.
+        // Solo los TRAMOS que pasan por debajo de la plataforma (no toda la
+        // huella dibujada): la franja donde la rampa LLEGA a esta cota queda
+        // intacta (antes se recortaba y la llegada daba a un foso).
+        const cutPolygons: Point2D[][] = [];
         for (const other of this.elementsById.values()) {
             if (
                 (other.type !== 'stair' && other.type !== 'ramp') ||
@@ -1675,82 +1757,139 @@ export class SiteBuilder3D {
             ) {
                 continue;
             }
+            const segments = rampPlanSegments(other, scaleM);
+            if (segments.length > 0) {
+                for (const segment of segments) {
+                    if (Math.max(segment.startM, segment.endM) < platformYAbs - 0.05) {
+                        cutPolygons.push(segment.corners);
+                    }
+                }
+                continue;
+            }
+            // Rampa de una sola losa o espiral: su huella, si baja desde aquí.
             const oc = other.config;
             const lowest =
                 oc?.kind === 'stair' || oc?.kind === 'ramp'
                     ? Math.min(oc.fromElevationM, oc.toElevationM)
                     : platformYAbs;
-            if (lowest >= platformYAbs - 0.05) continue;
-            // Entera dentro (con 10 cm de margen al borde) — un hueco que toca el borde partiría la losa.
-            const inside = other.vertices.every((v) => {
-                if (!pointInPolygon(v, element.vertices)) return false;
-                const hit = closestPointOnPolygon(v, element.vertices, true);
-                return !!hit && hit.distance * scaleM > 0.1;
-            });
-            if (!inside) continue;
-            holes.push(
-                other.vertices.map(
-                    (v) =>
-                        new Vector3(
-                            (v.x - center.x) * scaleM,
-                            0,
-                            -(v.y - center.y) * scaleM,
-                        ),
-                ),
-            );
+            if (lowest < platformYAbs - 0.05) cutPolygons.push(other.vertices);
         }
+        const ring = (vertices: Point2D[]): ClipRing => vertices.map((v) => [v.x, v.y] as [number, number]);
+        let pieces: ClipPolygon[] = [[ring(element.vertices)]];
+        if (cutPolygons.length > 0) {
+            try {
+                pieces = polygonClipping.difference(
+                    [ring(element.vertices)],
+                    ...cutPolygons.map((polygon) => [ring(polygon)] as ClipPolygon),
+                );
+            } catch {
+                pieces = [[ring(element.vertices)]]; // geometría degenerada: sin recorte
+            }
+        }
+        const toLocal = (x: number, y: number, yLocal = 0) =>
+            new Vector3((x - center.x) * scaleM, yLocal, -(y - center.y) * scaleM);
+        const openRing = (r: ClipRing) => {
+            const pts = r.map(([x, y]) => ({ x, y }));
+            const first = pts[0];
+            const last = pts[pts.length - 1];
+            return first && last && first.x === last.x && first.y === last.y ? pts.slice(0, -1) : pts;
+        };
+        /** Un punto (planta) está dentro de alguna huella recortada. */
+        const insideCutter = (pt: Point2D) => cutPolygons.some((polygon) => pointInPolygon(pt, polygon));
         const capDepth = Math.max(0.15, -lowestY);
-        const cap = MeshBuilder.CreatePolygon(
-            `site_terrace_cap_${element.id}`,
-            {
-                shape: localVertices,
-                holes: holes.length > 0 ? holes : undefined,
-                depth: capDepth,
-                sideOrientation: Mesh.DOUBLESIDE,
-            },
-            this.scene,
-        );
-        cap.material = this.matFor(element.style.fillColor, 1);
-        cap.receiveShadows = true;
-        cap.parent = node;
-
-        const topRing = [...localVertices, localVertices[0]];
-        bottomRing.push(bottomRing[0]);
-
-        const skirt = MeshBuilder.CreateRibbon(
-            `site_terrace_skirt_${element.id}`,
-            {
-                pathArray: [topRing, bottomRing],
-                sideOrientation: Mesh.DOUBLESIDE,
-            },
-            this.scene,
-        );
-        skirt.material = this.matFor('#a89270', 1, 0.05);
-        skirt.receiveShadows = true;
-        skirt.parent = node;
-
-        // `CreatePolygon` con `holes` solo recorta la TAPA — deja el agujero sin pared, así
-        // que se veía a través de la plataforma (la cara de abajo de la tapa, mal iluminada,
-        // se leía como una cuña clara flotando junto a la escalera). Cada hueco necesita su
-        // propia pared vertical, igual que el talud exterior pero recta (de la tapa hasta su
-        // fondo), para que se lea como un hueco tallado y no como un agujero al vacío.
-        holes.forEach((hole, index) => {
-            const holeTop = [...hole, hole[0]];
-            const holeBottom = holeTop.map(
-                (p) => new Vector3(p.x, -capDepth, p.z),
-            );
-            const holeWall = MeshBuilder.CreateRibbon(
-                `site_terrace_hole_${element.id}_${index}`,
+        const wallMat = this.matFor('#a89270', 1, 0.05);
+        pieces.forEach((piece, pieceIndex) => {
+            const [outer, ...inner] = piece.map(openRing);
+            if (!outer || outer.length < 3) return;
+            const cap = MeshBuilder.CreatePolygon(
+                `site_terrace_cap_${element.id}_${pieceIndex}`,
                 {
-                    pathArray: [holeTop, holeBottom],
+                    shape: outer.map((v) => toLocal(v.x, v.y)),
+                    holes: inner.length > 0 ? inner.map((h) => h.map((v) => toLocal(v.x, v.y))) : undefined,
+                    depth: capDepth,
                     sideOrientation: Mesh.DOUBLESIDE,
                 },
                 this.scene,
             );
-            holeWall.material = this.matFor('#a89270', 1, 0.05);
-            holeWall.receiveShadows = true;
-            holeWall.parent = node;
+            cap.material = this.matFor(element.style.fillColor, 1);
+            cap.receiveShadows = true;
+            cap.parent = node;
+            // Paredes verticales en los bordes NUEVOS (los del recorte, dentro
+            // de una huella): se lee como un corte tallado, no un agujero al vacío.
+            if (cutPolygons.length === 0) return;
+            [outer, ...inner].forEach((r, ringIndex) => {
+                r.forEach((a, i) => {
+                    const b = r[(i + 1) % r.length];
+                    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+                    const onCut = cutPolygons.some((polygon) => {
+                        const hit = closestPointOnPolygon(mid, polygon, true);
+                        return !!hit && hit.distance * scaleM < 0.02;
+                    });
+                    if (!onCut) return;
+                    const wall = MeshBuilder.CreateRibbon(
+                        `site_terrace_cut_${element.id}_${pieceIndex}_${ringIndex}_${i}`,
+                        {
+                            pathArray: [
+                                [toLocal(a.x, a.y), toLocal(b.x, b.y)],
+                                [toLocal(a.x, a.y, -capDepth), toLocal(b.x, b.y, -capDepth)],
+                            ],
+                            sideOrientation: Mesh.DOUBLESIDE,
+                        },
+                        this.scene,
+                    );
+                    wall.material = wallMat;
+                    wall.receiveShadows = true;
+                    wall.parent = node;
+                });
+            });
         });
+
+        // Talud exterior por lado, SIN los tramos donde la escalera/rampa
+        // corta el borde (si no, el talud tapaba la entrada de la escalera).
+        const SUBDIVISIONS = cutPolygons.length > 0 ? 24 : 1;
+        const n = localVertices.length;
+        let runTop: Vector3[] = [];
+        let runBottom: Vector3[] = [];
+        let runIndex = 0;
+        const flushRun = () => {
+            if (runTop.length >= 2) {
+                const skirt = MeshBuilder.CreateRibbon(
+                    `site_terrace_skirt_${element.id}_${runIndex++}`,
+                    { pathArray: [runTop, runBottom], sideOrientation: Mesh.DOUBLESIDE },
+                    this.scene,
+                );
+                skirt.material = wallMat;
+                skirt.receiveShadows = true;
+                skirt.parent = node;
+            }
+            runTop = [];
+            runBottom = [];
+        };
+        for (let i = 0; i < n; i++) {
+            const j = (i + 1) % n;
+            const va = element.vertices[i];
+            const vb = element.vertices[j];
+            for (let k = 0; k < SUBDIVISIONS; k++) {
+                const t0 = k / SUBDIVISIONS;
+                const t1 = (k + 1) / SUBDIVISIONS;
+                const mid = {
+                    x: va.x + (vb.x - va.x) * ((t0 + t1) / 2),
+                    y: va.y + (vb.y - va.y) * ((t0 + t1) / 2),
+                };
+                if (cutPolygons.length > 0 && insideCutter(mid)) {
+                    flushRun();
+                    continue;
+                }
+                const lerp = (a: Vector3, b: Vector3, t: number) => Vector3.Lerp(a, b, t);
+                if (runTop.length === 0) {
+                    runTop.push(lerp(localVertices[i], localVertices[j], t0));
+                    runBottom.push(lerp(bottomRing[i], bottomRing[j], t0));
+                }
+                runTop.push(lerp(localVertices[i], localVertices[j], t1));
+                runBottom.push(lerp(bottomRing[i], bottomRing[j], t1));
+            }
+        }
+        flushRun();
     }
 
     /** Punto acotado: varilla vertical hasta su cota (desde el 0 de referencia). */
@@ -1799,10 +1938,97 @@ export class SiteBuilder3D {
             return;
         }
         if (c?.flights && c.flights.length > 0) {
-            this.buildFlightRamp(element, scaleM, c);
+            // Tramos repartidos para LLEGAR a la cota de destino (no a la suma escrita).
+            this.buildFlightRamp(element, scaleM, normalizeFlightRises(c));
+            this.buildArrivalBridge(element, scaleM);
+            this.buildSideLights(element, scaleM);
             return;
         }
         this.buildSingleRampSlab(element, scaleM, c);
+    }
+
+    /**
+     * Losa de llegada: si el final de la rampa/escalera no apoya sobre su
+     * plataforma de destino (queda a menos de 3 m de su borde), une ese
+     * borde con la plataforma a la misma cota — antes se veía un abismo.
+     */
+    /**
+     * Balizas de circulación de una rampa/escalera (`rampSideLightPoints`,
+     * misma posición que el cálculo): de muro = caja empotrada en el sardinel
+     * con la lente hacia la huella; bolardo = poste de 1 m. Son luminarias
+     * del modo noche como las de los postes.
+     */
+    private buildSideLights(element: SiteElement, scaleM: number) {
+        const lights = sideLightsOf(element);
+        if (!lights) return;
+        const housing = this.matFor('#4b5563', 1, 0.2);
+        rampSideLightPoints(element, scaleM).forEach((point, index) => {
+            const angle = (point.rotationDeg * Math.PI) / 180;
+            const nx = Math.cos(angle);
+            const ny = Math.sin(angle);
+            // Nodo "poste" detrás de la baliza (hacia afuera): da el rumbo C0 hacia la huella.
+            const base = new TransformNode(`site_sidelight_base_${element.id}_${index}`, this.scene);
+            base.position.set(
+                this.wx((point.x - nx * 0.3) / scaleM, scaleM),
+                this.rel(point.elevationM),
+                this.wz((point.y - ny * 0.3) / scaleM, scaleM),
+            );
+            const worldX = this.wx(point.x / scaleM, scaleM);
+            const worldZ = this.wz(point.y / scaleM, scaleM);
+            const yaw = Math.atan2(nx, -ny);
+            if (lights.mode === 'bollard') {
+                const post = MeshBuilder.CreateCylinder(
+                    `site_sidelight_post_${element.id}_${index}`,
+                    { diameter: 0.14, height: 1, tessellation: 12 },
+                    this.scene,
+                );
+                post.position.set(worldX, this.rel(point.elevationM) - 0.5, worldZ);
+                post.material = housing;
+            } else {
+                const box = MeshBuilder.CreateBox(
+                    `site_sidelight_box_${element.id}_${index}`,
+                    { width: 0.16, height: 0.09, depth: 0.05 },
+                    this.scene,
+                );
+                box.position.set(worldX, this.rel(point.elevationM), worldZ);
+                box.rotation.y = yaw;
+                box.material = housing;
+            }
+            const lens = MeshBuilder.CreateBox(
+                `site_sidelight_head_${element.id}_${index}`,
+                lights.mode === 'bollard'
+                    ? { width: 0.16, height: 0.06, depth: 0.16 }
+                    : { width: 0.12, height: 0.03, depth: 0.012 },
+                this.scene,
+            );
+            lens.position.set(worldX + nx * 0.03, this.rel(point.elevationM) - (lights.mode === 'bollard' ? 0 : 0.015), worldZ - ny * 0.03);
+            lens.rotation.y = yaw;
+            lens.material = this.getLampMaterial();
+            this.lampHeads.push({
+                head: lens,
+                pole: base,
+                lumens: lights.lumens,
+                productId: lights.productId,
+                beamDeg: DEFAULT_LUMINAIRE.beamDeg,
+                maintenance: DEFAULT_LUMINAIRE.maintenance,
+            });
+        });
+    }
+
+    private buildArrivalBridge(element: SiteElement, scaleM: number) {
+        const bridge = arrivalBridge(element, [...this.elementsById.values()], scaleM);
+        if (!bridge) return;
+        const node = new TransformNode(`site_arrival_${element.id}`, this.scene);
+        node.position.y = this.rel(bridge.elevationM);
+        const shape = bridge.polygon.map((p) => new Vector3(this.wx(p.x, scaleM), 0, this.wz(p.y, scaleM)));
+        const slab = MeshBuilder.CreatePolygon(
+            `site_arrival_slab_${element.id}`,
+            { shape, depth: 0.25, sideOrientation: Mesh.DOUBLESIDE },
+            this.scene,
+        );
+        slab.material = this.matFor(element.style.fillColor, 1, 0.05);
+        slab.receiveShadows = true;
+        slab.parent = node;
     }
 
     /** Comportamiento clásico: una losa inclinada sobre el polígono dibujado, de `fromElevationM` a `toElevationM`. */
@@ -2212,12 +2438,15 @@ export class SiteBuilder3D {
                         : 0.175,
             },
         );
+        this.buildArrivalBridge(element, scaleM);
+        this.buildSideLights(element, scaleM);
     }
 
     /** Piscina: caja hundida con un plano de agua translúcido al ras del terreno. */
     private buildPool(element: SiteElement, scaleM: number) {
         const { node, localVertices } = this.anchorNode(element, scaleM);
-        const basinDepth = Math.max(0.3, element.heightM ?? 1.4);
+        const poolCfg = element.config?.kind === 'pool' ? element.config : undefined;
+        const basinDepth = Math.max(0.3, poolCfg?.depthM ?? element.heightM ?? 1.4);
         const basin = MeshBuilder.CreatePolygon(
             `site_pool_basin_${element.id}`,
             {
@@ -2243,6 +2472,21 @@ export class SiteBuilder3D {
         water.position.y = -0.15;
         water.material = this.matFor(element.style.fillColor, 0.75, 0.4);
         water.parent = node;
+        // Luces subacuáticas en las paredes del vaso (brillan de noche; no entran al cálculo de la lámina).
+        const baseY = node.position.y;
+        poolLightPoints(element, scaleM).forEach((point, index) => {
+            const disc = MeshBuilder.CreateSphere(
+                `site_pool_light_${element.id}_${index}`,
+                { diameter: 0.25, segments: 8 },
+                this.scene,
+            );
+            disc.position.set(
+                this.wx(point.x / scaleM, scaleM),
+                baseY - 0.15 - Math.min(point.depthM, basinDepth - 0.2),
+                this.wz(point.y / scaleM, scaleM),
+            );
+            disc.material = this.getLampMaterial();
+        });
     }
 
     /** Bloque de edificación: masa extruida + (opcional) interior real del módulo vinculado. */
@@ -2904,40 +3148,111 @@ export class SiteBuilder3D {
         const armLen = cfg?.armLengthM ?? 0;
         const armDir = ((cfg?.armDirectionDeg ?? 0) * Math.PI) / 180;
         const fixtures = Math.max(1, cfg?.fixtures ?? 1);
+        if (cfg?.mount === 'inground' || cfg?.mount === 'bollard') {
+            this.buildGroundLuminaire(element, node, cfg.mount, shaftHeight, cfg);
+            return;
+        }
+        const armStyle = cfg?.armStyle ?? 'straight';
+        const headStyle = cfg?.headStyle ?? (armLen > 0 ? 'street' : 'globe');
+        // Punto de montaje = centro óptico de la luminaria: MISMO que usa el
+        // cálculo (`siteLuminaires`): brazo `armLen` a `heightM − 0,10 m`.
+        const headY = shaftHeight - (armLen > 0 ? 0.1 : 0);
+        const metal = this.matFor('#8b939c', 1, 0.35);
+        const housingMat = this.matFor('#5b636d', 1, 0.3);
+
+        // Fuste cónico con placa base (más delgado arriba, como un poste real).
+        const rise = armStyle === 'curved' ? Math.min(1.6, Math.max(0.5, armLen * 0.35)) : 0;
+        const shaftTop =
+            armLen <= 0
+                ? shaftHeight
+                : armStyle === 'curved'
+                  ? headY - 0.2
+                  : armStyle === 'bracket'
+                    ? headY + 0.15
+                    : headY + 0.1;
         const shaft = MeshBuilder.CreateCylinder(
             `site_pole_shaft_${element.id}`,
-            { diameter: 0.15, height: shaftHeight },
+            {
+                diameterTop: Math.max(0.07, 0.12 - shaftHeight * 0.003),
+                diameterBottom: Math.min(0.24, 0.14 + shaftHeight * 0.006),
+                height: shaftTop,
+                tessellation: 16,
+            },
             this.scene,
         );
-        shaft.position.y = shaftHeight / 2;
-        shaft.material = this.matFor('#6b7280', 1, 0.2);
+        shaft.position.y = shaftTop / 2;
+        shaft.material = metal;
         shaft.parent = node;
+        const plate = MeshBuilder.CreateCylinder(
+            `site_pole_base_${element.id}`,
+            { diameter: 0.34, height: 0.05, tessellation: 16 },
+            this.scene,
+        );
+        plate.position.y = 0.025;
+        plate.material = metal;
+        plate.parent = node;
+
+        const tube = (name: string, path: Vector3[], radius: number) => {
+            const mesh = MeshBuilder.CreateTube(name, { path, radius, tessellation: 10, cap: Mesh.CAP_ALL }, this.scene);
+            mesh.material = metal;
+            mesh.parent = node;
+        };
 
         for (let i = 0; i < fixtures; i++) {
-            // Reparte las luminarias alrededor del eje (una sola → según armDir).
+            // Reparte las luminarias alrededor del eje (una sola → según armDir;
+            // dos → doble brazo en T, como los postes de avenida).
             const ang =
                 fixtures === 1 ? armDir : armDir + (i * 2 * Math.PI) / fixtures;
-            const hx = Math.sin(ang) * armLen;
-            const hz = -Math.cos(ang) * armLen;
+            const dx = Math.sin(ang);
+            const dz = -Math.cos(ang);
+            const hx = dx * armLen;
+            const hz = dz * armLen;
+            const out = (t: number, y: number) => new Vector3(dx * armLen * t, y, dz * armLen * t);
             if (armLen > 0) {
-                const arm = MeshBuilder.CreateBox(
-                    `site_pole_arm_${element.id}_${i}`,
-                    { width: 0.06, height: 0.06, depth: armLen },
-                    this.scene,
-                );
-                arm.position.set(hx / 2, shaftHeight - 0.1, hz / 2);
-                arm.lookAt(new Vector3(hx, shaftHeight - 0.1, hz));
-                arm.material = this.matFor('#6b7280', 1, 0.2);
-                arm.parent = node;
+                if (armStyle === 'curved') {
+                    // Báculo: sube desde el fuste y se curva hacia la vía (Bézier cúbica).
+                    const p0 = new Vector3(0, shaftTop - 0.05, 0);
+                    const p1 = new Vector3(0, headY + rise, 0);
+                    const p2 = out(0.45, headY + rise);
+                    const p3 = new Vector3(hx, headY + 0.08, hz);
+                    const path: Vector3[] = [];
+                    for (let k = 0; k <= 18; k++) {
+                        const t = k / 18;
+                        const u = 1 - t;
+                        path.push(
+                            p0.scale(u * u * u)
+                                .add(p1.scale(3 * u * u * t))
+                                .add(p2.scale(3 * u * t * t))
+                                .add(p3.scale(t * t * t)),
+                        );
+                    }
+                    tube(`site_pole_arm_${element.id}_${i}`, path, 0.04);
+                } else if (armStyle === 'bracket') {
+                    // Acodado: brazo inclinado ~12° + tirante diagonal al fuste.
+                    const start = new Vector3(0, headY - Math.tan((12 * Math.PI) / 180) * armLen, 0);
+                    tube(`site_pole_arm_${element.id}_${i}`, [start, new Vector3(hx, headY + 0.06, hz)], 0.035);
+                    const brace = Math.min(1.2, armLen * 0.5);
+                    tube(
+                        `site_pole_brace_${element.id}_${i}`,
+                        [new Vector3(0, start.y - brace, 0), out(0.55, start.y + (headY - start.y) * 0.55)],
+                        0.022,
+                    );
+                } else {
+                    // Recto con leve subida (5°), como un brazo de alumbrado estándar.
+                    const start = new Vector3(0, headY - Math.tan((5 * Math.PI) / 180) * armLen, 0);
+                    tube(`site_pole_arm_${element.id}_${i}`, [start, new Vector3(hx, headY + 0.05, hz)], 0.035);
+                }
             }
-            const head = MeshBuilder.CreateSphere(
-                `site_pole_head_${element.id}_${i}`,
-                { diameter: 0.35 },
-                this.scene,
+            const head = this.buildLuminaireHead(
+                element.id,
+                i,
+                node,
+                new Vector3(hx, headY, hz),
+                Math.atan2(dx, dz),
+                headStyle,
+                cfg?.headSizeM,
+                housingMat,
             );
-            head.position.set(hx, shaftHeight - (armLen > 0 ? 0.1 : 0), hz);
-            head.material = this.getLampMaterial();
-            head.parent = node;
             this.lampHeads.push({
                 head,
                 pole: node,
@@ -2948,6 +3263,141 @@ export class SiteBuilder3D {
                     cfg?.maintenanceFactor ?? DEFAULT_LUMINAIRE.maintenance,
             });
         }
+    }
+
+    /**
+     * Luminaria de piso: bolardo (cuerpo cilíndrico con anillo luminoso
+     * arriba, a `heightM`, luminaria del modo noche como un poste) o empotrada
+     * (disco al ras del piso que brilla; no ilumina el suelo, igual que en el
+     * cálculo).
+     */
+    private buildGroundLuminaire(
+        element: SiteElement,
+        node: TransformNode,
+        mount: 'bollard' | 'inground',
+        heightM: number,
+        cfg: NonNullable<ReturnType<typeof poleCfg>>,
+    ) {
+        if (mount === 'inground') {
+            const ring = MeshBuilder.CreateCylinder(
+                `site_inground_ring_${element.id}`,
+                { diameter: 0.24, height: 0.03, tessellation: 20 },
+                this.scene,
+            );
+            ring.position.y = 0.015;
+            ring.material = this.matFor('#9ca3af', 1, 0.4);
+            ring.parent = node;
+            const lens = MeshBuilder.CreateCylinder(
+                `site_inground_lens_${element.id}`,
+                { diameter: 0.18, height: 0.035, tessellation: 20 },
+                this.scene,
+            );
+            lens.position.y = 0.02;
+            lens.material = this.getLampMaterial();
+            lens.parent = node;
+            return;
+        }
+        const h = Math.max(0.4, heightM);
+        const body = MeshBuilder.CreateCylinder(
+            `site_bollard_body_${element.id}`,
+            { diameter: 0.18, height: h - 0.14, tessellation: 16 },
+            this.scene,
+        );
+        body.position.y = (h - 0.14) / 2;
+        body.material = this.matFor('#4b5563', 1, 0.25);
+        body.parent = node;
+        const lens = MeshBuilder.CreateCylinder(
+            `site_pole_head_${element.id}_0`,
+            { diameter: 0.17, height: 0.1, tessellation: 16 },
+            this.scene,
+        );
+        // Centro del anillo luminoso = altura de montaje (la del cálculo).
+        lens.position.y = h;
+        lens.material = this.getLampMaterial();
+        lens.parent = node;
+        const cap = MeshBuilder.CreateCylinder(
+            `site_bollard_cap_${element.id}`,
+            { diameter: 0.2, height: 0.05, tessellation: 16 },
+            this.scene,
+        );
+        cap.position.y = h + 0.075;
+        cap.material = this.matFor('#374151', 1, 0.25);
+        cap.parent = node;
+        this.lampHeads.push({
+            head: lens,
+            pole: node,
+            lumens: cfg.lumens,
+            productId: cfg.productId,
+            beamDeg: cfg.beamAngleDeg ?? DEFAULT_LUMINAIRE.beamDeg,
+            maintenance: cfg.maintenanceFactor ?? DEFAULT_LUMINAIRE.maintenance,
+        });
+    }
+
+    /**
+     * Cuerpo de una luminaria de poste. Devuelve la LENTE (material de lámpara,
+     * centrada en el punto de montaje): es la que brilla de noche y cuya
+     * posición usa el cálculo del 3D.
+     */
+    private buildLuminaireHead(
+        elementId: string,
+        index: number,
+        parent: TransformNode,
+        at: Vector3,
+        yaw: number,
+        style: 'street' | 'globe' | 'flood',
+        size: { length: number; width: number; height: number } | undefined,
+        housingMat: StandardMaterial,
+    ): Mesh {
+        const root = new TransformNode(`site_pole_headroot_${elementId}_${index}`, this.scene);
+        root.parent = parent;
+        root.position.copyFrom(at);
+        root.rotation.y = yaw;
+        const clamp = (value: number | undefined, lo: number, hi: number, fallback: number) =>
+            value && value > 0 ? Math.min(hi, Math.max(lo, value)) : fallback;
+        if (style === 'globe') {
+            const cap = MeshBuilder.CreateCylinder(
+                `site_pole_cap_${elementId}_${index}`,
+                { diameterTop: 0.08, diameterBottom: 0.22, height: 0.1, tessellation: 12 },
+                this.scene,
+            );
+            cap.position.y = 0.22;
+            cap.material = housingMat;
+            cap.parent = root;
+            const globe = MeshBuilder.CreateSphere(
+                `site_pole_head_${elementId}_${index}`,
+                { diameter: clamp(size?.width || size?.length, 0.25, 0.6, 0.4) },
+                this.scene,
+            );
+            globe.material = this.getLampMaterial();
+            globe.parent = root;
+            return globe;
+        }
+        // Medidas de la ficha LDT/IES (largo a lo largo del brazo, ancho, alto).
+        const length = clamp(size?.length, 0.25, 1.4, style === 'flood' ? 0.4 : 0.62);
+        const width = clamp(size?.width, 0.15, 0.8, style === 'flood' ? 0.32 : 0.26);
+        const height = clamp(size?.height, 0.05, 0.3, style === 'flood' ? 0.14 : 0.09);
+        const housing = MeshBuilder.CreateBox(
+            `site_pole_housing_${elementId}_${index}`,
+            { width, height, depth: length },
+            this.scene,
+        );
+        housing.position.set(0, height / 2 + 0.01, 0);
+        housing.material = housingMat;
+        housing.parent = root;
+        if (style === 'flood') {
+            // Proyector: inclinado ~25° hacia afuera.
+            root.rotation.x = (25 * Math.PI) / 180;
+        }
+        const lens = MeshBuilder.CreateBox(
+            `site_pole_head_${elementId}_${index}`,
+            { width: width * 0.86, height: 0.012, depth: length * 0.82 },
+            this.scene,
+        );
+        // Centro de la lente = punto de montaje (lo que usa el cálculo).
+        lens.position.set(0, 0, 0);
+        lens.material = this.getLampMaterial();
+        lens.parent = root;
+        return lens;
     }
 
     /**
@@ -3308,6 +3758,7 @@ export class SiteBuilder3D {
             (id) => this.elementsById.get(id),
             scaleM,
             circuit.tgOutputId,
+            this.elementsById.values(),
         );
         const points = this.hasRoutedModes(circuit)
             ? this.aerialFeederPoints({ ...circuit, waypoints }, scaleM)
@@ -3438,15 +3889,27 @@ export class SiteBuilder3D {
             }
             const planA = path.waypoints[i - 1];
             const planB = path.waypoints[i];
-            if (!bow) {
-                // Tendido "plano" (sin modo definido): recto, sin arco ni catenaria.
-                points.push(at(i, currentLevel));
-                continue;
-            }
             const yA = restY(i - 1, currentLevel);
             const yB = restY(i, currentLevel);
             const spanM =
                 Math.hypot(planB.x - planA.x, planB.y - planA.y) * scaleM;
+            // Subterráneo / por el suelo: el cable SIGUE el suelo real en cada
+            // punto (plataformas, taludes, relieve). Antes se interpolaba en
+            // línea recta entre los extremos: entre dos plataformas a distinta
+            // cota el cable "subterráneo" cruzaba por el aire en diagonal.
+            if (!aerial) {
+                const offset = currentLevel === 'underground' ? -depth - 0.06 : 0;
+                const steps = Math.max(2, Math.min(80, Math.ceil(spanM / 0.5)));
+                for (let k = 1; k <= steps; k++) {
+                    const t = k / steps;
+                    const plan = bow
+                        ? bowedPoint(planA, planB, scaleM, bow, t, path.route?.curveSide, path.route?.curveOffsetM)
+                        : { x: planA.x + (planB.x - planA.x) * t, y: planA.y + (planB.y - planA.y) * t };
+                    const xz = worldXZ(plan);
+                    points.push(new Vector3(xz.x, groundRel(plan) + offset, xz.z));
+                }
+                continue;
+            }
             const steps = 12;
             const drops =
                 aerial && spanM >= 0.05
@@ -3458,7 +3921,7 @@ export class SiteBuilder3D {
                     planA,
                     planB,
                     scaleM,
-                    bow,
+                    'aerial',
                     t,
                     path.route?.curveSide,
                     path.route?.curveOffsetM,

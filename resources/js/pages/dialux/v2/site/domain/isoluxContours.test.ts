@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LightingResult } from '@/pages/dialux/hooks/types';
-import { areaIsolines, areaIsoluxLevels, isoluxContours, isoluxLevelsFor } from './isoluxContours';
+import { areaIsolines, areaIsoluxLevels, areaRaster, isoluxContours, isoluxLevelsFor } from './isoluxContours';
 
 function grid(cols: number, rows: number, f: (x: number, y: number) => number | null): LightingResult {
     const values: Array<number | null> = [];
@@ -93,5 +93,58 @@ describe('curvas de un espacio con la curva de su norma', () => {
         expect(iso.requiredLux).toBeNull();
         expect(iso.lines.every((line) => !line.required)).toBe(true);
         expect(iso.levels.length).toBeGreaterThan(2);
+    });
+});
+
+describe('curvas por espacio sobre malla continua (compatibles con el dibujo)', () => {
+    // Franja angosta (vereda 20 × 2 m) calculada con UNA fila de puntos: por
+    // parche no hay curvas (marching squares necesita 2 filas).
+    const strip = {
+        grid_values: [5, 10, 20, 30, 40, 30, 20, 10, 5, 2],
+        grid_cols: 10,
+        grid_rows: 1,
+        grid_origin_x: 0,
+        grid_origin_y: 0,
+        grid_cell_width: 2,
+        grid_cell_height: 2,
+    } as unknown as LightingResult;
+    const outline = [
+        { x: 0, y: 0 },
+        { x: 20, y: 0 },
+        { x: 20, y: 2 },
+        { x: 0, y: 2 },
+    ];
+
+    it('un espacio de una sola fila de puntos igual tiene curvas', () => {
+        expect(areaIsolines([strip], null).lines).toHaveLength(0);
+        const iso = areaIsolines([strip], 20, [outline]);
+        expect(iso.lines.length).toBeGreaterThan(0);
+        expect(iso.lines.some((line) => line.required)).toBe(true);
+    });
+
+    it('la malla de dibujo conserva los valores calculados y no se aleja del contorno', () => {
+        const raster = areaRaster([strip], [outline])!;
+        const step = raster.grid_cell_width ?? 0;
+        const cols = raster.grid_cols;
+        // Centro de la celda de cálculo 4 (x = 9 m, y = 1 m) = 40 lx.
+        const x0 = (raster.grid_origin_x ?? 0) + step / 2;
+        const y0 = (raster.grid_origin_y ?? 0) + step / 2;
+        const c = Math.round((9 - x0) / step);
+        const r = Math.round((1 - y0) / step);
+        // Interpolación bilineal: a ≤ medio paso del punto, entre 40 y su vecino (30).
+        const value = raster.grid_values[r * cols + c] ?? 0;
+        expect(Math.abs(x0 + c * step - 9)).toBeLessThanOrEqual(step / 2 + 1e-9);
+        expect(value).toBeGreaterThanOrEqual(38 - 1e-9);
+        expect(value).toBeLessThanOrEqual(40 + 1e-9);
+        // Ningún nodo con valor a más de 1,5 pasos del contorno.
+        raster.grid_values.forEach((value, index) => {
+            if (value === null) return;
+            const x = x0 + (index % cols) * step;
+            const y = y0 + Math.floor(index / cols) * step;
+            expect(x).toBeGreaterThanOrEqual(-step * 1.51);
+            expect(x).toBeLessThanOrEqual(20 + step * 1.51);
+            expect(y).toBeGreaterThanOrEqual(-step * 1.51);
+            expect(y).toBeLessThanOrEqual(2 + step * 1.51);
+        });
     });
 });

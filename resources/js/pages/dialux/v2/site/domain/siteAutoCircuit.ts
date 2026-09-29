@@ -99,7 +99,11 @@ const isLoad = (element: SiteElement) =>
     element.visible !== false &&
     (element.type === 'pole' ||
         element.type === 'outlet' ||
-        ((element.type === 'gate' || element.type === 'canopy') &&
+        ((element.type === 'gate' ||
+            element.type === 'canopy' ||
+            element.type === 'ramp' ||
+            element.type === 'stair' ||
+            element.type === 'pool') &&
             siteElementLoadW(element).watts > 0));
 
 /** Barrido angular: ordena por ángulo empezando después del mayor hueco. */
@@ -209,7 +213,7 @@ export function planAutoCircuits(
             origin,
             ofKind.map(({ element, at }) => ({ id: element.id, at })),
         )) {
-            const watts = siteElementLoadW(byId.get(point.id)!).watts;
+            const watts = siteElementLoadW(byId.get(point.id)!, site.terrainScaleM || 1).watts;
             if (watts > maxW) {
                 warnings.push(
                     `${byId.get(point.id)!.label}: ${watts} W supera el máximo por circuito (${maxW} W); va en un circuito propio.`,

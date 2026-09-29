@@ -26,6 +26,12 @@ export interface LuminaireCatalogItem {
     distributionType: string | null;
     sourceFormat: string | null;
     isGlobal: boolean;
+    /** Foto del producto (subida al importar o en el catálogo de la V1). */
+    imageUrl: string | null;
+    /** Medidas del cuerpo (m) según la ficha LDT/IES; null si no las trae. */
+    dimensions: { length: number; width: number; height: number } | null;
+    articleNumber: string | null;
+    efficacyLmW: number | null;
 }
 
 /** Matriz fotométrica (misma forma que `Fixture.photometricWeb` de v1). */
@@ -63,7 +69,25 @@ function toItem(raw: Record<string, unknown>): LuminaireCatalogItem {
         distributionType: (raw.distribution_type as string | null) ?? null,
         sourceFormat: (raw.source_format as string | null) ?? null,
         isGlobal: Boolean(raw.is_global),
+        imageUrl: typeof raw.product_image_url === 'string' ? raw.product_image_url : null,
+        dimensions: toDimensions(raw.dimensions),
+        articleNumber:
+            (raw.article_number as string | null) ?? (raw.catalog_number as string | null) ?? null,
+        efficacyLmW:
+            num(raw.efficiency) ??
+            (num(raw.total_lumens) && num(raw.power_watts)
+                ? (num(raw.total_lumens) as number) / (num(raw.power_watts) as number)
+                : null),
     };
+}
+
+function toDimensions(raw: unknown): LuminaireCatalogItem['dimensions'] {
+    if (!raw || typeof raw !== 'object') return null;
+    const d = raw as Record<string, unknown>;
+    const length = num(d.length) ?? 0;
+    const width = num(d.width) ?? 0;
+    const height = num(d.height) ?? 0;
+    return length > 0 || width > 0 ? { length, width, height } : null;
 }
 
 async function getJson(url: string): Promise<Record<string, unknown>> {
@@ -94,6 +118,13 @@ export function loadLuminaireCatalog(
             });
     }
     return catalogPromise;
+}
+
+/** Producto COMPLETO del catálogo (ficha: report_data, report_assets, foto, logo, matriz) para el informe. */
+export function loadProductDetail(id: number): Promise<Record<string, unknown> | null> {
+    return getJson(productShow.url(id))
+        .then((json) => (json.product as Record<string, unknown>) ?? null)
+        .catch(() => null);
 }
 
 const photometryCache = new Map<number, Promise<LuminairePhotometry | null>>();
@@ -134,9 +165,11 @@ function readXsrfToken(): string {
 /** Sube un archivo IES/LDT/GLDF al MISMO catálogo que usa v1 (queda disponible en ambos editores). */
 export async function importLuminaireFile(
     file: File,
+    image?: File,
 ): Promise<{ item: LuminaireCatalogItem; warnings: string[] }> {
     const body = new FormData();
     body.append('file', file);
+    if (image) body.append('product_image', image);
     const response = await fetch(importMethod.url(), {
         method: 'POST',
         headers: {

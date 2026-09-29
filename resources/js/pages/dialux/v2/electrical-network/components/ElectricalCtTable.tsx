@@ -1,5 +1,5 @@
 import { AlertTriangle, Check, Wrench } from 'lucide-react';
-import { Fragment, useState } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { circuitCurrent } from '@/pages/dialux/electrical/engine/formulas';
 import { CONDUCTOR_SECTION_OPTIONS } from '@/pages/dialux/hooks/types';
 import {
@@ -304,70 +304,109 @@ export function ElectricalCtTable({
         return result;
     };
     const indent = (depth: number) => `${'↳ '.repeat(Math.min(depth, 4))}`;
+    // Numeración de TG como en la planilla: con varios TG de nombre genérico → TG-1, TG-2…
+    const mainPanels = data.nodes.filter((node) => node.type === 'main_panel');
+    const labelOf = (node: ElectricalNode) =>
+        node.type === 'main_panel' && mainPanels.length > 1 && /^TG$/i.test(node.label.trim())
+            ? `TG-${mainPanels.indexOf(node) + 1}`
+            : node.label;
+    /** Salidas de la planta de un tablero (TG / sub tablero de planta), filas C-1… */
+    const renderSiteOutputs = (node: ElectricalNode, kind: string, select: () => void) => {
+        const ownRows = siteRowsOf(node);
+        return ownRows.map((row, index) => (
+            <CircuitRow
+                key={`${node.id}:${row.rootConductorId}:site`}
+                circuit={{ ...row, moduleId: 0, moduleName: 'Planta general' }}
+                onUpdate={onUpdateCircuit}
+                readOnly
+                description={{
+                    title: row.outputLabel,
+                    detail: `${row.loadsDetail}${row.firstTargetLabel ? ` · → ${row.firstTargetLabel}` : ''} (se edita en la planta general)`,
+                }}
+                panelHeader={
+                    index === 0
+                        ? { rowSpan: ownRows.length, panelKind: kind, panelLabel: labelOf(node), onSelect: select }
+                        : undefined
+                }
+            />
+        ));
+    };
+    /**
+     * Pie de un TG (como la planilla: el TG va AL FINAL de su árbol): sus
+     * salidas propias de la planta y la fila del alimentador general.
+     */
+    const renderTgFooter = (block: (typeof tree.blocks)[number]) => {
+        const node = nodes.get(block.nodeId);
+        if (!node) return null;
+        const loads = loadsBelow(node.id);
+        return (
+            <Fragment key={`${node.id}:footer`}>
+                <tr className="bg-violet-100 font-bold text-violet-900 dark:bg-violet-950/40 dark:text-violet-200">
+                    <td colSpan={COLS} className="px-3 py-1.5">
+                        {labelOf(node)} · salidas propias y alimentador general (caída aguas arriba desde el suministro)
+                    </td>
+                </tr>
+                {renderSiteOutputs(node, 'TG', () => onSelect(block.edgeId ?? node.id))}
+                <GeneralRow
+                    tgNodeId={node.id}
+                    displayLabel={labelOf(node)}
+                    data={data}
+                    calculations={calculations}
+                    distributionSummaries={loads.summaries}
+                    siteRows={loads.siteRows}
+                    editableSettings
+                    onUpdate={onUpdateSettings}
+                    onUpdateEdge={onUpdateEdge}
+                />
+            </Fragment>
+        );
+    };
     const renderBlock = (block: (typeof tree.blocks)[number]) => {
         const node = nodes.get(block.nodeId);
         if (!node) return null;
         const parent = block.parentPanelId
             ? nodes.get(block.parentPanelId)
             : undefined;
+        const parentLabel = parent ? labelOf(parent) : undefined;
         const select = () => onSelect(block.edgeId ?? node.id);
-        if (node.type === 'main_panel' || node.type === 'site_panel') {
-            const ownRows = siteRowsOf(node);
+        if (node.type === 'main_panel') {
+            // Cabecera del árbol del TG; su pie (salidas + alimentador general) va al final.
+            return (
+                <tr key={node.id} className="bg-slate-800 font-bold text-white dark:bg-[#1c2740]">
+                    <td colSpan={COLS} className="px-3 py-2">
+                        ÁRBOL {labelOf(node)}
+                        {parentLabel ? ` · alimentado desde ${parentLabel}` : ''} · caída de tensión propia de este árbol
+                    </td>
+                </tr>
+            );
+        }
+        if (node.type === 'site_panel') {
             const loads = loadsBelow(node.id);
-            const kind = node.type === 'main_panel' ? 'TG' : 'ST planta';
             return (
                 <Fragment key={node.id}>
-                    <tr className="bg-slate-700 font-bold text-white dark:bg-[#263650]">
+                    <tr className="bg-slate-200 font-bold text-slate-800 dark:bg-[#344763] dark:text-white">
                         <td colSpan={COLS} className="px-3 py-1.5">
-                            {indent(block.depth)}
-                            {kind} {node.label}
-                            {parent
-                                ? ` · alimentado desde ${parent.label}`
-                                : ''}
-                            {' · '}
-                            {ownRows.length} salida(s) de la planta general
+                            {indent(block.depth)}TD (planta) {node.label}
+                            {parentLabel ? ` · alimentado desde ${parentLabel}` : ''}
                         </td>
                     </tr>
-                    {ownRows.map((row, index) => (
-                        <CircuitRow
-                            key={`${node.id}:${row.rootConductorId}:site`}
-                            circuit={{
-                                ...row,
-                                moduleId: 0,
-                                moduleName: 'Planta general',
-                            }}
-                            onUpdate={onUpdateCircuit}
-                            readOnly
-                            description={{
-                                title: row.outputLabel,
-                                detail: `${row.loadsDetail}${row.firstTargetLabel ? ` · → ${row.firstTargetLabel}` : ''} (se edita en la planta general)`,
-                            }}
-                            panelHeader={
-                                index === 0
-                                    ? {
-                                          rowSpan: ownRows.length,
-                                          panelKind: kind,
-                                          panelLabel: node.label,
-                                          onSelect: select,
-                                      }
-                                    : undefined
-                            }
-                        />
-                    ))}
+                    {renderSiteOutputs(node, 'TD', select)}
                     <GeneralRow
                         tgNodeId={node.id}
+                        displayLabel={node.label}
                         data={data}
                         calculations={calculations}
                         distributionSummaries={loads.summaries}
                         siteRows={loads.siteRows}
-                        editableSettings={node.type === 'main_panel'}
+                        editableSettings={false}
                         onUpdate={onUpdateSettings}
                         onUpdateEdge={onUpdateEdge}
                     />
                 </Fragment>
             );
         }
-        // Tablero de un módulo (TD / Sub‑TD) con sus salidas y su CG.
+        // Tablero de un módulo (TD / Sub‑TD): salidas C-1… y luego SU fila de
+        // alimentador (caída aguas arriba), como la planilla.
         const { outputRows, summaryRows } = moduleRowsOf(node);
         const panelKind = parent?.type === 'main_panel' ? 'TD' : 'Sub-TD';
         const entersModule = parent?.moduleId !== node.moduleId;
@@ -390,7 +429,7 @@ export function ElectricalCtTable({
                         {indent(block.depth)}
                         {panelKind} {node.label} · {node.moduleName ?? 'Módulo'}
                         {node.sceneName ? ` · ${node.sceneName}` : ''}
-                        {parent ? ` · alimentado desde ${parent.label}` : ''}
+                        {parentLabel ? ` · alimentado desde ${parentLabel}` : ''}
                         {' · '}
                         {outputRows.length} salida(s)
                     </td>
@@ -407,16 +446,48 @@ export function ElectricalCtTable({
                         }
                     />
                 ))}
-                {summaryRows.map((circuit) => (
-                    <CircuitRow
-                        key={`${node.id}:${circuit.rootConductorId}:CG`}
-                        circuit={circuit}
-                        onUpdate={onUpdateCircuit}
-                        panelHeader={panelHeader(1)}
-                    />
-                ))}
+                {summaryRows.length > 0
+                    ? summaryRows.map((circuit) => (
+                          <CircuitRow
+                              key={`${node.id}:${circuit.rootConductorId}:CG`}
+                              circuit={circuit}
+                              onUpdate={onUpdateCircuit}
+                              panelHeader={panelHeader(1)}
+                          />
+                      ))
+                    : (
+                          // El módulo no publica fila resumen de su tablero raíz
+                          // (en la V1 solo existe si otro tablero del módulo lo
+                          // alimenta): se arma desde el alimentador de la red.
+                          <GeneralRow
+                              tgNodeId={node.id}
+                              displayLabel={`${panelKind} ${node.label}`}
+                              data={data}
+                              calculations={calculations}
+                              distributionSummaries={outputRows}
+                              siteRows={[]}
+                              editableSettings={false}
+                              onUpdate={onUpdateSettings}
+                              onUpdateEdge={onUpdateEdge}
+                          />
+                      )}
             </Fragment>
         );
+    };
+    /** Filas en el orden de la planilla: por cada TG, sus TD/Sub-TD y al final el TG. */
+    const renderTree = () => {
+        const rows: ReactNode[] = [];
+        let openTg: (typeof tree.blocks)[number] | null = null;
+        for (const block of tree.blocks) {
+            const node = nodes.get(block.nodeId);
+            if (node?.type === 'main_panel') {
+                if (openTg) rows.push(renderTgFooter(openTg));
+                openTg = block;
+            }
+            rows.push(renderBlock(block));
+        }
+        if (openTg) rows.push(renderTgFooter(openTg));
+        return rows;
     };
 
     return (
@@ -467,7 +538,7 @@ export function ElectricalCtTable({
                 <table className="w-full min-w-[3500px] border-collapse text-left text-[10px] text-slate-700 dark:text-slate-200">
                     <FullHeader />
                     <tbody>
-                        {tree.blocks.map((block) => renderBlock(block))}
+                        {renderTree()}
                         {unreachablePanels.map((node) => (
                             <tr
                                 key={node.id}
@@ -560,10 +631,13 @@ function GeneralRow({
     distributionSummaries,
     siteRows = [],
     editableSettings = true,
+    displayLabel,
     onUpdate,
     onUpdateEdge,
 }: {
     tgNodeId?: string;
+    /** Etiqueta en la planilla (TG-1, TD-01…); por defecto la del nodo. */
+    displayLabel?: string;
     /** Solo el TG edita los ajustes generales de la red (fp, sistema, T). */
     editableSettings?: boolean;
     data: ElectricalNetworkData;
@@ -636,13 +710,17 @@ function GeneralRow({
     return (
         <tr className="border-b-4 border-violet-300 bg-violet-50/80 font-semibold dark:border-violet-900 dark:bg-violet-950/20">
             <Mono
-                value={`${tgNode?.label ?? 'TG'} · ${tgNode?.type === 'site_panel' ? 'Sub tablero' : 'General'}`}
+                value={`${displayLabel ?? tgNode?.label ?? 'TG'} · ${tgNode?.type === 'main_panel' ? 'Alim. general' : 'Alimentador'}`}
                 accent
             />
             <Mono value="CG1" accent />
             <Description
-                title={`Resumen de ${tgNode?.label ?? 'TG'}`}
-                detail={`${distributionSummaries.length} tablero(s) de módulo + ${siteRows.length} salida(s) de la planta general; alimentador que llega a este tablero`}
+                title={`${displayLabel ?? tgNode?.label ?? 'TG'} · caída aguas arriba`}
+                detail={
+                    tgNode?.type === 'module_panel_port'
+                        ? `${distributionSummaries.length} salida(s) del tablero; alimentador desde su tablero padre (longitud horizontal + vertical de la red)`
+                        : `${distributionSummaries.length} tablero(s) + ${siteRows.length} salida(s) de la planta general; alimentador que llega a este tablero`
+                }
             />
             <Mono value="0" />
             <Mono value="0" />

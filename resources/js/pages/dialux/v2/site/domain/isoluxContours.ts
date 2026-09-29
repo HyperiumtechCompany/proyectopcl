@@ -195,14 +195,20 @@ const areaCache = new WeakMap<LightingResult, Map<string, AreaIsolines>>();
  * curva del Ē exigido por su norma, para medir el espacio contra su
  * requisito. Caché por la malla del primer parche (cambia con cada cálculo).
  */
-export function areaIsolines(results: LightingResult[], requiredLux: number | null): AreaIsolines {
-    const key = `${requiredLux ?? ''}`;
+export function areaIsolines(
+    results: LightingResult[],
+    requiredLux: number | null,
+    /** Contorno(s) de lo calculado (m): las curvas se trazan sobre su malla continua (`areaRaster`). */
+    polygonsM?: Point2D[][],
+): AreaIsolines {
+    const key = `${requiredLux ?? ''}|${polygonsM ? polygonsM.map((polygon) => polygon.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(';')).join('/') : ''}`;
     const first = results[0];
     const cached = first ? areaCache.get(first)?.get(key) : undefined;
     if (cached) return cached;
     const levels = areaIsoluxLevels(results);
     const lines: AreaIsolines['lines'] = [];
-    for (const result of results) {
+    const raster = polygonsM ? areaRaster(results, polygonsM) : null;
+    for (const result of raster ? [raster] : results) {
         for (const line of isoluxContours(result, levels.filter((level) => level !== requiredLux))) {
             lines.push({ ...line, required: false });
         }
@@ -221,3 +227,134 @@ export function areaIsolines(results: LightingResult[], requiredLux: number | nu
     return value;
 }
 
+
+/** Tope de nodos de la malla de dibujo de un espacio (rendimiento). */
+const RASTER_MAX_NODES = 60000;
+
+/** Valor interpolado (bilineal entre centros de celda) de UN parche en (x, y) m; null si fuera de su malla. */
+function sampleResult(result: LightingResult, x: number, y: number): number | null {
+    const cols = result.grid_cols;
+    const rows = Math.round(result.grid_values.length / Math.max(1, cols));
+    const cw = result.grid_cell_width ?? 0;
+    const ch = result.grid_cell_height ?? 0;
+    if (cols < 1 || rows < 1 || cw <= 0 || ch <= 0) return null;
+    const ox = result.grid_origin_x ?? 0;
+    const oy = result.grid_origin_y ?? 0;
+    if (x < ox - cw * 0.01 || x > ox + cols * cw + cw * 0.01 || y < oy - ch * 0.01 || y > oy + rows * ch + ch * 0.01) {
+        return null;
+    }
+    const fc = Math.min(cols - 1, Math.max(0, (x - ox) / cw - 0.5));
+    const fr = Math.min(rows - 1, Math.max(0, (y - oy) / ch - 0.5));
+    const c0 = Math.floor(fc);
+    const r0 = Math.floor(fr);
+    const c1 = Math.min(cols - 1, c0 + 1);
+    const r1 = Math.min(rows - 1, r0 + 1);
+    const tx = fc - c0;
+    const ty = fr - r0;
+    let sum = 0;
+    let weight = 0;
+    for (const [r, c, w] of [
+        [r0, c0, (1 - tx) * (1 - ty)],
+        [r0, c1, tx * (1 - ty)],
+        [r1, c0, (1 - tx) * ty],
+        [r1, c1, tx * ty],
+    ] as Array<[number, number, number]>) {
+        const value = result.grid_values[r * cols + c];
+        if (value === null || value === undefined || w <= 0) continue;
+        sum += value * w;
+        weight += w;
+    }
+    if (weight > 1e-9) return sum / weight;
+    // Esquinas vacías (borde del espacio): la celda válida más cercana.
+    const value = result.grid_values[Math.round(fr) * cols + Math.round(fc)];
+    return value ?? null;
+}
+
+function pointInPolygonM(p: Point2D, polygon: Point2D[]): boolean {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const a = polygon[i];
+        const b = polygon[j];
+        if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+    }
+    return inside;
+}
+
+function distanceToPolygonM(p: Point2D, polygon: Point2D[]): number {
+    let best = Infinity;
+    for (let i = 0; i < polygon.length; i++) {
+        const a = polygon[i];
+        const b = polygon[(i + 1) % polygon.length];
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const len = dx * dx + dy * dy || 1;
+        const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len));
+        best = Math.min(best, Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t)));
+    }
+    return best;
+}
+
+/**
+ * Malla de DIBUJO continua de un espacio (metros): todos sus parches
+ * reinterpolados sobre una sola grilla fina que cubre el contorno del
+ * espacio (+ un paso afuera, para que las curvas lleguen al borde; el dibujo
+ * se recorta al contorno). Antes cada parche daba sus curvas por separado:
+ * en rampas/escaleras (trozos de 2×3 puntos) casi no salían y quedaban
+ * cortadas. Los VALORES de cálculo no cambian: solo se interpolan para dibujar.
+ */
+export function areaRaster(results: LightingResult[], polygonsM: Point2D[][]): LightingResult | null {
+    const polygons = polygonsM.filter((polygon) => polygon.length >= 3);
+    if (polygons.length === 0 || results.length === 0) return null;
+    const xs = polygons.flat().map((p) => p.x);
+    const ys = polygons.flat().map((p) => p.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const w = maxX - minX;
+    const h = maxY - minY;
+    if (!(w > 0 && h > 0)) return null;
+    const smallestCell = Math.min(
+        ...results.flatMap((result) => [result.grid_cell_width ?? Infinity, result.grid_cell_height ?? Infinity]),
+    );
+    // Paso: la mitad de la celda de cálculo (curvas suaves), al menos 5 nodos en el lado corto.
+    let step = Math.min(Number.isFinite(smallestCell) ? smallestCell / 2 : 0.5, Math.min(w, h) / 5);
+    step = Math.max(0.05, step);
+    if (((w + 2 * step) / step) * ((h + 2 * step) / step) > RASTER_MAX_NODES) {
+        step = Math.sqrt(((w + 2 * step) * (h + 2 * step)) / RASTER_MAX_NODES);
+    }
+    const x0 = minX - step;
+    const y0 = minY - step;
+    const cols = Math.ceil((w + 2 * step) / step) + 1;
+    const rows = Math.ceil((h + 2 * step) / step) + 1;
+    const values: Array<number | null> = new Array(cols * rows).fill(null);
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const p = { x: x0 + c * step, y: y0 + r * step };
+            // Dentro del espacio, o a menos de 1,5 pasos de su borde (para cerrar las curvas en el borde).
+            if (
+                !polygons.some((polygon) => pointInPolygonM(p, polygon)) &&
+                Math.min(...polygons.map((polygon) => distanceToPolygonM(p, polygon))) > step * 1.5
+            ) {
+                continue;
+            }
+            let value: number | null = null;
+            for (const result of results) {
+                value = sampleResult(result, p.x, p.y);
+                if (value !== null) break;
+            }
+            values[r * cols + c] = value;
+        }
+    }
+    // Pseudo-malla: los nodos son "centros de celda" de `isoluxContours`.
+    return {
+        ...results[0],
+        grid_values: values,
+        grid_cols: cols,
+        grid_rows: rows,
+        grid_origin_x: x0 - step / 2,
+        grid_origin_y: y0 - step / 2,
+        grid_cell_width: step,
+        grid_cell_height: step,
+    } as LightingResult;
+}

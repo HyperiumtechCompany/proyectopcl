@@ -1,3 +1,4 @@
+import { moduleWorstCircuit } from '../../site/domain/blockConnection';
 import type { SiteOutputRow } from '../../site/domain/siteOutputs';
 import type { EdgeCalculation } from './calculations';
 import { networkRootIds } from './graph';
@@ -185,6 +186,18 @@ export function buildSingleLineDiagram(input: {
                 `Pd ${fmt(calc.demandPowerW / 1000, 2)} kW${calc.simultaneityFactor < 1 ? ` (fs ${fmt(calc.simultaneityFactor, 2)})` : ''}`,
             );
         }
+        // Tablero raíz de un módulo: ΔU de punta a punta = acumulada hasta aquí
+        // + circuito más desfavorable dentro del módulo (mismo dato que la
+        // planta y el PDF, `moduleWorstCircuit`).
+        let endToEndOver = false;
+        if (port && !port.parentPanelId && calc) {
+            const worst = moduleWorstCircuit(input.ports, port.moduleId);
+            if (worst) {
+                const total = calc.accumulatedVoltageDropPercent + worst.percent;
+                endToEndOver = total > network.settings.totalDropLimitPercent + 1e-9;
+                lines.push(`dU max ${worst.code} ${fmt(worst.percent, 2)} % -> total ${fmt(total, 2)} %`.slice(0, 40));
+            }
+        }
         if (sc && Number.isFinite(sc.ikKa)) lines.push(`I"k${sc.kind === '3F' ? '3' : '1'} ${fmt(sc.ikKa, 2)} kA`);
         if (node.type === 'service' && node.transformerKva) lines.push(`${node.transformerKva} kVA`);
         nodes.push({
@@ -194,7 +207,7 @@ export function buildSingleLineDiagram(input: {
             y: SLD_MARGIN_MM + SLD_TITLE_H_MM + depth * SLD_ROW_MM,
             title: node.label,
             lines,
-            warning: sc?.breakingCapacityOk === false,
+            warning: sc?.breakingCapacityOk === false || endToEndOver,
         });
         return x;
     };

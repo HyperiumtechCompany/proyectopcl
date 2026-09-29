@@ -112,7 +112,7 @@ export function summarizeSiteForDxf(site: SiteData): SiteDxfSummary {
         poles: elements.filter((element) => element.type === 'pole').length,
         lightingW: elements
             .filter((element) => ['pole', 'gate', 'canopy'].includes(element.type))
-            .reduce((sum, element) => sum + siteElementLoadW(element).watts, 0),
+            .reduce((sum, element) => sum + siteElementLoadW(element, site.terrainScaleM || 1).watts, 0),
         outlets: elements.filter((element) => element.type === 'outlet').length,
         panels: elements.filter((element) => element.type === 'tg_location' || element.type === 'sub_panel').length,
         cableByType: [...cable.entries()]

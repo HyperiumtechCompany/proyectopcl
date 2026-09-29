@@ -136,3 +136,25 @@ describe('diagrama unifilar (E2)', () => {
         expect(svg).toContain('DIAGRAMA UNIFILAR - Colegio');
     });
 });
+
+describe('unifilar: ΔU de punta a punta del edificio (C3)', () => {
+    it('el tablero raíz del módulo muestra acumulada + circuito más desfavorable y avisa si pasa el total', () => {
+        const data = network();
+        const circuit = (code: string, pct: number) =>
+            ({ circuitId: code, panelId: 'td', code, type: 'lighting', totalPowerW: 1, demandPowerW: 1, currentA: 1, designCurrentA: 1, lengthM: 1, calculatedHorizontalLengthM: 1, calculatedVerticalLengthM: 0, sectionMm2: 2.5, breakerA: 16, voltageDropPct: pct, cumulativeVoltageDropPct: pct, status: 'ok' }) as NonNullable<ModuleElectricalPort['circuits']>[number];
+        const ports = [
+            { ...port(1), circuits: [circuit('C-1', 1.2), circuit('C-2', 3.5)] },
+            port(2),
+            port(3),
+        ];
+        const calculations = calculateElectricalNetwork(data, ports, []);
+        const d = buildSingleLineDiagram({ network: data, calculations, ports });
+        const accumulated = calculations.find((c) => c.edgeId === 'f1')!.accumulatedVoltageDropPercent;
+        const m1 = d.nodes.find((n) => n.id === 'm1')!;
+        const total = accumulated + 3.5;
+        expect(m1.lines.join(' ')).toContain(`dU max C-2 3,50 % -> total ${total.toFixed(2).replace('.', ',')} %`);
+        expect(m1.warning).toBe(total > 4);
+        // Sin circuitos publicados: no inventa el dato.
+        expect(d.nodes.find((n) => n.id === 'm2')!.lines.join(' ')).not.toContain('dU max');
+    });
+});

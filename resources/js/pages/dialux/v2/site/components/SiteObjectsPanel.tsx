@@ -199,6 +199,7 @@ export function SiteObjectsPanel({ editor, onSelect }: Props) {
                                 (id) => elements.find((el) => el.id === id),
                                 editor.terrainScaleM,
                                 circuit.tgOutputId,
+                                elements,
                             );
                             return {
                                 id: circuit.id,
