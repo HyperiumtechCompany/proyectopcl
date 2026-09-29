@@ -10,12 +10,20 @@ import {
     Unlock,
 } from 'lucide-react';
 import { useState } from 'react';
-import { feederPathLengthM } from '../domain/aerialCableGeometry';
-import { cableWaypointElevations } from '../domain/cableElevation';
+import {
+    feederPathLengthM,
+    feederSegmentModes,
+} from '../domain/aerialCableGeometry';
+import {
+    cableProfileM,
+    cableWaypointElevations,
+} from '../domain/cableElevation';
 import { continuationCandidates } from '../domain/circuitContinuation';
+import { circuitColor } from '../domain/circuitRuns';
 import { isSpanGate } from '../domain/gateLayout';
 import { polygonArea, polygonPerimeter } from '../domain/geometry';
 import { SITE_CALCULATION_AREA_TYPES } from '../domain/siteLightingCalculation';
+import { siteCircuitLengthSplit, type SiteCableLengthSplit } from '../domain/siteNetworkBridge';
 import { normalizeTgOutputs } from '../domain/tgPanel';
 import type { Point2D, SiteCircuit, SiteElement } from '../domain/types';
 import { resolveWireEndpoints } from '../domain/wireAnchors';
@@ -280,11 +288,15 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                                 editor.siteData?.elements ?? [],
                                 editor.terrainScaleM,
                             );
+                            // Salida a la que pertenece (aunque esta conexión no toque el TG).
+                            const run = editor.circuitRuns.get(circuit.id);
                             const tg = editor.siteData?.elements.find(
                                 (item) =>
                                     item.type === 'tg_location' &&
-                                    (item.id === circuit.sourceId ||
-                                        item.id === circuit.targetId),
+                                    (run
+                                        ? item.id === run.panelId
+                                        : item.id === circuit.sourceId ||
+                                          item.id === circuit.targetId),
                             );
                             const tgOutputs = tg
                                 ? normalizeTgOutputs(
@@ -373,17 +385,32 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                                             Separar por objetos
                                         </button>
                                     )}
-                                    {liveWaypoints.length > 2 && (
-                                        <WireSegments
-                                            waypoints={liveWaypoints}
-                                            onRemove={(i) =>
-                                                editor.removeSiteCircuitWaypoint(
-                                                    circuit.id,
-                                                    i,
-                                                )
-                                            }
-                                        />
-                                    )}
+                                    <CableRunSummary
+                                        circuit={circuit}
+                                        editor={editor}
+                                    />
+                                    <CableLengthLine
+                                        split={siteCircuitLengthSplit(
+                                            circuit,
+                                            editor.siteData?.elements ?? [],
+                                            editor.terrainScaleM,
+                                        )}
+                                    />
+                                    <WireSegments
+                                        waypoints={liveWaypoints}
+                                        onRemove={(i) =>
+                                            editor.removeSiteCircuitWaypoint(
+                                                circuit.id,
+                                                i,
+                                            )
+                                        }
+                                        onReroute={(i) =>
+                                            editor.startCircuitReroute(
+                                                circuit.id,
+                                                i,
+                                            )
+                                        }
+                                    />
                                     {tgOutputs.length > 0 && (
                                         <label className="mt-1 block text-[10px] text-slate-500">
                                             Salida del TG
@@ -394,13 +421,9 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                                                     tgOutputs[0].id
                                                 }
                                                 onChange={(event) =>
-                                                    editor.updateSiteCircuit(
+                                                    editor.setCircuitRunOutput(
                                                         circuit.id,
-                                                        {
-                                                            tgOutputId:
-                                                                event.target
-                                                                    .value,
-                                                        },
+                                                        event.target.value,
                                                     )
                                                 }
                                             >
@@ -576,6 +599,16 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                                         context="circuit"
                                         onSetRoute={editor.setSiteCircuitRoute}
                                         elevationsM={waypointElevations}
+                                        profileM={cableProfileM(
+                                            liveWaypoints,
+                                            editor.siteData?.elements ?? [],
+                                            editor.terrainScaleM,
+                                            feederSegmentModes(
+                                                liveWaypoints.length,
+                                                circuit.route,
+                                                circuit.segmentModes,
+                                            ),
+                                        )}
                                         onWastePctChange={(wastePct) =>
                                             editor.updateSiteCircuit(
                                                 circuit.id,
@@ -594,10 +627,11 @@ export function SitePropertiesPanel({ editor, modules }: Props) {
                         transformadores, celdas MT, buzones, cajas de pase,
                         portones y techados. El metrado incluye recorrido en
                         planta, amarres o zanja, desniveles entre plataformas y
-                        reserva. Todavía no entra al cálculo de caída de tensión
-                        ni a la Tabla CT. Haz clic en un cable para
-                        seleccionarlo y borrarlo con Supr, o borra solo un tramo
-                        suyo abajo.
+                        reserva, separado en horizontal y vertical: es la
+                        longitud que usan las salidas (Tabla CT) y Red y CT.
+                        Al seleccionar una conexión se resalta todo el cable de
+                        su salida; con ✂ se borra un tramo y se re-traza desde
+                        ahí.
                     </p>
                 </div>
             )}
@@ -609,18 +643,7 @@ function circuitDisplayColor(
     circuit: SiteCircuit,
     editor: UseSiteEditorReturn,
 ): string {
-    const tg = editor.siteData?.elements.find(
-        (element) =>
-            element.type === 'tg_location' &&
-            (element.id === circuit.sourceId ||
-                element.id === circuit.targetId),
-    );
-    const output = tg
-        ? normalizeTgOutputs(
-              tg.config?.kind === 'tg' ? tg.config.outputs : undefined,
-          ).find((item) => item.id === circuit.tgOutputId)
-        : undefined;
-    return output?.color ?? circuit.style?.color ?? '#0891b2';
+    return circuitColor(circuit, editor.circuitRuns.get(circuit.id));
 }
 
 function CircuitContinuationControl({
@@ -745,22 +768,144 @@ function CircuitContinuationControl({
 }
 
 /**
- * "Eliminar por tramo": lista los puntos INTERIORES de un cableado (no los 2
- * extremos, que son los artefactos anclados) para quitar uno sin borrar toda
- * la conexión — fusiona los dos tramos que tocaba en uno directo.
+ * El cable COMPLETO de la salida (TG → cajas → postes…): color, rótulo y sus
+ * conexiones. Cambiar el color aquí cambia el de toda la salida.
+ */
+function CableRunSummary({
+    circuit,
+    editor,
+}: {
+    circuit: SiteCircuit;
+    editor: UseSiteEditorReturn;
+}) {
+    const run = editor.circuitRuns.get(circuit.id);
+    const color = circuitColor(circuit, run);
+    const elements = editor.siteData?.elements ?? [];
+    const circuits = editor.siteData?.circuits ?? [];
+    const labelOf = (id: string) =>
+        elements.find((element) => element.id === id)?.label ?? '?';
+    const pieces = (run?.circuitIds ?? [circuit.id])
+        .map((id) => circuits.find((item) => item.id === id))
+        .filter((item): item is SiteCircuit => Boolean(item));
+    const totalM = pieces.reduce(
+        (sum, piece) =>
+            sum +
+            siteCircuitLengthSplit(piece, elements, editor.terrainScaleM)
+                .totalM,
+        0,
+    );
+    const countLabel = pieces.length === 1 ? 'conexión' : 'conexiones';
+    return (
+        <div
+            className="mt-1 rounded border border-slate-200 p-1.5 dark:border-white/10"
+            onClick={(event) => event.stopPropagation()}
+        >
+            <div className="flex items-center gap-2">
+                <input
+                    type="color"
+                    value={color}
+                    onChange={(event) =>
+                        editor.setCircuitRunColor(circuit.id, event.target.value)
+                    }
+                    title={
+                        run?.outputId
+                            ? 'Color de la salida del TG (cambia todo su cable y el borne del tablero)'
+                            : 'Color de todo el cable'
+                    }
+                    className="h-6 w-8 shrink-0 cursor-pointer rounded border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900"
+                />
+                <div className="min-w-0 text-[10px] leading-4">
+                    <p className="font-semibold text-slate-700 dark:text-slate-200">
+                        {run
+                            ? `${run.panelLabel} · salida ${run.outputLabel}`
+                            : 'Cable sin tablero de origen'}
+                    </p>
+                    <p className="text-slate-500 dark:text-slate-400">
+                        {`${pieces.length} ${countLabel} · ${totalM.toFixed(1)} m en total`}
+                    </p>
+                </div>
+            </div>
+            {!run && (
+                <p className="mt-1 text-[9px] text-amber-600 dark:text-amber-400">
+                    No llega a ningún TG ni sub tablero: no entra al cálculo de
+                    salidas. Re-trázalo (✂) o conéctalo a un tablero.
+                </p>
+            )}
+            {pieces.length > 1 && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                    {pieces.map((piece, index) => (
+                        <button
+                            key={piece.id}
+                            type="button"
+                            onClick={() =>
+                                editor.selectWire({ kind: 'circuit', id: piece.id })
+                            }
+                            title={`${labelOf(piece.sourceId)} → ${labelOf(piece.targetId)}`}
+                            className={`max-w-full truncate rounded border px-1.5 py-0.5 text-[9px] ${
+                                piece.id === circuit.id
+                                    ? 'border-amber-400 bg-amber-50 font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-200'
+                                    : 'border-slate-300 text-slate-500 hover:border-amber-400 dark:border-slate-700 dark:text-slate-400'
+                            }`}
+                        >
+                            {`${index + 1}. ${labelOf(piece.sourceId)} → ${labelOf(piece.targetId)}`}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+/** Longitud del cable como la usa Red y CT: horizontal + vertical (subir/bajar plataformas, zanja). */
+function CableLengthLine({ split }: { split: SiteCableLengthSplit }) {
+    return (
+        <p
+            className="mt-1 text-[10px] text-slate-500 dark:text-slate-400"
+            title="Horizontal: recorrido en planta siguiendo el terreno. Vertical: subidas y bajadas de plataformas, zanja, amarres y cajas. Incluye la reserva por desperdicio. Es la longitud que usa la caída de tensión."
+        >
+            Longitud: {split.horizontalM.toFixed(1)} m horiz. +{' '}
+            {split.verticalM.toFixed(1)} m vert. ={' '}
+            <b>{split.totalM.toFixed(1)} m</b>
+        </p>
+    );
+}
+
+/**
+ * Edición por tramo de un cable:
+ *  - "✂ Tramo N": borra ese tramo y lo que sigue, y re-traza desde su punto
+ *    inicial (por otra zanja, caja de pase o plataforma) hasta el destino.
+ *  - "Quitar punto N": une los dos tramos que tocaba ese punto intermedio.
  */
 function WireSegments({
     waypoints,
     onRemove,
+    onReroute,
 }: {
     waypoints: Point2D[];
     onRemove: (vertexIndex: number) => void;
+    /** Sin él (alimentadores de la red) solo se quitan puntos. */
+    onReroute?: (fromVertexIndex: number) => void;
 }) {
+    if (waypoints.length < 2) return null;
     return (
         <div className="mt-1 flex flex-wrap gap-1">
+            {(onReroute ? waypoints.slice(1) : []).map((_, i) => (
+                <button
+                    key={`cut-${i}`}
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onReroute?.(i);
+                    }}
+                    title={`Borrar el tramo ${i + 1} (y lo que sigue) y volver a trazar desde el punto ${i}: clic = por el aire, clic derecho = por el suelo; doble clic o Enter sobre el destino. Esc lo deja como estaba.`}
+                    className="rounded border border-amber-300 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-500/40 dark:text-amber-300"
+                >
+                    ✂ Tramo {i + 1}
+                </button>
+            ))}
             {waypoints.slice(1, -1).map((_, i) => (
                 <button
-                    key={i}
+                    key={`pt-${i}`}
                     type="button"
                     onClick={(e) => {
                         e.stopPropagation();
@@ -769,7 +914,7 @@ function WireSegments({
                     title={`Quitar el punto intermedio ${i + 1} (une los dos tramos que tocaba)`}
                     className="rounded border border-slate-300 px-1.5 py-0.5 text-[9px] text-slate-500 hover:border-rose-400 hover:text-rose-600 dark:border-slate-700 dark:text-slate-400"
                 >
-                    Quitar tramo {i + 1}
+                    Quitar punto {i + 1}
                 </button>
             ))}
         </div>

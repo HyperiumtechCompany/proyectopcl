@@ -5,8 +5,8 @@ import type {
     ElectricalNode,
     ModuleElectricalPort,
 } from '../../electrical-network/domain/types';
-import { feederLengthBreakdown } from './aerialCableGeometry';
-import { cableWaypointElevations } from './cableElevation';
+import { feederLengthBreakdown, feederSegmentModes } from './aerialCableGeometry';
+import { cableProfileM } from './cableElevation';
 import type { SiteCircuit, SiteData, SiteElement } from './types';
 import { PASS_THROUGH_TYPES, resolveWireEndpoints } from './wireAnchors';
 
@@ -120,6 +120,29 @@ export function siteCircuitLengthM(
     elements: SiteElement[],
     scaleM: number,
 ): number {
+    return siteCircuitLengthSplit(circuit, elements, scaleM).totalM;
+}
+
+export interface SiteCableLengthSplit {
+    /** Recorrido horizontal (planta, pendientes suaves, catenaria), m — con reserva. */
+    horizontalM: number;
+    /** Recorrido vertical (subir/bajar plataformas, zanja, amarres, cajas), m — con reserva. */
+    verticalM: number;
+    totalM: number;
+}
+
+/**
+ * Longitud del cable separada en horizontal y vertical, como la piden Red y
+ * CT: el perfil se sigue sobre el terreno y las plataformas a lo largo de
+ * TODO el recorrido (`cableProfileM`), más las bajadas/subidas propias del
+ * tendido (zanja, amarre aéreo, cambios de modo, cajas). La reserva por
+ * desperdicio se reparte en proporción.
+ */
+export function siteCircuitLengthSplit(
+    circuit: SiteCircuit,
+    elements: SiteElement[],
+    scaleM: number,
+): SiteCableLengthSplit {
     const waypoints = resolveWireEndpoints(
         circuit.waypoints,
         circuit.sourceId,
@@ -129,14 +152,17 @@ export function siteCircuitLengthM(
         circuit.tgOutputId,
         elements,
     );
-    return feederLengthBreakdown(
+    const base = feederLengthBreakdown(waypoints, scaleM, circuit.route, circuit.segmentModes);
+    const profile = cableProfileM(
         waypoints,
+        elements,
         scaleM,
-        circuit.route,
-        circuit.segmentModes,
-        cableWaypointElevations(waypoints, elements, scaleM),
-        circuit.wastePct ?? 5,
-    ).totalM;
+        feederSegmentModes(waypoints.length, circuit.route, circuit.segmentModes),
+    );
+    const factor = 1 + Math.max(0, circuit.wastePct ?? 5) / 100;
+    const horizontalM = (profile.alongM + base.sagExtraM) * factor;
+    const verticalM = (profile.riseM + base.routeVerticalM) * factor;
+    return { horizontalM, verticalM, totalM: horizontalM + verticalM };
 }
 
 function baseEdge(
@@ -419,6 +445,10 @@ export function applySiteToNetwork(
      * cable pasan a la red; si el cable no los define, manda la red (p.ej. el
      * corrector automático de la Tabla CT).
      */
+    const liveSiteCircuitIds = new Set(
+        (site.circuits ?? []).map((circuit) => circuit.id),
+    );
+    const liveCircuitId = (id: string) => liveSiteCircuitIds.has(id);
     const feedWithCable = (
         circuit: SiteCircuit,
         upstream: ElectricalNode,
@@ -457,7 +487,7 @@ export function applySiteToNetwork(
                         edge.targetNodeId === target.id &&
                         edge.id !== existing.id,
                 );
-                if (taken?.siteCircuitId) {
+                if (taken?.siteCircuitId && liveCircuitId(taken.siteCircuitId)) {
                     conflicts.push({
                         code: 'feeder-taken',
                         siteCircuitId: circuit.id,
@@ -501,7 +531,10 @@ export function applySiteToNetwork(
             label: circuit.label ?? label,
         };
         const incoming = edges.find((edge) => edge.targetNodeId === target.id);
-        if (incoming?.siteCircuitId) {
+        // Un alimentador de un cable que YA NO EXISTE (se unió, re-trazó o
+        // borró) se reutiliza — conserva su sección y factores — en vez de
+        // bloquear al cable nuevo con "ya está alimentado".
+        if (incoming?.siteCircuitId && liveCircuitId(incoming.siteCircuitId)) {
             conflicts.push({
                 code: 'feeder-taken',
                 siteCircuitId: circuit.id,
@@ -605,13 +638,14 @@ export function applySiteToNetwork(
         const byPanel = ensureModulePorts(block.moduleId, upstream);
         const target = byPanel.get(chosen.panelId);
         if (!target) return;
+        const blockSplit = siteCircuitLengthSplit(circuit, elements, scaleM);
         feedWithCable(
             circuit,
             upstream,
             target,
             // Exterior (acometida en la fachada) + interior hasta el tablero.
-            siteCircuitLengthM(circuit, elements, scaleM) + Math.max(0, circuit.interiorLengthM ?? 0),
-            options.panelVerticalM?.(chosen.panelId) ?? 0,
+            blockSplit.horizontalM + Math.max(0, circuit.interiorLengthM ?? 0),
+            blockSplit.verticalM + (options.panelVerticalM?.(chosen.panelId) ?? 0),
             `${upstream.label} → ${moduleName}: ${target.label}`,
         );
     };
@@ -644,6 +678,7 @@ export function applySiteToNetwork(
         elements,
         (id) => rankOf(id) > 0 || blockById.has(id),
         (id) => rankOf(id) > 0,
+        (origin, end) => blockById.has(end) || rankOf(end) < rankOf(origin),
     );
     const chainPieceIds = new Set(chains.flatMap((chain) => chain.pieceIds));
     const feederCircuits = [
@@ -690,12 +725,13 @@ export function applySiteToNetwork(
         const upstream = upstreamNodeFor(upstreamElementId);
         const downstream = panelNodeFor(downstreamElementId);
         if (!upstream || !downstream) continue;
+        const panelSplit = siteCircuitLengthSplit(circuit, elements, scaleM);
         feedWithCable(
             circuit,
             upstream,
             downstream,
-            siteCircuitLengthM(circuit, elements, scaleM),
-            0,
+            panelSplit.horizontalM,
+            panelSplit.verticalM,
             `${upstream.label} → ${downstream.label}`,
         );
     }
@@ -867,6 +903,12 @@ export function passThroughFeederChains(
     isEndpoint: (elementId: string) => boolean,
     /** Dónde puede EMPEZAR una cadena (tableros/suministros; nunca un edificio). */
     isSource: (elementId: string) => boolean = isEndpoint,
+    /**
+     * ¿Puede una cadena que sale de `origin` terminar en `end`? Dos cables de
+     * tableros distintos que solo COMPARTEN una caja (misma zanja) no están
+     * conectados: TG → caja ← TG-2 no es un alimentador.
+     */
+    canEnd: (origin: string, end: string) => boolean = () => true,
 ): Array<{ circuit: SiteCircuit; pieceIds: string[] }> {
     const seenChains = new Set<string>();
     const typeOf = new Map(elements.map((element) => [element.id, element.type]));
@@ -906,7 +948,7 @@ export function passThroughFeederChains(
                 const nextModes = [...modes, ...stepModes];
                 const nextPath = [...path, piece];
                 if (isEndpoint(step.to)) {
-                    if (step.to === origin) return;
+                    if (step.to === origin || !canEnd(origin, step.to)) return;
                     // Tablero ↔ tablero se encuentra desde ambos extremos: una sola vez.
                     const key = nextPath.map((item) => item.id).sort().join('|');
                     if (seenChains.has(key)) return;
@@ -936,6 +978,8 @@ export function passThroughFeederChains(
                 const seen = new Set(visited).add(step.to);
                 for (const next of touching.get(step.to) ?? []) {
                     if (next.id === piece.id || nextPath.some((item) => item.id === next.id)) continue;
+                    // En una caja compartida solo sigue el tramo de la MISMA salida.
+                    if (piece.tgOutputId && next.tgOutputId && next.tgOutputId !== piece.tgOutputId) continue;
                     walk(next, step.to, nextPath, nextPoints, nextModes, seen);
                 }
             };

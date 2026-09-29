@@ -215,3 +215,34 @@ describe('analyzeSiteOutputs · techado con luminarias', () => {
         expect(rows[0].installedPowerW).toBe(72);
     });
 });
+
+describe('varios cables por la MISMA salida del TG', () => {
+    const twoCables = site(
+        [at('tg', 'tg_location', 0), pole('p1', 30), pole('p2', -40)],
+        [
+            wire('a', 'tg', 'p1', 0, 30, { tgOutputId: 'tg-output-1' }),
+            wire('b', 'tg', 'p2', 0, -40, { tgOutputId: 'tg-output-1' }),
+        ],
+    );
+
+    it('son UN circuito (una fila) con todas sus cargas y la longitud exacta', () => {
+        const { rows } = analyzeSiteOutputs(twoCables, settings);
+        expect(rows).toHaveLength(1);
+        const [row] = rows;
+        expect(row.outputLabel).toBe('1');
+        expect(row.installedPowerW).toBe(200);
+        expect([...row.circuitIds].sort()).toEqual(['a', 'b']);
+        // 30 + 40 m dibujados + 2 subidas de poste de 8 m; la barra no agrega longitud.
+        expect(Math.abs(row.lengthM - (70 + 16))).toBeLessThan(1e-3);
+        expect(row.firstTargetLabel).toBe('P1 / P2');
+    });
+
+    it('en salidas distintas siguen siendo dos circuitos', () => {
+        const split = site(twoCables.elements, [
+            twoCables.circuits![0],
+            { ...twoCables.circuits![1], tgOutputId: 'tg-output-2' },
+        ]);
+        const { rows } = analyzeSiteOutputs(split, settings);
+        expect(rows.map((row) => row.outputLabel).sort()).toEqual(['1', '2']);
+    });
+});

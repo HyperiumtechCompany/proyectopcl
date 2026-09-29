@@ -9,6 +9,7 @@ import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import { ModuleLoadingOverlay } from '../../components/ModuleLoadingOverlay';
 import { bowedPoint, bowedSegmentPoints } from '../domain/cableBow';
 import { cableWaypointElevations } from '../domain/cableElevation';
+import { circuitColor, circuitRunTag } from '../domain/circuitRuns';
 import { courtLines } from '../domain/courtLayout';
 import { deriveFeederStatus, feederStatusColor } from '../domain/feederSync';
 import {
@@ -568,7 +569,7 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
     // circuito solo se cierra con doble clic o Enter sobre el último objeto.
     const circuitAnchorHover =
         drawingCircuit && drawCursor
-            ? editor.nearestCircuitAnchor(drawCursor, CIRCUIT_COMMIT_SNAP_M)
+            ? editor.nearestCircuitAnchor(drawCursor, CIRCUIT_COMMIT_SNAP_M, true)
             : null;
     const circuitAnchorHoverValid =
         circuitAnchorHover &&
@@ -916,6 +917,7 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                         const hover = editor.nearestCircuitAnchor(
                             world,
                             CIRCUIT_COMMIT_SNAP_M,
+                            true,
                         );
                         const hoverId =
                             hover && hover.id !== wDrag.otherId
@@ -1062,8 +1064,15 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                         sourceId: drag.hoverId,
                                     });
                                 } else {
+                                    const previousTarget = siteData.circuits?.find(
+                                        (item) => item.id === w.id,
+                                    )?.targetId;
                                     editor.updateSiteCircuit(w.id, {
                                         targetId: drag.hoverId,
+                                        // El tablero del módulo / recorrido interior eran del destino anterior.
+                                        ...(previousTarget !== drag.hoverId
+                                            ? { modulePanelId: undefined, interiorLengthM: undefined }
+                                            : {}),
                                     });
                                 }
                             }
@@ -2452,6 +2461,18 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                     const wireSelected =
                         editor.selectedWireId?.kind === 'circuit' &&
                         editor.selectedWireId.id === circuit.id;
+                    // Todo el cable de la salida (TG → cajas → postes…) se
+                    // resalta al seleccionar cualquiera de sus conexiones.
+                    const run = editor.circuitRuns.get(circuit.id);
+                    const selectedRun =
+                        editor.selectedWireId?.kind === 'circuit'
+                            ? editor.circuitRuns.get(editor.selectedWireId.id)
+                            : undefined;
+                    const runSelected =
+                        !wireSelected &&
+                        !!run &&
+                        selectedRun?.key === run.key;
+                    const runTag = circuitRunTag(run);
                     const selectable = editor.activeTool === 'select';
                     const selectThisWire = (
                         event: ReactPointerEvent<SVGElement>,
@@ -2460,24 +2481,13 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                         event.stopPropagation();
                         editor.selectWire({ kind: 'circuit', id: circuit.id });
                     };
-                    const tg = [
-                        elementById.get(circuit.sourceId),
-                        elementById.get(circuit.targetId),
-                    ].find((element) => element?.type === 'tg_location');
-                    const tgAnchor = tg
-                        ? tgOutputAnchorLocal(
-                              tg.config?.kind === 'tg'
-                                  ? tg.config.outputs
-                                  : undefined,
-                              circuit.tgOutputId,
-                          )
-                        : undefined;
+                    const ownColor = circuitColor(circuit, run);
                     const color = wireSelected
                         ? '#f59e0b'
-                        : (tgAnchor?.output.color ??
-                          circuit.style?.color ??
-                          '#0891b2');
-                    const width = wireSelected ? 3.5 : 2;
+                        : runSelected
+                          ? '#fbbf24'
+                          : ownColor;
+                    const width = wireSelected ? 3.5 : runSelected ? 3 : 2;
                     // El extremo se sigue leyendo del punto ACTUAL del
                     // artefacto anclado (no del guardado al dibujar) — así el
                     // cable sigue al objeto cuando se arrastra o gira. Si un
@@ -2585,6 +2595,35 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                               ),
                                           )
                                         : null;
+                                // Tijera del tramo (a 1/4, lejos del punto de arco).
+                                const cutHandle = wireSelected
+                                    ? toScreen(
+                                          bowMode
+                                              ? bowedPoint(
+                                                    renderWaypoints[i],
+                                                    wp,
+                                                    editor.terrainScaleM,
+                                                    bowMode,
+                                                    0.25,
+                                                    circuit.route?.curveSide,
+                                                    circuit.route?.curveOffsetM,
+                                                )
+                                              : {
+                                                    x:
+                                                        renderWaypoints[i].x +
+                                                        (wp.x -
+                                                            renderWaypoints[i]
+                                                                .x) *
+                                                            0.25,
+                                                    y:
+                                                        renderWaypoints[i].y +
+                                                        (wp.y -
+                                                            renderWaypoints[i]
+                                                                .y) *
+                                                            0.25,
+                                                },
+                                      )
+                                    : null;
                                 const levelDelta =
                                     (circuitElevations[i + 1] ?? 0) -
                                     (circuitElevations[i] ?? 0);
@@ -2660,6 +2699,41 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                                 m
                                             </text>
                                         )}
+                                        {cutHandle && (
+                                            <g
+                                                transform={`translate(${cutHandle.x},${cutHandle.y})`}
+                                                className="cursor-pointer"
+                                                style={{
+                                                    pointerEvents:
+                                                        'visiblePainted',
+                                                }}
+                                                onPointerDown={(event) => {
+                                                    // En pointerdown (no click): el lienzo captura el puntero.
+                                                    event.stopPropagation();
+                                                    editor.startCircuitReroute(
+                                                        circuit.id,
+                                                        i,
+                                                    );
+                                                }}
+                                            >
+                                                <title>
+                                                    {`Borrar el tramo ${i + 1} y re-trazar desde aquí (por otra zanja/caja)`}
+                                                </title>
+                                                <circle
+                                                    r={7}
+                                                    className="fill-white stroke-rose-500 dark:fill-slate-900"
+                                                    strokeWidth={1.5}
+                                                />
+                                                <text
+                                                    textAnchor="middle"
+                                                    dominantBaseline="central"
+                                                    fontSize={9}
+                                                    className="fill-rose-600"
+                                                >
+                                                    ✂
+                                                </text>
+                                            </g>
+                                        )}
                                         {arcHandle && bowMode && (
                                             <circle
                                                 cx={arcHandle.x}
@@ -2695,6 +2769,47 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                     </g>
                                 );
                             })}
+                            {runTag &&
+                                (() => {
+                                    // Rótulo de la salida en el tramo más largo (si cabe en pantalla).
+                                    let best = { length: 0, x: 0, y: 0 };
+                                    for (let k = 1; k < renderWaypoints.length; k++) {
+                                        const p = toScreen(renderWaypoints[k - 1]);
+                                        const q = toScreen(renderWaypoints[k]);
+                                        const length = Math.hypot(q.x - p.x, q.y - p.y);
+                                        if (length > best.length) {
+                                            best = { length, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+                                        }
+                                    }
+                                    if (best.length < 56 && !wireSelected && !runSelected) return null;
+                                    const w = runTag.length * 5.2 + 8;
+                                    return (
+                                        <g
+                                            transform={`translate(${best.x},${best.y + 9})`}
+                                            style={{ pointerEvents: 'none' }}
+                                        >
+                                            <rect
+                                                x={-w / 2}
+                                                y={-6}
+                                                width={w}
+                                                height={12}
+                                                rx={3}
+                                                fill={ownColor}
+                                                stroke="#0f172a"
+                                                strokeWidth={0.75}
+                                            />
+                                            <text
+                                                textAnchor="middle"
+                                                dominantBaseline="central"
+                                                fontSize={8.5}
+                                                fontWeight="bold"
+                                                fill="#0f172a"
+                                            >
+                                                {runTag}
+                                            </text>
+                                        </g>
+                                    );
+                                })()}
                             {wireSelected && (
                                 <>
                                     <circle
@@ -2942,7 +3057,8 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
             )}
             {editor.activeTool === 'select' && editor.selectedWireId && (
                 <div className="pointer-events-none absolute bottom-2 left-2 z-10 rounded bg-slate-900/85 px-2 py-1 text-[10px] font-medium text-white">
-                    Cable seleccionado — arrastra el punto{' '}
+                    Cable seleccionado — <span className="text-rose-400">✂</span>{' '}
+                    borra un tramo y lo re-traza desde ahí; arrastra el punto{' '}
                     <span className="text-amber-400">ámbar</span> a la mitad de
                     un tramo arqueado para ajustar su arco; arrastra el punto{' '}
                     <span className="text-emerald-400">verde</span> o{' '}
@@ -2967,7 +3083,9 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                         ? '— clic = por el AIRE · clic derecho = por el SUELO · doble clic o Enter para terminar · Esc cancela'
                         : drawingCircuit
                           ? editor.pendingCircuitSourceId
-                              ? editor.pendingCircuitContinuationIds.length > 0
+                              ? editor.pendingRerouteCircuitId
+                                  ? '— RE-TRAZANDO el cable: clic = por el AIRE · clic derecho = por el SUELO (zanja) · pasa por cajas de pase · doble clic o Enter sobre el destino · Retroceso quita puntos · Esc lo deja como estaba'
+                                  : editor.pendingCircuitContinuationIds.length > 0
                                   ? `— continuando ${editor.pendingCircuitContinuationIds.length} circuito${editor.pendingCircuitContinuationIds.length === 1 ? '' : 's'} · recorre cajas con clics · doble clic o Enter en la última · Esc cancela`
                                   : '— recorre objetos con clics · clic derecho = tramo por el SUELO · doble clic o Enter sobre el último para terminar · Esc cancela'
                               : '— clic sobre un poste, tomacorriente, tablero, transformador, grupo electrógeno, portón, techado, celda MT, buzón o caja de pase para empezar'

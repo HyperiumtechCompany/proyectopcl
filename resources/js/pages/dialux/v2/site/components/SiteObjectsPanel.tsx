@@ -11,9 +11,8 @@ import {
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { feederLengthBreakdown } from '../domain/aerialCableGeometry';
-import { cableWaypointElevations } from '../domain/cableElevation';
+import { siteCircuitLengthM } from '../domain/siteNetworkBridge';
 import type { SiteElement, SiteElementType } from '../domain/types';
-import { resolveWireEndpoints } from '../domain/wireAnchors';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
 import { SITE_ELEMENT_DEFAULTS } from '../lib/siteDefaults';
 
@@ -191,37 +190,15 @@ export function SiteObjectsPanel({ editor, onSelect }: Props) {
                                 path.segmentModes,
                             ).totalM,
                         })),
-                        ...circuits.map((circuit) => {
-                            const liveWaypoints = resolveWireEndpoints(
-                                circuit.waypoints,
-                                circuit.sourceId,
-                                circuit.targetId,
-                                (id) => elements.find((el) => el.id === id),
-                                editor.terrainScaleM,
-                                circuit.tgOutputId,
-                                elements,
-                            );
-                            return {
-                                id: circuit.id,
-                                kind: 'circuit' as const,
-                                label:
-                                    circuit.label ??
-                                    `${labelOf(circuit.sourceId)} → ${labelOf(circuit.targetId)}`,
-                                // Extremos EN VIVO y cotas de sus plataformas.
-                                lengthM: feederLengthBreakdown(
-                                    liveWaypoints,
-                                    editor.terrainScaleM,
-                                    circuit.route,
-                                    circuit.segmentModes,
-                                    cableWaypointElevations(
-                                        liveWaypoints,
-                                        elements,
-                                        editor.terrainScaleM,
-                                    ),
-                                    circuit.wastePct ?? 5,
-                                ).totalM,
-                            };
-                        }),
+                        ...circuits.map((circuit) => ({
+                            id: circuit.id,
+                            kind: 'circuit' as const,
+                            label:
+                                circuit.label ??
+                                `${labelOf(circuit.sourceId)} → ${labelOf(circuit.targetId)}`,
+                            // Misma longitud que Red y CT: extremos en vivo, perfil del terreno y plataformas.
+                            lengthM: siteCircuitLengthM(circuit, elements, editor.terrainScaleM),
+                        })),
                     ]}
                     selectedWireId={editor.selectedWireId}
                     onSelect={selectWire}

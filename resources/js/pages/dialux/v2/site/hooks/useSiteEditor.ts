@@ -4,12 +4,17 @@ import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import { isBaseLockActive, isElementFrozen } from '../domain/baseLock';
 import { blockFeedOrigin, proposeBlockCableRoute } from '../domain/blockConnection';
 import { appendCircuitContinuation } from '../domain/circuitContinuation';
+import { circuitRuns } from '../domain/circuitRuns';
 import {
     downstreamCircuitIds,
+    reroutedCircuitDraft,
     splitCircuitAtAnchors,
     type CircuitDraft,
 } from '../domain/circuitSplit';
-import { compactCircuitTrace } from '../domain/circuitTrace';
+import {
+    compactCircuitTrace,
+    forceUndergroundAtBoxes,
+} from '../domain/circuitTrace';
 import { defaultCableForKind } from '../domain/feederCables';
 import { gateFrame, inwardNormal } from '../domain/gateLayout';
 import { closestPointOnPolygon, pointInPolygon } from '../domain/geometry';
@@ -50,7 +55,9 @@ import type {
     SiteElement,
     SiteElementType,
     SiteTool,
+    TgConfig,
 } from '../domain/types';
+import { resolveWireEndpoints } from '../domain/wireAnchors';
 import { sitePlanImageUrl } from '../lib/planImport';
 import { defaultConfigFor, SITE_ELEMENT_DEFAULTS } from '../lib/siteDefaults';
 import { useNetworkSnapshotForSite } from './useNetworkSnapshotForSite';
@@ -102,6 +109,14 @@ const CIRCUIT_ANCHOR_TYPES = new Set<SiteElementType>([
     'cable_vault',
     'pull_box',
     'generator',
+]);
+/** Objetos de área a los que el cable se engancha haciendo clic dentro o en su borde. */
+const AREA_ANCHOR_TYPES = new Set<SiteElementType>([
+    'building_block',
+    'canopy',
+    'pool',
+    'ramp',
+    'stair',
 ]);
 /** Distancia máxima (m) para "enganchar" el PRIMER clic (dónde arranca el cable) a un artefacto — generosa porque ahí no hay nada que rodear todavía. */
 const CIRCUIT_SNAP_M = 2.5;
@@ -223,6 +238,10 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
     // está creando un circuito nuevo desde cero.
     const [pendingCircuitContinuationIds, setPendingCircuitContinuationIds] =
         useState<string[]>([]);
+    // Cable que se está RE-TRAZANDO desde uno de sus puntos (null = ninguno).
+    const [pendingRerouteCircuitId, setPendingRerouteCircuitId] = useState<
+        string | null
+    >(null);
     const setSiteBaseLocked = useEditorStore(
         (state) => state.setSiteBaseLocked,
     );
@@ -288,6 +307,13 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
     const nearestCircuitAnchor = (
         point: Point2D,
         maxM: number = CIRCUIT_SNAP_M,
+        /**
+         * Al DIBUJAR: un objeto grande (edificio, techado, piscina, rampa,
+         * escalera) también engancha si el clic cae dentro de él o junto a su
+         * borde — no solo cerca de su centro (en un edificio el centro queda
+         * lejos de la fachada y el cable nunca llegaba a él).
+         */
+        includeAreas = false,
     ): { id: string; point: Point2D } | null => {
         let best: { id: string; point: Point2D; d: number } | null = null;
         for (const el of siteData?.elements ?? []) {
@@ -302,6 +328,24 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
             const d = Math.hypot(point.x - c.x, point.y - c.y) * terrainScaleM;
             if (d <= maxM && (!best || d < best.d)) {
                 best = { id: el.id, point: c, d };
+            }
+        }
+        if (best) return { id: best.id, point: best.point };
+        if (!includeAreas) return null;
+        for (const el of siteData?.elements ?? []) {
+            if (
+                el.visible === false ||
+                !AREA_ANCHOR_TYPES.has(el.type) ||
+                el.vertices.length < 3
+            ) {
+                continue;
+            }
+            const edge = closestPointOnPolygon(point, el.vertices, true);
+            const d = pointInPolygon(point, el.vertices)
+                ? 0
+                : (edge?.distance ?? Infinity) * terrainScaleM;
+            if (d <= maxM && (!best || d < best.d)) {
+                best = { id: el.id, point: elementBox(el, terrainScaleM).center, d };
             }
         }
         return best ? { id: best.id, point: best.point } : null;
@@ -326,9 +370,63 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         return pieces.length;
     };
 
+    // Salida (TG·n) de CADA conexión, aunque no toque el tablero.
+    const runsByCircuit = circuitRuns(siteData);
+
+    /**
+     * Color del cable completo (su salida): en un TG cambia el color de la
+     * salida (tablero, sus cables y el plano quedan iguales); en un sub
+     * tablero o un cable suelto, el de todas sus conexiones.
+     */
+    const setCircuitRunColor = (circuitId: string, color: string) => {
+        const run = runsByCircuit.get(circuitId);
+        const panel = run
+            ? siteData?.elements.find((element) => element.id === run.panelId)
+            : undefined;
+        const history = useEditorStore.getState();
+        history.beginHistoryGesture();
+        try {
+            if (run?.outputId && panel?.type === 'tg_location') {
+                const config = panel.config?.kind === 'tg' ? panel.config : undefined;
+                const outputs = normalizeTgOutputs(config?.outputs).map((output) =>
+                    output.id === run.outputId ? { ...output, color } : output,
+                );
+                updateSiteElement(panel.id, {
+                    config: { ...(config ?? (defaultConfigFor('tg_location') as TgConfig)), outputs },
+                });
+            } else {
+                for (const id of run?.circuitIds ?? [circuitId]) {
+                    const circuit = siteData?.circuits?.find((item) => item.id === id);
+                    updateSiteCircuit(id, { style: { ...(circuit?.style ?? {}), color } });
+                }
+            }
+        } finally {
+            history.endHistoryGesture();
+        }
+    };
+
+    /** Cambia la salida del TG de TODO el cable (todas sus conexiones, también las que pasan por cajas). */
+    const setCircuitRunOutput = (circuitId: string, outputId: string) => {
+        const run = runsByCircuit.get(circuitId);
+        const history = useEditorStore.getState();
+        history.beginHistoryGesture();
+        try {
+            for (const id of run?.circuitIds ?? [circuitId]) {
+                updateSiteCircuit(id, { tgOutputId: outputId });
+            }
+        } finally {
+            history.endHistoryGesture();
+        }
+    };
+
     /** Elimina la conexión y todo lo que cuelga de ella (aguas abajo); lo anterior queda. */
     const removeCircuitDownstream = (id: string): number => {
-        const ids = downstreamCircuitIds(siteData?.circuits ?? [], siteData?.elements ?? [], id);
+        const ids = downstreamCircuitIds(
+            siteData?.circuits ?? [],
+            siteData?.elements ?? [],
+            id,
+            runsByCircuit.get(id)?.upstreamNodeOf[id],
+        );
         const history = useEditorStore.getState();
         history.beginHistoryGesture();
         ids.forEach((circuitId) => removeSiteCircuit(circuitId));
@@ -344,8 +442,53 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         setPendingCircuitSourceId(null);
         setPendingCircuitTgOutputId(null);
         setPendingCircuitContinuationIds([]);
+        setPendingRerouteCircuitId(null);
         setSpaceWarning(null);
         setActiveToolState('draw_circuit');
+    };
+
+    /**
+     * Borra el cable desde su punto `fromVertexIndex` en adelante y lo deja
+     * listo para RE-TRAZARLO desde ahí (por otra zanja, caja de pase,
+     * plataforma…) hasta su destino u otro objeto. Nada cambia hasta cerrar
+     * el trazo (doble clic / Enter); Esc lo deja como estaba. Conserva
+     * sección, conductor, salida del TG y tendido del cable.
+     */
+    const startCircuitReroute = (
+        circuitId: string,
+        fromVertexIndex: number,
+    ): boolean => {
+        const circuit = siteData?.circuits?.find((item) => item.id === circuitId);
+        if (!circuit || circuit.waypoints.length < 2) return false;
+        const elements = siteData?.elements ?? [];
+        const live = resolveWireEndpoints(
+            circuit.waypoints,
+            circuit.sourceId,
+            circuit.targetId,
+            (id) => elements.find((element) => element.id === id),
+            terrainScaleM,
+            circuit.tgOutputId,
+            elements,
+        );
+        const k = Math.max(0, Math.min(fromVertexIndex, live.length - 2));
+        const prefix = live.slice(0, k + 1);
+        // El origen se guarda en el anclaje del objeto (como al dibujar).
+        prefix[0] = circuit.waypoints[0] ?? prefix[0];
+        const fallback: 'aerial' | 'underground' =
+            circuit.route?.kind === 'aerial' ? 'aerial' : 'underground';
+        setPendingVertices(prefix);
+        setPendingModes(
+            prefix.slice(1).map((_, i) => circuit.segmentModes?.[i] ?? fallback),
+        );
+        setPendingCircuitSourceId(circuit.sourceId);
+        setPendingCircuitTgOutputId(circuit.tgOutputId ?? null);
+        setPendingCircuitContinuationIds([]);
+        setPendingRerouteCircuitId(circuit.id);
+        setSelectedWireId(null);
+        setSelectedIds([]);
+        setSpaceWarning(null);
+        setActiveToolState('draw_circuit');
+        return true;
     };
 
     /**
@@ -375,6 +518,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         setPendingCircuitContinuationIds(
             compatible.map((circuit) => circuit.id),
         );
+        setPendingRerouteCircuitId(null);
         setSelectedWireId(null);
         setSelectedIds([]);
         setSpaceWarning(null);
@@ -393,7 +537,21 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         targetAnchorId: string,
     ) => {
         if (!pendingCircuitSourceId) return;
-        const trace = compactCircuitTrace(waypoints, modes);
+        const compacted = compactCircuitTrace(waypoints, modes);
+        const trace = {
+            waypoints: compacted.waypoints,
+            modes: forceUndergroundAtBoxes(
+                compacted.waypoints,
+                compacted.modes,
+                (point) => {
+                    const id = anchorIdAtPoint(point);
+                    const type = id
+                        ? siteData?.elements.find((element) => element.id === id)?.type
+                        : undefined;
+                    return type === 'pull_box' || type === 'cable_vault';
+                },
+            ),
+        };
         if (trace.waypoints.length < 2) return;
         const hasModes = trace.modes.length === trace.waypoints.length - 1;
         const kind: 'aerial' | 'underground' = trace.modes.includes('aerial')
@@ -401,6 +559,48 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
             : 'underground';
         const pure =
             hasModes && trace.modes.every((mode) => mode === trace.modes[0]);
+
+        if (pendingRerouteCircuitId) {
+            const circuit = siteData?.circuits?.find(
+                (item) => item.id === pendingRerouteCircuitId,
+            );
+            if (circuit) {
+                const draft = reroutedCircuitDraft(
+                    circuit,
+                    trace.waypoints,
+                    trace.modes,
+                    targetAnchorId,
+                );
+                // Si el nuevo recorrido pasa por cajas/objetos, una conexión por
+                // objeto; el ÚLTIMO tramo conserva el id (y su alimentador en la red).
+                const pieces = splitCircuitAtAnchors(draft, anchorIdAtPoint) ?? [draft];
+                const last = pieces[pieces.length - 1];
+                const history = useEditorStore.getState();
+                history.beginHistoryGesture();
+                try {
+                    pieces.slice(0, -1).forEach((piece) => addSiteCircuit(piece));
+                    updateSiteCircuit(circuit.id, {
+                        phase: undefined,
+                        modulePanelId: undefined,
+                        interiorLengthM: undefined,
+                        segmentModes: undefined,
+                        label: undefined,
+                        ...last,
+                    });
+                } finally {
+                    history.endHistoryGesture();
+                }
+                selectWire({ kind: 'circuit', id: circuit.id });
+            }
+            setSpaceWarning(null);
+            setPendingModes([]);
+            setPendingVertices([]);
+            setPendingCircuitSourceId(null);
+            setPendingCircuitTgOutputId(null);
+            setPendingRerouteCircuitId(null);
+            setActiveToolState('select');
+            return;
+        }
 
         if (pendingCircuitContinuationIds.length > 0) {
             const history = useEditorStore.getState();
@@ -526,7 +726,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         mode: 'aerial' | 'underground',
     ) => {
         if (pendingVertices.length === 0) {
-            const anchor = nearestCircuitAnchor(point);
+            const anchor = nearestCircuitAnchor(point, CIRCUIT_SNAP_M, true);
             if (!anchor) {
                 setSpaceWarning(
                     'Empieza el cable sobre un poste, tomacorriente, tablero, transformador, grupo electrógeno, portón, techado, celda MT, buzón o caja de pase.',
@@ -534,6 +734,8 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
                 return;
             }
             setSpaceWarning(null);
+            // Se borró todo el trazo del re-trazado: lo que se dibuje ahora es un cable NUEVO.
+            setPendingRerouteCircuitId(null);
             setPendingCircuitSourceId(anchor.id);
             const source = siteData?.elements.find(
                 (element) => element.id === anchor.id,
@@ -567,7 +769,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
             setPendingVertices([anchor.point]);
             return;
         }
-        const anchor = nearestCircuitAnchor(point, CIRCUIT_COMMIT_SNAP_M);
+        const anchor = nearestCircuitAnchor(point, CIRCUIT_COMMIT_SNAP_M, true);
         if (anchor && anchor.id !== pendingCircuitSourceId) {
             setSpaceWarning(null);
             setPendingModes((current) => [
@@ -803,12 +1005,21 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
     };
 
     const cancelDrawing = () => {
+        // Re-trazado cancelado: el cable queda como estaba, seleccionado.
+        const reroutedId = pendingRerouteCircuitId;
+        if (reroutedId) {
+            setActiveToolState('select');
+            if (siteData?.circuits?.some((circuit) => circuit.id === reroutedId)) {
+                setSelectedWireId({ kind: 'circuit', id: reroutedId });
+            }
+        }
         setSpaceWarning(null);
         setPendingVertices([]);
         setPendingNetworkEdgeId(null);
         setPendingCircuitSourceId(null);
         setPendingCircuitTgOutputId(null);
         setPendingCircuitContinuationIds([]);
+        setPendingRerouteCircuitId(null);
         setPendingModes([]);
     };
 
@@ -1162,7 +1373,7 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
                 return;
             }
             const last = pendingVertices[pendingVertices.length - 1];
-            const anchor = nearestCircuitAnchor(last);
+            const anchor = nearestCircuitAnchor(last, CIRCUIT_SNAP_M, true);
             if (!anchor || anchor.id === pendingCircuitSourceId) {
                 // No se crea: el trazo sigue abierto para seguir acercándolo a otro artefacto.
                 setSpaceWarning(
@@ -1578,6 +1789,11 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
         pendingModes,
         startCircuitTool,
         startCircuitContinuation,
+        startCircuitReroute,
+        pendingRerouteCircuitId,
+        circuitRuns: runsByCircuit,
+        setCircuitRunColor,
+        setCircuitRunOutput,
         addCircuitVertex,
         pendingCircuitSourceId,
         pendingCircuitTgOutputId,

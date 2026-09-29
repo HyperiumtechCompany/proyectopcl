@@ -7,6 +7,7 @@ import type {
 } from '@/pages/dialux/export/domain/types';
 import { DIALUX_FORMAL_DOCUMENT_SCHEMA_VERSION } from '@/pages/dialux/export/domain/types';
 import type { BuildingFeedRow } from '../domain/blockConnection';
+import { sitePanelLabeler } from '../domain/circuitRuns';
 import { summarizeSiteForDxf } from '../domain/siteDxfExport';
 import type { SiteLightingCalculation } from '../domain/siteLightingCalculation';
 import { siteLuminaires } from '../domain/siteLightingCalculation';
@@ -596,6 +597,7 @@ export function buildSiteFormalDocument(input: SiteReportInput): DialuxFormalDoc
     }
 
     // ── Salidas de tableros (motor CT de la V1).
+    const panelLabelOf = sitePanelLabeler(site.elements ?? []);
     if (input.outputRows.length > 0) {
         assets.push(
             table('site-outputs', 'Salidas de tableros de la planta', [
@@ -610,7 +612,10 @@ export function buildSiteFormalDocument(input: SiteReportInput): DialuxFormalDoc
                 ['du', 'ΔU acum. %'],
                 ['status', 'Estado'],
             ], input.outputRows.map((row) => ({
-                panel: byId.get(row.panelElementId)?.label ?? '-',
+                panel: (() => {
+                    const element = byId.get(row.panelElementId);
+                    return element ? panelLabelOf(element) : '-';
+                })(),
                 output: row.outputLabel,
                 loads: row.loadsDetail,
                 kw: n(row.installedPowerW / 1000, 2),

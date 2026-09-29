@@ -6,6 +6,7 @@ import {
     dxfText,
     type DxfLines,
 } from '@/pages/dialux/export/dxf/emitters/primitives';
+import { feederPathLengthM } from './aerialCableGeometry';
 import { siteLuminaires } from './siteLightingCalculation';
 import { siteCircuitLengthM } from './siteNetworkBridge';
 import { siteElementLoadW } from './siteOutputs';
@@ -118,7 +119,8 @@ export function summarizeSiteForDxf(site: SiteData): SiteDxfSummary {
         cableByType: [...cable.entries()]
             .map(([label, lengthM]) => ({ label, lengthM }))
             .sort((a, b) => a.label.localeCompare(b.label)),
-        feederLengthM: (site.feederPaths ?? []).reduce((sum, path) => sum + (path.calculatedLengthM || 0), 0),
+        // Longitud vigente del trazado (no la guardada al dibujar, que puede quedar vieja).
+        feederLengthM: (site.feederPaths ?? []).reduce((sum, path) => sum + feederPathLengthM(path, scaleM), 0),
     };
 }
 

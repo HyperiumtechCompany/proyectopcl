@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { circuitsAfterRemovingElements } from '../../v2/site/domain/circuitSplit';
 import type {
     FeederPath,
     FeederRoute,
@@ -169,6 +170,10 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
                         elements: state.project.site.elements.filter(
                             (item) => item.id !== id,
                         ),
+                        circuits: circuitsAfterRemovingElements(
+                            state.project.site.circuits ?? [],
+                            new Set([id]),
+                        ),
                     },
                 },
             };
@@ -184,6 +189,14 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
                         ...state.project.site,
                         elements: state.project.site.elements.filter(
                             (item) => !drop.has(item.type),
+                        ),
+                        circuits: circuitsAfterRemovingElements(
+                            state.project.site.circuits ?? [],
+                            new Set(
+                                state.project.site.elements
+                                    .filter((item) => drop.has(item.type))
+                                    .map((item) => item.id),
+                            ),
                         ),
                     },
                 },
@@ -357,6 +370,10 @@ export const createSiteSlice: EditorSlice<SiteSlice> = (set, get) => ({
                         ...state.project.site,
                         elements: state.project.site.elements.filter(
                             (item) => !drop.has(item.id),
+                        ),
+                        circuits: circuitsAfterRemovingElements(
+                            state.project.site.circuits ?? [],
+                            drop,
                         ),
                     },
                 },

@@ -275,6 +275,21 @@ describe('applySiteToNetwork', () => {
         expect(result.conflicts.map((conflict) => conflict.code)).toContain('feeder-taken');
     });
 
+    it('un cable que cambió de id (re-trazado/unido) toma el alimentador del cable que ya no existe', () => {
+        const plant = (circuitId: string, sectionMm2?: number) =>
+            site(
+                [panel('tg1', 'tg_location', 0), panel('td1', 'sub_panel', 30)],
+                [{ ...cable(circuitId, 'tg1', 'td1', 30), sectionMm2 }],
+            );
+        const first = applySiteToNetwork(baseNetwork(), plant('viejo', 25)).data;
+        const result = applySiteToNetwork(first, plant('nuevo'));
+        expect(result.conflicts.map((conflict) => conflict.code)).not.toContain('feeder-taken');
+        const feeders = result.data.edges.filter((edge) => edge.targetNodeId === sitePanelNodeId('td1'));
+        expect(feeders).toHaveLength(1);
+        // Conserva lo ya definido en la red (sección 25) y queda a nombre del cable nuevo.
+        expect(feeders[0]).toMatchObject({ siteCircuitId: 'nuevo', sectionMm2: 25 });
+    });
+
     it('borrar el objeto en la planta no borra el nodo: queda como huérfano', () => {
         const withTd = applySiteToNetwork(
             baseNetwork(),
@@ -475,5 +490,50 @@ describe('applySiteToNetwork · ATS y grupo electrógeno', () => {
         expect(result.data.edges.find((edge) => edge.targetNodeId === 'tg')?.sourceNodeId).toBe(atsNode?.id);
         expect(result.conflicts.map((conflict) => conflict.code)).toEqual(['backup-source']);
         expect(validateElectricalNetwork(result.data)).toEqual([]);
+    });
+});
+
+describe('cajas de pase compartidas', () => {
+    const box = (id: string, x: number): SiteElement => ({
+        id,
+        type: 'pull_box',
+        label: id,
+        vertices: [{ x, y: 0 }],
+        style: { fillColor: '#000', strokeColor: '#000' },
+    });
+
+    it('dos TG que llevan cables a la MISMA caja no se alimentan entre sí', () => {
+        const result = applySiteToNetwork(
+            baseNetwork(),
+            site(
+                [panel('tg1', 'tg_location', 0), panel('tg2', 'tg_location', 40), box('caja', 20)],
+                [
+                    { ...cable('a', 'tg1', 'caja', 20), tgOutputId: 'tg-output-1' },
+                    { ...cable('b', 'tg2', 'caja', 20), tgOutputId: 'tg-output-1' },
+                ],
+            ),
+        );
+        expect(result.conflicts.map((conflict) => conflict.code)).not.toContain('feeder-taken');
+        expect(result.data.edges.some((edge) => edge.siteCircuitId === 'a' || edge.siteCircuitId === 'b')).toBe(false);
+    });
+
+    it('en una caja compartida el alimentador sigue solo el tramo de SU salida', () => {
+        const result = applySiteToNetwork(
+            baseNetwork(),
+            site(
+                [panel('tg1', 'tg_location', 0), box('caja', 20), panel('td1', 'sub_panel', 30), panel('td2', 'sub_panel', 50)],
+                [
+                    { ...cable('a1', 'tg1', 'caja', 20), tgOutputId: 'tg-output-1' },
+                    { ...cable('a2', 'caja', 'td1', 30), tgOutputId: 'tg-output-1' },
+                    { ...cable('b1', 'tg1', 'caja', 20), tgOutputId: 'tg-output-2' },
+                    { ...cable('b2', 'caja', 'td2', 50), tgOutputId: 'tg-output-2' },
+                ],
+            ),
+        );
+        expect(result.conflicts.map((conflict) => conflict.code)).not.toContain('feeder-taken');
+        const into = (panelId: string) =>
+            result.data.edges.filter((edge) => edge.targetNodeId === sitePanelNodeId(panelId));
+        expect(into('td1').map((edge) => edge.siteCircuitId)).toEqual(['a2']);
+        expect(into('td2').map((edge) => edge.siteCircuitId)).toEqual(['b2']);
     });
 });

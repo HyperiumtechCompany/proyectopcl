@@ -11,6 +11,7 @@ import {
     type PanelCircuitSummary,
 } from '@/pages/dialux/hooks/wireLengthCalculations';
 import type { ElectricalNetworkData } from '../../electrical-network/domain/types';
+import { continuesRun } from './circuitRuns';
 import { poleInstalledPowerW } from './exteriorLightingPort';
 import { gateEntrance, gateLightsPowerW } from './gateLayout';
 import { rampSideLightPoints, sideLightsOf } from './rampFootprint';
@@ -308,27 +309,109 @@ export function buildSitePanelScene(
         circuit: SiteCircuit;
         rootIndex: number;
         rootId: string;
-    }> = (incident.get(panel.id) ?? []).map((circuit, rootIndex) => ({
-        from: panel.id,
-        circuit,
-        rootIndex,
-        rootId: circuit.id,
-    }));
+        /** Salida del TG de la raíz de la rama (los tramos siguientes pueden no declararla). */
+        outputId?: string;
+    }> = [];
+    // Varios cables por la MISMA salida del TG son UN circuito: cuelgan de una
+    // barra de la salida (nodo de paso en el tablero, 0 m) cuyo puente es la
+    // raíz del circuito en el motor V1.
+    const rootCables = incident.get(panel.id) ?? [];
+    const outputOf = (circuit: SiteCircuit) =>
+        outputs.find((output) => output.id === circuit.tgOutputId);
+    const cablesPerOutput = new Map<string, SiteCircuit[]>();
+    for (const circuit of rootCables) {
+        const output = outputOf(circuit);
+        if (output) {
+            cablesPerOutput.set(output.id, [...(cablesPerOutput.get(output.id) ?? []), circuit]);
+        }
+    }
+    /** Barras cuyo puente aún no descontó su holgura V1 (se descuenta en el primer cable). */
+    const busSlackPending = new Set<string>();
+    rootCables.forEach((circuit, rootIndex) => {
+        const output = outputOf(circuit);
+        const shared = output ? (cablesPerOutput.get(output.id) ?? []) : [];
+        if (!output || shared.length < 2) {
+            queue.push({ from: panel.id, circuit, rootIndex, rootId: circuit.id, outputId: circuit.tgOutputId });
+            return;
+        }
+        const busId = `${panel.id}::${output.id}`;
+        const bridgeId = `${busId}::puente`;
+        if (!placed.has(busId)) {
+            placed.add(busId);
+            position.set(busId, 0);
+            busSlackPending.add(busId);
+            devices.push({
+                id: busId,
+                type: 'junction_box',
+                x: 0,
+                y: 0,
+                label: `Salida ${output.label}`,
+                mountingHeight: 0,
+                properties: {},
+            } as unknown as ElectricalDevice);
+            const wireCount = Math.max(...shared.map((item) => item.wireCount));
+            const phases: 1 | 3 = wireCount >= 4 ? 3 : 1;
+            const sections = shared.map((item) => item.sectionMm2);
+            if (sections.some((section) => section === undefined)) {
+                assumedSectionCircuitIds.add(bridgeId);
+            }
+            conductors.push({
+                id: bridgeId,
+                sourceId: panel.id,
+                targetId: busId,
+                wireCount,
+                routeType: 'floor',
+                tubeSize: 20,
+                conductorType: circuit.conductorType ?? DEFAULT_CONDUCTOR,
+                // La sección del circuito es la menor de sus cables (la más desfavorable).
+                sectionMm2: Math.min(
+                    ...sections.map((section) => section ?? ASSUMED_SECTION_MM2),
+                ),
+                waypoints: [],
+                ct: {
+                    system: phases,
+                    ...(phases === 1
+                        ? {
+                              phaseBalance:
+                                  shared.find((item) => item.phase)?.phase ??
+                                  PHASE_ROTATION[rootIndex % 3],
+                          }
+                        : {}),
+                },
+            } as unknown as Conductor);
+            rootOutputLabel.set(bridgeId, output.label);
+            firstTargetLabel.set(
+                bridgeId,
+                shared
+                    .map((item) => {
+                        const toId = item.sourceId === panel.id ? item.targetId : item.sourceId;
+                        return byId.get(toId)?.label ?? '?';
+                    })
+                    .join(' / '),
+            );
+        }
+        queue.push({ from: busId, circuit, rootIndex, rootId: bridgeId, outputId: output.id });
+    });
     while (queue.length > 0) {
-        const { from, circuit, rootIndex, rootId } = queue.shift()!;
+        const { from, circuit, rootIndex, rootId, outputId } = queue.shift()!;
         if (usedCircuits.has(circuit.id)) continue;
         usedCircuits.add(circuit.id);
+        // Desde la barra de una salida, el extremo del cable en la planta es el tablero.
+        const end = busSlackPending.has(from) || from.startsWith(`${panel.id}::`) ? panel.id : from;
         const toId =
-            circuit.sourceId === from ? circuit.targetId : circuit.sourceId;
+            circuit.sourceId === end ? circuit.targetId : circuit.sourceId;
         const to = byId.get(toId);
         if (!to || isStop(to) || placed.has(toId)) continue;
         // Recorrido dibujado + subida por el equipo hasta la luminaria o el
         // tomacorriente (una sola vez por equipo, aunque la rama siga).
         const lengthM =
             siteCircuitLengthM(circuit, elements, scaleM) + equipmentRiserM(to);
+        // El puente de la barra (0 m en planta) lleva la holgura V1 de un
+        // conductor: se descuenta una vez para que el total siga exacto.
+        const busSlack = busSlackPending.delete(from) ? V1_SLACK_PER_CONDUCTOR_M : 0;
         const x =
             (position.get(from) ?? 0) +
-            Math.max(0, lengthM - V1_SLACK_PER_CONDUCTOR_M);
+            Math.max(0, lengthM - V1_SLACK_PER_CONDUCTOR_M - busSlack);
         position.set(toId, x);
         placed.add(toId);
         rootOfCircuit.set(circuit.id, rootId);
@@ -375,8 +458,17 @@ export function buildSitePanelScene(
             firstTargetLabel.set(circuit.id, to.label);
         }
         for (const next of incident.get(toId) ?? []) {
-            if (!usedCircuits.has(next.id)) {
-                queue.push({ from: toId, circuit: next, rootIndex, rootId });
+            // Caja compartida por varias salidas / otro TG: solo sigue su propio cable.
+            if (
+                !usedCircuits.has(next.id) &&
+                continuesRun(
+                    { ...circuit, tgOutputId: circuit.tgOutputId ?? outputId },
+                    next,
+                    panel.id,
+                    (id) => byId.get(id)?.type,
+                )
+            ) {
+                queue.push({ from: toId, circuit: next, rootIndex, rootId, outputId });
             }
         }
     }

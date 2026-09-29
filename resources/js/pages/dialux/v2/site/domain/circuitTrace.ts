@@ -31,3 +31,17 @@ export function compactCircuitTrace(
 
     return { waypoints: compactedWaypoints, modes: compactedModes };
 }
+
+/**
+ * Un tramo que entra o sale de una caja de pase / buzón va SIEMPRE por el
+ * suelo (el cable llega a la caja por su ducto enterrado): un clic "aéreo"
+ * por descuido sumaba dos subidas al amarre (≈ 2 × 6 m) a la caída de tensión.
+ */
+export function forceUndergroundAtBoxes(
+    waypoints: Point2D[],
+    modes: CircuitSegmentMode[],
+    isBoxAt: (point: Point2D) => boolean,
+): CircuitSegmentMode[] {
+    const boxes = waypoints.map((point) => isBoxAt(point));
+    return modes.map((mode, i) => (boxes[i] || boxes[i + 1] ? 'underground' : mode));
+}

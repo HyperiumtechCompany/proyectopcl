@@ -1,9 +1,11 @@
+import { circuitColor, circuitRuns, circuitRunTag } from '../domain/circuitRuns';
 import { luxColor } from '../domain/exteriorLighting';
 import { calcOutlines } from '../domain/rampFootprint';
 import type { SiteLightingCalculation } from '../domain/siteLightingCalculation';
 import { siteLuminaires } from '../domain/siteLightingCalculation';
 import { requiredLuxFor } from '../domain/siteLightingNorms';
 import type { Point2D, SiteData, SiteElement, SiteNormRegion } from '../domain/types';
+import { resolveWireEndpoints } from '../domain/wireAnchors';
 import { isoluxSvgFragments, svgClipToPolygons } from './isoluxSvg';
 
 /**
@@ -15,6 +17,8 @@ import { isoluxSvgFragments, svgClipToPolygons } from './isoluxSvg';
  */
 
 const LEGEND_STOPS = [0, 1, 5, 10, 20, 50, 100];
+/** Objetos puntuales que se dibujan como símbolo pequeño, no con su huella de dibujo. */
+const SMALL_SYMBOL_TYPES = new Set<SiteElement['type']>(['pull_box', 'cable_vault', 'earth_pit']);
 const POINT_TYPES = new Set<SiteElement['type']>([
     'pole',
     'outlet',
@@ -143,12 +147,45 @@ export function renderSitePlanSvg(
             );
         }
     }
+    // Cables con sus extremos EN VIVO y el color de su salida (TG-1·2…),
+    // rotulados en su tramo más largo: se distingue cada salida en el plano.
+    const runs = circuitRuns(site);
+    const byId = (id: string) => (site.elements ?? []).find((element) => element.id === id);
+    const tags: string[] = [];
     for (const circuit of site.circuits ?? []) {
-        const points = circuit.waypoints.map(M);
-        if (points.length >= 2) {
-            parts.push(`<polyline points="${pts(points)}" fill="none" stroke="#0e7490" stroke-width="${stroke * 1.6}"/>`);
+        const live = resolveWireEndpoints(
+            circuit.waypoints,
+            circuit.sourceId,
+            circuit.targetId,
+            byId,
+            scaleM,
+            circuit.tgOutputId,
+            site.elements ?? [],
+        );
+        const points = live.map(M);
+        if (points.length < 2) continue;
+        const run = runs.get(circuit.id);
+        const color = circuitColor(circuit, run, '#0e7490');
+        parts.push(`<polyline points="${pts(points)}" fill="none" stroke="${color}" stroke-width="${stroke * 1.6}"/>`);
+        const tag = circuitRunTag(run);
+        if (!tag) continue;
+        let best = { length: 0, x: 0, y: 0 };
+        for (let k = 1; k < points.length; k++) {
+            const length = Math.hypot(points[k].x - points[k - 1].x, points[k].y - points[k - 1].y);
+            if (length > best.length) {
+                best = { length, x: (points[k].x + points[k - 1].x) / 2, y: (points[k].y + points[k - 1].y) / 2 };
+            }
         }
+        const size = textH * 0.5;
+        const w = size * 0.62 * tag.length + size * 0.6;
+        if (best.length < w) continue;
+        // Etiqueta con fondo blanco y borde del color de la salida: legible sobre cualquier fondo.
+        tags.push(
+            `<rect x="${(best.x - w / 2).toFixed(3)}" y="${(best.y - size * 0.75).toFixed(3)}" width="${w.toFixed(3)}" height="${(size * 1.5).toFixed(3)}" rx="${(size * 0.3).toFixed(3)}" fill="#ffffff" stroke="${color}" stroke-width="${(stroke * 1.2).toFixed(3)}"/>` +
+                `<text x="${best.x.toFixed(3)}" y="${(best.y + size * 0.35).toFixed(3)}" font-size="${size.toFixed(3)}" font-weight="bold" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">${escapeXml(tag)}</text>`,
+        );
     }
+    parts.push(...tags);
     for (const path of site.feederPaths ?? []) {
         const points = path.waypoints.map(M);
         if (points.length >= 2) {
@@ -167,6 +204,16 @@ export function renderSitePlanSvg(
             parts.push(`<circle cx="${c.x}" cy="${c.y}" r="${symbolR * 0.7}" fill="#fff" stroke="#1d4ed8" stroke-width="${stroke}"/>`);
         } else if (element.type === 'tree') {
             parts.push(`<circle cx="${c.x}" cy="${c.y}" r="${Math.max(symbolR, spreadRadius(element, scaleM))}" fill="#16a34a" fill-opacity="0.35" stroke="#166534" stroke-width="${stroke}"/>`);
+        } else if (SMALL_SYMBOL_TYPES.has(element.type)) {
+            // Caja de pase / buzón / pozo a tierra: símbolo pequeño (su huella
+            // de dibujo es simbólica, ~3 m, y tapaba el plano).
+            const half = symbolR * (element.type === 'cable_vault' ? 0.8 : 0.6);
+            const fill = element.style?.fillColor ?? '#e2e8f0';
+            parts.push(
+                element.type === 'earth_pit'
+                    ? `<circle cx="${c.x}" cy="${c.y}" r="${half}" fill="${fill}" stroke="${color}" stroke-width="${stroke}"/><line x1="${c.x - half * 0.6}" y1="${c.y}" x2="${c.x + half * 0.6}" y2="${c.y}" stroke="${color}" stroke-width="${stroke}"/>`
+                    : `<rect x="${c.x - half}" y="${c.y - half}" width="${half * 2}" height="${half * 2}" fill="${fill}" stroke="${color}" stroke-width="${stroke}"/>`,
+            );
         } else {
             parts.push(`<polygon points="${pts(element.vertices.map(M))}" fill="${element.style?.fillColor ?? '#fecaca'}" stroke="${color}" stroke-width="${stroke}"/>`);
         }

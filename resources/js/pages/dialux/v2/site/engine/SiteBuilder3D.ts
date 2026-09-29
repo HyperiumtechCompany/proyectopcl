@@ -29,6 +29,7 @@ import {
     routeSagPct,
 } from '../domain/aerialCableGeometry';
 import { bowedPoint } from '../domain/cableBow';
+import { circuitColor, circuitRuns } from '../domain/circuitRuns';
 import {
     computeLuxGrid,
     DEFAULT_LUMINAIRE,
@@ -627,9 +628,11 @@ export class SiteBuilder3D {
             }
         }
 
+        // Cada conexión con el color de SU salida, aunque no toque el TG (pasa por cajas).
+        const runs = circuitRuns(siteData);
         for (const circuit of siteData.circuits ?? []) {
             try {
-                this.buildCircuit(circuit, scaleM);
+                this.buildCircuit(circuit, scaleM, circuitColor(circuit, runs.get(circuit.id)));
             } catch (error) {
                 console.warn(
                     `No se pudo construir el cableado de instalaciones ${circuit.id}`,
@@ -3746,7 +3749,7 @@ export class SiteBuilder3D {
      * alimentador, pero SIN color por estado de caída de tensión (no entra hoy a
      * ese cálculo) y con un tubo más delgado, propio de un circuito ramal.
      */
-    private buildCircuit(circuit: SiteCircuit, scaleM: number) {
+    private buildCircuit(circuit: SiteCircuit, scaleM: number, color: string) {
         if (circuit.waypoints.length < 2) return;
         // El extremo sigue el centro ACTUAL del artefacto anclado (no el
         // punto guardado al dibujar) — así el cable sigue al objeto al
@@ -3801,22 +3804,7 @@ export class SiteBuilder3D {
             { path: points, radius: 0.025, sideOrientation: Mesh.DOUBLESIDE },
             this.scene,
         );
-        const tg =
-            source?.type === 'tg_location'
-                ? source
-                : target?.type === 'tg_location'
-                  ? target
-                  : undefined;
-        const tgOutputColor = tg
-            ? normalizeTgOutputs(
-                  tg.config?.kind === 'tg' ? tg.config.outputs : undefined,
-              ).find((output) => output.id === circuit.tgOutputId)?.color
-            : undefined;
-        tube.material = this.matFor(
-            tgOutputColor ?? circuit.style?.color ?? '#0891b2',
-            1,
-            0.15,
-        );
+        tube.material = this.matFor(color, 1, 0.15);
         this.feederMeshes.push(tube);
     }
 

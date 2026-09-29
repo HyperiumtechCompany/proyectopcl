@@ -6,6 +6,7 @@ import {
     routeMountHeightM,
     routeSagPct,
 } from '../domain/aerialCableGeometry';
+import type { CableProfileM } from '../domain/cableElevation';
 import {
     cablePresetsFor,
     defaultCableForKind,
@@ -38,6 +39,7 @@ export function SiteFeederRoutePanel({
     context = 'feeder',
     onSetRoute,
     elevationsM,
+    profileM,
     onWastePctChange,
 }: {
     path: RoutableEntity;
@@ -50,6 +52,8 @@ export function SiteFeederRoutePanel({
         segmentModes?: Array<'aerial' | 'underground'>,
     ) => void;
     elevationsM?: number[];
+    /** Perfil real sobre terreno/plataformas (cables de la planta): manda sobre `elevationsM`. */
+    profileM?: CableProfileM;
     onWastePctChange?: (value: number) => void;
 }) {
     const setFeederRoute = useEditorStore((s) => s.setFeederRoute);
@@ -59,14 +63,33 @@ export function SiteFeederRoutePanel({
     const airCount = modes.filter((m) => m === 'aerial').length;
     const groundCount = modes.length - airCount;
     const mixed = airCount > 0 && groundCount > 0;
-    const breakdown = feederLengthBreakdown(
+    const wastePct = context === 'circuit' ? (path.wastePct ?? 5) : 0;
+    const raw = feederLengthBreakdown(
         path.waypoints,
         scaleM,
         route,
         path.segmentModes,
-        elevationsM,
-        context === 'circuit' ? (path.wastePct ?? 5) : 0,
+        profileM ? [] : elevationsM,
+        wastePct,
     );
+    // Misma cifra que Red y CT (`siteCircuitLengthSplit`): planta siguiendo el
+    // terreno y desniveles medidos a lo largo de TODO el recorrido.
+    const breakdown = profileM
+        ? (() => {
+              const subtotalM =
+                  profileM.alongM + raw.sagExtraM + raw.routeVerticalM + profileM.riseM;
+              const wasteM = subtotalM * (Math.max(0, wastePct) / 100);
+              return {
+                  ...raw,
+                  planM: profileM.alongM,
+                  levelChangeM: profileM.riseM,
+                  verticalM: raw.routeVerticalM + profileM.riseM,
+                  subtotalM,
+                  wasteM,
+                  totalM: subtotalM + wasteM,
+              };
+          })()
+        : raw;
 
     const patch = (next: Partial<FeederRoute>) => {
         if (!route) return;
