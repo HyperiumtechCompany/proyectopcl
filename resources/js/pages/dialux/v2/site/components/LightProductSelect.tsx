@@ -2,6 +2,7 @@ import { ImagePlus, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useLuminaireCatalog } from '../hooks/useLuminaireCatalog';
 import { importLuminaireFile } from '../lib/luminaireCatalog';
+import { LdtInfoButton } from './LdtInfoButton';
 
 /**
  * Selector de producto del catálogo de luminarias COMPARTIDO con la V1 (postes
@@ -28,6 +29,13 @@ export function LightProductSelect({
     const [image, setImage] = useState<File | null>(null);
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
+    // Ficha LDT (modal de la V1): se abre sola al importar para revisar sus datos.
+    const [ldtOpen, setLdtOpen] = useState(false);
+    const [imported, setImported] = useState<{ id: number; sourceFormat: string | null } | null>(null);
+    // El elegido si ya está en el catálogo; recién importado, mientras el catálogo recarga.
+    const chosen = catalog.items.find((item) => item.id === productId);
+    const shownId = chosen ? productId : (imported?.id ?? productId);
+    const shownFormat = chosen ? chosen.sourceFormat : imported?.sourceFormat;
 
     const onFile = async (file: File | undefined) => {
         if (!file) return;
@@ -43,6 +51,8 @@ export function LightProductSelect({
                 ...(item.powerWatts ? { wattage: item.powerWatts } : {}),
             });
             setMessage(`Importada "${item.name}" (también disponible en la V1).`);
+            setImported({ id: item.id, sourceFormat: item.sourceFormat ?? 'ldt' });
+            setLdtOpen(true);
         } catch (error) {
             setMessage(`No se pudo importar: ${error instanceof Error ? error.message : 'error'}`);
         } finally {
@@ -102,6 +112,13 @@ export function LightProductSelect({
                     <ImagePlus className="h-3 w-3 shrink-0" />
                     <span className="truncate">{image ? image.name : 'Foto (opcional)'}</span>
                 </button>
+                <LdtInfoButton
+                    productId={shownId}
+                    sourceFormat={shownFormat}
+                    open={ldtOpen}
+                    onOpenChange={setLdtOpen}
+                    onSaved={() => catalog.reload()}
+                />
                 <input ref={fileRef} type="file" accept=".ldt,.ies,.gldf,.txt,.xml" className="hidden" onChange={(event) => void onFile(event.target.files?.[0])} />
                 <input ref={imageRef} type="file" accept="image/*" className="hidden" onChange={(event) => setImage(event.target.files?.[0] ?? null)} />
             </div>

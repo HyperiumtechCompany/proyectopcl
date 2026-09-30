@@ -57,3 +57,18 @@ describe('proyección existente de un espacio', () => {
         expect(existingProjection(site, 'nada').poles).toHaveLength(0);
     });
 });
+
+describe('superficie marcada "no evaluar"', () => {
+    it('no se calcula ni aparece en el informe (ni en sus avisos)', async () => {
+        const { calculateSiteLighting } = await import('./siteLightingCalculation');
+        const platform: SiteElement = {
+            ...strip('pl', 20, 20),
+            type: 'terrace_platform',
+            label: 'Plataforma',
+        };
+        const site = { terrainScaleM: 1, elements: [platform], circuits: [], feederPaths: [] } as unknown as SiteData;
+        expect(calculateSiteLighting(site, new Map()).areas.map((area) => area.elementId)).toEqual(['pl']);
+        const skipped = { ...site, elements: [{ ...platform, calcSurface: { evaluate: false } }] } as SiteData;
+        expect(calculateSiteLighting(skipped, new Map()).areas).toHaveLength(0);
+    });
+});

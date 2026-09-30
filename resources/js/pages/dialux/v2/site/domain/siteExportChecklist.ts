@@ -15,22 +15,26 @@ export interface ExportCheckItem {
     detail: string;
     /** Acción que la interfaz puede ofrecer para resolverlo. */
     action?: 'calculate';
+    /** Objetos afectados: la interfaz los ofrece para ir a cada uno (seleccionarlo en el plano). */
+    elementIds?: string[];
+    /** Arreglo automático seguro que la interfaz puede aplicar. */
+    fix?: { kind: 'skip-evaluation' | 'spread-ramp-levels'; label: string };
 }
 
 const list = (names: string[], max = 4) =>
     names.length <= max ? names.join(', ') : `${names.slice(0, max).join(', ')} y ${names.length - max} más`;
 
 /** Luminarias exteriores sin producto del catálogo (se calculan con el modelo genérico). */
-function genericLuminaireOwners(elements: SiteElement[]): string[] {
-    const names: string[] = [];
+function genericLuminaireOwners(elements: SiteElement[]): SiteElement[] {
+    const names: SiteElement[] = [];
     for (const element of elements) {
         if (element.visible === false) continue;
         const config = element.config;
-        if (config?.kind === 'pole' && config.mount !== 'inground' && config.productId === undefined) names.push(element.label);
-        if (config?.kind === 'gate' && config.lights?.enabled && config.lights.productId === undefined) names.push(element.label);
-        if (config?.kind === 'canopy' && config.lights?.enabled && config.lights.productId === undefined) names.push(element.label);
+        if (config?.kind === 'pole' && config.mount !== 'inground' && config.productId === undefined) names.push(element);
+        if (config?.kind === 'gate' && config.lights?.enabled && config.lights.productId === undefined) names.push(element);
+        if (config?.kind === 'canopy' && config.lights?.enabled && config.lights.productId === undefined) names.push(element);
         if ((config?.kind === 'ramp' || config?.kind === 'stair') && config.lights?.enabled && config.lights.productId === undefined) {
-            names.push(element.label);
+            names.push(element);
         }
     }
     return names;
@@ -85,7 +89,9 @@ export function siteExportChecklist(input: {
                 id: 'unlit-spaces',
                 level: 'recommended',
                 title: `${unlit.length} espacio(s) sin luminarias propias`,
-                detail: `${list(unlit.map((area) => area.label))}: se calculan solo con sus luminarias y darán 0 lx. Proyecta luminarias en cada uno (Iluminación → Proyectar luminarias) o cámbialos a "toda la escena".`,
+                detail: `${list(unlit.map((area) => area.label))}: se calculan solo con sus luminarias y darán 0 lx. Proyecta luminarias en cada uno (Iluminación → Proyectar luminarias), cámbialos a "toda la escena" o, si solo son superficies de apoyo (plataformas, terreno), márcalos "No evaluar".`,
+                elementIds: unlit.map((area) => area.elementId),
+                fix: { kind: 'skip-evaluation', label: 'No evaluar estos espacios en el informe' },
             });
         }
         const byId = new Map(elements.map((element) => [element.id, element]));
@@ -99,6 +105,7 @@ export function siteExportChecklist(input: {
                 level: 'recommended',
                 title: `${noNorm.length} espacio(s) sin actividad normativa elegida`,
                 detail: `${list(noNorm.map((area) => area.label))}: se comparan con la actividad SUGERIDA por el tipo de espacio. Elige la actividad en las propiedades del espacio (Normativa) para que la verificación sea la que corresponde.`,
+                elementIds: noNorm.map((area) => area.elementId),
             });
         }
         if ((calculation.skipped ?? []).length > 0) {
@@ -107,6 +114,7 @@ export function siteExportChecklist(input: {
                 level: 'recommended',
                 title: `${calculation.skipped?.length} espacio(s) tapados por otro (duplicados)`,
                 detail: `${list((calculation.skipped ?? []).map((item) => item.label))}: no tienen puntos propios. Elimina el duplicado o ajusta su contorno.`,
+                elementIds: (calculation.skipped ?? []).map((item) => item.elementId),
             });
         }
     }
@@ -116,14 +124,15 @@ export function siteExportChecklist(input: {
             id: 'generic-luminaires',
             level: 'recommended',
             title: `${generic.length} luminaria(s) sin producto del catálogo`,
-            detail: `${list(generic)}: se calculan con el modelo genérico (lm + haz). Elige o importa su LDT/IES para usar la fotometría real.`,
+            detail: `${list(generic.map((element) => element.label))}: se calculan con el modelo genérico (lm + haz). Selecciona cada una y elige o importa su LDT/IES (Propiedades → luminaria del catálogo; "Reemplazar en todos" cambia de una vez los postes iguales).`,
+            elementIds: generic.map((element) => element.id),
         });
     }
     // Producto de INTERIOR (empotrable, panel, downlight…) en postes o
     // balizas exteriores: la fotometría es real, pero no es una luminaria de
     // alumbrado exterior (IP, distribución, montaje). Se avisa para el informe.
     if (input.products) {
-        const indoor = new Map<string, string[]>();
+        const indoor = new Map<string, SiteElement[]>();
         for (const element of elements) {
             const config = element.config as { productId?: number; lights?: { productId?: number } } | undefined;
             const id = element.type === 'pole' ? config?.productId : config?.lights?.productId;
@@ -131,14 +140,15 @@ export function siteExportChecklist(input: {
             if (!product) continue;
             const text = `${product.name} ${product.fixtureType ?? ''}`;
             if (!/recessed|empotr|panel|downlight|troffer|ceiling|techo|suspend/i.test(text)) continue;
-            indoor.set(product.name, [...(indoor.get(product.name) ?? []), element.label]);
+            indoor.set(product.name, [...(indoor.get(product.name) ?? []), element]);
         }
         for (const [name, owners] of indoor) {
             items.push({
                 id: `indoor-product-${name}`,
                 level: 'recommended',
                 title: `"${name}" parece una luminaria de interior`,
-                detail: `Usada en ${owners.length} luminaria(s) exterior(es) (${list(owners)}). Para un informe de alumbrado exterior usa una luminaria de alumbrado público / exterior (IP65 o más) con su LDT.`,
+                detail: `Usada en ${owners.length} luminaria(s) exterior(es) (${list(owners.map((element) => element.label))}). Para un informe de alumbrado exterior usa una luminaria de alumbrado público / exterior (IP65 o más) con su LDT: selecciona una y usa "Reemplazar en todos".`,
+                elementIds: owners.map((element) => element.id),
             });
         }
     }
@@ -154,7 +164,9 @@ export function siteExportChecklist(input: {
             id: 'ramp-levels',
             level: 'recommended',
             title: `${rampIssues.length} rampa(s) cuyos tramos no suman el desnivel`,
-            detail: `${list(rampIssues.map((element) => element.label))}: el 3D ya los reparte, pero guarda el ajuste ("Repartir el desnivel entre todos los tramos") o corrige la cota destino.`,
+            detail: `${list(rampIssues.map((element) => element.label))}: el 3D ya los reparte, pero guarda el ajuste o corrige la cota destino.`,
+            elementIds: rampIssues.map((element) => element.id),
+            fix: { kind: 'spread-ramp-levels', label: 'Repartir el desnivel entre sus tramos' },
         });
     }
     const fedBlocks = new Set(
@@ -169,6 +181,7 @@ export function siteExportChecklist(input: {
             level: 'recommended',
             title: `${unfed.length} edificio(s) de módulo sin alimentador desde la planta`,
             detail: `${list(unfed.map((element) => `${element.label} (${element.moduleName ?? 'módulo'})`))}: su caída de tensión no incluye el recorrido real. Conéctalos (Propiedades → Conexión eléctrica → Conectar al tablero).`,
+            elementIds: unfed.map((element) => element.id),
         });
     }
     const assumed = input.outputRows.filter((row) => row.assumptions.some((text) => text.startsWith('Sección supuesta')));

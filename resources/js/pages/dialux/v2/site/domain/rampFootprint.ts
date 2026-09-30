@@ -287,3 +287,94 @@ export function calcOutlines(element: SiteElement, scaleM: number): Point2D[][] 
     if (segments.length > 0) return segments.map((segment) => segment.corners);
     return element.vertices.length >= 3 ? [element.vertices] : [];
 }
+
+/**
+ * Cota real (m) de la superficie de paso de rampas y escaleras en un punto
+ * de planta: dentro de cada tramo/descanso se interpola entre su cota de
+ * inicio y de fin. `null` si el punto no cae sobre ninguna. Se arma UNA vez
+ * (los tramos se calculan al construir el muestreador) — la usan los cables
+ * (subir/bajar con la rampa, en 3D y en la longitud vertical) y los postes
+ * colocados sobre ella.
+ */
+export function rampSurfaceSampler(
+    elements: SiteElement[],
+    scaleM: number,
+): (point: Point2D) => number | null {
+    const segments = elements
+        .filter((element) => (element.type === 'ramp' || element.type === 'stair') && element.visible !== false)
+        .flatMap((element) => rampPlanSegments(element, scaleM))
+        .map((segment) => {
+            const [c0, c1, c2, c3] = segment.corners;
+            const start = { x: (c0.x + c3.x) / 2, y: (c0.y + c3.y) / 2 };
+            const end = { x: (c1.x + c2.x) / 2, y: (c1.y + c2.y) / 2 };
+            const xs = segment.corners.map((c) => c.x);
+            const ys = segment.corners.map((c) => c.y);
+            return {
+                ...segment,
+                start,
+                end,
+                minX: Math.min(...xs),
+                maxX: Math.max(...xs),
+                minY: Math.min(...ys),
+                maxY: Math.max(...ys),
+            };
+        });
+    // Rampa de UNA losa (sin tramos, no helicoidal): plano inclinado a lo largo
+    // de su eje largo, igual que `SiteBuilder3D.buildSingleRampSlab` (verificado
+    // en 3D: en X sube hacia x mínima; en Y, hacia y máxima del plano).
+    const slabs = elements
+        .filter(
+            (element) =>
+                element.type === 'ramp' &&
+                element.visible !== false &&
+                element.config?.kind === 'ramp' &&
+                element.config.shape !== 'spiral' &&
+                !(element.config.flights && element.config.flights.length > 0) &&
+                element.vertices.length >= 3,
+        )
+        .map((element) => {
+            const config = element.config as RampConfig;
+            const xs = element.vertices.map((v) => v.x);
+            const ys = element.vertices.map((v) => v.y);
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            const maxY = Math.max(...ys);
+            return {
+                vertices: element.vertices,
+                minX,
+                maxX,
+                minY,
+                maxY,
+                alongX: maxX - minX >= maxY - minY,
+                from: config.fromElevationM,
+                to: config.toElevationM,
+            };
+        });
+    if (segments.length === 0 && slabs.length === 0) return () => null;
+    return (point) => {
+        let best: number | null = null;
+        for (const slab of slabs) {
+            if (point.x < slab.minX || point.x > slab.maxX || point.y < slab.minY || point.y > slab.maxY) continue;
+            if (!pointInPolygon(point, slab.vertices)) continue;
+            const t = slab.alongX
+                ? (slab.maxX - point.x) / Math.max(1e-9, slab.maxX - slab.minX)
+                : (point.y - slab.minY) / Math.max(1e-9, slab.maxY - slab.minY);
+            const z = slab.from + (slab.to - slab.from) * t;
+            if (best === null || z > best) best = z;
+        }
+        for (const segment of segments) {
+            if (point.x < segment.minX || point.x > segment.maxX || point.y < segment.minY || point.y > segment.maxY) {
+                continue;
+            }
+            if (!pointInPolygon(point, segment.corners)) continue;
+            const dx = segment.end.x - segment.start.x;
+            const dy = segment.end.y - segment.start.y;
+            const len2 = dx * dx + dy * dy;
+            const t = len2 > 0 ? Math.max(0, Math.min(1, ((point.x - segment.start.x) * dx + (point.y - segment.start.y) * dy) / len2)) : 0;
+            const z = segment.startM + (segment.endM - segment.startM) * t;
+            if (best === null || z > best) best = z;
+        }
+        return best;
+    };
+}

@@ -64,6 +64,7 @@ import {
 } from '../domain/layoutFit';
 import { pickSpreadSources } from '../domain/lightPicker';
 import { platformGroundAt, PLATFORM_EDGE_ON_M } from '../domain/platformGround';
+import { rampSurfaceSampler } from '../domain/rampFootprint';
 import {
     arrivalBridge,
     normalizeFlightRises,
@@ -124,7 +125,7 @@ import type {
     TransformerConfig,
 } from '../domain/types';
 import { resolveWireEndpoints } from '../domain/wireAnchors';
-import { offsetPolyline, wireBundleLanes, type WireLane } from '../domain/wireBundles';
+import { bundleShiftAt, wireBundleLanes, type WireLane } from '../domain/wireBundles';
 import type { LuminairePhotometry } from '../lib/luminaireCatalog';
 import {
     buildCanopyMeshes,
@@ -278,6 +279,7 @@ export class SiteBuilder3D {
     private originZ = 0;
     /** Elementos del emplazamiento por id — para que un objeto pueda referenciar a otro (ej. portón → cerco al que queda pegado). */
     private elementsById = new Map<string, SiteElement>();
+    private rampSurfaceAt: (point: Point2D) => number | null = () => null;
     /** Plataformas de terreno — para que un objeto colocado encima se apoye en su superficie sin tener que teclear la cota. */
     private platforms: SiteElement[] = [];
     /** Metros por unidad de plano de la última `sync` — para medir distancias reales en helpers de suelo. */
@@ -555,6 +557,8 @@ export class SiteBuilder3D {
             siteData.elements.map((element) => [element.id, element]),
         );
         this.gateFence = this.computeGateFences(siteData.elements);
+        // Superficie de paso de rampas/escaleras (cables y postes suben con ella).
+        this.rampSurfaceAt = rampSurfaceSampler(siteData.elements, scaleM);
         this.platforms = siteData.elements.filter(
             (element) =>
                 element.type === 'terrace_platform' &&
@@ -635,6 +639,8 @@ export class SiteBuilder3D {
         const lanes = wireBundleLanes(
             (siteData.circuits ?? []).map((circuit) => ({
                 id: circuit.id,
+                startId: circuit.sourceId,
+                endId: circuit.targetId,
                 points: resolveWireEndpoints(
                     circuit.waypoints,
                     circuit.sourceId,
@@ -1516,6 +1522,33 @@ export class SiteBuilder3D {
     }
 
     /** X de plano → X de mundo 3D (recentrado). */
+    /** Suelo de un cable: la superficie de la rampa/escalera si pasa por ella; si no, plataforma o relieve. */
+    private cableGroundAbs(point: Point2D): number {
+        return this.rampSurfaceAt(point) ?? this.groundTopAbs(point);
+    }
+
+    /** Punto 3D apoyado sobre el suelo real (rampa, plataforma o relieve) + 5 cm. */
+    private groundPoint3D(point: Point2D, scaleM: number): Vector3 {
+        return new Vector3(
+            this.wx(point.x, scaleM),
+            this.rel(this.cableGroundAbs(point)) + 0.05,
+            this.wz(point.y, scaleM),
+        );
+    }
+
+    /**
+     * Cota (relativa) de la cabeza de un poste: su base (plataforma o rampa,
+     * como `anchorNode`) + la altura del fuste. Un cable aéreo que llega al
+     * poste termina ahí (el conductor baja por dentro del poste).
+     */
+    private poleHeadRel(element: SiteElement, scaleM: number): number | undefined {
+        if (element.type !== 'pole') return undefined;
+        const cfg = poleCfg(element);
+        if (cfg?.mount === 'inground' || cfg?.mount === 'bollard') return undefined;
+        const base = this.anchorBaseRel(element, scaleM);
+        return base + (cfg?.heightM ?? element.heightM ?? 6) - 0.3;
+    }
+
     private wx(planX: number, scaleM: number): number {
         return planX * scaleM - this.originX;
     }
@@ -1525,6 +1558,29 @@ export class SiteBuilder3D {
     }
 
     /** TransformNode anclado al centroide del elemento — punto de referencia común para todas las variantes de construcción. */
+    /**
+     * Y (relativa) de la base de un objeto = cota del terreno natural bajo el
+     * centroide + `baseElevationM` (0 = apoyado en el suelo; +7 = plataforma
+     * de aulas; −1 = estacionamiento hundido). Sin cota propia: un poste /
+     * tomacorriente sobre una rampa o escalera se apoya en SU superficie; si
+     * no, en la plataforma bajo su centro. Con cota propia no se toca.
+     */
+    private anchorBaseRel(element: SiteElement, scaleM: number): number {
+        void scaleM;
+        const center = centroid(element.vertices);
+        if (!element.baseElevationM && (element.type === 'pole' || element.type === 'outlet')) {
+            const onRamp = this.rampSurfaceAt(center);
+            if (onRamp !== null) return this.rel(onRamp);
+        }
+        const platformTop =
+            !element.baseElevationM && !NO_PLATFORM_REST.has(element.type)
+                ? this.platformTopAt(center)
+                : undefined;
+        return platformTop !== undefined
+            ? this.rel(platformTop)
+            : this.groundAt(center) + (element.baseElevationM ?? 0);
+    }
+
     private anchorNode(
         element: SiteElement,
         scaleM: number,
@@ -1535,21 +1591,9 @@ export class SiteBuilder3D {
     } {
         const center = centroid(element.vertices);
         const node = new TransformNode(`site_${element.id}`, this.scene);
-        // Y = cota del terreno natural bajo el centroide + `baseElevationM`
-        // (offset en metros reales: 0 = apoyado en el suelo; +7 = plataforma
-        // de aulas; −1 = estacionamiento hundido).
-        // Sin cota propia (0/ausente) y con el centro sobre una plataforma:
-        // se apoya en la superficie de ESA plataforma (construir sobre ella).
-        // Con cota propia distinta de 0 no se toca — respeta lo ya dibujado.
-        const platformTop =
-            !element.baseElevationM && !NO_PLATFORM_REST.has(element.type)
-                ? this.platformTopAt(center)
-                : undefined;
         node.position.set(
             this.wx(center.x, scaleM),
-            platformTop !== undefined
-                ? this.rel(platformTop)
-                : this.groundAt(center) + (element.baseElevationM ?? 0),
+            this.anchorBaseRel(element, scaleM),
             this.wz(center.y, scaleM),
         );
         // `rotation` en grados horarios sobre pantalla. Como el plano se
@@ -3780,30 +3824,59 @@ export class SiteBuilder3D {
         // El extremo sigue el centro ACTUAL del artefacto anclado (no el
         // punto guardado al dibujar) — así el cable sigue al objeto al
         // moverlo, igual que en el plano 2D.
-        const waypoints = offsetPolyline(
-            resolveWireEndpoints(
-                circuit.waypoints,
-                circuit.sourceId,
-                circuit.targetId,
-                (id) => this.elementsById.get(id),
-                scaleM,
-                circuit.tgOutputId,
-                this.elementsById.values(),
-            ),
-            lanes,
-            // 12 cm entre cables del mismo haz.
-            0.12 / Math.max(scaleM, 1e-9),
+        const waypoints = resolveWireEndpoints(
+            circuit.waypoints,
+            circuit.sourceId,
+            circuit.targetId,
+            (id) => this.elementsById.get(id),
+            scaleM,
+            circuit.tgOutputId,
+            this.elementsById.values(),
         );
+        // Tendido plano: muestreado cada ~0,5 m sobre el suelo real (sigue
+        // plataformas y relieve, y el haz puede abrirse a lo largo del tramo).
+        const flatPoints = (): Vector3[] => {
+            const out: Vector3[] = [];
+            for (let k = 0; k < waypoints.length; k++) {
+                if (k === 0) {
+                    out.push(this.groundPoint3D(waypoints[0], scaleM));
+                    continue;
+                }
+                const a = waypoints[k - 1];
+                const b = waypoints[k];
+                const n = Math.min(80, Math.max(1, Math.ceil((Math.hypot(b.x - a.x, b.y - a.y) * scaleM) / 0.5)));
+                for (let j = 1; j <= n; j++) {
+                    out.push(this.groundPoint3D({ x: a.x + ((b.x - a.x) * j) / n, y: a.y + ((b.y - a.y) * j) / n }, scaleM));
+                }
+            }
+            return out;
+        };
         const points = this.hasRoutedModes(circuit)
-            ? this.aerialFeederPoints({ ...circuit, waypoints }, scaleM)
-            : waypoints.map(
-                  (point) =>
-                      new Vector3(
-                          this.wx(point.x, scaleM),
-                          this.rel(this.groundTopAbs(point)) + 0.05,
-                          this.wz(point.y, scaleM),
-                      ),
-              );
+            ? this.aerialFeederPoints({ ...circuit, waypoints }, scaleM, {
+                  start: (() => {
+                      const element = this.elementsById.get(circuit.sourceId);
+                      return element ? this.poleHeadRel(element, scaleM) : undefined;
+                  })(),
+                  end: (() => {
+                      const element = this.elementsById.get(circuit.targetId);
+                      return element ? this.poleHeadRel(element, scaleM) : undefined;
+                  })(),
+              })
+            : flatPoints();
+        // Haz: cables por la misma zanja en paralelo (12 cm), juntándose en
+        // sus objetos (borne del TG, caja, poste) — igual que en el 2D.
+        if (lanes?.some((lane) => lane.lane !== 0)) {
+            const spacing = 0.12 / Math.max(scaleM, 1e-9);
+            for (const point of points) {
+                const plan = {
+                    x: (point.x + this.originX) / scaleM,
+                    y: -(point.z + this.originZ) / scaleM,
+                };
+                const shift = bundleShiftAt(plan, waypoints, lanes, spacing);
+                point.x += shift.x * scaleM;
+                point.z -= shift.y * scaleM;
+            }
+        }
         const source = this.elementsById.get(circuit.sourceId);
         const target = this.elementsById.get(circuit.targetId);
         const terminalHeight = (element: SiteElement): number => {
@@ -3864,6 +3937,8 @@ export class SiteBuilder3D {
     private aerialFeederPoints(
         path: Pick<FeederPath, 'waypoints' | 'route' | 'segmentModes'>,
         scaleM: number,
+        /** Cota (relativa) del amarre en un poste de extremo: el cable aéreo termina en su cabeza. */
+        ends: { start?: number; end?: number } = {},
     ): Vector3[] {
         const mount = routeMountHeightM(path.route);
         const depth = routeDepthM(path.route);
@@ -3875,26 +3950,34 @@ export class SiteBuilder3D {
                 path.segmentModes,
             ) ?? path.waypoints.slice(1).map(() => 'aerial' as const);
         const groundRel = (point: Point2D) =>
-            this.rel(this.groundTopAbs(point)) + 0.06;
+            this.rel(this.cableGroundAbs(point)) + 0.06;
+        const last = path.waypoints.length - 1;
         const worldXZ = (point: Point2D) => ({
             x: this.wx(point.x, scaleM),
             z: this.wz(point.y, scaleM),
         });
         type RouteLevel = 'surface' | 'aerial' | 'underground';
-        const restY = (i: number, level: RouteLevel) =>
-            groundRel(path.waypoints[i]) +
-            (level === 'aerial'
-                ? mount - 0.06
-                : level === 'underground'
-                  ? -depth - 0.06
-                  : 0);
+        const restY = (i: number, level: RouteLevel) => {
+            if (level === 'aerial' && i === 0 && ends.start !== undefined) return ends.start;
+            if (level === 'aerial' && i === last && ends.end !== undefined) return ends.end;
+            return (
+                groundRel(path.waypoints[i]) +
+                (level === 'aerial'
+                    ? mount - 0.06
+                    : level === 'underground'
+                      ? -depth - 0.06
+                      : 0)
+            );
+        };
         const at = (i: number, level: RouteLevel): Vector3 => {
             const xz = worldXZ(path.waypoints[i]);
             return new Vector3(xz.x, restY(i, level), xz.z);
         };
 
-        const points: Vector3[] = [at(0, 'surface')];
-        let currentLevel: RouteLevel = 'surface';
+        // Sale de un poste por el aire: arranca en su cabeza, no en el suelo.
+        const startsAtPoleHead = ends.start !== undefined && modes[0] === 'aerial';
+        const points: Vector3[] = [at(0, startsAtPoleHead ? 'aerial' : 'surface')];
+        let currentLevel: RouteLevel = startsAtPoleHead ? 'aerial' : 'surface';
         for (let i = 1; i < path.waypoints.length; i++) {
             const mode = modes[i - 1];
             const aerial = mode === 'aerial';
@@ -3950,7 +4033,8 @@ export class SiteBuilder3D {
                 points.push(new Vector3(xz.x, y, xz.z));
             }
         }
-        if (currentLevel !== 'surface') {
+        // Llega a un poste por el aire: termina en su cabeza (baja por dentro).
+        if (currentLevel !== 'surface' && !(currentLevel === 'aerial' && ends.end !== undefined)) {
             points.push(at(path.waypoints.length - 1, 'surface'));
         }
         return points;

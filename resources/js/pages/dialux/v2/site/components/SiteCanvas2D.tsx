@@ -48,7 +48,7 @@ import {
 } from '../domain/tgPanel';
 import type { Point2D, SiteData, SiteElement } from '../domain/types';
 import { resolveWireEndpoints } from '../domain/wireAnchors';
-import { offsetSegment, wireBundleLanes } from '../domain/wireBundles';
+import { laneShift, offsetSegment, wireBundleLanes } from '../domain/wireBundles';
 import { useSiteCadPlan } from '../hooks/useSiteCadPlan';
 import { CIRCUIT_COMMIT_SNAP_M } from '../hooks/useSiteEditor';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
@@ -499,6 +499,8 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
     const wireLanes = wireBundleLanes(
         (siteData.circuits ?? []).map((circuit) => ({
             id: circuit.id,
+            startId: circuit.sourceId,
+            endId: circuit.targetId,
             points: resolveWireEndpoints(
                 circuit.waypoints,
                 circuit.sourceId,
@@ -2593,6 +2595,7 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                         : undefined;
                                 // Carril del tramo en su haz (cables paralelos por la misma zanja).
                                 const segLane = wireLanes.get(circuit.id)?.[i];
+                                // Tramo en su carril (manijas y rótulos): a mitad de tramo.
                                 const [segA, segB] = offsetSegment(
                                     renderWaypoints[i],
                                     wp,
@@ -2600,22 +2603,59 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                     laneSpacing,
                                 );
                                 const bundled = !!segLane && segLane.lane !== 0;
-                                const d = wireSegmentPath(
-                                    segA,
-                                    segB,
-                                    bowMode,
-                                    circuit.route?.curveSide,
-                                    circuit.route?.curveOffsetM,
-                                );
-                                const hitD = wireHitPath(
-                                    segA,
-                                    segB,
-                                    bowMode,
-                                    circuit.route?.curveSide,
-                                    circuit.route?.curveOffsetM,
-                                    i === 0,
-                                    i === renderWaypoints.length - 2,
-                                );
+                                // Trazo del haz: cada cable llega JUNTO a sus objetos
+                                // (borne del TG, caja, poste) y va en paralelo a lo
+                                // largo del tramo — nunca se cruzan ni saltan en la caja.
+                                const taper = {
+                                    start: i === 0,
+                                    end: i === renderWaypoints.length - 2,
+                                };
+                                const samples = 17;
+                                const basePts = bowMode
+                                    ? bowedSegmentPoints(
+                                          renderWaypoints[i],
+                                          wp,
+                                          editor.terrainScaleM,
+                                          bowMode,
+                                          samples,
+                                          circuit.route?.curveSide,
+                                          circuit.route?.curveOffsetM,
+                                      )
+                                    : Array.from({ length: samples }, (_, k) => ({
+                                          x: renderWaypoints[i].x + ((wp.x - renderWaypoints[i].x) * k) / (samples - 1),
+                                          y: renderWaypoints[i].y + ((wp.y - renderWaypoints[i].y) * k) / (samples - 1),
+                                      }));
+                                const pathPts = basePts.map((p, k) => {
+                                    const shift = laneShift(segLane, laneSpacing, k / (basePts.length - 1), taper);
+                                    return { x: p.x + shift.x, y: p.y + shift.y };
+                                });
+                                const toD = (pts: Point2D[]) =>
+                                    pts
+                                        .map((p, k) => {
+                                            const sp = toScreen(p);
+                                            return `${k === 0 ? 'M' : 'L'} ${sp.x} ${sp.y}`;
+                                        })
+                                        .join(' ');
+                                const d = bundled
+                                    ? toD(pathPts)
+                                    : wireSegmentPath(
+                                          renderWaypoints[i],
+                                          wp,
+                                          bowMode,
+                                          circuit.route?.curveSide,
+                                          circuit.route?.curveOffsetM,
+                                      );
+                                const hitD = bundled
+                                    ? toD(pathPts.slice(taper.start ? 2 : 0, taper.end ? -2 : undefined))
+                                    : wireHitPath(
+                                          renderWaypoints[i],
+                                          wp,
+                                          bowMode,
+                                          circuit.route?.curveSide,
+                                          circuit.route?.curveOffsetM,
+                                          i === 0,
+                                          i === renderWaypoints.length - 2,
+                                      );
                                 const arcHandle =
                                     wireSelected && bowMode
                                         ? toScreen(

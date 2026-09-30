@@ -6,7 +6,7 @@ import { siteLuminaires } from '../domain/siteLightingCalculation';
 import { requiredLuxFor } from '../domain/siteLightingNorms';
 import type { Point2D, SiteData, SiteElement, SiteNormRegion } from '../domain/types';
 import { resolveWireEndpoints } from '../domain/wireAnchors';
-import { offsetPolyline, wireBundleLanes } from '../domain/wireBundles';
+import { bundledPolyline, laneShift, wireBundleLanes } from '../domain/wireBundles';
 import { isoluxSvgFragments, svgClipToPolygons } from './isoluxSvg';
 
 /**
@@ -166,10 +166,18 @@ export function renderSitePlanSvg(
         ).map(M),
     }));
     // Cables por la misma zanja/cajas: en paralelo, cada salida visible con su color.
-    const lanes = wireBundleLanes(wires.map((wire) => ({ id: wire.circuit.id, points: wire.points })));
+    const lanes = wireBundleLanes(
+        wires.map((wire) => ({
+            id: wire.circuit.id,
+            points: wire.points,
+            startId: wire.circuit.sourceId,
+            endId: wire.circuit.targetId,
+        })),
+    );
     for (const { circuit, points: centerline } of wires) {
         const circuitLanes = lanes.get(circuit.id);
-        const points = offsetPolyline(centerline, circuitLanes, stroke * 3);
+        // Haz: en paralelo a lo largo del tramo, juntándose en sus objetos.
+        const points = bundledPolyline(centerline, circuitLanes, stroke * 3);
         if (points.length < 2) continue;
         const run = runs.get(circuit.id);
         const color = circuitColor(circuit, run, '#0e7490');
@@ -177,21 +185,29 @@ export function renderSitePlanSvg(
         const tag = circuitRunTag(run);
         if (!tag) continue;
         let best = { length: 0, x: 0, y: 0 };
-        for (let k = 1; k < points.length; k++) {
-            const length = Math.hypot(points[k].x - points[k - 1].x, points[k].y - points[k - 1].y);
+        // Sobre los tramos REALES (no el muestreo del haz), en su carril.
+        for (let k = 1; k < centerline.length; k++) {
+            const a = centerline[k - 1];
+            const b = centerline[k];
+            const length = Math.hypot(b.x - a.x, b.y - a.y);
             // En un haz, cada rótulo en otro punto del tramo (no se tapan).
             const t = 0.5 + Math.max(-0.35, Math.min(0.35, (circuitLanes?.[k - 1]?.lane ?? 0) * 0.22));
             if (length > best.length) {
+                const shift = laneShift(circuitLanes?.[k - 1], stroke * 3, t, {
+                    start: k === 1,
+                    end: k === centerline.length - 1,
+                });
                 best = {
                     length,
-                    x: points[k - 1].x + (points[k].x - points[k - 1].x) * t,
-                    y: points[k - 1].y + (points[k].y - points[k - 1].y) * t,
+                    x: a.x + (b.x - a.x) * t + shift.x,
+                    y: a.y + (b.y - a.y) * t + shift.y,
                 };
             }
         }
         const size = textH * 0.5;
         const w = size * 0.62 * tag.length + size * 0.6;
-        if (best.length < w) continue;
+        // Solo en un tramo que doble al rótulo: en uno corto (TG → caja) lo tapaba.
+        if (best.length < w * 2) continue;
         // Etiqueta con fondo blanco y borde del color de la salida: legible sobre cualquier fondo.
         tags.push(
             `<rect x="${(best.x - w / 2).toFixed(3)}" y="${(best.y - size * 0.75).toFixed(3)}" width="${w.toFixed(3)}" height="${(size * 1.5).toFixed(3)}" rx="${(size * 0.3).toFixed(3)}" fill="#ffffff" stroke="${color}" stroke-width="${(stroke * 1.2).toFixed(3)}"/>` +

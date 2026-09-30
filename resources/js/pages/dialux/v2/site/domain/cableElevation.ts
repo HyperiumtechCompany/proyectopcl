@@ -1,4 +1,5 @@
 import { platformGroundAt } from './platformGround';
+import { rampSurfaceSampler } from './rampFootprint';
 import {
     sampleGroundElevation,
     terrainElevationPoints,
@@ -15,6 +16,7 @@ export function cableWaypointElevations(
     scaleM: number,
 ): number[] {
     const terrain = terrainElevationPoints(elements);
+    const rampAt = rampSurfaceSampler(elements, scaleM);
     const platforms = elements
         .filter(
             (element) =>
@@ -32,6 +34,9 @@ export function cableWaypointElevations(
             terrain.length >= 3
                 ? sampleGroundElevation(terrain, point.x, point.y)
                 : 0;
+        // Sobre una rampa/escalera manda SU superficie (sube con ella).
+        const onRamp = rampAt(point);
+        if (onRamp !== null) return onRamp;
         const platform = platformGroundAt(point, platforms, scaleM);
         return platform === null ? natural : Math.max(natural, platform);
     });
@@ -61,6 +66,7 @@ export function cableProfileM(
     stepM = 0.5,
 ): CableProfileM {
     const terrain = terrainElevationPoints(elements);
+    const rampAt = rampSurfaceSampler(elements, scaleM);
     const platforms = elements
         .filter(
             (element) =>
@@ -71,6 +77,9 @@ export function cableProfileM(
         .map((element) => ({ vertices: element.vertices, topM: element.baseElevationM ?? 0 }));
     const groundAt = (point: Point2D) => {
         const natural = terrain.length >= 3 ? sampleGroundElevation(terrain, point.x, point.y) : 0;
+        // Sobre una rampa/escalera manda SU superficie (sube con ella).
+        const onRamp = rampAt(point);
+        if (onRamp !== null) return onRamp;
         const platform = platformGroundAt(point, platforms, scaleM);
         return platform === null ? natural : Math.max(natural, platform);
     };

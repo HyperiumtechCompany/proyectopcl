@@ -5,7 +5,13 @@ import type { Fixture, LightingResult, Room } from '@/pages/dialux/hooks/types';
 import type { LuminairePhotometry } from '../lib/luminaireCatalog';
 import { DEFAULT_LUMINAIRE, type LightingSummary } from './exteriorLighting';
 import { gateEntrance } from './gateLayout';
-import { calcOutlines, rampCalcPatches, rampSideLightPoints, sideLightsOf } from './rampFootprint';
+import {
+    calcOutlines,
+    rampCalcPatches,
+    rampSideLightPoints,
+    rampSurfaceSampler,
+    sideLightsOf,
+} from './rampFootprint';
 import { maskGrid, patchStats, planPatches } from './siteLightingPatches';
 import {
     canopyLightPoints,
@@ -191,6 +197,11 @@ export function siteElementBaseElevation(
 ): number {
     const center = centroidOf(element.vertices);
     if (element.type === 'terrace_platform') return element.baseElevationM ?? 0;
+    // Poste / tomacorriente sobre una rampa o escalera: su superficie (igual que el 3D).
+    if (!element.baseElevationM && (element.type === 'pole' || element.type === 'outlet')) {
+        const onRamp = rampSurfaceSampler(site.elements ?? [], site.terrainScaleM || 1)(center);
+        if (onRamp !== null) return onRamp;
+    }
     if (element.type === 'terrain') return siteSurfaceElevationAt(site, center);
     if (!element.baseElevationM && !NO_PLATFORM_REST.has(element.type)) {
         return siteSurfaceElevationAt(site, center);
@@ -821,7 +832,9 @@ export function calculateSiteLighting(
             !SITE_CALCULATION_AREA_TYPES.has(element.type) ||
             element.visible === false ||
             element.vertices.length < 3 ||
-            (onlyAreaIds && !onlyAreaIds.has(element.id))
+            (onlyAreaIds && !onlyAreaIds.has(element.id)) ||
+            // Superficie de apoyo marcada "no evaluar" (no es un objeto de alumbrado).
+            element.calcSurface?.evaluate === false
         ) {
             continue;
         }

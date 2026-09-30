@@ -12,6 +12,7 @@ import {
     useLuminairePhotometry,
 } from '../hooks/useLuminaireCatalog';
 import { importLuminaireFile, type LuminaireCatalogItem } from '../lib/luminaireCatalog';
+import { LdtInfoButton } from './LdtInfoButton';
 
 /** Tipos de poste habituales (fotos de referencia: báculo, doble brazo, acodado…). */
 const POLE_PRESETS: Array<{
@@ -155,6 +156,8 @@ export function PoleLuminairePanel({ config, onPatch, count = 1 }: Props) {
     const updateSiteElement = useEditorStore((state) => state.updateSiteElement);
 
     const product = catalog.items.find((item) => item.id === config.productId);
+    const [ldtOpen, setLdtOpen] = useState(false);
+    const [imported, setImported] = useState<{ id: number; sourceFormat: string | null } | null>(null);
     const photometry = useLuminairePhotometry(
         config.productId ? [config.productId] : [],
     ).get(config.productId ?? -1);
@@ -259,6 +262,9 @@ export function PoleLuminairePanel({ config, onPatch, count = 1 }: Props) {
         try {
             const { item, warnings } = await importLuminaireFile(file, pendingImage ?? undefined);
             catalog.reload();
+            // Ficha LDT (modal de la V1) para revisar lo importado.
+            setImported({ id: item.id, sourceFormat: item.sourceFormat ?? 'ldt' });
+            setLdtOpen(true);
             setPendingImage(null);
             onPatch({
                 productId: item.id,
@@ -465,6 +471,14 @@ export function PoleLuminairePanel({ config, onPatch, count = 1 }: Props) {
                     accept=".ldt,.ies,.gldf,.txt,.xml"
                     className="hidden"
                     onChange={(e) => void onFile(e.target.files?.[0])}
+                />
+                <LdtInfoButton
+                    // El elegido si ya está en el catálogo; recién importado, mientras el catálogo recarga.
+                    productId={product ? config.productId : (imported?.id ?? config.productId)}
+                    sourceFormat={product ? product.sourceFormat : imported?.sourceFormat}
+                    open={ldtOpen}
+                    onOpenChange={setLdtOpen}
+                    onSaved={() => catalog.reload()}
                 />
                 <button
                     type="button"

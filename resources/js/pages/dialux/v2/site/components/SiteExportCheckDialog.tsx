@@ -1,5 +1,6 @@
 import { AlertTriangle, Calculator, CheckCircle2, FileText, X, XCircle } from 'lucide-react';
-import { siteExportChecklist } from '../domain/siteExportChecklist';
+import { normalizeFlightRises } from '../domain/rampFootprint';
+import { siteExportChecklist, type ExportCheckItem } from '../domain/siteExportChecklist';
 import type { SiteOutputRow } from '../domain/siteOutputs';
 import { useLuminaireCatalog } from '../hooks/useLuminaireCatalog';
 import type { UseSiteEditorReturn } from '../hooks/useSiteEditor';
@@ -101,6 +102,7 @@ export function SiteExportCheckDialog({
                                         {item.title}
                                     </p>
                                     <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">{item.detail}</p>
+                                    <ItemActions item={item} editor={editor} onRecalculate={lighting.run} onClose={onClose} />
                                 </div>
                             ))}
                         </section>
@@ -123,6 +125,74 @@ export function SiteExportCheckDialog({
                     </button>
                 </footer>
             </div>
+        </div>
+    );
+}
+
+/**
+ * Cómo resolver un aviso ahí mismo: ir a cada objeto afectado (lo selecciona
+ * en el plano y cierra el diálogo, para corregirlo en sus propiedades) y,
+ * cuando es seguro, arreglarlo con un clic.
+ */
+function ItemActions({
+    item,
+    editor,
+    onRecalculate,
+    onClose,
+}: {
+    item: ExportCheckItem;
+    editor: UseSiteEditorReturn;
+    onRecalculate: () => void;
+    onClose: () => void;
+}) {
+    const elements = editor.siteData?.elements ?? [];
+    const targets = (item.elementIds ?? [])
+        .map((id) => elements.find((element) => element.id === id))
+        .filter((element): element is NonNullable<typeof element> => Boolean(element));
+    if (targets.length === 0 && !item.fix) return null;
+    const applyFix = () => {
+        if (item.fix?.kind === 'skip-evaluation') {
+            for (const element of targets) {
+                editor.updateSiteElement(element.id, {
+                    calcSurface: { ...(element.calcSurface ?? {}), evaluate: false },
+                });
+            }
+        }
+        if (item.fix?.kind === 'spread-ramp-levels') {
+            for (const element of targets) {
+                if (element.config?.kind === 'ramp') {
+                    editor.updateSiteElement(element.id, { config: normalizeFlightRises(element.config) });
+                }
+            }
+        }
+        window.setTimeout(onRecalculate, 60);
+    };
+    return (
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+            {targets.slice(0, 14).map((element) => (
+                <button
+                    key={element.id}
+                    type="button"
+                    onClick={() => {
+                        editor.selectElements([element.id]);
+                        onClose();
+                    }}
+                    title="Seleccionarlo en el plano para corregirlo en sus propiedades"
+                    className="rounded border border-amber-300 bg-white px-1.5 py-0.5 text-[10px] text-amber-800 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-transparent dark:text-amber-200 dark:hover:bg-amber-500/10"
+                >
+                    {element.label || element.type} →
+                </button>
+            ))}
+            {targets.length > 14 && <span className="text-[10px] text-slate-500">y {targets.length - 14} más</span>}
+            {item.fix && (
+                <button
+                    type="button"
+                    onClick={applyFix}
+                    className="rounded bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-amber-600"
+                >
+                    {item.fix.label}
+                </button>
+            )}
         </div>
     );
 }

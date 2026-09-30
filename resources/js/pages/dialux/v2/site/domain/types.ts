@@ -665,6 +665,12 @@ export interface SiteCalcSurface {
     floorReflectance?: number;
     /** Reflectancia de la cara inferior de la cubierta (techado / cancha techada), 0–1. Por defecto 0,70. */
     ceilingReflectance?: number;
+    /**
+     * `false` = superficie de apoyo que NO es un objeto de alumbrado (terreno,
+     * plataforma sin luminarias…): no se calcula ni aparece en el informe.
+     * Sus puntos siguen siendo suyos (no pasan a otro espacio). Ausente = se evalúa.
+     */
+    evaluate?: boolean;
 }
 
 export interface SiteElement {

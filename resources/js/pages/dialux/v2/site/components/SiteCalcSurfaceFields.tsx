@@ -45,6 +45,19 @@ export function SiteCalcSurfaceFields({
     return (
         <section className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-2 text-[11px] dark:border-amber-500/20 dark:bg-amber-500/5">
             <p className="font-bold text-slate-700 dark:text-slate-200">Superficie de cálculo</p>
+            <label className="flex items-start gap-1.5 text-[10px] text-slate-600 dark:text-slate-300">
+                <input
+                    type="checkbox"
+                    className="mt-0.5 h-3 w-3 accent-amber-600"
+                    checked={surface.evaluate !== false}
+                    onChange={(event) => update({ evaluate: event.target.checked ? undefined : false })}
+                />
+                <span>
+                    Evaluar en el cálculo y el informe. Desmárcalo en superficies
+                    de apoyo que no son objetos de alumbrado (terreno, plataforma
+                    sin luminarias).
+                </span>
+            </label>
             <div className="grid grid-cols-2 gap-1.5">
                 <label className="text-[10px] text-slate-500">
                     Malla
