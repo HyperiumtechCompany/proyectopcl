@@ -1630,8 +1630,10 @@ export function useSiteEditor(projectId: number, generalModuleId: number) {
             originalName: result.originalName,
             x: 0,
             y: 0,
-            widthUnits: 1,
-            heightUnits: 1,
+            // Imagen de fondo: su tamaño en px como tamaño inicial (se calibra después).
+            widthUnits: result.kind === 'image' ? (result.widthPx ?? 1) : 1,
+            heightUnits: result.kind === 'image' ? (result.heightPx ?? 1) : 1,
+            ...(result.kind === 'image' ? { kind: 'image' as const } : { kind: 'cad' as const }),
             opacity: 0.85,
             visible: true,
             updatedAt: Date.now(),

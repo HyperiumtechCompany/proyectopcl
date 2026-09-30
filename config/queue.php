@@ -44,6 +44,18 @@ return [
             'after_commit' => false,
         ],
 
+        // Planos CAD pesados (optimización en segundo plano, hasta 30 min):
+        // `retry_after` MAYOR que el tiempo del job, o la cola lo relanzaría
+        // mientras sigue corriendo. Worker propio de 1 proceso (Supervisor).
+        'database-cad' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => 'cad',
+            'retry_after' => (int) env('DIALUX_PLAN_QUEUE_RETRY_AFTER', 2100),
+            'after_commit' => false,
+        ],
+
         'beanstalkd' => [
             'driver' => 'beanstalkd',
             'host' => env('BEANSTALKD_QUEUE_HOST', 'localhost'),

@@ -121,6 +121,9 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
         phase: cadPhase,
         fileBytes: cadFileBytes,
         deferredBytes,
+        vectorBlocked,
+        light: cadLight,
+        retryLight,
         loadVector,
         abandonVector,
         getView,
@@ -754,8 +757,12 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
     // defecto y de otro modo se ven todas iguales sin importar la cota.
     const platformElevationRange = elementElevationRange(siteData.elements);
 
+    // Imagen de fondo: la importada como PNG/JPG o la de proyectos antiguos
+    // (sin `kind`). Un plano importado como CAD no tiene PNG (pedirla daba 404).
     const legacyPlan =
-        !cadPlanActive && siteData.importedPlan?.visible
+        !cadPlanActive &&
+        siteData.importedPlan?.visible &&
+        siteData.importedPlan.kind !== 'cad'
             ? siteData.importedPlan
             : null;
     let planImageRect: {
@@ -3177,19 +3184,78 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                 </div>
             )}
             {cadStatus === 'deferred' && (
-                <div className="absolute top-2 right-2 z-10 flex items-center gap-2 rounded-lg border border-slate-200 bg-white/95 px-2.5 py-1.5 text-[10px] text-slate-600 shadow dark:border-white/10 dark:bg-slate-900/95 dark:text-slate-300">
-                    <span>
-                        Plano CAD pesado (
-                        {(deferredBytes / 1_000_000).toFixed(1)} MB): se muestra
-                        la imagen.
-                    </span>
-                    <button
-                        type="button"
-                        onClick={loadVector}
-                        className="rounded bg-amber-500 px-2 py-0.5 font-semibold text-white hover:bg-amber-600"
-                    >
-                        Cargar vectorial
-                    </button>
+                <div className="absolute top-2 right-2 z-10 flex max-w-md items-center gap-2 rounded-lg border border-slate-200 bg-white/95 px-2.5 py-1.5 text-[10px] text-slate-600 shadow dark:border-white/10 dark:bg-slate-900/95 dark:text-slate-300">
+                    {!vectorBlocked ? (
+                        <>
+                            <span>
+                                {`Plano CAD pesado (${(deferredBytes / 1_000_000).toFixed(1)} MB): `}
+                                {editor.importedPlan?.kind === 'image' ? 'se muestra la imagen.' : 'aún sin abrir.'}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={loadVector}
+                                className="shrink-0 rounded bg-amber-500 px-2 py-0.5 font-semibold text-white hover:bg-amber-600"
+                            >
+                                Cargar vectorial
+                            </button>
+                        </>
+                    ) : cadLight?.status === 'pending' || cadLight?.status === 'processing' ? (
+                        // El servidor genera la versión ligera en segundo plano.
+                        <span className="flex items-center gap-1.5">
+                            <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+                            {`Optimizando el plano en el servidor (${(deferredBytes / 1_000_000).toFixed(1)} MB). Puedes seguir trabajando; te avisará aquí cuando esté listo.`}
+                        </span>
+                    ) : cadLight?.status === 'ready' ? (
+                        <>
+                            <span>
+                                {`Plano optimizado listo: ${((cadLight.light_size_bytes ?? 0) / 1_000_000).toFixed(1)} MB (antes ${(deferredBytes / 1_000_000).toFixed(1)} MB, sin sombreados ni imágenes).`}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={loadVector}
+                                className="shrink-0 rounded bg-emerald-600 px-2 py-0.5 font-semibold text-white hover:bg-emerald-700"
+                            >
+                                Abrir plano optimizado
+                            </button>
+                        </>
+                    ) : cadLight?.status === 'failed' ? (
+                        <>
+                            <span>{`No se pudo optimizar el plano: ${cadLight.error ?? 'error desconocido'}`}</span>
+                            <button
+                                type="button"
+                                onClick={retryLight}
+                                className="shrink-0 rounded border border-amber-500 px-2 py-0.5 font-semibold text-amber-700 hover:bg-amber-50 dark:text-amber-300"
+                            >
+                                Reintentar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={editor.openPlanImport}
+                                className="shrink-0 rounded bg-amber-500 px-2 py-0.5 font-semibold text-white hover:bg-amber-600"
+                            >
+                                Importar imagen/DXF
+                            </button>
+                        </>
+                    ) : (
+                        // Sin copia en el servidor (no se pudo subir): solo queda la imagen o un DXF depurado.
+                        <>
+                            <span>
+                                {`Plano CAD demasiado pesado para abrirse en el navegador (${(deferredBytes / 1_000_000).toFixed(1)} MB). `}
+                                {editor.importedPlan?.kind === 'image'
+                                    ? 'Se muestra su imagen.'
+                                    : 'Vuelve a importarlo para que el servidor lo optimice, o importa una imagen (PNG/JPG).'}
+                            </span>
+                            {editor.importedPlan?.kind !== 'image' && (
+                                <button
+                                    type="button"
+                                    onClick={editor.openPlanImport}
+                                    className="shrink-0 rounded bg-amber-500 px-2 py-0.5 font-semibold text-white hover:bg-amber-600"
+                                >
+                                    Importar
+                                </button>
+                            )}
+                        </>
+                    )}
                 </div>
             )}
             {cadLoadingStages && (

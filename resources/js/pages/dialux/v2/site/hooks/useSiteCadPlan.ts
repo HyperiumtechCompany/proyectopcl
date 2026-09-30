@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+    cadOpenHardMax,
+    fetchDialuxPlanLightStatus,
     loadDialuxPlan,
     loadDialuxPlanFromServer,
+    loadDialuxPlanLightFile,
+    retryDialuxPlanLight,
     storedDialuxPlanToFile,
+    type DialuxPlanLightStatus,
 } from '@/pages/dialux/hooks/dialuxPlanStorage';
 import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
 import { SITE_PLAN_SOURCE_SCENE_ID } from '../lib/planImport';
@@ -83,6 +88,14 @@ export function useSiteCadPlan(
     const containerRef = useRef<HTMLDivElement>(null);
     const [status, setStatus] = useState<SiteCadPlanStatus>('idle');
     const [deferredBytes, setDeferredBytes] = useState(0);
+    /**
+     * El plano diferido supera el tope para abrirse en el navegador
+     * (`cadOpenHardMax`): "Cargar vectorial" no se ofrece — agotaba la memoria
+     * de la pestaña. Se usa una imagen del plano.
+     */
+    const [vectorBlocked, setVectorBlocked] = useState(false);
+    /** Versión LIGERA del plano pesado, que el servidor genera en segundo plano. */
+    const [light, setLight] = useState<DialuxPlanLightStatus | null>(null);
     const [phase, setPhase] = useState<SiteCadPlanPhase>(null);
     /** Tamaño del archivo que se está abriendo (para el indicador). */
     const [fileBytes, setFileBytes] = useState(0);
@@ -133,7 +146,48 @@ export function useSiteCadPlan(
 
                 const file = storedDialuxPlanToFile(stored);
                 setFileBytes(file.size);
-                if (file.size > AUTO_OPEN_MAX_BYTES && !forceLoad) {
+                const blocked = file.size > cadOpenHardMax(file.name);
+                setVectorBlocked(blocked);
+                let toOpen = file;
+                if (blocked) {
+                    // Demasiado pesado para el navegador: se abre su versión
+                    // LIGERA, que el servidor genera en segundo plano.
+                    const lightInfo = await fetchDialuxPlanLightStatus(
+                        String(projectId),
+                        SITE_PLAN_SOURCE_SCENE_ID,
+                        String(generalModuleId),
+                    );
+                    if (stale()) return;
+                    setLight(lightInfo);
+                    if (!forceLoad || lightInfo?.status !== 'ready' || lightInfo.updated_at === null) {
+                        setDeferredBytes(file.size);
+                        setStatus('deferred');
+                        return;
+                    }
+                    setPhase('reading');
+                    const lightFile = await loadDialuxPlanLightFile(
+                        String(projectId),
+                        SITE_PLAN_SOURCE_SCENE_ID,
+                        String(generalModuleId),
+                        lightInfo.updated_at,
+                    );
+                    if (stale()) return;
+                    if (!lightFile || lightFile.size > cadOpenHardMax(lightFile.name)) {
+                        setLight({
+                            ...lightInfo,
+                            status: 'failed',
+                            error: lightFile
+                                ? `La versión optimizada aún pesa ${(lightFile.size / 1_000_000).toFixed(1)} MB: depura el plano en AutoCAD o usa una imagen.`
+                                : 'No se pudo descargar la versión optimizada.',
+                        });
+                        setDeferredBytes(file.size);
+                        setForceLoad(false);
+                        setStatus('deferred');
+                        return;
+                    }
+                    toOpen = lightFile;
+                    setFileBytes(lightFile.size);
+                } else if (file.size > AUTO_OPEN_MAX_BYTES && !forceLoad) {
                     setDeferredBytes(file.size);
                     setStatus('deferred');
                     return;
@@ -154,7 +208,7 @@ export function useSiteCadPlan(
                 setPhase('opening');
 
                 const opened = await Promise.race([
-                    engine.openFile(file),
+                    engine.openFile(toOpen),
                     new Promise<'timeout'>((resolve) =>
                         window.setTimeout(
                             () => resolve('timeout'),
@@ -193,6 +247,33 @@ export function useSiteCadPlan(
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [importedAt, projectId, generalModuleId, forceLoad]);
+
+    // Mientras el servidor optimiza el plano, se consulta cada 15 s.
+    const lightPending = light?.status === 'pending' || light?.status === 'processing';
+    useEffect(() => {
+        if (!lightPending) return;
+        const timer = window.setInterval(() => {
+            void fetchDialuxPlanLightStatus(
+                String(projectId),
+                SITE_PLAN_SOURCE_SCENE_ID,
+                String(generalModuleId),
+            ).then((next) => {
+                if (next) setLight(next);
+            });
+        }, 15_000);
+        return () => window.clearInterval(timer);
+    }, [lightPending, projectId, generalModuleId]);
+
+    /** Vuelve a pedir la optimización al servidor (tras un fallo). */
+    const retryLight = useCallback(() => {
+        void retryDialuxPlanLight(
+            String(projectId),
+            SITE_PLAN_SOURCE_SCENE_ID,
+            String(generalModuleId),
+        ).then((next) => {
+            if (next) setLight(next);
+        });
+    }, [projectId, generalModuleId]);
 
     /** Carga el plano vectorial aunque sea pesado (acción explícita del usuario). */
     const loadVector = useCallback(() => setForceLoad(true), []);
@@ -306,6 +387,9 @@ export function useSiteCadPlan(
         phase,
         fileBytes,
         deferredBytes,
+        vectorBlocked,
+        light,
+        retryLight,
         loadVector,
         abandonVector,
         getView,

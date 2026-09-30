@@ -19,7 +19,20 @@ class DialuxPlan extends Model
         'size_bytes',
         'disk',
         'path',
+        'light_status',
+        'light_path',
+        'light_size_bytes',
+        'light_error',
     ];
+
+    /** ¿Es un plano CAD que el navegador no puede abrir y necesita su versión ligera? */
+    public function needsLightVersion(): bool
+    {
+        $extension = strtolower(pathinfo($this->path, PATHINFO_EXTENSION));
+        $threshold = config("dialux.plan_light.threshold_bytes.{$extension}");
+
+        return is_numeric($threshold) && $this->size_bytes > (int) $threshold;
+    }
 
     public function project(): BelongsTo
     {

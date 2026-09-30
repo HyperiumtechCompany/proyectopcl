@@ -96,6 +96,40 @@ export async function loadDialuxPlan(
     return plan;
 }
 
+/**
+ * Tope para ABRIR un plano CAD en el navegador (V1 y V2). El motor CAD lo
+ * procesa en el hilo principal: un DWG de 15,4 MB ("PLANTA GENERAL.dwg")
+ * agotó la memoria de la pestaña en producción ("Out of Memory"). Por encima
+ * de esto el archivo se conserva, pero no se abre como vectorial.
+ */
+export const CAD_OPEN_HARD_MAX_BYTES = {
+    dwg: 6_000_000,
+    dxf: 20_000_000,
+} as const;
+
+export function cadOpenHardMax(fileName: string): number {
+    return fileName.toLowerCase().endsWith('.dxf')
+        ? CAD_OPEN_HARD_MAX_BYTES.dxf
+        : CAD_OPEN_HARD_MAX_BYTES.dwg;
+}
+
+/** Quita la copia local (IndexedDB) del plano de una escena. */
+export async function deleteDialuxPlanFile(
+    projectId: string,
+    sceneId: string,
+): Promise<void> {
+    if (typeof indexedDB === 'undefined') return;
+    const db = await openPlanDatabase();
+    await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, 'readwrite');
+        transaction.objectStore(STORE_NAME).delete(planKey(projectId, sceneId));
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+    });
+    db.close();
+}
+
 export function storedDialuxPlanToFile(plan: StoredDialuxPlan): File {
     return new File([plan.blob], plan.fileName, {
         type: plan.mimeType,
@@ -329,4 +363,75 @@ export async function unlinkDialuxPlanFile(
         },
         credentials: 'same-origin',
     });
+}
+
+/** Estado de la versión ligera de un plano CAD pesado (la genera el servidor en segundo plano). */
+export interface DialuxPlanLightStatus {
+    needs_light: boolean;
+    status: 'pending' | 'processing' | 'ready' | 'failed' | null;
+    size_bytes: number;
+    light_size_bytes: number | null;
+    error: string | null;
+    updated_at: number | null;
+}
+
+/** Consulta (y, para planos subidos antes, pone en cola) la versión ligera. `null` si el plano no está en el servidor. */
+export async function fetchDialuxPlanLightStatus(
+    projectId: string,
+    sceneId: string,
+    moduleId: string,
+): Promise<DialuxPlanLightStatus | null> {
+    const response = await fetch(`${planFileUrl(projectId, sceneId, moduleId)}/light/status`, {
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as DialuxPlanLightStatus;
+}
+
+/** Vuelve a poner en cola la versión ligera (tras un fallo). */
+export async function retryDialuxPlanLight(
+    projectId: string,
+    sceneId: string,
+    moduleId: string,
+): Promise<DialuxPlanLightStatus | null> {
+    const response = await fetch(`${planFileUrl(projectId, sceneId, moduleId)}/light/retry`, {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'X-XSRF-TOKEN': readXsrfTokenFromCookie(),
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'same-origin',
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as DialuxPlanLightStatus;
+}
+
+/**
+ * Descarga la versión ligera (DXF). Se guarda en la caché local con su
+ * `updated_at` para no volver a bajarla mientras el plano no cambie.
+ */
+export async function loadDialuxPlanLightFile(
+    projectId: string,
+    sceneId: string,
+    moduleId: string,
+    version: number,
+): Promise<File | null> {
+    const cacheScene = `${sceneId}::light`;
+    const cached = await loadDialuxPlan(projectId, cacheScene);
+    if (cached && cached.lastModified === version) return storedDialuxPlanToFile(cached);
+    const response = await fetch(`${planFileUrl(projectId, sceneId, moduleId)}/light`, {
+        headers: { Accept: 'application/octet-stream', 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
+    });
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    const file = new File([blob], 'plano-ligero.dxf', { type: 'application/dxf', lastModified: version });
+    try {
+        await saveDialuxPlanFile(projectId, cacheScene, file);
+    } catch {
+        /* sin caché local: se vuelve a descargar la próxima vez */
+    }
+    return file;
 }

@@ -22,6 +22,12 @@ import {
     resolveFixtureRenderHeight,
     resolveRoomCeilingHeight,
 } from '@/pages/dialux/engine/fixtureHeights';
+import {
+    autoDetectClosedRegion,
+    segmentsFromVertexRing,
+    type Segment,
+} from '@/pages/dialux/geometry/autoDetectClosedRegion';
+import { createCanvasTransforms } from '@/pages/dialux/geometry/coordinateTransform';
 import { findAmbientSpaceAtPoint } from '@/pages/dialux/hooks/ambientSpaces';
 import { shouldEnableOverlayPointerEvents } from '@/pages/dialux/hooks/cadInteraction';
 import {
@@ -29,37 +35,37 @@ import {
     panelBoundaryIds,
 } from '@/pages/dialux/hooks/conductorCircuitGroups';
 import {
-    ELECTRICAL_DEVICE_DEFAULTS,
-    isOutletDeviceType,
-    type ElectricalDeviceType,
-} from '@/pages/dialux/hooks/types';
-import {
-    useCanvasInteraction,
-    type AlignmentGuide,
-    type CanvasPoint,
-} from '@/pages/dialux/hooks/useCanvasInteraction';
-import {
-    normalizeScaleConfig,
-    useEditorStore,
-    useActiveScene,
-    useViewport,
-} from '@/pages/dialux/hooks/useEditorStore';
-import {
+    cadOpenHardMax,
     loadDialuxPlan,
     loadDialuxPlanFromServer,
     saveDialuxPlanFile,
     storedDialuxPlanToFile,
     uploadLocalDialuxPlanIfMissing,
 } from '@/pages/dialux/hooks/dialuxPlanStorage';
+import { extractDxfEntitiesFromEngineDocument } from '@/pages/dialux/hooks/engineDxfExtraction';
+import { findRampAtPoint, resolveRampUndersidePoint } from '@/pages/dialux/hooks/rampGeometry';
+import { resolveStairUndersidePoint } from '@/pages/dialux/hooks/stairMountingGeometry';
+import {
+    ELECTRICAL_DEVICE_DEFAULTS,
+    isOutletDeviceType,
+    type ElectricalDeviceType,
+} from '@/pages/dialux/hooks/types';
+import type { DxfEntity } from '@/pages/dialux/hooks/types';
+import {
+    useCanvasInteraction,
+    type AlignmentGuide,
+    type CanvasPoint,
+} from '@/pages/dialux/hooks/useCanvasInteraction';
 import {
     markDialuxPlanSyncFailed,
     markDialuxPlanSyncOk,
 } from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
-import { extractDxfEntitiesFromEngineDocument } from '@/pages/dialux/hooks/engineDxfExtraction';
 import {
-    drawPerfEnabled,
-    reportMove,
-} from '@/pages/dialux/lib/drawPerfProbe';
+    normalizeScaleConfig,
+    useEditorStore,
+    useActiveScene,
+    useViewport,
+} from '@/pages/dialux/hooks/useEditorStore';
 import {
     clampOpeningOffsetToWallSegment,
     wallLength,
@@ -74,16 +80,11 @@ import {
     applyLegacyLinkUpdate,
     computeLegacyLinkUpdate,
 } from '@/pages/dialux/hooks/wireLegacySync';
-import { resolveStairUndersidePoint } from '@/pages/dialux/hooks/stairMountingGeometry';
-import { findRampAtPoint, resolveRampUndersidePoint } from '@/pages/dialux/hooks/rampGeometry';
-
-import { createCanvasTransforms } from '@/pages/dialux/geometry/coordinateTransform';
 import {
-    autoDetectClosedRegion,
-    segmentsFromVertexRing,
-    type Segment,
-} from '@/pages/dialux/geometry/autoDetectClosedRegion';
-import type { DxfEntity } from '@/pages/dialux/hooks/types';
+    drawPerfEnabled,
+    reportMove,
+} from '@/pages/dialux/lib/drawPerfProbe';
+
 
 /**
  * Segmentos de barrera para `autoDetectClosedRegion` (Ronda 28) — mismo
@@ -159,6 +160,11 @@ function dxfEntityToAutoDetectSegments(ent: DxfEntity): Segment[] {
     }
     return [];
 }
+import {
+    acceptsWireNode,
+    wireFamilyFromShortcut,
+    wireRouteFromShortcut,
+} from '@/pages/dialux/selection/wireNodeFamily';
 import { CalibrationDialog } from '../CalibrationDialog';
 import { CadStatusOverlays } from './CadStatusOverlays';
 import { CalibrationOverlay } from './CalibrationOverlay';
@@ -176,6 +182,7 @@ import {
     safeNum,
 } from './canvasUtils';
 
+import { DynamicInputOverlay } from './DynamicInputOverlay';
 import { GridLayer } from './GridLayer';
 import { IsoluxLayer } from './IsoluxLayer';
 import { OverlayCanopies } from './OverlayCanopies';
@@ -184,7 +191,6 @@ import { OverlayElectricalDevices } from './OverlayElectricalDevices';
 import { OverlayFixtureArrangementAreas } from './OverlayFixtureArrangementAreas';
 import { OverlayFixtureGridGuides } from './OverlayFixtureGridGuides';
 import { OverlayFixtures } from './OverlayFixtures';
-import { DynamicInputOverlay } from './DynamicInputOverlay';
 import { OverlayLightSwitches } from './OverlayLightSwitches';
 import { OverlayMeasureArea } from './OverlayMeasureArea';
 import { OverlayMeasureDistance } from './OverlayMeasureDistance';
@@ -203,11 +209,6 @@ import {
     classifyConductorLayer,
     isElectricalItemVisible,
 } from '@/pages/dialux/electrical/electricalLayerVisibility';
-import {
-    acceptsWireNode,
-    wireFamilyFromShortcut,
-    wireRouteFromShortcut,
-} from '@/pages/dialux/selection/wireNodeFamily';
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
@@ -1577,6 +1578,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         // el re-parseo (engine.openFile + parseDxf) es lo que hace que cambiar
         // de piso sea instantáneo en vez de repetir un parseo DXF completo.
         const lastLoadedPlanKeyRef = useRef<string | null>(null);
+        const [planTooHeavy, setPlanTooHeavy] = useState<string | null>(null);
         useEffect(() => {
             if (!engine.isReady || !projectId || !activeSceneId) return;
             // planReloadTick fuerza a releer el plano aunque el piso activo no
@@ -1643,6 +1645,17 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
 
                 try {
                     const file = storedDialuxPlanToFile(storedPlan);
+                    // Plano demasiado pesado para el navegador: abrirlo agotaba
+                    // la memoria de la pestaña. Se conserva, pero no se abre.
+                    if (file.size > cadOpenHardMax(file.name)) {
+                        setPlanTooHeavy(
+                            `El plano "${file.name}" (${(file.size / 1_000_000).toFixed(1)} MB) es demasiado pesado para abrirse en el navegador. Depúralo en AutoCAD (PURGE/AUDIT, sin sombreados) o expórtalo como DXF más liviano y vuelve a importarlo.`,
+                        );
+                        lastLoadedPlanKeyRef.current = planKey;
+                        await engine.newDocument();
+                        return;
+                    }
+                    setPlanTooHeavy(null);
                     const opened = await engine.openFile(file);
                     if (opened) {
                         if (file.name.toLowerCase().endsWith('.dxf')) {
@@ -2563,7 +2576,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     isLoading={engine.isLoading}
                     loadProgress={engine.loadProgress}
                     fileName={engine.fileName}
-                    error={engine.error}
+                    error={engine.error ?? planTooHeavy}
                     activeDoc={engine.activeDoc}
                     onFitToView={() => engine.fitToView()}
                     isCalibrated={scaleConfig.isCalibrated}

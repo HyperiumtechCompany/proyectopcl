@@ -30,24 +30,14 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { findAmbientSpaceAtPoint } from '@/pages/dialux/hooks/ambientSpaces';
 import {
-    createScaleConfig,
-    useEditorStore,
-    useScaleConfig,
-} from '@/pages/dialux/hooks/useEditorStore';
-import type { ScaleConfig } from '@/pages/dialux/hooks/useEditorStore';
-import {
+    cadOpenHardMax,
     saveDialuxPlanFile,
     uploadDialuxPlanFile,
 } from '@/pages/dialux/hooks/dialuxPlanStorage';
-import {
-    markDialuxPlanSyncFailed,
-    markDialuxPlanSyncOk,
-} from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
 import { detectDxfUnitFromHeader } from '@/pages/dialux/hooks/dxfFallbackParser';
-import { findAmbientSpaceAtPoint } from '@/pages/dialux/hooks/ambientSpaces';
 import { polygonCentroid } from '@/pages/dialux/hooks/fixtureGrid';
-import { ddbg } from '@/pages/dialux/lib/dialuxDebug';
 import {
     calculateObstacleAwareFixtureGridPositions,
     computeFixtureGroupAreaVertices,
@@ -58,12 +48,23 @@ import {
     type SymmetryCheckResult,
     type SymmetrySuggestion,
 } from '@/pages/dialux/hooks/fixtureGridSymmetry';
-import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
-import { useWasmEngine } from '@/pages/dialux/hooks/useWasmEngine';
 import {
     parseIfcFileForImport,
     type IfcImportPreview,
 } from '@/pages/dialux/hooks/ifcImport/ifcImportPipeline';
+import {
+    markDialuxPlanSyncFailed,
+    markDialuxPlanSyncOk,
+} from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
+import type { ScaleConfig } from '@/pages/dialux/hooks/useEditorStore';
+import {
+    createScaleConfig,
+    useEditorStore,
+    useScaleConfig,
+} from '@/pages/dialux/hooks/useEditorStore';
+import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
+import { useWasmEngine } from '@/pages/dialux/hooks/useWasmEngine';
+import { ddbg } from '@/pages/dialux/lib/dialuxDebug';
 import { getEffectiveScale } from './canvas/canvasUtils';
 import { FixtureGridProjectionDialog } from './FixtureGridProjectionDialog';
 import { IfcImportDialog, type IfcImportSelection } from './IfcImportDialog';
@@ -343,6 +344,14 @@ export const Toolbar: React.FC = () => {
         async (e: React.ChangeEvent<HTMLInputElement>) => {
             const file = e.target.files?.[0];
             if (!file) return;
+            // Un plano demasiado pesado agota la memoria de la pestaña al abrirse.
+            if (file.size > cadOpenHardMax(file.name)) {
+                window.alert(
+                    `"${file.name}" (${(file.size / 1_000_000).toFixed(1)} MB) es demasiado pesado para abrirse en el navegador. Depúralo en AutoCAD (PURGE/AUDIT, sin sombreados) o expórtalo como DXF más liviano.`,
+                );
+                e.target.value = '';
+                return;
+            }
             const ok = await engine.openFile(file);
             if (ok) {
                 if (projectId && store.activeSceneId) {

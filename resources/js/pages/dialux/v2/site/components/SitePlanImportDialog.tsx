@@ -39,7 +39,7 @@ export function SitePlanImportDialog({
             >
                 <div className="mb-3 flex items-center justify-between">
                     <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                        Importar plano DXF/DWG
+                        Importar plano (DXF/DWG o imagen)
                     </h2>
                     <button
                         type="button"
@@ -56,13 +56,22 @@ export function SitePlanImportDialog({
                     para dibujar exteriores y trazar la red encima. Luego usa
                     &quot;Calibrar plano&quot; para fijar la escala real.
                 </p>
+                <p className="mb-3 rounded-md bg-amber-50 p-2 text-[11px] leading-relaxed text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                    ¿Plano muy pesado (decenas de MB)? Súbelo igual: el
+                    servidor lo <b>optimiza en segundo plano</b> (quita
+                    sombreados e imágenes) y el editor abre la versión
+                    ligera cuando está lista. Para DWG el servidor necesita
+                    su conversor; si no lo tiene, sube el <b>DXF</b>
+                    (AutoCAD → Guardar como → DXF) o una <b>imagen</b>
+                    PNG/JPG.
+                </p>
                 {!processing && (
                     <label className="mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 p-6 text-xs text-slate-500 hover:border-cyan-400 dark:border-white/15 dark:text-slate-400">
                         <Upload className="h-4 w-4" />
-                        {fileName ?? 'Seleccionar archivo .dxf o .dwg'}
+                        {fileName ?? 'Seleccionar .dxf, .dwg, .png o .jpg'}
                         <input
                             type="file"
-                            accept=".dxf,.dwg"
+                            accept=".dxf,.dwg,.png,.jpg,.jpeg"
                             className="hidden"
                             onChange={(event) => {
                                 const file = event.target.files?.[0];

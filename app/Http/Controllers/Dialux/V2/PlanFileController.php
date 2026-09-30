@@ -7,6 +7,7 @@ use App\Concerns\DetectsDwgCompatibility;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Dialux\LinkDialuxPlanFileRequest;
 use App\Http\Requests\Dialux\StoreDialuxPlanFileRequest;
+use App\Jobs\Dialux\LightenDialuxPlan;
 use App\Models\Dialux\DialuxModule;
 use App\Models\Dialux\DialuxPlan;
 use App\Models\Dialux\DialuxPlanFile;
@@ -70,11 +71,17 @@ class PlanFileController extends Controller
 
         $this->rebindScene($dialuxModule, $sceneId, $plan->id);
 
+        // Plano CAD pesado: el servidor genera su versión ligera en segundo plano.
+        if ($plan->needsLightVersion()) {
+            $this->queueLightVersion($plan);
+        }
+
         return response()->json([
             'message' => 'Plano del módulo guardado correctamente.',
             'file_name' => $plan->original_name,
             'size_bytes' => $plan->size_bytes,
             'warning' => $warning,
+            'light_status' => $plan->light_status,
         ]);
     }
 
@@ -120,6 +127,90 @@ class PlanFileController extends Controller
             'Content-Type' => $plan->mime_type,
             'X-Dialux-File-Name' => rawurlencode($plan->original_name),
         ]);
+    }
+
+    /**
+     * Estado de la versión ligera de un plano CAD pesado (el editor la consulta
+     * mientras la cola la genera). Un plano pesado subido antes de esta función
+     * se pone en cola la primera vez que se consulta.
+     */
+    public function lightStatus(
+        DialuxProject $dialuxProject,
+        DialuxModule $dialuxModule,
+        string $sceneId,
+    ): JsonResponse {
+        $this->authorizeModule($dialuxProject, $dialuxModule);
+        $plan = $this->boundPlan($dialuxModule, $sceneId);
+
+        if ($plan->needsLightVersion() && $plan->light_status === null) {
+            $this->queueLightVersion($plan);
+        }
+
+        return response()->json($this->lightPayload($plan));
+    }
+
+    /** Vuelve a poner en cola la versión ligera (tras un fallo, p.ej. al instalar el conversor de DWG). */
+    public function lightRetry(
+        DialuxProject $dialuxProject,
+        DialuxModule $dialuxModule,
+        string $sceneId,
+    ): JsonResponse {
+        $this->authorizeModule($dialuxProject, $dialuxModule);
+        $plan = $this->boundPlan($dialuxModule, $sceneId);
+        abort_unless($plan->needsLightVersion(), 422, 'Este plano no necesita versión ligera.');
+
+        if (! in_array($plan->light_status, ['pending', 'processing'], true)) {
+            $this->queueLightVersion($plan);
+        }
+
+        return response()->json($this->lightPayload($plan));
+    }
+
+    /** Descarga la versión ligera (DXF) del plano. */
+    public function lightShow(
+        DialuxProject $dialuxProject,
+        DialuxModule $dialuxModule,
+        string $sceneId,
+    ): StreamedResponse {
+        $this->authorizeModule($dialuxProject, $dialuxModule);
+        $plan = $this->boundPlan($dialuxModule, $sceneId);
+        abort_unless(
+            $plan->light_status === 'ready' && $plan->light_path && Storage::disk($plan->disk)->exists($plan->light_path),
+            404,
+        );
+        $name = pathinfo($plan->original_name, PATHINFO_FILENAME).' (ligero).dxf';
+
+        return Storage::disk($plan->disk)->download($plan->light_path, $name, [
+            'Content-Type' => 'application/dxf',
+            'X-Dialux-File-Name' => rawurlencode($name),
+        ]);
+    }
+
+    private function boundPlan(DialuxModule $module, string $sceneId): DialuxPlan
+    {
+        $binding = $module->planFiles()->where('scene_id', $sceneId)->with('plan')->firstOrFail();
+        abort_unless($binding->plan, 404);
+
+        return $binding->plan;
+    }
+
+    private function queueLightVersion(DialuxPlan $plan): void
+    {
+        $plan->forceFill(['light_status' => 'pending', 'light_error' => null])->save();
+        LightenDialuxPlan::dispatch($plan->id);
+    }
+
+    /** @return array<string, mixed> */
+    private function lightPayload(DialuxPlan $plan): array
+    {
+        return [
+            'needs_light' => $plan->needsLightVersion(),
+            'status' => $plan->light_status,
+            'size_bytes' => $plan->size_bytes,
+            'light_size_bytes' => $plan->light_size_bytes,
+            'error' => $plan->light_error,
+            'updated_at' => $plan->updated_at?->getTimestampMs(),
+        ];
     }
 
     public function destroy(
@@ -168,6 +259,9 @@ class PlanFileController extends Controller
         }
 
         Storage::disk($plan->disk)->delete($plan->path);
+        if ($plan->light_path) {
+            Storage::disk($plan->disk)->delete($plan->light_path);
+        }
         $plan->delete();
     }
 }

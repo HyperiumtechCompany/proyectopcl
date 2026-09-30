@@ -823,6 +823,8 @@ export interface ImportedSitePlan {
     visible: boolean;
     /** `Date.now()` de la última (re)importación — invalida la caché del navegador en la URL de la imagen, que vive en una ruta fija. */
     updatedAt: number;
+    /** 'image' = PNG/JPG de fondo (plano CAD demasiado pesado para el navegador); 'cad' / ausente = DXF/DWG. */
+    kind?: 'cad' | 'image';
 }
 
 // ── Documento principal ──────────────────────────
