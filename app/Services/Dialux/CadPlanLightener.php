@@ -40,7 +40,7 @@ class CadPlanLightener
         $template = config('dialux.plan_light.dwg_converter');
         if (! is_string($template) || trim($template) === '') {
             throw new RuntimeException(
-                'El servidor no tiene conversor de DWG configurado. Sube el plano como DXF (AutoCAD → Guardar como → DXF) o una imagen PNG/JPG.',
+                'El servidor aún no tiene conversor de DWG. Sube el mismo plano como DXF (AutoCAD → Guardar como → DXF 2013): sigue siendo vectorial y se optimiza igual.',
             );
         }
 

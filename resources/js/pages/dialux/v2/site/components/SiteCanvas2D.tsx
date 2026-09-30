@@ -3233,7 +3233,7 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                                 onClick={editor.openPlanImport}
                                 className="shrink-0 rounded bg-amber-500 px-2 py-0.5 font-semibold text-white hover:bg-amber-600"
                             >
-                                Importar imagen/DXF
+                                Importar DXF
                             </button>
                         </>
                     ) : (

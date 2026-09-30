@@ -60,10 +60,10 @@ export function SitePlanImportDialog({
                     ¿Plano muy pesado (decenas de MB)? Súbelo igual: el
                     servidor lo <b>optimiza en segundo plano</b> (quita
                     sombreados e imágenes) y el editor abre la versión
-                    ligera cuando está lista. Para DWG el servidor necesita
-                    su conversor; si no lo tiene, sube el <b>DXF</b>
-                    (AutoCAD → Guardar como → DXF) o una <b>imagen</b>
-                    PNG/JPG.
+                    ligera (vectorial) cuando está lista. Si el servidor aún
+                    no convierte DWG, sube el mismo plano como <b>DXF</b>
+                    (AutoCAD → Guardar como → DXF 2013): sigue siendo
+                    vectorial. La imagen PNG/JPG es solo el último recurso.
                 </p>
                 {!processing && (
                     <label className="mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 p-6 text-xs text-slate-500 hover:border-cyan-400 dark:border-white/15 dark:text-slate-400">
