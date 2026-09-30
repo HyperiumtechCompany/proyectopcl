@@ -3,6 +3,7 @@
 namespace App\Jobs\Dialux;
 
 use App\Models\Dialux\DialuxPlan;
+use App\Services\Dialux\CadPlanGeometryBuilder;
 use App\Services\Dialux\CadPlanLightener;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -42,8 +43,9 @@ class LightenDialuxPlan implements ShouldQueue
         $this->onQueue(config('dialux.plan_light.queue', 'cad'));
     }
 
-    public function handle(CadPlanLightener $lightener): void
+    public function handle(CadPlanLightener $lightener, ?CadPlanGeometryBuilder $geometry = null): void
     {
+        $geometry ??= app(CadPlanGeometryBuilder::class);
         $plan = DialuxPlan::query()->find($this->planId);
         if (! $plan) {
             return;
@@ -57,6 +59,15 @@ class LightenDialuxPlan implements ShouldQueue
 
         try {
             $dxf = $this->convertedDxf($plan, $lightener, $workDir);
+
+            // Camino principal: GEOMETRÍA para WebGL — el plano completo, con
+            // todas sus capas, en un formato que el navegador sí puede cargar.
+            if ($this->keepLayers === null) {
+                $this->buildGeometry($plan, $dxf, $geometry, $workDir);
+
+                return;
+            }
+
             $analysis = $lightener->analyzeDxf($dxf);
 
             if ($this->keepLayers === null && $lightener->estimateBytes($analysis, null) > $cap) {
@@ -118,6 +129,60 @@ class LightenDialuxPlan implements ShouldQueue
         } finally {
             File::deleteDirectory($workDir);
         }
+    }
+
+    /**
+     * Genera la geometría (.dxg, comprimida con gzip: el navegador la
+     * descomprime sola) y deja el plano listo con TODAS sus capas.
+     */
+    private function buildGeometry(DialuxPlan $plan, string $dxf, CadPlanGeometryBuilder $geometry, string $workDir): void
+    {
+        $raw = $workDir.'/plano.dxg';
+        $report = $geometry->build($dxf, $raw);
+
+        $gzipped = $workDir.'/plano.dxg.gz';
+        $in = fopen($raw, 'rb');
+        $out = gzopen($gzipped, 'wb6');
+        while (! feof($in)) {
+            gzwrite($out, (string) fread($in, 1 << 20));
+        }
+        fclose($in);
+        gzclose($out);
+
+        $disk = Storage::disk($plan->disk);
+        $path = dirname($plan->path).'/'.pathinfo($plan->path, PATHINFO_FILENAME).'-geometria.dxg.gz';
+        $stream = fopen($gzipped, 'rb');
+        $disk->put($path, $stream);
+        if (is_resource($stream)) {
+            fclose($stream);
+        }
+        if ($plan->light_path && $plan->light_path !== $path) {
+            $disk->delete($plan->light_path);
+        }
+
+        $plan->forceFill([
+            'light_status' => 'ready',
+            'light_path' => $path,
+            'light_size_bytes' => (int) filesize($gzipped),
+            'light_error' => null,
+            'light_layers' => [
+                'format' => 'geometry',
+                'layers_count' => $report['layers'],
+                'points' => $report['points'],
+                'texts' => $report['texts'],
+                'raw_bytes' => $report['bytes'],
+            ],
+        ])->save();
+
+        Log::info('[dialux] plano convertido a geometría', [
+            'plan' => $plan->id,
+            'original_bytes' => $plan->size_bytes,
+            'geometry_bytes' => $report['bytes'],
+            'gzip_bytes' => $plan->light_size_bytes,
+            'layers' => $report['layers'],
+            'points' => $report['points'],
+            'texts' => $report['texts'],
+        ]);
     }
 
     /** DXF del plano: el original, o el convertido desde el DWG (guardado para no repetir la conversión). */

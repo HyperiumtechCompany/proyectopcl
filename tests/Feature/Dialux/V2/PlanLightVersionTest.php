@@ -142,7 +142,7 @@ test('un DXF binario se rechaza con un mensaje claro', function () {
         ->toThrow(RuntimeException::class, 'DXF binario');
 });
 
-test('si todo el plano no cabe, el ingeniero elige las capas y se genera con ellas', function () {
+test('un plano pesado se convierte en segundo plano a geometría completa y el editor la descarga', function () {
     Queue::fake();
     config(['dialux.plan_light.threshold_bytes.dxf' => 100]);
     $user = User::factory()->create();
@@ -158,26 +158,47 @@ test('si todo el plano no cabe, el ingeniero elige las capas y se genera con ell
         ->assertJsonPath('light_status', 'pending');
     Queue::assertPushed(LightenDialuxPlan::class);
 
-    // 1ª pasada del worker: con el tope de prueba no cabe todo → elegir capas.
+    // Lo que corre el worker: TODAS las capas, sin pedir elegir.
     $plan = $module->plans()->firstOrFail();
     (new LightenDialuxPlan($plan->id))->handle(app(CadPlanLightener::class));
-    expect($plan->refresh()->light_status)->toBe('needs_layers');
+    expect($plan->refresh()->light_status)->toBe('ready')
+        ->and($plan->light_layers['format'])->toBe('geometry');
 
-    $status = $this->actingAs($user)
+    $this->actingAs($user)
         ->getJson(route('dialux-v2.modules.plans.light-status', $parameters))
         ->assertSuccessful()
-        ->assertJsonPath('status', 'needs_layers')
-        ->json();
-    expect(collect($status['layers'])->firstWhere('name', 'Arboles y Arbustos')['keep'])->toBeFalse();
+        ->assertJsonPath('status', 'ready')
+        ->assertJsonPath('format', 'geometry');
 
-    // El ingeniero elige MUROS.
+    $response = $this->actingAs($user)->get(route('dialux-v2.modules.plans.light', $parameters));
+    $response->assertSuccessful()->assertHeader('Content-Encoding', 'gzip');
+    $dxg = gzdecode($response->streamedContent());
+    expect(substr($dxg, 0, 4))->toBe('DXG1');
+    $header = json_decode(substr($dxg, 8, unpack('V', substr($dxg, 4, 4))[1]), true);
+    // Muros, puertas y árboles (bloques expandidos); sin espacio papel ni sombreados.
+    expect(array_column($header['layers'], 'name'))->toContain('MUROS', 'Arboles y Arbustos', '13. PUERTAS.')
+        ->and(array_column($header['layers'], 'name'))->not->toContain('MARCO', 'SOMBRA');
+});
+
+test('con capas elegidas explícitamente se genera la versión DXF ligera', function () {
+    Queue::fake();
+    config(['dialux.plan_light.threshold_bytes.dxf' => 100]);
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+    $module = DialuxModule::factory()->for($project, 'project')->create();
+    $parameters = [$project, $module, 'site-plan-source'];
+    $this->actingAs($user)->post(route('dialux-v2.modules.plans.store', $parameters), [
+        'plan' => UploadedFile::fake()->createWithContent('PLANTA GENERAL.dxf', samplePlanDxf()),
+    ]);
+    $plan = $module->plans()->firstOrFail();
+    (new LightenDialuxPlan($plan->id))->handle(app(CadPlanLightener::class));
+
     $this->actingAs($user)
         ->postJson(route('dialux-v2.modules.plans.light-layers', $parameters), ['keep' => ['MUROS']])
         ->assertSuccessful()
         ->assertJsonPath('status', 'pending');
     Queue::assertPushed(LightenDialuxPlan::class, fn (LightenDialuxPlan $job) => $job->keepLayers === ['MUROS']);
 
-    // Con un tope real, la versión ligera con esas capas cabe.
     config(['dialux.plan_light.threshold_bytes.dxf' => 20_000_000]);
     (new LightenDialuxPlan($plan->id, ['MUROS']))->handle(app(CadPlanLightener::class));
     expect($plan->refresh()->light_status)->toBe('ready');
@@ -248,4 +269,24 @@ test('otro usuario no puede consultar ni elegir capas', function () {
     $this->actingAs($intruder)
         ->postJson(route('dialux-v2.modules.plans.light-layers', [$project, $module, 'floor-1']), ['keep' => ['MUROS']])
         ->assertForbidden();
+});
+
+test('un plano ya procesado con el método anterior se reconvierte a geometría al consultarlo', function () {
+    Queue::fake();
+    config(['dialux.plan_light.threshold_bytes.dxf' => 100]);
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+    $module = DialuxModule::factory()->for($project, 'project')->create();
+    $parameters = [$project, $module, 'site-plan-source'];
+    $this->actingAs($user)->post(route('dialux-v2.modules.plans.store', $parameters), [
+        'plan' => UploadedFile::fake()->createWithContent('PLANTA GENERAL.dxf', samplePlanDxf()),
+    ]);
+    $plan = $module->plans()->firstOrFail();
+    $plan->forceFill(['light_status' => 'needs_layers', 'light_layers' => ['layers' => []]])->save();
+
+    $this->actingAs($user)
+        ->getJson(route('dialux-v2.modules.plans.light-status', $parameters))
+        ->assertSuccessful()
+        ->assertJsonPath('status', 'pending');
+    Queue::assertPushed(LightenDialuxPlan::class, 2);
 });

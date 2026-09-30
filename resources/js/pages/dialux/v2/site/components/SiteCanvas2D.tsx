@@ -56,6 +56,7 @@ import {
     useSiteLightingStore,
     type SiteLightingCalculationState,
 } from '../hooks/useSiteLightingCalculation';
+import { dxgSiteBounds } from '../lib/dxgPlan';
 import { SITE_ELEMENT_DEFAULTS } from '../lib/siteDefaults';
 import { buildSiteLoadingStages } from '../lib/siteLoadingStages';
 import {
@@ -69,7 +70,7 @@ import {
     SiteElementSymbol,
 } from './SiteElementSymbol';
 import { IsoluxLayer } from './SiteIsoluxLayer';
-import { SitePlanLayersDialog } from './SitePlanLayersDialog';
+import { SiteVectorPlanLayer, SiteVectorPlanLayersPanel } from './SiteVectorPlanLayer';
 
 interface Props {
     /** Resultado del botón "Calcular alumbrado" (falsos colores sobre la planta). */
@@ -125,7 +126,9 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
         vectorBlocked,
         light: cadLight,
         retryLight,
-        chooseLayers,
+        geometry: planGeometry,
+        hiddenLayers: hiddenPlanLayers,
+        setHiddenLayers: setHiddenPlanLayers,
         loadVector,
         abandonVector,
         getView,
@@ -139,6 +142,8 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
         editor.importedPlan?.updatedAt,
     );
     const cadPlanActive = cadStatus === 'ready';
+    /** Plano pesado dibujado con WebGL desde su geometría (sin motor CAD: usa la transformación propia). */
+    const vectorPlan = cadStatus === 'geometry' ? planGeometry : null;
     const projectionPreview = useSiteLightingStore(
         (state) => state.projectionPreview,
     );
@@ -153,10 +158,14 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
     /** Sube cada vez que el motor mueve la cámara → fuerza recomputar la transformación. */
     const [camTick, setCamTick] = useState(0);
     const [fallbackView, setFallbackView] = useState<FallbackView | null>(null);
+    // Al abrirse la geometría del plano pesado, se encuadra a ella.
+    const [fittedPlan, setFittedPlan] = useState(vectorPlan);
+    if (fittedPlan !== vectorPlan) {
+        setFittedPlan(vectorPlan);
+        if (vectorPlan) setFallbackView(null);
+    }
     /** Cursor mientras se dibuja (coords del emplazamiento) — línea guía elástica. */
     const [drawCursor, setDrawCursor] = useState<Point2D | null>(null);
-    // Diálogo para elegir las capas del plano pesado (versión ligera en el servidor).
-    const [layersDialogOpen, setLayersDialogOpen] = useState(false);
 
     const panRef = useRef<
         | { pointerId: number; lastX: number; lastY: number; moved: boolean }
@@ -317,9 +326,18 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
     // no tienen por qué caber en el lienzo por defecto de 2000×1200 — sin
     // esto el emplazamiento salía diminuto en una esquina (sin plano CAD
     // vivo, p. ej. mientras se abre o si es demasiado pesado).
-    const plan = editor.importedPlan;
-    const fitW = plan ? plan.widthUnits : baseWidth;
-    const fitH = plan ? plan.heightUnits : baseHeight;
+    // Con la geometría del plano pesado, se encuadra a su extensión real.
+    const importedFit = editor.importedPlan
+        ? {
+              x: editor.importedPlan.x,
+              y: editor.importedPlan.y,
+              width: editor.importedPlan.widthUnits,
+              height: editor.importedPlan.heightUnits,
+          }
+        : null;
+    const plan = vectorPlan ? dxgSiteBounds(vectorPlan) : importedFit;
+    const fitW = plan ? plan.width : baseWidth;
+    const fitH = plan ? plan.height : baseHeight;
     const fitX = plan ? plan.x : 0;
     const fitY = plan ? plan.y : 0;
     const fb: FallbackView =
@@ -807,6 +825,16 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                 className="pointer-events-none absolute inset-0"
                 style={{ visibility: cadPlanActive ? 'visible' : 'hidden' }}
             />
+            {vectorPlan && editor.importedPlan?.visible !== false && (
+                <SiteVectorPlanLayer
+                    plan={vectorPlan}
+                    transform={fb}
+                    width={size.w}
+                    height={size.h}
+                    hiddenLayers={hiddenPlanLayers}
+                    opacity={editor.importedPlan?.opacity ?? 1}
+                />
+            )}
             <svg
                 ref={svgRef}
                 data-cam-tick={camTick}
@@ -3209,21 +3237,6 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                             <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
                             {`Optimizando el plano en el servidor (${(deferredBytes / 1_000_000).toFixed(1)} MB). Puedes seguir trabajando; te avisará aquí cuando esté listo.`}
                         </span>
-                    ) : cadLight?.status === 'needs_layers' ? (
-                        // No cabe completo: el ingeniero elige qué capas cargar.
-                        <>
-                            <span>
-                                {cadLight.error ??
-                                    `El plano es demasiado grande para cargarlo completo (${((cadLight.dxf_bytes ?? deferredBytes) / 1_000_000).toFixed(0)} MB). Elige qué capas necesitas.`}
-                            </span>
-                            <button
-                                type="button"
-                                onClick={() => setLayersDialogOpen(true)}
-                                className="shrink-0 rounded bg-amber-500 px-2 py-0.5 font-semibold text-white hover:bg-amber-600"
-                            >
-                                Elegir capas
-                            </button>
-                        </>
                     ) : cadLight?.status === 'ready' ? (
                         <>
                             <span>
@@ -3236,15 +3249,6 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                             >
                                 Abrir plano optimizado
                             </button>
-                            {cadLight.layers && (
-                                <button
-                                    type="button"
-                                    onClick={() => setLayersDialogOpen(true)}
-                                    className="shrink-0 rounded border border-slate-300 px-2 py-0.5 font-semibold text-slate-600 hover:bg-slate-100 dark:border-white/15 dark:text-slate-300 dark:hover:bg-white/5"
-                                >
-                                    Cambiar capas
-                                </button>
-                            )}
                         </>
                     ) : cadLight?.status === 'failed' ? (
                         <>
@@ -3286,14 +3290,11 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                     )}
                 </div>
             )}
-            {layersDialogOpen && cadLight?.layers && (
-                <SitePlanLayersDialog
-                    light={cadLight}
-                    onConfirm={async (keep) => {
-                        await chooseLayers(keep);
-                        setLayersDialogOpen(false);
-                    }}
-                    onClose={() => setLayersDialogOpen(false)}
+            {vectorPlan && (
+                <SiteVectorPlanLayersPanel
+                    plan={vectorPlan}
+                    hiddenLayers={hiddenPlanLayers}
+                    onChange={setHiddenPlanLayers}
                 />
             )}
             {cadLoadingStages && (

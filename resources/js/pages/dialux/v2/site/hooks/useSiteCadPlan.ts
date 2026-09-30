@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     cadOpenHardMax,
-    chooseDialuxPlanLayers,
     fetchDialuxPlanLightStatus,
     loadDialuxPlan,
     loadDialuxPlanFromServer,
+    loadDialuxPlanGeometry,
     loadDialuxPlanLightFile,
     retryDialuxPlanLight,
     storedDialuxPlanToFile,
     type DialuxPlanLightStatus,
 } from '@/pages/dialux/hooks/dialuxPlanStorage';
 import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
+import { type DxgPlan, parseDxgPlan } from '../lib/dxgPlan';
 import { SITE_PLAN_SOURCE_SCENE_ID } from '../lib/planImport';
 
 /**
@@ -48,7 +49,9 @@ export type SiteCadPlanStatus =
     | 'missing'
     | 'error'
     /** Plano demasiado pesado para abrirse solo: se muestra la imagen y el usuario decide cargar el vectorial. */
-    | 'deferred';
+    | 'deferred'
+    /** Plano pesado dibujado con WebGL desde su geometría (`.dxg`) generada en el servidor. */
+    | 'geometry';
 
 /**
  * Sub-etapa de la apertura, solo para el indicador de carga
@@ -63,6 +66,21 @@ export type SiteCadPlanPhase = 'reading' | 'initializing' | 'opening' | null;
 const AUTO_OPEN_MAX_BYTES = 1_500_000;
 /** Tope de espera al abrir: pasado esto se abandona y se vuelve a la imagen. */
 const OPEN_TIMEOUT_MS = 90_000;
+
+function hiddenLayersKey(projectId: number): string {
+    return `dialux-site-plan-hidden-layers:${projectId}`;
+}
+
+/** Capas apagadas: las que el usuario apagó (si las guardó) o las apagadas en el DXF. */
+function initialHiddenLayers(projectId: number, plan: DxgPlan): Set<string> {
+    try {
+        const saved = window.localStorage.getItem(hiddenLayersKey(projectId));
+        if (saved) return new Set(JSON.parse(saved) as string[]);
+    } catch {
+        /* sin almacenamiento local */
+    }
+    return new Set(plan.layers.filter((layer) => !layer.visible).map((layer) => layer.name));
+}
 
 interface CadViewLike {
     zoom?: number;
@@ -98,6 +116,9 @@ export function useSiteCadPlan(
     /** Versión LIGERA del plano pesado, que el servidor genera en segundo plano. */
     const [light, setLight] = useState<DialuxPlanLightStatus | null>(null);
     const [phase, setPhase] = useState<SiteCadPlanPhase>(null);
+    /** Geometría del plano pesado (se dibuja con WebGL, sin el motor CAD). */
+    const [geometry, setGeometry] = useState<DxgPlan | null>(null);
+    const [hiddenLayers, setHiddenLayersState] = useState<ReadonlySet<string>>(() => new Set());
     /** Tamaño del archivo que se está abriendo (para el indicador). */
     const [fileBytes, setFileBytes] = useState(0);
     /** El usuario pidió cargar el vectorial aunque sea pesado. */
@@ -162,6 +183,30 @@ export function useSiteCadPlan(
                     );
                     if (stale()) return;
                     setLight(lightInfo);
+                    if (lightInfo?.status === 'ready' && lightInfo.format === 'geometry' && lightInfo.updated_at !== null) {
+                        // El plano COMPLETO como geometría: se abre solo.
+                        setFileBytes(lightInfo.light_size_bytes ?? 0);
+                        const buffer = await loadDialuxPlanGeometry(
+                            String(projectId),
+                            SITE_PLAN_SOURCE_SCENE_ID,
+                            String(generalModuleId),
+                            lightInfo.updated_at,
+                        );
+                        if (stale()) return;
+                        if (!buffer) {
+                            setLight({ ...lightInfo, status: 'failed', error: 'No se pudo descargar el plano procesado.' });
+                            setDeferredBytes(file.size);
+                            setStatus('deferred');
+                            return;
+                        }
+                        setPhase('opening');
+                        const parsed = parseDxgPlan(buffer);
+                        setHiddenLayersState(initialHiddenLayers(projectId, parsed));
+                        setGeometry(parsed);
+                        openedForRef.current = importedAt ?? Date.now();
+                        setStatus('geometry');
+                        return;
+                    }
                     if (!forceLoad || lightInfo?.status !== 'ready' || lightInfo.updated_at === null) {
                         setDeferredBytes(file.size);
                         setStatus('deferred');
@@ -261,7 +306,13 @@ export function useSiteCadPlan(
                 SITE_PLAN_SOURCE_SCENE_ID,
                 String(generalModuleId),
             ).then((next) => {
-                if (next) setLight(next);
+                if (!next) return;
+                setLight(next);
+                // Terminó la geometría del plano completo: se abre sola.
+                if (next.status === 'ready' && next.format === 'geometry') {
+                    openedForRef.current = null;
+                    setOpenTick((tick) => tick + 1);
+                }
             });
         }, 15_000);
         return () => window.clearInterval(timer);
@@ -278,18 +329,17 @@ export function useSiteCadPlan(
         });
     }, [projectId, generalModuleId]);
 
-    /** El ingeniero eligió las capas a cargar: el servidor genera la versión ligera con ellas. */
-    const chooseLayers = useCallback(
-        async (keep: string[]) => {
-            const next = await chooseDialuxPlanLayers(
-                String(projectId),
-                SITE_PLAN_SOURCE_SCENE_ID,
-                String(generalModuleId),
-                keep,
-            );
-            setLight(next);
+    /** Encender/apagar capas del plano (se recuerda por proyecto en este navegador). */
+    const setHiddenLayers = useCallback(
+        (next: Set<string>) => {
+            setHiddenLayersState(next);
+            try {
+                window.localStorage.setItem(hiddenLayersKey(projectId), JSON.stringify([...next]));
+            } catch {
+                /* sin almacenamiento local */
+            }
         },
-        [projectId, generalModuleId],
+        [projectId],
     );
 
     /** Carga el plano vectorial aunque sea pesado (acción explícita del usuario). */
@@ -412,7 +462,9 @@ export function useSiteCadPlan(
         vectorBlocked,
         light,
         retryLight,
-        chooseLayers,
+        geometry,
+        hiddenLayers,
+        setHiddenLayers,
         loadVector,
         abandonVector,
         getView,

@@ -382,6 +382,8 @@ export interface DialuxPlanLightStatus {
     light_size_bytes: number | null;
     error: string | null;
     updated_at: number | null;
+    /** `geometry` = geometría binaria del plano COMPLETO (se dibuja con WebGL); `dxf` = método anterior. */
+    format?: 'geometry' | 'dxf';
     /** Capas con su peso (cuando el plano completo no cabe en el navegador). */
     layers: DialuxPlanLayer[] | null;
     /** Lo que queda siempre (cabecera, tablas, bloques compartidos). */
@@ -452,27 +454,39 @@ export async function loadDialuxPlanLightFile(
     return file;
 }
 
-/** Genera la versión ligera solo con las capas elegidas por el ingeniero. */
-export async function chooseDialuxPlanLayers(
+/**
+ * Descarga la GEOMETRÍA del plano pesado (`.dxg`, generada en el servidor):
+ * el plano completo reducido a trazos por capa, que se dibuja con WebGL. Va
+ * comprimida (gzip) y el navegador la descomprime solo. Se guarda en la
+ * caché local con su `updated_at` para no volver a bajarla.
+ */
+export async function loadDialuxPlanGeometry(
     projectId: string,
     sceneId: string,
     moduleId: string,
-    keep: string[],
-): Promise<DialuxPlanLightStatus> {
-    const response = await fetch(`${planFileUrl(projectId, sceneId, moduleId)}/light/layers`, {
-        method: 'POST',
-        headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            'X-XSRF-TOKEN': readXsrfTokenFromCookie(),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-        credentials: 'same-origin',
-        body: JSON.stringify({ keep }),
-    });
-    if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(body?.message ?? `No se pudo generar el plano (HTTP ${response.status}).`);
+    version: number,
+): Promise<ArrayBuffer | null> {
+    const cacheScene = `${sceneId}::geometry`;
+    try {
+        const cached = await loadDialuxPlan(projectId, cacheScene);
+        if (cached && cached.lastModified === version) return await cached.blob.arrayBuffer();
+    } catch {
+        /* caché local no disponible: se descarga */
     }
-    return (await response.json()) as DialuxPlanLightStatus;
+    const response = await fetch(`${planFileUrl(projectId, sceneId, moduleId)}/light`, {
+        headers: { Accept: 'application/octet-stream', 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
+    });
+    if (!response.ok) return null;
+    const buffer = await response.arrayBuffer();
+    try {
+        await saveDialuxPlanFile(
+            projectId,
+            cacheScene,
+            new File([buffer], 'plano.dxg', { type: 'application/octet-stream', lastModified: version }),
+        );
+    } catch {
+        /* sin caché local: se vuelve a descargar la próxima vez */
+    }
+    return buffer;
 }

@@ -143,7 +143,11 @@ class PlanFileController extends Controller
         $this->authorizeModule($dialuxProject, $dialuxModule);
         $plan = $this->boundPlan($dialuxModule, $sceneId);
 
-        if ($plan->needsLightVersion() && $plan->light_status === null) {
+        // Sin versión todavía, o procesado con el método anterior (DXF
+        // ligero / elegir capas): se genera la geometría completa.
+        $legacy = in_array($plan->light_status, ['ready', 'needs_layers'], true)
+            && ($plan->light_layers['format'] ?? null) !== 'geometry';
+        if ($plan->needsLightVersion() && ($plan->light_status === null || $legacy)) {
             $this->queueLightVersion($plan);
         }
 
@@ -201,6 +205,17 @@ class PlanFileController extends Controller
             $plan->light_status === 'ready' && $plan->light_path && Storage::disk($plan->disk)->exists($plan->light_path),
             404,
         );
+        if (($plan->light_layers['format'] ?? null) === 'geometry') {
+            // Geometría comprimida: el navegador la descomprime sola (Content-Encoding).
+            $name = pathinfo($plan->original_name, PATHINFO_FILENAME).'.dxg';
+
+            return Storage::disk($plan->disk)->download($plan->light_path, $name, [
+                'Content-Type' => 'application/octet-stream',
+                'Content-Encoding' => 'gzip',
+                'X-Dialux-File-Name' => rawurlencode($name),
+                'Cache-Control' => 'private, max-age=0, must-revalidate',
+            ]);
+        }
         $name = pathinfo($plan->original_name, PATHINFO_FILENAME).' (ligero).dxf';
 
         return Storage::disk($plan->disk)->download($plan->light_path, $name, [
@@ -233,8 +248,10 @@ class PlanFileController extends Controller
             'light_size_bytes' => $plan->light_size_bytes,
             'error' => $plan->light_error,
             'updated_at' => $plan->updated_at?->getTimestampMs(),
+            // 'geometry' = plano completo para WebGL; 'dxf' = versión DXF ligera.
+            'format' => $plan->light_layers['format'] ?? 'dxf',
             // Capas con su peso (para elegir qué cargar) y el tope del navegador.
-            'layers' => $plan->light_layers['layers'] ?? null,
+            'layers' => ($plan->light_layers['format'] ?? null) === 'geometry' ? null : ($plan->light_layers['layers'] ?? null),
             'base_bytes' => $plan->light_layers['base_bytes'] ?? null,
             'dxf_bytes' => $plan->light_layers['dxf_bytes'] ?? null,
             'cap_bytes' => $plan->light_layers['cap_bytes'] ?? (int) config('dialux.plan_light.threshold_bytes.dxf'),
