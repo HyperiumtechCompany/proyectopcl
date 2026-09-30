@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { aciToRgb, dxgLayerColor, dxgSiteBounds, dxgStripIndices, parseDxgPlan } from './dxgPlan';
 
-/** Arma un .dxg igual que `CadPlanGeometryBuilder`: una capa con dos tiras. */
-function sampleDxg(): ArrayBuffer {
-    const counts = new Uint32Array([2, 3]);
-    const points = new Float32Array([0, 0, 10, 0, 10, 0, 10, 5, 12, 5]);
+/** Arma un .dxg igual que `CadPlanGeometryBuilder`: una capa (por defecto, dos tiras). */
+function sampleDxg(
+    counts = new Uint32Array([2, 3]),
+    points = new Float32Array([0, 0, 10, 0, 10, 0, 10, 5, 12, 5]),
+    bbox = [0, 0, 12, 5],
+): ArrayBuffer {
     const layerBytes = counts.byteLength + points.byteLength;
     let json = JSON.stringify({
         version: 1,
         origin: [500000, 8000000],
-        bbox: [0, 0, 12, 5],
-        layers: [{ name: 'MUROS', color: 1, visible: true, strips: 2, points: 5, offset: 0 }],
+        bbox,
+        layers: [{ name: 'MUROS', color: 1, visible: true, strips: counts.length, points: points.length / 2, offset: 0 }],
         texts: [[1, 1, 0.5, Math.PI / 2, 'Aula', 'MUROS']],
     });
     while (json.length % 4 !== 0) json += ' ';
@@ -45,6 +47,17 @@ describe('dxgPlan', () => {
 
     it('la extensión pasa al emplazamiento con Y invertida', () => {
         expect(dxgSiteBounds(parseDxgPlan(sampleDxg()))).toEqual({ x: 500000, y: -8000005, width: 12, height: 5 });
+    });
+
+    it('el encuadre ignora objetos sueltos lejanos (basura del DWG)', () => {
+        // 1000 puntos del dibujo en [0, 100] y una línea perdida a 2 000 km.
+        const drawing = Array.from({ length: 2000 }, (_, i) => (i * 37) % 101);
+        const points = new Float32Array([...drawing, 0, 0, 2_000_000, 2_000_000]);
+        const counts = new Uint32Array([1000, 2]);
+        const plan = parseDxgPlan(sampleDxg(counts, points, [0, 0, 2_000_000, 2_000_000]));
+        const [minX, , maxX] = plan.fitBox;
+        expect(maxX - minX).toBeLessThan(120);
+        expect(dxgSiteBounds(plan).width).toBeLessThan(120);
     });
 
     it('colores ACI de AutoCAD', () => {

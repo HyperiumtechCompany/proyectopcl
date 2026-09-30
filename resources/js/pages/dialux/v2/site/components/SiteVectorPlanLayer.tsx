@@ -45,13 +45,19 @@ interface GpuPlan {
     layers: GpuLayer[];
 }
 
-function compile(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
+function compile(
+    gl: WebGL2RenderingContext,
+    type: number,
+    source: string,
+): WebGLShader {
     const shader = gl.createShader(type);
     if (!shader) throw new Error('WebGL: no se pudo crear el shader.');
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        throw new Error(`WebGL: ${gl.getShaderInfoLog(shader) ?? 'shader inválido'}`);
+        throw new Error(
+            `WebGL: ${gl.getShaderInfoLog(shader) ?? 'shader inválido'}`,
+        );
     }
     return shader;
 }
@@ -63,7 +69,9 @@ function uploadPlan(gl: WebGL2RenderingContext, plan: DxgPlan): GpuPlan {
     gl.attachShader(program, compile(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER));
     gl.linkProgram(program);
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        throw new Error(`WebGL: ${gl.getProgramInfoLog(program) ?? 'programa inválido'}`);
+        throw new Error(
+            `WebGL: ${gl.getProgramInfoLog(program) ?? 'programa inválido'}`,
+        );
     }
     const pointLocation = gl.getAttribLocation(program, 'a_point');
 
@@ -83,7 +91,13 @@ function uploadPlan(gl: WebGL2RenderingContext, plan: DxgPlan): GpuPlan {
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
         gl.bindVertexArray(null);
-        layers.push({ name: layer.name, color: layer.color, vao, buffers: [vertexBuffer, indexBuffer], indexCount: indices.length });
+        layers.push({
+            name: layer.name,
+            color: layer.color,
+            vao,
+            buffers: [vertexBuffer, indexBuffer],
+            indexCount: indices.length,
+        });
     }
 
     return {
@@ -140,18 +154,42 @@ export function SiteVectorPlanLayer({
             errorRef.current.hidden = message === null;
         };
         if (!canvas) return;
-        const gl = canvas.getContext('webgl2', { antialias: true, premultipliedAlpha: false, preserveDrawingBuffer: false });
+        const gl = canvas.getContext('webgl2', {
+            antialias: true,
+            premultipliedAlpha: false,
+            preserveDrawingBuffer: false,
+        });
         if (!gl) {
-            showError('Este navegador no tiene WebGL2: no se puede dibujar el plano pesado.');
+            showError(
+                'Este navegador no tiene WebGL2: no se puede dibujar el plano pesado.',
+            );
             return;
         }
+        const onLost = (event: Event) => {
+            event.preventDefault();
+            gpuRef.current = null;
+            showError(
+                'La tarjeta gráfica se quedó sin memoria para el plano: apaga capas pesadas y recarga la página.',
+            );
+        };
+        canvas.addEventListener('webglcontextlost', onLost);
         try {
             gpuRef.current = uploadPlan(gl, plan);
-            showError(null);
+            const outOfMemory = gl.getError() === gl.OUT_OF_MEMORY;
+            showError(
+                outOfMemory
+                    ? 'La tarjeta gráfica no tiene memoria suficiente para todo el plano.'
+                    : null,
+            );
         } catch (error) {
-            showError(error instanceof Error ? error.message : 'No se pudo preparar el plano en la GPU.');
+            showError(
+                error instanceof Error
+                    ? error.message
+                    : 'No se pudo preparar el plano en la GPU.',
+            );
         }
         return () => {
+            canvas.removeEventListener('webglcontextlost', onLost);
             if (gpuRef.current) releasePlan(gpuRef.current);
             gpuRef.current = null;
         };
@@ -192,7 +230,12 @@ export function SiteVectorPlanLayer({
                 const [r, g, b] = dxgLayerColor(layer.color, dark);
                 gl.uniform4f(gpu.colorLocation, r / 255, g / 255, b / 255, 1);
                 gl.bindVertexArray(layer.vao);
-                gl.drawElements(gl.LINE_STRIP, layer.indexCount, gl.UNSIGNED_INT, 0);
+                gl.drawElements(
+                    gl.LINE_STRIP,
+                    layer.indexCount,
+                    gl.UNSIGNED_INT,
+                    0,
+                );
             }
             gl.bindVertexArray(null);
         }
@@ -209,7 +252,9 @@ export function SiteVectorPlanLayer({
         }
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, w, h);
-        const layerColor = new Map(plan.layers.map((layer) => [layer.name, layer.color]));
+        const layerColor = new Map(
+            plan.layers.map((layer) => [layer.name, layer.color]),
+        );
         let drawn = 0;
         for (const [x, y, textHeight, rotation, content, layer] of plan.texts) {
             const px = textHeight * scale;
@@ -217,14 +262,17 @@ export function SiteVectorPlanLayer({
             const sx = (ox + x) * scale + tx;
             const sy = -(oy + y) * scale + ty;
             const reach = px * Math.max(content.length, 1);
-            if (sx < -reach || sx > w + reach || sy < -reach || sy > h + reach) continue;
+            if (sx < -reach || sx > w + reach || sy < -reach || sy > h + reach)
+                continue;
             const [r, g, b] = dxgLayerColor(layerColor.get(layer) ?? 7, dark);
             ctx.fillStyle = `rgb(${r},${g},${b})`;
             ctx.font = `${px}px sans-serif`;
             ctx.save();
             ctx.translate(sx, sy);
             ctx.rotate(-rotation);
-            content.split('\n').forEach((line, i) => ctx.fillText(line, 0, i * px * 1.4));
+            content
+                .split('\n')
+                .forEach((line, i) => ctx.fillText(line, 0, i * px * 1.4));
             ctx.restore();
             if (++drawn >= MAX_TEXTS_PER_FRAME) break;
         }
@@ -256,15 +304,22 @@ export function SiteVectorPlanLayersPanel({
     plan,
     hiddenLayers,
     onChange,
+    onFit,
 }: {
     plan: DxgPlan;
     hiddenLayers: ReadonlySet<string>;
     onChange: (hidden: Set<string>) => void;
+    /** Reencuadra la vista al dibujo. */
+    onFit: () => void;
 }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
-    const names = plan.layers.map((layer) => layer.name).sort((a, b) => a.localeCompare(b, 'es'));
-    const filtered = names.filter((name) => name.toLowerCase().includes(query.trim().toLowerCase()));
+    const names = plan.layers
+        .map((layer) => layer.name)
+        .sort((a, b) => a.localeCompare(b, 'es'));
+    const filtered = names.filter((name) =>
+        name.toLowerCase().includes(query.trim().toLowerCase()),
+    );
     const setMany = (visible: boolean) => {
         const next = new Set(hiddenLayers);
         for (const name of filtered) {
@@ -274,17 +329,33 @@ export function SiteVectorPlanLayersPanel({
         onChange(next);
     };
 
+    const [minX, minY, maxX, maxY] = plan.fitBox;
+    const points = plan.layers.reduce(
+        (sum, layer) => sum + layer.points.length / 2,
+        0,
+    );
+
     if (!open) {
         return (
-            <button
-                type="button"
-                onClick={() => setOpen(true)}
-                title="Capas del plano"
-                className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 px-2 py-1 text-[10px] font-semibold text-slate-600 shadow hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/95 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-                <Layers className="h-3.5 w-3.5 text-amber-500" />
-                {`Capas (${names.length - hiddenLayers.size}/${names.length})`}
-            </button>
+            <div className="absolute top-2 right-2 z-10 flex gap-1">
+                <button
+                    type="button"
+                    onClick={onFit}
+                    title="Encuadrar el plano completo"
+                    className="rounded-lg border border-slate-200 bg-white/95 px-2 py-1 text-[10px] font-semibold text-slate-600 shadow hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/95 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                    Encuadrar
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setOpen(true)}
+                    title="Capas del plano"
+                    className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 px-2 py-1 text-[10px] font-semibold text-slate-600 shadow hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/95 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                    <Layers className="h-3.5 w-3.5 text-amber-500" />
+                    {`Capas (${names.length - hiddenLayers.size}/${names.length})`}
+                </button>
+            </div>
         );
     }
 
@@ -295,7 +366,12 @@ export function SiteVectorPlanLayersPanel({
                     <Layers className="h-3.5 w-3.5 text-amber-500" />
                     Capas del plano
                 </span>
-                <button type="button" onClick={() => setOpen(false)} title="Cerrar" className="text-slate-400 hover:text-slate-700 dark:hover:text-white">
+                <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    title="Cerrar"
+                    className="text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                >
                     <X className="h-3.5 w-3.5" />
                 </button>
             </div>
@@ -306,13 +382,24 @@ export function SiteVectorPlanLayersPanel({
                     placeholder="Buscar capa…"
                     className="min-w-0 flex-1 rounded border border-slate-200 bg-transparent px-1.5 py-0.5 outline-none dark:border-white/10"
                 />
-                <button type="button" onClick={() => setMany(true)} className="rounded border border-slate-300 px-1.5 py-0.5 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/5">
+                <button
+                    type="button"
+                    onClick={() => setMany(true)}
+                    className="rounded border border-slate-300 px-1.5 py-0.5 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/5"
+                >
                     Todas
                 </button>
-                <button type="button" onClick={() => setMany(false)} className="rounded border border-slate-300 px-1.5 py-0.5 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/5">
+                <button
+                    type="button"
+                    onClick={() => setMany(false)}
+                    className="rounded border border-slate-300 px-1.5 py-0.5 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/5"
+                >
                     Ninguna
                 </button>
             </div>
+            <p className="border-b border-slate-200 px-2 py-1 text-slate-500 dark:border-white/10 dark:text-slate-400">
+                {`${points.toLocaleString('es-PE')} puntos · dibujo ${(maxX - minX).toFixed(0)} × ${(maxY - minY).toFixed(0)} u · total ${(plan.bbox[2] - plan.bbox[0]).toFixed(0)} × ${(plan.bbox[3] - plan.bbox[1]).toFixed(0)} u`}
+            </p>
             <ul className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
                 {filtered.map((name) => (
                     <li key={name}>
@@ -328,13 +415,20 @@ export function SiteVectorPlanLayersPanel({
                                     onChange(next);
                                 }}
                             />
-                            <span className="truncate text-slate-700 dark:text-slate-200" title={name}>
+                            <span
+                                className="truncate text-slate-700 dark:text-slate-200"
+                                title={name}
+                            >
                                 {name || '(sin nombre)'}
                             </span>
                         </label>
                     </li>
                 ))}
-                {filtered.length === 0 && <li className="px-1.5 py-1 text-slate-400">Ninguna capa coincide.</li>}
+                {filtered.length === 0 && (
+                    <li className="px-1.5 py-1 text-slate-400">
+                        Ninguna capa coincide.
+                    </li>
+                )}
             </ul>
         </div>
     );

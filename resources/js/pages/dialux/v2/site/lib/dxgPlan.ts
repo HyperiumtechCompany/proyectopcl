@@ -29,6 +29,12 @@ export interface DxgPlan {
     origin: [number, number];
     /** Extensión en coordenadas relativas: [minX, minY, maxX, maxY]. */
     bbox: [number, number, number, number];
+    /**
+     * Extensión del DIBUJO (sin objetos sueltos lejanos), relativa: los DWG
+     * reales suelen tener basura a kilómetros que, con la extensión total,
+     * dejaba el plano del tamaño de un punto al encuadrar.
+     */
+    fitBox: [number, number, number, number];
     layers: DxgLayer[];
     texts: DxgText[];
 }
@@ -50,11 +56,7 @@ export function parseDxgPlan(buffer: ArrayBuffer): DxgPlan {
     const header = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + headerLength))) as DxgHeader;
     const base = 8 + headerLength;
 
-    return {
-        origin: header.origin,
-        bbox: header.bbox,
-        texts: header.texts ?? [],
-        layers: header.layers.map((layer) => {
+    const layers = header.layers.map((layer): DxgLayer => {
             const at = base + layer.offset;
             return {
                 name: layer.name,
@@ -63,8 +65,49 @@ export function parseDxgPlan(buffer: ArrayBuffer): DxgPlan {
                 counts: new Uint32Array(buffer, at, layer.strips),
                 points: new Float32Array(buffer, at + layer.strips * 4, layer.points * 2),
             };
-        }),
+        });
+
+    return {
+        origin: header.origin,
+        bbox: header.bbox,
+        fitBox: robustBox(layers, header.bbox),
+        texts: header.texts ?? [],
+        layers,
     };
+}
+
+/** Puntos que se muestrean para la extensión del dibujo. */
+const FIT_SAMPLES = 200_000;
+/** Fracción que se descarta en cada extremo (objetos sueltos lejanos). */
+const FIT_TRIM = 0.002;
+
+function robustBox(layers: DxgLayer[], bbox: [number, number, number, number]): [number, number, number, number] {
+    const total = layers.reduce((sum, layer) => sum + layer.points.length / 2, 0);
+    if (total < 50) return bbox;
+    const stride = Math.max(1, Math.floor(total / FIT_SAMPLES));
+    const xs: number[] = [];
+    const ys: number[] = [];
+    let skip = 0;
+    for (const layer of layers) {
+        const points = layer.points;
+        for (let i = 0; i < points.length; i += 2) {
+            if (skip++ % stride !== 0) continue;
+            if (Number.isFinite(points[i]) && Number.isFinite(points[i + 1])) {
+                xs.push(points[i]);
+                ys.push(points[i + 1]);
+            }
+        }
+    }
+    if (xs.length < 50) return bbox;
+    const ascending = (a: number, b: number) => a - b;
+    xs.sort(ascending);
+    ys.sort(ascending);
+    const lo = Math.floor(xs.length * FIT_TRIM);
+    const hi = Math.min(xs.length - 1, Math.ceil(xs.length * (1 - FIT_TRIM)));
+    const [minX, maxX, minY, maxY] = [xs[lo], xs[hi], ys[lo], ys[hi]];
+    const padX = (maxX - minX) * 0.03;
+    const padY = (maxY - minY) * 0.03;
+    return [minX - padX, minY - padY, maxX + padX, maxY + padY];
 }
 
 /**
@@ -138,7 +181,7 @@ export function dxgLayerColor(index: number, dark: boolean): [number, number, nu
 
 /** Extensión del plano en coordenadas del EMPLAZAMIENTO (Y abajo): para el encuadre inicial. */
 export function dxgSiteBounds(plan: DxgPlan): { x: number; y: number; width: number; height: number } {
-    const [minX, minY, maxX, maxY] = plan.bbox;
+    const [minX, minY, maxX, maxY] = plan.fitBox;
     return {
         x: plan.origin[0] + minX,
         y: -(plan.origin[1] + maxY),

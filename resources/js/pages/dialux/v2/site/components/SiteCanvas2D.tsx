@@ -3295,6 +3295,7 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                     plan={vectorPlan}
                     hiddenLayers={hiddenPlanLayers}
                     onChange={setHiddenPlanLayers}
+                    onFit={() => setFallbackView(null)}
                 />
             )}
             {cadLoadingStages && (
