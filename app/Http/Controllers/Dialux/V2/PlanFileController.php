@@ -7,6 +7,7 @@ use App\Concerns\DetectsDwgCompatibility;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Dialux\LinkDialuxPlanFileRequest;
 use App\Http\Requests\Dialux\StoreDialuxPlanFileRequest;
+use App\Http\Requests\Dialux\V2\ChooseDialuxPlanLayersRequest;
 use App\Jobs\Dialux\LightenDialuxPlan;
 use App\Models\Dialux\DialuxModule;
 use App\Models\Dialux\DialuxPlan;
@@ -166,6 +167,28 @@ class PlanFileController extends Controller
         return response()->json($this->lightPayload($plan));
     }
 
+    /**
+     * El ingeniero eligió qué capas cargar (plano demasiado pesado para
+     * cargarlo completo): se genera la versión ligera solo con ellas.
+     */
+    public function lightLayers(
+        ChooseDialuxPlanLayersRequest $request,
+        DialuxProject $dialuxProject,
+        DialuxModule $dialuxModule,
+        string $sceneId,
+    ): JsonResponse {
+        $this->authorizeModule($dialuxProject, $dialuxModule);
+        $plan = $this->boundPlan($dialuxModule, $sceneId);
+        abort_unless($plan->needsLightVersion(), 422, 'Este plano no necesita versión ligera.');
+        abort_if(in_array($plan->light_status, ['pending', 'processing'], true), 409, 'El plano ya se está optimizando.');
+
+        $keep = array_values(array_unique($request->validated('keep')));
+        $plan->forceFill(['light_status' => 'pending', 'light_error' => null])->save();
+        LightenDialuxPlan::dispatch($plan->id, $keep);
+
+        return response()->json($this->lightPayload($plan));
+    }
+
     /** Descarga la versión ligera (DXF) del plano. */
     public function lightShow(
         DialuxProject $dialuxProject,
@@ -210,6 +233,11 @@ class PlanFileController extends Controller
             'light_size_bytes' => $plan->light_size_bytes,
             'error' => $plan->light_error,
             'updated_at' => $plan->updated_at?->getTimestampMs(),
+            // Capas con su peso (para elegir qué cargar) y el tope del navegador.
+            'layers' => $plan->light_layers['layers'] ?? null,
+            'base_bytes' => $plan->light_layers['base_bytes'] ?? null,
+            'dxf_bytes' => $plan->light_layers['dxf_bytes'] ?? null,
+            'cap_bytes' => $plan->light_layers['cap_bytes'] ?? (int) config('dialux.plan_light.threshold_bytes.dxf'),
         ];
     }
 
@@ -259,8 +287,10 @@ class PlanFileController extends Controller
         }
 
         Storage::disk($plan->disk)->delete($plan->path);
-        if ($plan->light_path) {
-            Storage::disk($plan->disk)->delete($plan->light_path);
+        foreach ([$plan->light_path, $plan->light_converted_path] as $derived) {
+            if ($derived) {
+                Storage::disk($plan->disk)->delete($derived);
+            }
         }
         $plan->delete();
     }

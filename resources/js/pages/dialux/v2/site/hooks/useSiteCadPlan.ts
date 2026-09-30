@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     cadOpenHardMax,
+    chooseDialuxPlanLayers,
     fetchDialuxPlanLightStatus,
     loadDialuxPlan,
     loadDialuxPlanFromServer,
@@ -101,6 +102,8 @@ export function useSiteCadPlan(
     const [fileBytes, setFileBytes] = useState(0);
     /** El usuario pidió cargar el vectorial aunque sea pesado. */
     const [forceLoad, setForceLoad] = useState(false);
+    /** Sube al pedir abrir de nuevo (reabre aunque `forceLoad` ya fuera true). */
+    const [openTick, setOpenTick] = useState(0);
     /** Sube al abandonar una carga en curso: su resultado tardío se ignora. */
     const abortRef = useRef(0);
 
@@ -246,7 +249,7 @@ export function useSiteCadPlan(
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [importedAt, projectId, generalModuleId, forceLoad]);
+    }, [importedAt, projectId, generalModuleId, forceLoad, openTick]);
 
     // Mientras el servidor optimiza el plano, se consulta cada 15 s.
     const lightPending = light?.status === 'pending' || light?.status === 'processing';
@@ -275,8 +278,27 @@ export function useSiteCadPlan(
         });
     }, [projectId, generalModuleId]);
 
+    /** El ingeniero eligió las capas a cargar: el servidor genera la versión ligera con ellas. */
+    const chooseLayers = useCallback(
+        async (keep: string[]) => {
+            const next = await chooseDialuxPlanLayers(
+                String(projectId),
+                SITE_PLAN_SOURCE_SCENE_ID,
+                String(generalModuleId),
+                keep,
+            );
+            setLight(next);
+        },
+        [projectId, generalModuleId],
+    );
+
     /** Carga el plano vectorial aunque sea pesado (acción explícita del usuario). */
-    const loadVector = useCallback(() => setForceLoad(true), []);
+    const loadVector = useCallback(() => {
+        // Reabre aunque ya se hubiera abierto (p.ej. la versión ligera con otras capas).
+        openedForRef.current = null;
+        setForceLoad(true);
+        setOpenTick((tick) => tick + 1);
+    }, []);
 
     /** Abandona la carga en curso y vuelve a la imagen del plano. */
     const abandonVector = useCallback(() => {
@@ -390,6 +412,7 @@ export function useSiteCadPlan(
         vectorBlocked,
         light,
         retryLight,
+        chooseLayers,
         loadVector,
         abandonVector,
         getView,

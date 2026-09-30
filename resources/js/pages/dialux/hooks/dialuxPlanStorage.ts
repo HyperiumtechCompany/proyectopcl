@@ -366,13 +366,29 @@ export async function unlinkDialuxPlanFile(
 }
 
 /** Estado de la versión ligera de un plano CAD pesado (la genera el servidor en segundo plano). */
+export interface DialuxPlanLayer {
+    name: string;
+    entities: number;
+    /** Peso aproximado de la capa en la versión ligera (con sus bloques exclusivos). */
+    bytes: number;
+    /** Elegida por defecto (las decorativas vienen desmarcadas). */
+    keep: boolean;
+}
+
 export interface DialuxPlanLightStatus {
     needs_light: boolean;
-    status: 'pending' | 'processing' | 'ready' | 'failed' | null;
+    status: 'pending' | 'processing' | 'ready' | 'failed' | 'needs_layers' | null;
     size_bytes: number;
     light_size_bytes: number | null;
     error: string | null;
     updated_at: number | null;
+    /** Capas con su peso (cuando el plano completo no cabe en el navegador). */
+    layers: DialuxPlanLayer[] | null;
+    /** Lo que queda siempre (cabecera, tablas, bloques compartidos). */
+    base_bytes: number | null;
+    dxf_bytes: number | null;
+    /** Tope que el navegador puede abrir. */
+    cap_bytes: number;
 }
 
 /** Consulta (y, para planos subidos antes, pone en cola) la versión ligera. `null` si el plano no está en el servidor. */
@@ -434,4 +450,29 @@ export async function loadDialuxPlanLightFile(
         /* sin caché local: se vuelve a descargar la próxima vez */
     }
     return file;
+}
+
+/** Genera la versión ligera solo con las capas elegidas por el ingeniero. */
+export async function chooseDialuxPlanLayers(
+    projectId: string,
+    sceneId: string,
+    moduleId: string,
+    keep: string[],
+): Promise<DialuxPlanLightStatus> {
+    const response = await fetch(`${planFileUrl(projectId, sceneId, moduleId)}/light/layers`, {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-XSRF-TOKEN': readXsrfTokenFromCookie(),
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ keep }),
+    });
+    if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(body?.message ?? `No se pudo generar el plano (HTTP ${response.status}).`);
+    }
+    return (await response.json()) as DialuxPlanLightStatus;
 }

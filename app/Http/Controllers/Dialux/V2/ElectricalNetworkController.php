@@ -79,3 +79,4 @@ class ElectricalNetworkController extends Controller
         return response()->json(['network' => ['version' => $network->version, 'data' => $network->data]]);
     }
 }
+

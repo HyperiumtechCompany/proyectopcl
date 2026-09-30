@@ -175,6 +175,7 @@ Route::middleware(['auth', 'verified'])->prefix('dialux-v2')->name('dialux-v2.')
         Route::post('/{dialuxModule}/plans/{sceneId}/link', [DialuxV2PlanFileController::class, 'link'])->name('plans.link');
         Route::get('/{dialuxModule}/plans/{sceneId}/light/status', [DialuxV2PlanFileController::class, 'lightStatus'])->name('plans.light-status');
         Route::post('/{dialuxModule}/plans/{sceneId}/light/retry', [DialuxV2PlanFileController::class, 'lightRetry'])->name('plans.light-retry');
+        Route::post('/{dialuxModule}/plans/{sceneId}/light/layers', [DialuxV2PlanFileController::class, 'lightLayers'])->name('plans.light-layers');
         Route::get('/{dialuxModule}/plans/{sceneId}/light', [DialuxV2PlanFileController::class, 'lightShow'])->name('plans.light');
         Route::get('/{dialuxModule}/plans/{sceneId}', [DialuxV2PlanFileController::class, 'show'])->name('plans.show');
         Route::delete('/{dialuxModule}/plans/{sceneId}', [DialuxV2PlanFileController::class, 'destroy'])->name('plans.destroy');

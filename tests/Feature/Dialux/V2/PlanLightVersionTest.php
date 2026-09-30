@@ -11,27 +11,63 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
-/** DXF ASCII mínimo con una línea, un sombreado y una imagen (en ENTITIES y en un bloque). */
-function sampleDxf(): string
+/** Pares [código, valor] → texto DXF ASCII. */
+function dxfFrom(array $pairs): string
 {
-    $pairs = [
+    return implode("\r\n", array_map(fn (array $pair): string => $pair[0]."\r\n".$pair[1], $pairs))."\r\n";
+}
+
+/**
+ * Plano de muestra como el del usuario: muros, un árbol como BLOQUE pesado
+ * insertado en "Arboles y Arbustos", un bloque de puerta usado por dos capas
+ * (compartido), un sombreado, un marco en espacio PAPEL y un bloque sin uso.
+ */
+function samplePlanDxf(): string
+{
+    $tree = [];
+    for ($i = 0; $i < 60; $i++) {
+        $tree[] = [0, 'CIRCLE'];
+        $tree[] = [8, '0'];
+        $tree[] = [10, (string) $i];
+        $tree[] = [20, '0'];
+        $tree[] = [40, '0.5'];
+    }
+
+    return dxfFrom([
         [0, 'SECTION'], [2, 'HEADER'], [9, '$ACADVER'], [1, 'AC1027'], [0, 'ENDSEC'],
         [0, 'SECTION'], [2, 'BLOCKS'],
-        [0, 'BLOCK'], [2, 'B1'], [10, '0'], [20, '0'],
-        [0, 'HATCH'], [8, 'SOMBRA'], [2, 'SOLID'], [10, '0'], [20, '0'],
-        [0, 'CIRCLE'], [8, 'EJES'], [10, '1'], [20, '1'], [40, '0.5'],
+        [0, 'BLOCK'], [2, '*Model_Space'], [0, 'ENDBLK'],
+        [0, 'BLOCK'], [2, 'ARBOL'], [10, '0'], [20, '0'],
+        ...$tree,
+        [0, 'ENDBLK'],
+        [0, 'BLOCK'], [2, 'PUERTA'], [10, '0'], [20, '0'],
+        [0, 'ARC'], [8, '0'], [10, '0'], [20, '0'], [40, '0.9'], [50, '0'], [51, '90'],
+        [0, 'ENDBLK'],
+        [0, 'BLOCK'], [2, 'SIN_USO'], [10, '0'], [20, '0'],
+        ...$tree,
         [0, 'ENDBLK'],
         [0, 'ENDSEC'],
         [0, 'SECTION'], [2, 'ENTITIES'],
         [0, 'LINE'], [8, 'MUROS'], [10, '0'], [20, '0'], [11, '10'], [21, '0'],
+        [0, 'LINE'], [8, 'MUROS'], [10, '10'], [20, '0'], [11, '10'], [21, '8'],
+        [0, 'INSERT'], [8, 'Arboles y Arbustos'], [2, 'ARBOL'], [10, '3'], [20, '3'],
+        [0, 'INSERT'], [8, 'MUROS'], [2, 'PUERTA'], [10, '5'], [20, '0'],
+        [0, 'INSERT'], [8, '13. PUERTAS.'], [2, 'PUERTA'], [10, '7'], [20, '0'],
         [0, 'HATCH'], [8, 'SOMBRA'], [2, 'ANSI31'], [10, '1'], [20, '1'],
-        [0, 'IMAGE'], [8, 'FOTO'], [10, '0'], [20, '0'],
+        [0, 'LINE'], [8, 'MARCO'], [67, '1'], [10, '0'], [20, '0'], [11, '42'], [21, '0'],
         [0, 'TEXT'], [8, 'TEXTOS'], [10, '2'], [20, '2'], [1, 'Aula 1'],
         [0, 'ENDSEC'],
         [0, 'EOF'],
-    ];
+    ]);
+}
 
-    return implode("\r\n", array_map(fn (array $pair): string => $pair[0]."\r\n".$pair[1], $pairs))."\r\n";
+function tempDxf(string $contents): string
+{
+    $dir = sys_get_temp_dir().'/dxf-light-'.Str::uuid();
+    mkdir($dir);
+    file_put_contents("$dir/in.dxf", $contents);
+
+    return $dir;
 }
 
 beforeEach(function () {
@@ -43,36 +79,70 @@ beforeEach(function () {
     ]));
 });
 
-test('el aligerador quita sombreados e imágenes y conserva la geometría', function () {
-    $dir = sys_get_temp_dir().'/dxf-slim-'.Str::uuid();
-    mkdir($dir);
-    file_put_contents("$dir/in.dxf", sampleDxf());
+test('el análisis pesa cada capa con los bloques que solo ella usa', function () {
+    $dir = tempDxf(samplePlanDxf());
+    $analysis = app(CadPlanLightener::class)->analyzeDxf("$dir/in.dxf");
+    $layers = $analysis['layers'];
 
-    $report = app(CadPlanLightener::class)->slimDxf("$dir/in.dxf", "$dir/out.dxf");
+    // El árbol (bloque de 60 círculos) pesa en su capa, no en la base.
+    expect($layers['Arboles y Arbustos']['bytes'])->toBeGreaterThan($layers['MUROS']['bytes'])
+        ->and(array_key_first($layers))->toBe('Arboles y Arbustos')
+        // Espacio papel y sombreados no cuentan; tampoco su capa.
+        ->and($layers)->not->toHaveKey('MARCO')
+        ->and($layers)->not->toHaveKey('SOMBRA')
+        ->and($layers['MUROS']['entities'])->toBe(3);
+
+    // Estimación con TODAS las capas = base + Σ capas (el bloque sin uso no pesa).
+    $lightener = app(CadPlanLightener::class);
+    expect($lightener->estimateBytes($analysis, null))
+        ->toBe($analysis['base_bytes'] + array_sum(array_column($layers, 'bytes')))
+        ->and($lightener->estimateBytes($analysis, ['MUROS']))->toBeLessThan($lightener->estimateBytes($analysis, null));
+});
+
+test('la versión ligera deja solo las capas elegidas y vacía los bloques que nadie usa', function () {
+    $dir = tempDxf(samplePlanDxf());
+    $lightener = app(CadPlanLightener::class);
+    $report = $lightener->writeLight("$dir/in.dxf", "$dir/out.dxf", ['MUROS', 'TEXTOS']);
     $out = file_get_contents("$dir/out.dxf");
 
-    expect($report['dropped'])->toBe(3)
-        ->and($report['dropped_by_type'])->toBe(['HATCH' => 2, 'IMAGE' => 1])
-        ->and($out)->not->toContain('HATCH')
-        ->and($out)->not->toContain('SOMBRA')
-        ->and($out)->not->toContain('IMAGE')
-        ->and($out)->toContain('LINE')
-        ->and($out)->toContain('CIRCLE')
+    expect($out)->toContain('MUROS')
         ->and($out)->toContain('Aula 1')
-        // El nombre de sombreado "SOLID" dentro del HATCH se descartó con él; el archivo sigue cerrando bien.
-        ->and(trim($out))->toEndWith("0\r\nEOF");
+        ->and($out)->not->toContain('Arboles y Arbustos')
+        ->and($out)->not->toContain('SOMBRA')
+        ->and($out)->not->toContain('MARCO')
+        // Bloques: el del árbol y el sin uso quedan vacíos (se conserva su cabecera);
+        // la puerta la sigue usando MUROS.
+        ->and($out)->toContain("2\r\nARBOL")
+        ->and($out)->not->toContain('CIRCLE')
+        ->and($out)->toContain('ARC')
+        ->and(trim($out))->toEndWith("0\r\nEOF")
+        ->and($report['dropped_by_type'])->toHaveKeys(['CAPA NO ELEGIDA', 'ESPACIO PAPEL', 'HATCH', 'BLOQUE SIN USO'])
+        ->and($report['bytes'])->toBeLessThan(filesize("$dir/in.dxf"));
+
+    // Todas las capas: árbol completo, sin papel ni sombreado.
+    $lightener->writeLight("$dir/in.dxf", "$dir/all.dxf");
+    $all = file_get_contents("$dir/all.dxf");
+    expect($all)->toContain('CIRCLE')->and($all)->not->toContain('MARCO')->and($all)->not->toContain('HATCH');
+});
+
+test('las capas decorativas vienen desmarcadas por defecto', function () {
+    $dir = tempDxf(samplePlanDxf());
+    $lightener = app(CadPlanLightener::class);
+    $choices = collect($lightener->layerChoices($lightener->analyzeDxf("$dir/in.dxf")))->keyBy('name');
+
+    expect($choices['Arboles y Arbustos']['keep'])->toBeFalse()
+        ->and($choices['MUROS']['keep'])->toBeTrue()
+        ->and($choices['13. PUERTAS.']['keep'])->toBeTrue();
 });
 
 test('un DXF binario se rechaza con un mensaje claro', function () {
-    $dir = sys_get_temp_dir().'/dxf-bin-'.Str::uuid();
-    mkdir($dir);
-    file_put_contents("$dir/in.dxf", "AutoCAD Binary DXF\r\n\x1a\x00...");
+    $dir = tempDxf("AutoCAD Binary DXF\r\n\x1a\x00...");
 
-    expect(fn () => app(CadPlanLightener::class)->slimDxf("$dir/in.dxf", "$dir/out.dxf"))
+    expect(fn () => app(CadPlanLightener::class)->writeLight("$dir/in.dxf", "$dir/out.dxf"))
         ->toThrow(RuntimeException::class, 'DXF binario');
 });
 
-test('subir un plano pesado lo pone en cola y el editor puede consultar y descargar su versión ligera', function () {
+test('si todo el plano no cabe, el ingeniero elige las capas y se genera con ellas', function () {
     Queue::fake();
     config(['dialux.plan_light.threshold_bytes.dxf' => 100]);
     $user = User::factory()->create();
@@ -82,28 +152,50 @@ test('subir un plano pesado lo pone en cola y el editor puede consultar y descar
 
     $this->actingAs($user)
         ->post(route('dialux-v2.modules.plans.store', $parameters), [
-            'plan' => UploadedFile::fake()->createWithContent('PLANTA GENERAL.dxf', sampleDxf()),
+            'plan' => UploadedFile::fake()->createWithContent('PLANTA GENERAL.dxf', samplePlanDxf()),
         ])
         ->assertSuccessful()
         ->assertJsonPath('light_status', 'pending');
     Queue::assertPushed(LightenDialuxPlan::class);
 
-    // El job (lo que corre el worker en segundo plano).
+    // 1ª pasada del worker: con el tope de prueba no cabe todo → elegir capas.
     $plan = $module->plans()->firstOrFail();
     (new LightenDialuxPlan($plan->id))->handle(app(CadPlanLightener::class));
-    $plan->refresh();
-    expect($plan->light_status)->toBe('ready')
-        ->and($plan->light_size_bytes)->toBeLessThan($plan->size_bytes);
+    expect($plan->refresh()->light_status)->toBe('needs_layers');
 
-    $this->actingAs($user)
+    $status = $this->actingAs($user)
         ->getJson(route('dialux-v2.modules.plans.light-status', $parameters))
         ->assertSuccessful()
-        ->assertJsonPath('needs_light', true)
-        ->assertJsonPath('status', 'ready');
+        ->assertJsonPath('status', 'needs_layers')
+        ->json();
+    expect(collect($status['layers'])->firstWhere('name', 'Arboles y Arbustos')['keep'])->toBeFalse();
+
+    // El ingeniero elige MUROS.
+    $this->actingAs($user)
+        ->postJson(route('dialux-v2.modules.plans.light-layers', $parameters), ['keep' => ['MUROS']])
+        ->assertSuccessful()
+        ->assertJsonPath('status', 'pending');
+    Queue::assertPushed(LightenDialuxPlan::class, fn (LightenDialuxPlan $job) => $job->keepLayers === ['MUROS']);
+
+    // Con un tope real, la versión ligera con esas capas cabe.
+    config(['dialux.plan_light.threshold_bytes.dxf' => 20_000_000]);
+    (new LightenDialuxPlan($plan->id, ['MUROS']))->handle(app(CadPlanLightener::class));
+    expect($plan->refresh()->light_status)->toBe('ready');
 
     $this->actingAs($user)
         ->get(route('dialux-v2.modules.plans.light', $parameters))
         ->assertDownload('PLANTA GENERAL (ligero).dxf');
+});
+
+test('elegir capas exige al menos una', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+    $module = DialuxModule::factory()->for($project, 'project')->create();
+
+    $this->actingAs($user)
+        ->postJson(route('dialux-v2.modules.plans.light-layers', [$project, $module, 'floor-1']), ['keep' => []])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('keep');
 });
 
 test('un DWG sin conversor configurado falla con un aviso útil (no deja al editor esperando)', function () {
@@ -131,7 +223,7 @@ test('un plano liviano no se pone en cola ni pide versión ligera', function () 
     $module = DialuxModule::factory()->for($project, 'project')->create();
 
     $this->actingAs($user)->post(route('dialux-v2.modules.plans.store', [$project, $module, 'floor-1']), [
-        'plan' => UploadedFile::fake()->createWithContent('aula.dxf', sampleDxf()),
+        'plan' => UploadedFile::fake()->createWithContent('aula.dxf', samplePlanDxf()),
     ])->assertSuccessful();
 
     Queue::assertNotPushed(LightenDialuxPlan::class);
@@ -141,15 +233,19 @@ test('un plano liviano no se pone en cola ni pide versión ligera', function () 
         ->assertJsonPath('status', null);
 });
 
-test('otro usuario no puede consultar ni descargar la versión ligera', function () {
+test('otro usuario no puede consultar ni elegir capas', function () {
     $owner = User::factory()->create();
     $project = DialuxProject::factory()->for($owner)->create();
     $module = DialuxModule::factory()->for($project, 'project')->create();
     $this->actingAs($owner)->post(route('dialux-v2.modules.plans.store', [$project, $module, 'floor-1']), [
-        'plan' => UploadedFile::fake()->createWithContent('aula.dxf', sampleDxf()),
+        'plan' => UploadedFile::fake()->createWithContent('aula.dxf', samplePlanDxf()),
     ]);
+    $intruder = User::factory()->create();
 
-    $this->actingAs(User::factory()->create())
+    $this->actingAs($intruder)
         ->getJson(route('dialux-v2.modules.plans.light-status', [$project, $module, 'floor-1']))
+        ->assertForbidden();
+    $this->actingAs($intruder)
+        ->postJson(route('dialux-v2.modules.plans.light-layers', [$project, $module, 'floor-1']), ['keep' => ['MUROS']])
         ->assertForbidden();
 });

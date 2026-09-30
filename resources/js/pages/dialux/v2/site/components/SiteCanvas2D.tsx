@@ -69,6 +69,7 @@ import {
     SiteElementSymbol,
 } from './SiteElementSymbol';
 import { IsoluxLayer } from './SiteIsoluxLayer';
+import { SitePlanLayersDialog } from './SitePlanLayersDialog';
 
 interface Props {
     /** Resultado del botón "Calcular alumbrado" (falsos colores sobre la planta). */
@@ -124,6 +125,7 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
         vectorBlocked,
         light: cadLight,
         retryLight,
+        chooseLayers,
         loadVector,
         abandonVector,
         getView,
@@ -153,6 +155,8 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
     const [fallbackView, setFallbackView] = useState<FallbackView | null>(null);
     /** Cursor mientras se dibuja (coords del emplazamiento) — línea guía elástica. */
     const [drawCursor, setDrawCursor] = useState<Point2D | null>(null);
+    // Diálogo para elegir las capas del plano pesado (versión ligera en el servidor).
+    const [layersDialogOpen, setLayersDialogOpen] = useState(false);
 
     const panRef = useRef<
         | { pointerId: number; lastX: number; lastY: number; moved: boolean }
@@ -3205,10 +3209,25 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                             <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
                             {`Optimizando el plano en el servidor (${(deferredBytes / 1_000_000).toFixed(1)} MB). Puedes seguir trabajando; te avisará aquí cuando esté listo.`}
                         </span>
+                    ) : cadLight?.status === 'needs_layers' ? (
+                        // No cabe completo: el ingeniero elige qué capas cargar.
+                        <>
+                            <span>
+                                {cadLight.error ??
+                                    `El plano es demasiado grande para cargarlo completo (${((cadLight.dxf_bytes ?? deferredBytes) / 1_000_000).toFixed(0)} MB). Elige qué capas necesitas.`}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setLayersDialogOpen(true)}
+                                className="shrink-0 rounded bg-amber-500 px-2 py-0.5 font-semibold text-white hover:bg-amber-600"
+                            >
+                                Elegir capas
+                            </button>
+                        </>
                     ) : cadLight?.status === 'ready' ? (
                         <>
                             <span>
-                                {`Plano optimizado listo: ${((cadLight.light_size_bytes ?? 0) / 1_000_000).toFixed(1)} MB (antes ${(deferredBytes / 1_000_000).toFixed(1)} MB, sin sombreados ni imágenes).`}
+                                {`Plano optimizado listo: ${((cadLight.light_size_bytes ?? 0) / 1_000_000).toFixed(1)} MB (antes ${(deferredBytes / 1_000_000).toFixed(1)} MB).`}
                             </span>
                             <button
                                 type="button"
@@ -3217,6 +3236,15 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                             >
                                 Abrir plano optimizado
                             </button>
+                            {cadLight.layers && (
+                                <button
+                                    type="button"
+                                    onClick={() => setLayersDialogOpen(true)}
+                                    className="shrink-0 rounded border border-slate-300 px-2 py-0.5 font-semibold text-slate-600 hover:bg-slate-100 dark:border-white/15 dark:text-slate-300 dark:hover:bg-white/5"
+                                >
+                                    Cambiar capas
+                                </button>
+                            )}
                         </>
                     ) : cadLight?.status === 'failed' ? (
                         <>
@@ -3257,6 +3285,16 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                         </>
                     )}
                 </div>
+            )}
+            {layersDialogOpen && cadLight?.layers && (
+                <SitePlanLayersDialog
+                    light={cadLight}
+                    onConfirm={async (keep) => {
+                        await chooseLayers(keep);
+                        setLayersDialogOpen(false);
+                    }}
+                    onClose={() => setLayersDialogOpen(false)}
+                />
             )}
             {cadLoadingStages && (
                 <ModuleLoadingOverlay

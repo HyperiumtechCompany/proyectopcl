@@ -23,7 +23,17 @@ class DialuxPlan extends Model
         'light_path',
         'light_size_bytes',
         'light_error',
+        'light_converted_path',
+        'light_layers',
     ];
+
+    /** @return array<string, string> */
+    protected function casts(): array
+    {
+        return [
+            'light_layers' => 'array',
+        ];
+    }
 
     /** ¿Es un plano CAD que el navegador no puede abrir y necesita su versión ligera? */
     public function needsLightVersion(): bool
