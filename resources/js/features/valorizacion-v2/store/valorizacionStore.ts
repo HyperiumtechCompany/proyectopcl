@@ -3,6 +3,7 @@ import { setCell } from '../lib/cellMap';
 import type { CellMap } from '../lib/cellMap';
 import { emptyHistory, record, redo, undo } from '../lib/history';
 import type { History } from '../lib/history';
+import { remapPartidaCells } from '../lib/import/remapPartidaCells';
 import type { AdicionalPago, AjustesPago, CalendarioInput, ConfigRfc, FichaTecnica, MesKey, ParametrosPresupuesto, PartidaInput, PersonaClave, PresupuestoInput, ValorizacionInput } from '../types';
 
 /**
@@ -21,6 +22,8 @@ export interface ValorizacionState {
     history: History<ValorizacionInput>;
     /** Reemplaza todo (documento cargado del servidor o elegido al empezar); reinicia el historial. */
     loadInput: (input: ValorizacionInput) => void;
+    /** Importa entradas del expediente como una sola operación que se puede deshacer. */
+    importValorizacion: (input: ValorizacionInput) => void;
     /** Cambia la valorización activa (N° y mes): todas las hojas se recalculan a ese corte. */
     setPeriodo: (numero: number, mes: string) => void;
     /** Edita una sección de la Ficha Técnica. */
@@ -76,6 +79,8 @@ export function createValorizacionStore(initial: ValorizacionInput) {
 
             loadInput: (input) => set({ input, history: emptyHistory() }),
 
+            importValorizacion: (input) => commit('Importar valorización desde Excel', input),
+
             setPeriodo: (numero, mes) => {
                 const { input } = get();
                 if (input.periodo.numero !== numero || input.periodo.mes !== mes) {
@@ -111,7 +116,13 @@ export function createValorizacionStore(initial: ValorizacionInput) {
 
             replacePresupuesto: (presupuesto, parametros) => {
                 const { input } = get();
-                commit('Importar presupuesto', { ...input, presupuesto, parametros: parametros ?? input.parametros });
+                commit('Importar presupuesto', {
+                    ...input,
+                    presupuesto,
+                    parametros: parametros ?? input.parametros,
+                    calendarios: { programado: { montos: remapPartidaCells(input.calendarios.programado.montos, input.presupuesto.partidas, presupuesto.partidas) } },
+                    metrados: { ejecutado: remapPartidaCells(input.metrados.ejecutado, input.presupuesto.partidas, presupuesto.partidas) },
+                });
             },
 
             updatePartidas: (update, label) => {

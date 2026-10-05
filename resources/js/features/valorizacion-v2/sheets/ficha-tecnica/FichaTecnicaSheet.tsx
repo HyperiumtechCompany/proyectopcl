@@ -14,6 +14,7 @@ import { Panel } from '../../shared/Panel';
 import { useValorizacionStore } from '../../store/ValorizacionStoreProvider';
 import type { FichaTecnica, ModificacionContrato, ModificacionPlazo } from '../../types';
 import { fmtMoney, fmtPct } from '../../utils/format';
+import { ImportValorizacionPanel } from './ImportValorizacionPanel';
 
 const PENDIENTE_CONTROL = 'Se obtiene del Control general';
 
@@ -185,6 +186,7 @@ export default function FichaTecnicaSheet() {
 
     return (
         <div className="space-y-4">
+            <ImportValorizacionPanel />
             <div className="flex flex-wrap items-end justify-between gap-2">
                 <div>
                     <h2 className="text-xl font-bold text-stone-900 dark:text-stone-50">Ficha técnica del proyecto</h2>

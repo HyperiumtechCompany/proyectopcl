@@ -55,6 +55,7 @@ export default function PresupuestoSheet() {
                 <div className="min-w-0">
                     <h2 className="text-lg font-bold text-stone-900 sm:text-xl dark:text-stone-50">Presupuesto de obra</h2>
                     <p className="truncate text-xs text-stone-500 sm:text-sm dark:text-stone-400">{contrato} · {calculado.partidasCount} partidas</p>
+                    <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">Para cargar también el avance y las gráficas, <a href="#ficha-tecnica" className="font-semibold text-orange-700 hover:underline dark:text-orange-300">importa la valorización completa desde Ficha técnica</a>.</p>
                 </div>
                 {diferenciaContrato && (
                     <span className={cuadra ? 'inline-flex items-center gap-1.5 text-xs font-medium text-stone-600 dark:text-stone-300' : 'inline-flex items-center gap-1.5 text-xs font-medium text-red-700 dark:text-red-300'}>
