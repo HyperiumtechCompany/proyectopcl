@@ -32,6 +32,12 @@ export default defineConfig(({ command }) => ({
     headers: {
         'Permissions-Policy': 'unload=(self)',
     },
+    watch: {
+        // public/build acumula los assets de todos los builds (emptyOutDir: false): con
+        // ~185k archivos, vigilarlos hacía que `npm run dev` tardara minutos en arrancar en
+        // Windows. Ninguna de estas carpetas necesita recarga en vivo.
+        ignored: ['**/public/build/**', '**/vendor/**', '**/storage/**', '**/planes/**'],
+    },
     proxy: {
         '/module': {
             target: 'http://127.0.0.1:8000',
@@ -106,7 +112,10 @@ export default defineConfig(({ command }) => ({
 
 
     optimizeDeps: {
-        include: ['docx'],
+        // Valorización v2 (recharts, zustand/vanilla, decimal.js, xlsx): pre-empaquetadas al arrancar
+        // `npm run dev`. Sin esto Vite las descubre al abrir la página, re-optimiza y recarga todo
+        // a mitad de sesión (en este proyecto eso es otra espera de varios minutos).
+        include: ['docx', 'recharts', 'zustand/vanilla', 'decimal.js', 'xlsx'],
     },
 
     test: {

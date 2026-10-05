@@ -66,7 +66,9 @@ use App\Http\Controllers\RhEmController;
 use App\Http\Controllers\SpattPararrayoSpreadsheetController;
 use App\Http\Controllers\UbigeoController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\ValorizacionV2\ValorizacionV2Controller;
 use App\Http\Middleware\EnsureMaintenanceSchema;
+use App\Http\Middleware\EnsureValorizacionV2Schema;
 use App\Http\Middleware\SetCostosDatabase;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -352,6 +354,22 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
     Route::middleware([SetCostosDatabase::class])
         ->prefix('/{costoProject}')
         ->group(function () {
+            // Valorización v2: entorno de pruebas aislado del Cronograma Valorizado (producción).
+            Route::middleware([EnsureValorizacionV2Schema::class])->prefix('/valorizacion-v2')->name('valorizacion-v2.')->group(function () {
+                Route::get('/', [ValorizacionV2Controller::class, 'index'])->name('index');
+                Route::post('/', [ValorizacionV2Controller::class, 'store'])->name('store');
+
+                Route::prefix('/{documentoId}')->where(['documentoId' => '[0-9A-HJKMNP-TV-Z]{26}'])->group(function () {
+                    Route::get('/', [ValorizacionV2Controller::class, 'show'])->name('show');
+                    Route::put('/', [ValorizacionV2Controller::class, 'guardar'])->name('guardar');
+                    Route::delete('/', [ValorizacionV2Controller::class, 'destroy'])->name('destroy');
+                    Route::patch('/nombre', [ValorizacionV2Controller::class, 'renombrar'])->name('renombrar');
+                    Route::post('/duplicar', [ValorizacionV2Controller::class, 'duplicar'])->name('duplicar');
+                    Route::post('/cortes', [ValorizacionV2Controller::class, 'aprobar'])->name('aprobar');
+                    Route::delete('/cortes/{numero}', [ValorizacionV2Controller::class, 'reabrir'])->whereNumber('numero')->name('reabrir');
+                });
+            });
+
             Route::middleware([EnsureMaintenanceSchema::class])->prefix('/mantenimiento')->name('mantenimiento.')->group(function () {
                 Route::get('/', [MaintenanceDocumentController::class, 'index'])->name('index');
                 Route::post('/', [MaintenanceDocumentController::class, 'store'])->name('store');

@@ -32,6 +32,7 @@ import {
     Play,
     LayoutDashboard,
     Wrench,
+    Calculator,
 } from 'lucide-react';
 import React, { useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
@@ -159,6 +160,11 @@ const MODULE_MAP: Record<string, ModuleMeta> = {
         group: 'crono',
         icon: TrendingUp,
     },
+    valorizacion_v2: {
+        label: 'Valorización v2',
+        group: 'crono',
+        icon: Calculator,
+    },
     crono_materiales: {
         label: 'Cron. Materiales',
         group: 'crono',
@@ -220,6 +226,7 @@ const MODULE_LABELS: Record<string, string> = {
     presupuesto_indice: 'Índice',
     crono_general: 'Cronograma General',
     crono_valorizado: 'Cronograma Valorizado',
+    valorizacion_v2: 'Valorización v2',
     crono_materiales: 'Cronograma Materiales',
     delphin: 'Delphin',
     etts: 'ETTs',
@@ -248,6 +255,9 @@ function moduleHref(project_id: number, m: string): string {
     if (m === 'delphin') {
         return `/module/delphin?project=${project_id}`;
     }
+    if (m === 'valorizacion_v2') {
+        return `/costos/${project_id}/valorizacion-v2`;
+    }
     if (
         m === 'crono_general' ||
         m === 'crono_valorizado' ||
@@ -270,6 +280,10 @@ function groupModules(
         if (m === 'crono_general') {
             (grouped[group] ??= []).push('crono_general_v2');
             (grouped[group] ??= []).push('delphin');
+        }
+        // Inyectar Valorización v2 (entorno de pruebas) junto al Cronograma Valorizado
+        if (m === 'crono_valorizado') {
+            (grouped[group] ??= []).push('valorizacion_v2');
         }
     }
 
