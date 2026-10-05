@@ -115,3 +115,61 @@ test('el plano se reduce a geometría con bloques expandidos, capas y textos', f
         ->and($treeText[2])->toEqualWithDelta(1.0, 1e-6)
         ->and($treeText[5])->toBe('Arboles');
 });
+
+/** DXF mínimo: cabecera con extensión opcional + entidades del modelo. */
+function modelDxf(array $entities, ?array $extents = null): string
+{
+    $pairs = [[0, 'SECTION'], [2, 'HEADER']];
+    if ($extents !== null) {
+        $pairs = array_merge($pairs, [
+            [9, '$EXTMIN'], [10, (string) $extents[0]], [20, (string) $extents[1]],
+            [9, '$EXTMAX'], [10, (string) $extents[2]], [20, (string) $extents[3]],
+        ]);
+    }
+    $pairs = array_merge($pairs, [[0, 'ENDSEC'], [0, 'SECTION'], [2, 'ENTITIES']], $entities, [[0, 'ENDSEC'], [0, 'EOF']]);
+
+    return implode("\r\n", array_map(fn (array $p): string => $p[0]."\r\n".$p[1], $pairs))."\r\n";
+}
+
+function buildDxg(string $dxf): array
+{
+    $dir = sys_get_temp_dir().'/dxg-'.Str::uuid();
+    mkdir($dir);
+    file_put_contents("$dir/in.dxf", $dxf);
+    $report = app(CadPlanGeometryBuilder::class)->build("$dir/in.dxf", "$dir/out.dxg");
+
+    return ['report' => $report, 'dxg' => readDxg("$dir/out.dxg")];
+}
+
+test('líneas sueltas que forman un contorno se unen en una sola tira, sin puntos repetidos', function () {
+    $line = fn (float $x1, float $y1, float $x2, float $y2): array => [
+        [0, 'LINE'], [8, 'MUROS'], [10, (string) $x1], [20, (string) $y1], [11, (string) $x2], [21, (string) $y2],
+    ];
+    $result = buildDxg(modelDxf(array_merge(
+        $line(0, 0, 10, 0),
+        $line(10, 0, 10, 10),
+        $line(10, 10, 0, 10),
+        // Línea de largo cero: se descarta.
+        $line(5, 5, 5, 5),
+        // Otra suelta, no conectada: tira aparte.
+        $line(20, 0, 30, 0),
+    )));
+    $strips = $result['dxg']['layers']['MUROS']['strips'];
+
+    expect($strips)->toHaveCount(2)
+        ->and($strips[0])->toHaveCount(4)
+        ->and($strips[0][3])->toEqual([0.0, 10.0])
+        ->and($result['report']['points'])->toBe(6);
+});
+
+test('las curvas se subdividen según su tamaño respecto al plano', function () {
+    $circle = fn (float $r): array => [[0, 'CIRCLE'], [8, 'C'.$r], [10, '500'], [20, '500'], [40, (string) $r]];
+    $layers = buildDxg(modelDxf(array_merge($circle(0.5), $circle(200)), [0, 0, 1000, 1000]))['dxg']['layers'];
+
+    // Pequeño (árbol, poste): pocos segmentos. Grande (curva de vía): suave.
+    expect(count($layers['C0.5']['strips'][0]) - 1)->toBe(12)
+        ->and(count($layers['C200']['strips'][0]) - 1)->toBe(72);
+    foreach ($layers['C200']['strips'][0] as [$x, $y]) {
+        expect(hypot($x - 500, $y - 500))->toEqualWithDelta(200, 1e-2);
+    }
+});

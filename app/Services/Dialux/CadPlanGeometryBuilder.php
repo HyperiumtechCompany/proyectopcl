@@ -39,8 +39,23 @@ class CadPlanGeometryBuilder
         'POINT', 'ATTDEF', 'VIEWPORT',
     ];
 
-    /** Máximo de segmentos por vuelta completa (arcos, círculos, elipses). */
+    /**
+     * Versión del procesamiento: al mejorarlo se sube, y los planos ya
+     * procesados con una anterior se regeneran solos al abrirse.
+     * 2 = curvas según su tamaño + líneas unidas en tiras.
+     */
+    public const VERSION = 2;
+
+    /** Segmentos por vuelta completa cuando el plano no declara su extensión. */
     private const SEGMENTS_PER_TURN = 24;
+
+    /** Límites de segmentos por vuelta con la subdivisión adaptativa. */
+    private const MIN_SEGMENTS_PER_TURN = 12;
+
+    private const MAX_SEGMENTS_PER_TURN = 72;
+
+    /** Flecha máxima de la cuerda, como fracción de la extensión del plano. */
+    private const CHORD_TOLERANCE_RATIO = 2e-5;
 
     private const MAX_NESTING = 10;
 
@@ -53,11 +68,14 @@ class CadPlanGeometryBuilder
     /** @var array<string, array{color: int, visible: bool}> */
     private array $layerTable = [];
 
-    /** @var array<string, array{counts: string, points: string, n: int, p: int}> salida por capa (float32 relativo) */
+    /** @var array<string, array{counts: string, points: string, n: int, p: int, open: int, endX: ?float, endY: ?float}> salida por capa (float32 relativo; `open` = puntos de la tira aún abierta) */
     private array $out = [];
 
     /** @var array<int, array{0: float, 1: float, 2: float, 3: float, 4: string, 5: string}> */
     private array $texts = [];
+
+    /** Flecha máxima admitida al subdividir curvas (unidades del plano); null = fija por vuelta. */
+    private ?float $chordTolerance = null;
 
     private ?float $ox = null;
 
@@ -90,6 +108,12 @@ class CadPlanGeometryBuilder
             $currentBlock = null;
             foreach ($this->groups($dxfPath) as $group) {
                 [$type, $section, $pairs] = [$group['type'], $group['section'], $group['pairs']];
+
+                if ($type === 'SECTION' && strtoupper((string) $this->first($pairs, 2, '')) === 'HEADER') {
+                    $this->readHeader($pairs);
+
+                    continue;
+                }
 
                 if ($section === 'TABLES' && $type === 'LAYER') {
                     $this->readLayer($pairs);
@@ -152,6 +176,7 @@ class CadPlanGeometryBuilder
         $this->texts = [];
         $this->ox = null;
         $this->oy = 0.0;
+        $this->chordTolerance = null;
         $this->minX = $this->minY = INF;
         $this->maxX = $this->maxY = -INF;
     }
@@ -220,6 +245,48 @@ class CadPlanGeometryBuilder
         }
 
         return $default;
+    }
+
+    /**
+     * Extensión declarada ($EXTMIN/$EXTMAX) → tolerancia de subdivisión: un
+     * círculo de 1 m y la curva de una vía de 50 m no necesitan los mismos
+     * segmentos. Sin extensión válida, se usa la fija por vuelta.
+     *
+     * @param  array<int, array{0: int, 1: string}>  $pairs
+     */
+    private function readHeader(array $pairs): void
+    {
+        $values = [];
+        $variable = null;
+        foreach ($pairs as [$code, $value]) {
+            if ($code === 9) {
+                $variable = trim($value);
+            } elseif (($variable === '$EXTMIN' || $variable === '$EXTMAX') && ($code === 10 || $code === 20)) {
+                $values[$variable.$code] = (float) $value;
+            }
+        }
+        if (count($values) !== 4) {
+            return;
+        }
+        $extent = max($values['$EXTMAX10'] - $values['$EXTMIN10'], $values['$EXTMAX20'] - $values['$EXTMIN20']);
+        if (is_finite($extent) && $extent > 0 && $extent < 1e12) {
+            $this->chordTolerance = $extent * self::CHORD_TOLERANCE_RATIO;
+        }
+    }
+
+    /** Segmentos para un arco de radio `$radius` y barrido `$sweep` (rad). */
+    private function segments(float $radius, float $sweep, int $minimum): int
+    {
+        $turns = abs($sweep) / (2 * M_PI);
+        if ($this->chordTolerance === null || $radius <= 0) {
+            return max($minimum, (int) ceil($turns * self::SEGMENTS_PER_TURN));
+        }
+        // Flecha s ≈ r·θ²/8 → θ = √(8·s/r); nunca más del 5 % del radio.
+        $tolerance = min($this->chordTolerance, 0.05 * $radius);
+        $perTurn = (int) ceil(2 * M_PI / sqrt(8 * $tolerance / $radius));
+        $perTurn = max(self::MIN_SEGMENTS_PER_TURN, min(self::MAX_SEGMENTS_PER_TURN, $perTurn));
+
+        return max($minimum, (int) ceil($turns * $perTurn));
     }
 
     /** @param array<int, array{0: int, 1: string}> $pairs */
@@ -463,7 +530,7 @@ class CadPlanGeometryBuilder
                     $cx = $mx + $nx * $sagitta * $sign;
                     $cy = $my + $ny * $sagitta * $sign;
                     $a1 = atan2($y1 - $cy, $x1 - $cx);
-                    $steps = max(2, (int) ceil(abs($theta) / (2 * M_PI) * self::SEGMENTS_PER_TURN));
+                    $steps = $this->segments(abs($radius), $theta, 2);
                     for ($k = 1; $k < $steps; $k++) {
                         $a = $a1 + $theta * $k / $steps;
                         $points[] = $cx + $radius * cos($a);
@@ -485,7 +552,7 @@ class CadPlanGeometryBuilder
             return [];
         }
         $sweep = $end - $start;
-        $steps = max(4, (int) ceil(abs($sweep) / (2 * M_PI) * self::SEGMENTS_PER_TURN));
+        $steps = $this->segments($r, $sweep, 4);
         $points = [];
         for ($k = 0; $k <= $steps; $k++) {
             $a = $start + $sweep * $k / $steps;
@@ -521,7 +588,7 @@ class CadPlanGeometryBuilder
         $cos = cos($angle);
         $sin = sin($angle);
         $sweep = $end - $start;
-        $steps = max(4, (int) ceil($sweep / (2 * M_PI) * self::SEGMENTS_PER_TURN));
+        $steps = $this->segments($major, $sweep, 4);
         $points = [];
         for ($k = 0; $k <= $steps; $k++) {
             $t = $start + $sweep * $k / $steps;
@@ -808,52 +875,104 @@ class CadPlanGeometryBuilder
     /**
      * Tiras en coordenadas del MUNDO → salida float32 relativa al origen.
      *
+     * Para que el plano pese menos en la red y en la tarjeta gráfica: se
+     * quitan puntos repetidos y tiras sin largo; una tira que EMPIEZA donde
+     * terminó la anterior de la misma capa (líneas sueltas que forman un
+     * contorno) se une a ella; y una tira con coordenadas inválidas se
+     * descarta (antes iba a (0, 0) y alejaba todo el plano UTM).
+     *
      * @param  array<int, int>  $counts
      * @param  array<int, float>  $points
      */
     private function emit(string $layer, array $counts, array $points): void
     {
-        $n = count($points);
-        if ($n < 4) {
+        if (count($points) < 4) {
             return;
         }
-        $this->origin($points[0], $points[1]);
-        $relative = [];
-        for ($i = 0; $i < $n; $i += 2) {
-            $x = $points[$i];
-            $y = $points[$i + 1];
-            if (! is_finite($x) || ! is_finite($y)) {
-                $x = $y = 0.0;
-            }
-            if ($x < $this->minX) {
-                $this->minX = $x;
-            }
-            if ($x > $this->maxX) {
-                $this->maxX = $x;
-            }
-            if ($y < $this->minY) {
-                $this->minY = $y;
-            }
-            if ($y > $this->maxY) {
-                $this->maxY = $y;
-            }
-            $relative[] = $x - $this->ox;
-            $relative[] = $y - $this->oy;
-        }
-        $this->out[$layer] ??= ['counts' => '', 'points' => '', 'n' => 0, 'p' => 0];
+        $this->out[$layer] ??= ['counts' => '', 'points' => '', 'n' => 0, 'p' => 0, 'open' => 0, 'endX' => null, 'endY' => null];
         $bucket = &$this->out[$layer];
-        foreach (array_chunk($counts, 8192) as $chunk) {
-            $bucket['counts'] .= pack('V*', ...$chunk);
+        $relative = [];
+        $at = 0;
+        foreach ($counts as $count) {
+            $strip = [];
+            $valid = true;
+            $prevX = $prevY = null;
+            for ($k = 0; $k < $count; $k++, $at += 2) {
+                $x = $points[$at] ?? NAN;
+                $y = $points[$at + 1] ?? NAN;
+                if (! is_finite($x) || ! is_finite($y)) {
+                    $valid = false;
+
+                    continue;
+                }
+                if ($x === $prevX && $y === $prevY) {
+                    continue;
+                }
+                $strip[] = $x;
+                $strip[] = $y;
+                $prevX = $x;
+                $prevY = $y;
+            }
+            $n = count($strip);
+            if (! $valid || $n < 4) {
+                continue;
+            }
+            $this->origin($strip[0], $strip[1]);
+            for ($i = 0; $i < $n; $i += 2) {
+                $x = $strip[$i];
+                $y = $strip[$i + 1];
+                if ($x < $this->minX) {
+                    $this->minX = $x;
+                }
+                if ($x > $this->maxX) {
+                    $this->maxX = $x;
+                }
+                if ($y < $this->minY) {
+                    $this->minY = $y;
+                }
+                if ($y > $this->maxY) {
+                    $this->maxY = $y;
+                }
+            }
+            $startX = $strip[0] - $this->ox;
+            $startY = $strip[1] - $this->oy;
+            $from = 0;
+            if ($bucket['open'] > 0 && $bucket['endX'] === $startX && $bucket['endY'] === $startY) {
+                // Continúa la tira anterior: no se repite el punto de unión.
+                $from = 2;
+            } elseif ($bucket['open'] > 0) {
+                $bucket['counts'] .= pack('V', $bucket['open']);
+                $bucket['n']++;
+                $bucket['open'] = 0;
+            }
+            for ($i = $from; $i < $n; $i += 2) {
+                $relative[] = $strip[$i] - $this->ox;
+                $relative[] = $strip[$i + 1] - $this->oy;
+            }
+            $added = intdiv($n - $from, 2);
+            $bucket['open'] += $added;
+            $bucket['p'] += $added;
+            $bucket['endX'] = $strip[$n - 2] - $this->ox;
+            $bucket['endY'] = $strip[$n - 1] - $this->oy;
         }
         foreach (array_chunk($relative, 16384) as $chunk) {
             $bucket['points'] .= pack('g*', ...$chunk);
         }
-        $bucket['n'] += count($counts);
-        $bucket['p'] += intdiv($n, 2);
         if (strlen($bucket['points']) > 4_000_000) {
             $this->flush($layer);
         }
         unset($bucket);
+    }
+
+    /** Cierra la tira abierta de la capa (su cantidad de puntos pasa a la salida). */
+    private function closeStrip(string $layer): void
+    {
+        if ($this->out[$layer]['open'] > 0) {
+            $this->out[$layer]['counts'] .= pack('V', $this->out[$layer]['open']);
+            $this->out[$layer]['n']++;
+            $this->out[$layer]['open'] = 0;
+            $this->out[$layer]['endX'] = $this->out[$layer]['endY'] = null;
+        }
     }
 
     private function flush(string $layer): void
@@ -877,6 +996,7 @@ class CadPlanGeometryBuilder
         $points = 0;
         $names = array_keys($this->out);
         foreach ($names as $name) {
+            $this->closeStrip($name);
             $this->flush($name);
             $bucket = $this->out[$name];
             $table = $this->layerTable[$name] ?? ['color' => 7, 'visible' => true];
@@ -894,7 +1014,7 @@ class CadPlanGeometryBuilder
         }
 
         $header = json_encode([
-            'version' => 1,
+            'version' => self::VERSION,
             'origin' => [$this->ox ?? 0.0, $this->oy],
             'bbox' => is_finite($this->minX) ? [$this->minX, $this->minY, $this->maxX, $this->maxY] : [0, 0, 0, 0],
             'layers' => $layers,

@@ -384,6 +384,8 @@ export interface DialuxPlanLightStatus {
     updated_at: number | null;
     /** `geometry` = geometría binaria del plano COMPLETO (se dibuja con WebGL); `dxf` = método anterior. */
     format?: 'geometry' | 'dxf';
+    /** Tamaño de la geometría ya descomprimida (para el avance de la descarga). */
+    raw_bytes?: number | null;
     /** Capas con su peso (cuando el plano completo no cabe en el navegador). */
     layers: DialuxPlanLayer[] | null;
     /** Lo que queda siempre (cabecera, tablas, bloques compartidos). */
@@ -465,6 +467,8 @@ export async function loadDialuxPlanGeometry(
     sceneId: string,
     moduleId: string,
     version: number,
+    /** Bytes recibidos (ya descomprimidos) mientras se descarga. */
+    onProgress?: (loaded: number) => void,
 ): Promise<ArrayBuffer | null> {
     const cacheScene = `${sceneId}::geometry`;
     try {
@@ -478,7 +482,7 @@ export async function loadDialuxPlanGeometry(
         credentials: 'same-origin',
     });
     if (!response.ok) return null;
-    const buffer = await response.arrayBuffer();
+    const buffer = await readWithProgress(response, onProgress);
     try {
         await saveDialuxPlanFile(
             projectId,
@@ -489,4 +493,26 @@ export async function loadDialuxPlanGeometry(
         /* sin caché local: se vuelve a descargar la próxima vez */
     }
     return buffer;
+}
+
+/** Lee el cuerpo por partes avisando cuánto lleva (planos de decenas de MB). */
+async function readWithProgress(response: Response, onProgress?: (loaded: number) => void): Promise<ArrayBuffer> {
+    if (!onProgress || !response.body) return response.arrayBuffer();
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let loaded = 0;
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.byteLength;
+        onProgress(loaded);
+    }
+    const buffer = new Uint8Array(loaded);
+    let at = 0;
+    for (const chunk of chunks) {
+        buffer.set(chunk, at);
+        at += chunk.byteLength;
+    }
+    return buffer.buffer;
 }

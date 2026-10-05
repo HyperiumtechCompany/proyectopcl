@@ -122,6 +122,7 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
         status: cadStatus,
         phase: cadPhase,
         fileBytes: cadFileBytes,
+        download: cadDownload,
         deferredBytes,
         vectorBlocked,
         light: cadLight,
@@ -497,6 +498,7 @@ export function SiteCanvas2D({ editor, isActive = true, lighting }: Props) {
                   networkLoading: editor.networkEdgesLoading,
                   cadPhase,
                   cadFileBytes,
+                  cadDownload,
               })
             : null;
 

@@ -138,6 +138,7 @@ class LightenDialuxPlan implements ShouldQueue
     private function buildGeometry(DialuxPlan $plan, string $dxf, CadPlanGeometryBuilder $geometry, string $workDir): void
     {
         $raw = $workDir.'/plano.dxg';
+        $started = microtime(true);
         $report = $geometry->build($dxf, $raw);
 
         $gzipped = $workDir.'/plano.dxg.gz';
@@ -167,6 +168,7 @@ class LightenDialuxPlan implements ShouldQueue
             'light_error' => null,
             'light_layers' => [
                 'format' => 'geometry',
+                'version' => CadPlanGeometryBuilder::VERSION,
                 'layers_count' => $report['layers'],
                 'points' => $report['points'],
                 'texts' => $report['texts'],
@@ -182,6 +184,8 @@ class LightenDialuxPlan implements ShouldQueue
             'layers' => $report['layers'],
             'points' => $report['points'],
             'texts' => $report['texts'],
+            'seconds' => round(microtime(true) - $started, 1),
+            'peak_memory_mb' => round(memory_get_peak_usage(true) / 1_048_576),
         ]);
     }
 

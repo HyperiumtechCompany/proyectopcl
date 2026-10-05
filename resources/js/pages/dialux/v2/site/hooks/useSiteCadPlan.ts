@@ -121,6 +121,8 @@ export function useSiteCadPlan(
     const [hiddenLayers, setHiddenLayersState] = useState<ReadonlySet<string>>(() => new Set());
     /** Tamaño del archivo que se está abriendo (para el indicador). */
     const [fileBytes, setFileBytes] = useState(0);
+    /** Avance de la descarga de la geometría del plano pesado. */
+    const [download, setDownload] = useState<{ loaded: number; total: number } | null>(null);
     /** El usuario pidió cargar el vectorial aunque sea pesado. */
     const [forceLoad, setForceLoad] = useState(false);
     /** Sube al pedir abrir de nuevo (reabre aunque `forceLoad` ya fuera true). */
@@ -185,14 +187,23 @@ export function useSiteCadPlan(
                     setLight(lightInfo);
                     if (lightInfo?.status === 'ready' && lightInfo.format === 'geometry' && lightInfo.updated_at !== null) {
                         // El plano COMPLETO como geometría: se abre solo.
-                        setFileBytes(lightInfo.light_size_bytes ?? 0);
+                        const total = lightInfo.raw_bytes ?? 0;
+                        setFileBytes(total || (lightInfo.light_size_bytes ?? 0));
+                        let shown = 0;
                         const buffer = await loadDialuxPlanGeometry(
                             String(projectId),
                             SITE_PLAN_SOURCE_SCENE_ID,
                             String(generalModuleId),
                             lightInfo.updated_at,
+                            (loaded) => {
+                                // Se refresca cada ~1 MB, no por cada bloque recibido.
+                                if (stale() || loaded - shown < 1_000_000) return;
+                                shown = loaded;
+                                setDownload({ loaded, total });
+                            },
                         );
                         if (stale()) return;
+                        setDownload(null);
                         if (!buffer) {
                             setLight({ ...lightInfo, status: 'failed', error: 'No se pudo descargar el plano procesado.' });
                             setDeferredBytes(file.size);
@@ -458,6 +469,7 @@ export function useSiteCadPlan(
         status,
         phase,
         fileBytes,
+        download,
         deferredBytes,
         vectorBlocked,
         light,

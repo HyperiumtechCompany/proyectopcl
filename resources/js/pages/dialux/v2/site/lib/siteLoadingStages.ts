@@ -36,11 +36,14 @@ export function buildSiteLoadingStages({
     networkLoading,
     cadPhase,
     cadFileBytes,
+    cadDownload = null,
 }: {
     elementCount: number;
     networkLoading: boolean;
     cadPhase: Exclude<SiteCadPlanPhase, null>;
     cadFileBytes: number;
+    /** Avance de la descarga del plano (geometría del plano pesado). */
+    cadDownload?: { loaded: number; total: number } | null;
 }): LoadingStage[] {
     return [
         {
@@ -56,8 +59,13 @@ export function buildSiteLoadingStages({
         },
         {
             id: 'cad-file',
-            label: 'Buscando el archivo del plano',
+            label: cadDownload ? 'Descargando el plano' : 'Buscando el archivo del plano',
             status: cadStageStatus('reading', cadPhase),
+            detail: cadDownload
+                ? cadDownload.total > 0
+                    ? `${formatMegabytes(cadDownload.loaded)} de ${formatMegabytes(cadDownload.total)} (${Math.min(100, Math.round((cadDownload.loaded / cadDownload.total) * 100))} %)`
+                    : formatMegabytes(cadDownload.loaded)
+                : undefined,
         },
         {
             id: 'cad-viewer',

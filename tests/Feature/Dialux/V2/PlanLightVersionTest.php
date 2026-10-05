@@ -4,6 +4,7 @@ use App\Jobs\Dialux\LightenDialuxPlan;
 use App\Models\Dialux\DialuxModule;
 use App\Models\Dialux\DialuxProject;
 use App\Models\User;
+use App\Services\Dialux\CadPlanGeometryBuilder;
 use App\Services\Dialux\CadPlanLightener;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Http\UploadedFile;
@@ -287,6 +288,33 @@ test('un plano ya procesado con el método anterior se reconvierte a geometría 
     $this->actingAs($user)
         ->getJson(route('dialux-v2.modules.plans.light-status', $parameters))
         ->assertSuccessful()
+        ->assertJsonPath('status', 'pending');
+    Queue::assertPushed(LightenDialuxPlan::class, 2);
+});
+
+test('una geometría de una versión anterior del procesamiento se regenera al consultarla', function () {
+    Queue::fake();
+    config(['dialux.plan_light.threshold_bytes.dxf' => 100]);
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+    $module = DialuxModule::factory()->for($project, 'project')->create();
+    $parameters = [$project, $module, 'site-plan-source'];
+    $this->actingAs($user)->post(route('dialux-v2.modules.plans.store', $parameters), [
+        'plan' => UploadedFile::fake()->createWithContent('PLANTA GENERAL.dxf', samplePlanDxf()),
+    ]);
+    $plan = $module->plans()->firstOrFail();
+    (new LightenDialuxPlan($plan->id))->handle(app(CadPlanLightener::class));
+    expect($plan->refresh()->light_layers['version'])->toBe(CadPlanGeometryBuilder::VERSION);
+
+    // Vigente: no se vuelve a encolar.
+    $this->actingAs($user)->getJson(route('dialux-v2.modules.plans.light-status', $parameters))
+        ->assertJsonPath('status', 'ready')
+        ->assertJsonPath('raw_bytes', $plan->light_layers['raw_bytes']);
+    Queue::assertPushed(LightenDialuxPlan::class, 1);
+
+    // Procesada con la versión 1: se regenera.
+    $plan->forceFill(['light_layers' => array_merge($plan->light_layers, ['version' => 1])])->save();
+    $this->actingAs($user)->getJson(route('dialux-v2.modules.plans.light-status', $parameters))
         ->assertJsonPath('status', 'pending');
     Queue::assertPushed(LightenDialuxPlan::class, 2);
 });

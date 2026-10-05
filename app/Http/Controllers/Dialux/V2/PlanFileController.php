@@ -13,6 +13,7 @@ use App\Models\Dialux\DialuxModule;
 use App\Models\Dialux\DialuxPlan;
 use App\Models\Dialux\DialuxPlanFile;
 use App\Models\Dialux\DialuxProject;
+use App\Services\Dialux\CadPlanGeometryBuilder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Storage;
@@ -146,7 +147,8 @@ class PlanFileController extends Controller
         // Sin versión todavía, o procesado con el método anterior (DXF
         // ligero / elegir capas): se genera la geometría completa.
         $legacy = in_array($plan->light_status, ['ready', 'needs_layers'], true)
-            && ($plan->light_layers['format'] ?? null) !== 'geometry';
+            && (($plan->light_layers['format'] ?? null) !== 'geometry'
+                || ($plan->light_layers['version'] ?? 1) < CadPlanGeometryBuilder::VERSION);
         if ($plan->needsLightVersion() && ($plan->light_status === null || $legacy)) {
             $this->queueLightVersion($plan);
         }
@@ -250,6 +252,8 @@ class PlanFileController extends Controller
             'updated_at' => $plan->updated_at?->getTimestampMs(),
             // 'geometry' = plano completo para WebGL; 'dxf' = versión DXF ligera.
             'format' => $plan->light_layers['format'] ?? 'dxf',
+            // Tamaño descomprimido de la geometría: el editor muestra el avance de la descarga.
+            'raw_bytes' => $plan->light_layers['raw_bytes'] ?? null,
             // Capas con su peso (para elegir qué cargar) y el tope del navegador.
             'layers' => ($plan->light_layers['format'] ?? null) === 'geometry' ? null : ($plan->light_layers['layers'] ?? null),
             'base_bytes' => $plan->light_layers['base_bytes'] ?? null,
