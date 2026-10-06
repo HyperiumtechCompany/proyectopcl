@@ -6,6 +6,7 @@ use App\Http\Requests\Cuaderno\StoreCuadernoVinculoRequest;
 use App\Models\CostoProject;
 use App\Models\CuadernoAsiento;
 use App\Models\CuadernoVinculo;
+use App\Models\User;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -19,8 +20,19 @@ class CuadernoRunner
 {
     public const STATES = ['login', 'intervention', 'selection', 'ready', 'disconnected', 'syncing'];
 
-    public function health(): bool
+    public function __construct(private CuadernoAgentBridge $bridge) {}
+
+    /** "agent": connectors on the holders' computers (production); "local": 127.0.0.1 runner. */
+    public function usesAgents(): bool
     {
+        return config('cuaderno.mode') === 'agent';
+    }
+
+    public function health(?User $user = null): bool
+    {
+        if ($this->usesAgents()) {
+            return $user !== null && $this->bridge->onlineAgent($user) !== null;
+        }
         $token = config('cuaderno.runner_token');
         if (! $this->configured()) {
             return false;
@@ -35,6 +47,9 @@ class CuadernoRunner
 
     public function configured(): bool
     {
+        if ($this->usesAgents()) {
+            return true;
+        }
         $token = config('cuaderno.runner_token');
         $port = config('cuaderno.runner_port');
 
@@ -66,16 +81,9 @@ class CuadernoRunner
                 $vinculo->session_key = $current->session_key;
             });
         }
-        try {
-            $response = Http::withToken(config('cuaderno.runner_token'))->acceptJson()->connectTimeout(3)->timeout(55)
-                ->post('http://127.0.0.1:'.config('cuaderno.runner_port')."/{$action}", [
-                    ...$data, 'session' => $vinculo->session_key,
-                ]);
-        } catch (ConnectionException) {
-            throw ValidationException::withMessages(['conexion' => 'El conector local no responde. Inícialo y vuelve a intentar.']);
-        }
-        if (! $response->successful()) {
-            $message = match ($response->json('error')) {
+        [$status, $result] = $this->send($vinculo, $action, [...$data, 'session' => $vinculo->session_key]);
+        if ($status < 200 || $status >= 300) {
+            $message = match ($result['error'] ?? null) {
                 'session_missing', 'browser_closed', 'session_expired' => 'La sesión terminó. Conecta nuevamente tu cuenta.',
                 'operation_busy' => 'Hay una operación en curso. Espera antes de volver a intentar.',
                 'selection_changed' => 'La selección del cuaderno cambió. Actualiza la conexión.',
@@ -85,15 +93,15 @@ class CuadernoRunner
                 'screen_changed' => 'La pantalla de OECE cambió. Revisa los datos y vuelve a enviar.',
                 'submit_disabled' => 'OECE no habilitó el botón. Revisa que los campos estén completos.',
                 'sync_cancelled' => 'La importación se canceló. No se guardaron los datos.',
-                'browser_not_found' => 'No se encontró Chrome ni Edge. Instala uno o indica CUADERNO_BROWSER_PATH.',
+                'browser_not_found' => 'No se encontró Chrome ni Edge en la PC del conector. Instala uno de los dos.',
+                'upload_failed' => 'El conector no pudo subir el PDF al servidor. Vuelve a intentar.',
                 'login_form_not_found' => 'No se encontró el formulario de ingreso de OECE. Revisa la ventana del conector.',
                 'pagination_not_changed', 'pagination_repeated', 'pagination_limit', 'portal_structure_changed' => 'La estructura o paginación del portal no coincide. No se ha confirmado una importación completa.',
                 default => 'No se pudo completar la operación con OECE. Revisa el navegador del conector.',
             };
             throw ValidationException::withMessages(['conexion' => $message]);
         }
-        $result = $response->json();
-        if (! is_array($result) || ! in_array($result['state'] ?? null, self::STATES, true)) {
+        if (! in_array($result['state'] ?? null, self::STATES, true)) {
             throw ValidationException::withMessages(['conexion' => 'El conector devolvió una respuesta inválida.']);
         }
         $this->rememberDetected($vinculo, $result);
@@ -151,6 +159,23 @@ class CuadernoRunner
         }
 
         return $result;
+    }
+
+    /** @return array{0: int, 1: array<string, mixed>} */
+    private function send(CuadernoVinculo $vinculo, string $action, array $payload): array
+    {
+        if ($this->usesAgents()) {
+            return $this->bridge->dispatch($vinculo, $action, $payload);
+        }
+        try {
+            $response = Http::withToken(config('cuaderno.runner_token'))->acceptJson()->connectTimeout(3)->timeout(55)
+                ->post('http://127.0.0.1:'.config('cuaderno.runner_port')."/{$action}", $payload);
+        } catch (ConnectionException) {
+            throw ValidationException::withMessages(['conexion' => 'El conector local no responde. Inícialo y vuelve a intentar.']);
+        }
+        $body = $response->json();
+
+        return [$response->status(), is_array($body) ? $body : []];
     }
 
     public function confirm(CuadernoVinculo $vinculo, bool $replace = false): CuadernoVinculo

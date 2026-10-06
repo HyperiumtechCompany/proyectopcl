@@ -13,6 +13,7 @@ import { Spinner } from '@/components/ui/spinner';
 import AppLayout from '@/layouts/app-layout';
 import { start as startRunner } from '@/routes/costos/cuaderno/runner';
 import type { BreadcrumbItem } from '@/types';
+import AgentConnector, { type Agente } from './AgentConnector';
 import AsientosPanel, {
     type AsientosPage,
     type Filters,
@@ -43,7 +44,15 @@ interface Props {
     indiceOficial: IndexEntry[];
     cuadernoDetectado: DetectedNotebook | null;
     sincronizacion: SyncProgress | null;
-    conector?: { online: boolean; autostart: boolean };
+    conector?: {
+        mode: 'local' | 'agent';
+        online: boolean;
+        autostart: boolean;
+        agentes?: Agente[];
+        actual?: number | null;
+        extension?: boolean;
+        extensionUrl?: string | null;
+    };
 }
 
 function ConnectorBanner({
@@ -71,6 +80,18 @@ function ConnectorBanner({
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Spinner /> Comprobando el conector…
             </p>
+        );
+    }
+    // Production: the connector runs on the holder's own computer.
+    if (conector.mode === 'agent') {
+        return (
+            <AgentConnector
+                projectId={projectId}
+                online={conector.online}
+                agentes={conector.agentes ?? []}
+                actual={conector.actual ?? null}
+                extensionUrl={conector.extensionUrl ?? null}
+            />
         );
     }
     if (conector.online) {
@@ -199,6 +220,7 @@ export default function Show({
                     detected={cuadernoDetectado}
                     progress={sincronizacion}
                     connectorOnline={conector?.online}
+                    viaExtension={conector?.extension === true}
                 />
 
                 {vinculo && (

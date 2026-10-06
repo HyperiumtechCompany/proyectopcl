@@ -1,0 +1,21 @@
+{
+    "manifest_version": 3,
+    "name": "Asistente del Cuaderno de Obra - Costos",
+    "short_name": "Cuaderno Costos",
+    "version": "1.0.0",
+    "description": "Conecta Costos con tu Cuaderno de Incidencias de OECE usando tu propia sesión: sincroniza asientos y descarga los PDF oficiales.",
+    "minimum_chrome_version": "116",
+    "background": { "service_worker": "background.js", "type": "module" },
+    "permissions": ["scripting", "tabs", "downloads", "storage"],
+    "host_permissions": [
+        "https://apps.oece.gob.pe/*",
+        "https://eap.oece.gob.pe/*"
+    ],
+    "content_scripts": [
+        {
+            "matches": [],
+            "js": ["costos-bridge.js"],
+            "run_at": "document_start"
+        }
+    ]
+}

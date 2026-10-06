@@ -19,7 +19,9 @@
         "test": "vitest run",
         "setup:radiance": "node scripts/setup-radiance.mjs",
         "cuaderno:runner": "node scripts/cuaderno-runner.mjs",
-        "cuaderno:check": "node scripts/cuaderno-smoke.mjs"
+        "cuaderno:check": "node scripts/cuaderno-smoke.mjs",
+        "cuaderno:agent": "node scripts/cuaderno-agent.mjs",
+        "cuaderno:agent-check": "node scripts/cuaderno-agent-smoke.mjs"
     },
     "devDependencies": {
         "@eslint/js": "^9.19.0",

@@ -1,6 +1,17 @@
 // Functions in this file execute inside the official browser page through CDP.
 export function inspectPortal() {
     const url = new URL(location.href);
+    // RENIEC's security page (ID Perú / 2FA) blocks automated access from some networks,
+    // e.g. datacenter IPs. It must never be bypassed: stop and tell the holder.
+    const pageText = document.body?.innerText ?? '';
+    if (/actividad no autorizada ha sido detectada/i.test(pageText)) {
+        const caseNumber = pageText.match(/n[uú]mero de caso:?\s*(\d+)/i)?.[1];
+        return {
+            state: 'login',
+            blocked: true,
+            message: `RENIEC bloqueó el ingreso automático desde este equipo${caseNumber ? ` (caso ${caseNumber})` : ''}. No reintentes desde aquí; usa el conector en tu computadora.`,
+        };
+    }
     if (
         url.origin !== 'https://apps.oece.gob.pe' ||
         !url.pathname.startsWith('/cuaderno-obra/')

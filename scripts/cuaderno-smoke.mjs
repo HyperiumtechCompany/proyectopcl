@@ -35,6 +35,9 @@ const fixtures = {
     // Real case (2026-10-06): inbox restored with an expired token, list never loads.
     'vacia/bandeja-asientos':
         '<utils-info-row><section-label>Entidad contratante:</section-label><section-value>Entidad piloto</section-value></utils-info-row><button>Nuevo asiento</button><a>Filtros</a><p>Lista total de asientos:</p><a href="/cuaderno-obra/seleccionar-login" onclick="event.preventDefault();document.body.dataset.switch=1">Cambiar a otra obra</a>',
+    // RENIEC security page seen from the production VPS (2026-10-06).
+    'bloqueo-reniec':
+        '<h1>Actividad no autorizada ha sido detectada</h1><p>Estimado Usuario, está viendo esta página porque hemos detectado una actividad no autorizada.</p><p>Número de caso: 525681343</p>',
     expirado:
         '<div class="modal-content"><p>Tu sesión ha expirado</p><p>Vuelva a iniciar sesión</p><button>Aceptar</button></div>',
     // Official detail page, as captured on 2026-10-06.
@@ -218,6 +221,12 @@ try {
         await browser.evaluate(() => document.body.dataset.switch),
         '1',
     );
+    await browser.navigate('https://idaas.reniec.gob.pe/bloqueo-reniec');
+    await delay(250);
+    const blocked = await browser.evaluate(inspectPortal);
+    assert.equal(blocked.state, 'login');
+    assert.equal(blocked.blocked, true);
+    assert.match(blocked.message, /caso 525681343/);
     await open('expirado');
     assert.equal((await browser.evaluate(inspectPortal)).state, 'login');
     await open(
@@ -238,7 +247,7 @@ try {
         false,
     );
     process.stdout.write(
-        'Browser smoke passed: login, login notice, 2FA/session detection, remote form, screenshot, remote typing, PDF download, detail, expired session, stale inbox, change of work, selection, identity, table, outline, pagination and origin guard.\n',
+        'Browser smoke passed: login, login notice, 2FA/session detection, remote form, screenshot, remote typing, PDF download, detail, expired session, stale inbox, RENIEC block, change of work, selection, identity, table, outline, pagination and origin guard.\n',
     );
 } finally {
     if (browser) await browser.close();

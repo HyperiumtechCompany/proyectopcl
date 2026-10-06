@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Cuaderno\CuadernoConsultaRequest;
 use App\Http\Requests\Cuaderno\StoreCuadernoVinculoRequest;
 use App\Models\CostoProject;
+use App\Models\CuadernoAgente;
 use App\Models\CuadernoVinculo;
+use App\Services\Cuaderno\CuadernoAgentBridge;
 use App\Services\Cuaderno\CuadernoRunner;
 use App\Services\Cuaderno\CuadernoRunnerProcess;
 use Illuminate\Http\RedirectResponse;
@@ -49,10 +51,24 @@ class CuadernoVinculoController extends Controller
                 ->whereNull('active_slot')->latest('id')->limit(10)->get(),
             'roles' => StoreCuadernoVinculoRequest::ROLES,
             // Loaded after the first paint, and reloaded by the page while the connector is offline.
-            'conector' => Inertia::defer(fn (): array => [
-                'online' => $runner->health(),
-                'autostart' => $process->canStart() && $runner->configured(),
-            ]),
+            'conector' => Inertia::defer(fn (): array => $runner->usesAgents()
+                ? [
+                    'mode' => 'agent',
+                    'online' => $runner->health($request->user()),
+                    'autostart' => false,
+                    // Computers where this holder installed the connector.
+                    'agentes' => CuadernoAgente::query()->active()->where('user_id', $request->user()->id)
+                        ->latest('last_seen_at')->get(['id', 'nombre', 'tipo', 'plataforma', 'version', 'last_seen_at', 'revoked_at']),
+                    'actual' => $vinculo?->cuaderno_agente_id,
+                    // The holder signs in on their own OECE tab: no credentials in Costos.
+                    'extension' => app(CuadernoAgentBridge::class)->onlineAgent($request->user())?->tipo === 'extension',
+                    'extensionUrl' => config('cuaderno.extension_url'),
+                ]
+                : [
+                    'mode' => 'local',
+                    'online' => $runner->health(),
+                    'autostart' => $process->canStart() && $runner->configured(),
+                ]),
         ]);
     }
 

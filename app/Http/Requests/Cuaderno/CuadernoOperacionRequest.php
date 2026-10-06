@@ -3,6 +3,8 @@
 namespace App\Http\Requests\Cuaderno;
 
 use App\Models\CostoProject;
+use App\Services\Cuaderno\CuadernoAgentBridge;
+use App\Services\Cuaderno\CuadernoRunner;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -21,8 +23,11 @@ class CuadernoOperacionRequest extends FormRequest
         if ($this->routeIs('costos.cuaderno.connect')) {
             // The first connection creates the link from the official notebook.
             $rules['vinculo_id'] = ['nullable', 'integer'];
-            $rules['usuario'] = ['required', 'string', 'max:100'];
-            $rules['password'] = ['required', 'string', 'max:255'];
+            // With the browser extension the holder signs in on their own OECE tab:
+            // no credentials travel through Costos.
+            $credentials = Rule::requiredIf(fn (): bool => ! $this->viaExtension());
+            $rules['usuario'] = [$credentials, 'nullable', 'string', 'max:100'];
+            $rules['password'] = [$credentials, 'nullable', 'string', 'max:255'];
         }
         if ($this->routeIs('costos.cuaderno.select')) {
             $rules['choice'] = ['required', 'string', 'regex:/^[a-f0-9]{64}$/'];
@@ -54,5 +59,11 @@ class CuadernoOperacionRequest extends FormRequest
         }
 
         return $rules;
+    }
+
+    private function viaExtension(): bool
+    {
+        return app(CuadernoRunner::class)->usesAgents()
+            && app(CuadernoAgentBridge::class)->onlineAgent($this->user())?->tipo === 'extension';
     }
 }

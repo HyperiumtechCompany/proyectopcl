@@ -37,6 +37,7 @@ import {
     sync,
 } from '@/routes/costos/cuaderno';
 import RemoteScreen from './RemoteScreen';
+import { focusPortalTab } from './useCuadernoExtension';
 
 export interface Connection {
     id: number;
@@ -189,6 +190,7 @@ export default function ConnectionPanel({
     detected,
     progress,
     connectorOnline,
+    viaExtension = false,
 }: {
     projectId: number;
     projectCui: string | null;
@@ -196,6 +198,8 @@ export default function ConnectionPanel({
     detected: DetectedNotebook | null;
     progress: SyncProgress | null;
     connectorOnline: boolean | undefined;
+    /** The holder signs in on their own OECE tab through the browser extension. */
+    viaExtension?: boolean;
 }) {
     const step = currentStep(vinculo, detected);
     const { errors } = usePage<{ errors: Record<string, string> }>().props;
@@ -209,6 +213,13 @@ export default function ConnectionPanel({
     const offline = connectorOnline === false;
     const [remoteOpen, setRemoteOpen] = useState(false);
 
+    // With the extension, the holder signs in on the real OECE tab: Costos checks every few seconds.
+    usePolling(
+        step === 'waiting' && viaExtension ? inspect.url(projectId) : null,
+        vinculo?.id,
+        3000,
+        10 * 60 * 1000,
+    );
     usePolling(
         step === 'syncing' ? sync.url(projectId) : null,
         vinculo?.id,
@@ -321,7 +332,41 @@ export default function ConnectionPanel({
                 </p>
             )}
 
-            {step === 'login' && (
+            {step === 'login' && viaExtension && (
+                <div className="space-y-4">
+                    <div>
+                        <h2 className="font-semibold">
+                            {vinculo?.estado === 'verificada'
+                                ? 'Reconectar con OECE'
+                                : 'Conecta tu Cuaderno de OECE'}
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                            Costos usa tu propia sesión de OECE en este
+                            navegador. Si aún no entraste, se abrirá la pestaña
+                            oficial para que ingreses como siempre. Tu
+                            contraseña no pasa por Costos.
+                        </p>
+                    </div>
+                    {vinculo?.conexion_mensaje &&
+                        vinculo.conexion_estado === 'requiere_ingreso' && (
+                            <p
+                                role="alert"
+                                className="text-sm text-amber-700 dark:text-amber-400"
+                            >
+                                {vinculo.conexion_mensaje}
+                            </p>
+                        )}
+                    <Button
+                        disabled={busy || offline}
+                        onClick={() => run(connect.url(projectId))}
+                    >
+                        {operation.processing && <Spinner />}
+                        {operation.processing ? 'Abriendo OECE…' : 'Conectar'}
+                    </Button>
+                </div>
+            )}
+
+            {step === 'login' && !viaExtension && (
                 <div className="space-y-4">
                     <form onSubmit={submitLogin} className="space-y-4">
                         <div>
@@ -438,7 +483,36 @@ export default function ConnectionPanel({
                 </div>
             )}
 
-            {step === 'waiting' && vinculo && (
+            {step === 'waiting' && vinculo && viaExtension && (
+                <div className="flex gap-4 rounded-lg border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900 dark:bg-blue-950/30">
+                    <Smartphone
+                        className="mt-1 shrink-0 text-blue-600 dark:text-blue-400"
+                        size={24}
+                    />
+                    <div className="space-y-3">
+                        <h2 className="font-semibold">
+                            Ingresa a OECE en su pestaña
+                        </h2>
+                        <p className="text-sm">
+                            {vinculo.conexion_mensaje ??
+                                'Inicia sesión en la pestaña de OECE con tu usuario y tu verificación de siempre.'}{' '}
+                            Costos continúa solo cuando termines.
+                        </p>
+                        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Spinner /> Esperando a OECE…
+                        </p>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={focusPortalTab}
+                        >
+                            Ir a la pestaña de OECE
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+            {step === 'waiting' && vinculo && !viaExtension && (
                 <div className="space-y-4 rounded-lg border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900 dark:bg-blue-950/30">
                     <div className="flex gap-3">
                         <Smartphone

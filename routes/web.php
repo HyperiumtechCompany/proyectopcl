@@ -15,6 +15,7 @@ use App\Http\Controllers\CronogramaController;
 use App\Http\Controllers\CronogramaV2Controller;
 use App\Http\Controllers\CronoMaterialesController;
 use App\Http\Controllers\CronoValorizadoController;
+use App\Http\Controllers\Cuaderno\CuadernoAgenteController;
 use App\Http\Controllers\Cuaderno\CuadernoAsientoController;
 use App\Http\Controllers\Cuaderno\CuadernoConexionController;
 use App\Http\Controllers\Cuaderno\CuadernoVinculoController;
@@ -355,6 +356,9 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             }
             Route::post('/screen', [CuadernoConexionController::class, 'remote'])->name('screen');
             Route::post('/interact', [CuadernoConexionController::class, 'remote'])->name('interact');
+            Route::post('/agente/codigo', [CuadernoAgenteController::class, 'code'])->name('agent.code');
+            Route::get('/agente/extension', [CuadernoAgenteController::class, 'extension'])->name('agent.extension');
+            Route::delete('/agente/{agente}', [CuadernoAgenteController::class, 'revoke'])->name('agent.revoke');
             Route::post('/conector/iniciar', [CuadernoConexionController::class, 'startRunner'])->name('runner.start');
             Route::get('/exportar', [CuadernoAsientoController::class, 'export'])->name('export');
             Route::get('/pdfs', [CuadernoAsientoController::class, 'zip'])->name('pdfs');

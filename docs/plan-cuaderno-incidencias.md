@@ -404,6 +404,48 @@ Verificación: 57 pruebas Pest (419 aserciones), con reemplazo de obra, `switch`
 
 **Pendiente:** adjuntos y "Nuevo asiento"/responder. La sesión expiró antes de poder abrirlos; requieren reconectar y usar las capturas guiadas.
 
+### Producción: conector en la PC del titular (modo `agent`), 6 de octubre de 2026
+
+**Motivo:** desde el VPS (IP de un datacenter de Hostinger), RENIEC muestra "Actividad no autorizada ha sido detectada" al ingresar. No se evade: el ingreso debe salir del equipo y la red de quien usa la cuenta.
+
+**Arquitectura:**
+
+```text
+Usuario ─► ingenieros.tech (Costos)  ◄── HTTPS (pull cada 1–3 s) ── Conector en su PC (Perú)
+               crea tareas y espera            ejecuta con Chrome/Edge invisible y responde
+```
+
+- `scripts/cuaderno/engine.mjs`: motor común (portal, sesiones, sync, PDF, vista remota). Lo usan `cuaderno-runner.mjs` (modo `local`, 127.0.0.1) y `cuaderno-agent.mjs` (modo `agent`).
+- `CUADERNO_MODE=agent`: `CuadernoRunner::execute` no cambia su lógica. `CuadernoAgentBridge` convierte cada operación en una fila `cuaderno_tareas` y espera hasta 45 s (`CUADERNO_AGENT_TIMEOUT`) a que la PC la tome y la responda. El payload, que puede incluir la contraseña, va cifrado y se borra al tomarlo; las tareas respondidas se eliminan.
+- Una conexión queda ligada a la PC donde se hizo (`cuaderno_vinculos.cuaderno_agente_id`), porque ahí vive su perfil de navegador. Si esa PC está apagada, se avisa en vez de esperar.
+- **Enlace:** "Instalar conector en esta PC" genera un código de un solo uso (15 min) y un `instalar-conector-costos.cmd`. Este instala en `%LOCALAPPDATA%\CostosCuaderno`, sin permisos de administrador: baja Node portátil v24.4.1 (una vez), descarga el conector (`/api/cuaderno-agente/paquete`), lo enlaza (token propio; en el servidor solo se guarda su SHA-256) y lo deja iniciándose con Windows en segundo plano. Requiere Windows 10/11 de 64 bits con Chrome o Edge.
+- **Autoactualización:** la versión es un hash de los archivos del conector; tras cada deploy, el conector se actualiza solo cuando está inactivo.
+- **Desvincular** una PC revoca su token y termina las conexiones que vivían en ella; los datos importados se conservan.
+- La API (`routes/api.php`, `/api/cuaderno-agente/*`) no tiene sesión ni CSRF. Se excluye de `TrimStrings`/`ConvertEmptyStringsToNull` para que los campos vacíos de OECE lleguen intactos.
+
+**Servidor:** con `CUADERNO_MODE=agent` el VPS ya no necesita Chrome ni el programa `pcl-cuaderno` de Supervisor. Cada operación en curso ocupa un proceso PHP-FPM mientras espera (hasta 45 s): revisar `pm.max_children`. La subida de PDF requiere `client_max_body_size` ≥ 110 MB en Nginx.
+
+Verificación: 64 pruebas Pest del módulo (474 aserciones): enlace de un solo uso, tarea entregada una vez con la contraseña borrada, PDF solo dentro de la carpeta de la sesión, campos vacíos intactos, conexión completa a través del puente, PC apagada y revocación. `cuaderno-agent-smoke.mjs` ejecuta el conector real contra un servidor falso (enlace, tarea, respuesta, instancia única). El smoke del navegador y el conector local siguen funcionando tras separar el motor; el instalador PowerShell se validó sintácticamente. Suite completa: los 7 fallos restantes son preexistentes y ajenos al módulo (constante de módulos en `CostoProjectTest`, DIALux). **Pendiente:** instalación real en una PC con Windows y conexión a OECE desde producción.
+
+### Asistente del Cuaderno: extensión de Chrome/Edge (camino principal), 6 de octubre de 2026
+
+**Motivo:** el personal usa sus propias laptops y PC, en la oficina o en casa, y no tiene conocimientos técnicos. Instalar un programa es una barrera; una extensión desde la tienda oficial es un clic conocido. Además usa el navegador que ya tienen abierto (sin RAM extra) y su propia sesión de OECE (la contraseña nunca pasa por Costos).
+
+**Cómo funciona:**
+
+- `extension/cuaderno/` (Manifest V3): `costos-bridge.js` (en las páginas de Costos: marca la página, enlaza y mantiene despierto el service worker), `background.js` (toma tareas de `/api/cuaderno-agente` con `tipo=extension`, sube PDF y responde) y `executor.js` (mismos pasos que `engine.mjs`, pero con `chrome.scripting` sobre la pestaña de OECE del usuario). `dom.js` es la misma copia de `scripts/cuaderno/dom.mjs`.
+- **Enlace automático:** si la extensión está instalada, la página pide un código y se lo entrega; no hay nada que escribir.
+- **"Conectar"** abre o usa la pestaña de OECE. Si no hay sesión, el usuario entra ahí como siempre y Costos lo detecta cada 3 s. Con la extensión en línea, la validación ya no exige usuario ni contraseña.
+- **PDF oficial:** mientras Costos lo pide, se toma el Blob que arma el propio portal (`URL.createObjectURL`), así el archivo no cae en la carpeta Descargas. Hay una red de seguridad con `chrome.downloads`.
+- El conector de PC queda como alternativa ("¿No puedes usar extensiones?").
+
+**Distribución:**
+
+- Piloto: "Descargar asistente (versión de prueba)" en el Cuaderno (`/costos/{p}/cuaderno/agente/extension`, con el sitio actual en el manifiesto) → `chrome://extensions` → Modo de desarrollador → Cargar descomprimida.
+- Tiendas: `php artisan cuaderno:extension --origin=https://ingenieros.tech` genera el zip; después se define `CUADERNO_EXTENSION_URL` y la pantalla muestra "Agregar a Chrome o Edge". Falta para publicar: cuentas de desarrollador (Chrome USD 5 único, Edge gratis), iconos, capturas y política de privacidad.
+
+Verificación: 67 pruebas Pest del módulo (493 aserciones), con enlace `tipo=extension`, conexión sin credenciales, credenciales todavía exigidas con un conector de PC y zip con el sitio en el manifiesto. `cuaderno-extension-smoke.mjs` ejecuta el `executor.js` real sobre Chrome invisible con un shim mínimo de `chrome.*`: conectar, ingreso en la pestaña del usuario, sincronización, captura del PDF, detalle, solo PDF y cambio de obra (tres corridas seguidas). Edge cargó la extensión empaquetada y su service worker arrancó. **Pendiente:** prueba real en Chrome/Edge del usuario contra OECE.
+
 ### Próximas fases
 
 | Fase | Alcance | Qué necesita del titular |
