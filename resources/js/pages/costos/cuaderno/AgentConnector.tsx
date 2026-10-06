@@ -169,6 +169,20 @@ export default function AgentConnector({
         </details>
     );
 
+    if (extension.invalidated) {
+        return (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-800 dark:bg-amber-950/40">
+                <p>
+                    El Asistente del Cuaderno se actualizó. Recarga la página
+                    para seguir.
+                </p>
+                <Button size="sm" onClick={() => window.location.reload()}>
+                    <RefreshCw /> Recargar
+                </Button>
+            </div>
+        );
+    }
+
     if (online && active) {
         const here = active.tipo === 'extension' && extension.installed;
         return (

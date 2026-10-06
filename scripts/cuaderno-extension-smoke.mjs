@@ -3,7 +3,7 @@
 // observed portal screens. Covers sign-in on the holder's tab, sync, PDF capture, detail
 // and change of work.
 import assert from 'node:assert/strict';
-import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -153,8 +153,104 @@ try {
     assert.equal(choose.state, 'selection');
     assert.equal(choose.choices.length, 2);
 
+    // Bridge on a Costos page: a service-worker restart reconnects; a reloaded extension
+    // ("Extension context invalidated") makes the old copy stop without uncaught errors.
+    await go('https://apps.oece.gob.pe/cuaderno-obra/prueba-puente');
+    const bridge = await browser.evaluate(
+        async ({ source }) => {
+            const errors = [];
+            const received = [];
+            window.addEventListener('error', (event) =>
+                errors.push(event.message),
+            );
+            window.addEventListener('message', (event) => {
+                if (event.data?.source === 'costos-cuaderno-extension')
+                    received.push(event.data.type);
+            });
+            let connects = 0;
+            let current;
+            const makePort = () => {
+                const port = {
+                    dead: false,
+                    handlers: { message: [], disconnect: [] },
+                    postMessage() {
+                        if (port.dead)
+                            throw new Error(
+                                'Attempting to use a disconnected port object',
+                            );
+                    },
+                    onMessage: {
+                        addListener: (fn) => port.handlers.message.push(fn),
+                    },
+                    onDisconnect: {
+                        addListener: (fn) => port.handlers.disconnect.push(fn),
+                    },
+                };
+                return port;
+            };
+            window.chrome = {
+                runtime: {
+                    id: 'asistente',
+                    getManifest: () => ({ version: '1.0.1' }),
+                    connect() {
+                        if (!window.chrome.runtime.id)
+                            throw new Error('Extension context invalidated.');
+                        connects++;
+                        current = makePort();
+                        return current;
+                    },
+                },
+            };
+            const wait = (ms) =>
+                new Promise((resolve) => setTimeout(resolve, ms));
+            new Function(source)();
+            new Function(source)();
+            const first = connects;
+            current.dead = true;
+            current.handlers.disconnect.forEach((fn) => fn());
+            await wait(1300);
+            const afterRestart = connects;
+            window.chrome.runtime.id = undefined;
+            current.dead = true;
+            current.handlers.disconnect.forEach((fn) => fn());
+            window.postMessage(
+                { source: 'costos-cuaderno-page', type: 'status' },
+                location.origin,
+            );
+            await wait(1300);
+            return {
+                first,
+                afterRestart,
+                connects,
+                received,
+                errors,
+                marked: document.documentElement.dataset.costosCuaderno,
+            };
+        },
+        {
+            source: readFileSync(
+                join(root, 'extension/cuaderno/costos-bridge.js'),
+                'utf8',
+            ),
+        },
+    );
+    assert.equal(bridge.first, 1, 'duplicate injection must be ignored');
+    assert.equal(
+        bridge.afterRestart,
+        2,
+        'must reconnect after a service-worker restart',
+    );
+    assert.equal(
+        bridge.connects,
+        2,
+        'must not retry once the extension is gone',
+    );
+    assert.ok(bridge.received.includes('invalidated'));
+    assert.deepEqual(bridge.errors, []);
+    assert.equal(bridge.marked, '1.0.1');
+
     process.stdout.write(
-        'Extension smoke passed: connect, sign-in on the holder tab, sync, PDF capture, detail, PDF only and change of work.\n',
+        'Extension smoke passed: connect, sign-in on the holder tab, sync, PDF capture, detail, PDF only, change of work and bridge recovery after an extension reload.\n',
     );
 } finally {
     if (browser) await browser.close();

@@ -12,7 +12,8 @@ type ExtensionMessage =
           source: 'costos-cuaderno-extension';
           type: 'pair-error';
           message: string;
-      };
+      }
+    | { source: 'costos-cuaderno-extension'; type: 'invalidated' };
 
 const send = (message: Record<string, unknown>) =>
     window.postMessage(
@@ -37,6 +38,8 @@ export function useCuadernoExtension() {
     );
     const [paired, setPaired] = useState<boolean | null>(null);
     const [error, setError] = useState<string | null>(null);
+    // The extension was reloaded or updated while this page stayed open.
+    const [invalidated, setInvalidated] = useState(false);
 
     useEffect(() => {
         if (!installed) return;
@@ -46,7 +49,9 @@ export function useCuadernoExtension() {
                 event.data?.source !== 'costos-cuaderno-extension'
             )
                 return;
+            if (event.data.type === 'invalidated') setInvalidated(true);
             if (event.data.type === 'status') {
+                setInvalidated(false);
                 setPaired(event.data.paired);
                 if (event.data.paired) setError(null);
             }
@@ -57,5 +62,5 @@ export function useCuadernoExtension() {
         return () => window.removeEventListener('message', listener);
     }, [installed]);
 
-    return { installed, paired, error };
+    return { installed, paired, error, invalidated };
 }

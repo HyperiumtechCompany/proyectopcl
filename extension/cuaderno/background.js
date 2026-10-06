@@ -21,13 +21,7 @@ async function saveToken(origin, token) {
 }
 
 function broadcast(origin, message) {
-    for (const port of ports.get(origin) ?? []) {
-        try {
-            port.postMessage(message);
-        } catch {
-            // The tab was closed meanwhile.
-        }
-    }
+    for (const port of ports.get(origin) ?? []) reply(port, message);
 }
 
 const browserLabel = () => {
@@ -177,6 +171,15 @@ async function startLoop(origin) {
     }
 }
 
+// Replies to a Costos tab; it may have been closed or reloaded meanwhile.
+function reply(port, message) {
+    try {
+        port.postMessage(message);
+    } catch {
+        // Disconnected port: nothing to answer.
+    }
+}
+
 chrome.runtime.onConnect.addListener((port) => {
     if (port.name !== 'costos-cuaderno' || !port.sender?.url) return;
     const origin = new URL(port.sender.url).origin;
@@ -187,21 +190,14 @@ chrome.runtime.onConnect.addListener((port) => {
         if (message?.type === 'pair') {
             try {
                 await pair(origin, message.codigo);
-                port.postMessage({
-                    type: 'status',
-                    paired: true,
-                    version: VERSION,
-                });
+                reply(port, { type: 'status', paired: true, version: VERSION });
             } catch (error) {
-                port.postMessage({
-                    type: 'pair-error',
-                    message: error.message,
-                });
+                reply(port, { type: 'pair-error', message: error.message });
             }
         } else if (message?.type === 'focus') {
             await focusPortal();
         } else if (message?.type === 'status') {
-            port.postMessage({
+            reply(port, {
                 type: 'status',
                 paired: Boolean(await tokenFor(origin)),
                 version: VERSION,
@@ -210,11 +206,28 @@ chrome.runtime.onConnect.addListener((port) => {
         // "ping" messages only keep this worker awake while Costos is open.
     });
     tokenFor(origin).then((token) => {
-        port.postMessage({
+        reply(port, {
             type: 'status',
             paired: Boolean(token),
             version: VERSION,
         });
         if (token) startLoop(origin);
     });
+});
+
+// After installing or updating, Costos tabs already open get the new bridge right away
+// (their old copy stops by itself), so nobody has to reload the page.
+chrome.runtime.onInstalled.addListener(async () => {
+    const patterns =
+        chrome.runtime.getManifest().content_scripts?.[0]?.matches ?? [];
+    if (!patterns.length) return;
+    const tabs = await chrome.tabs.query({ url: patterns }).catch(() => []);
+    for (const tab of tabs) {
+        chrome.scripting
+            .executeScript({
+                target: { tabId: tab.id },
+                files: ['costos-bridge.js'],
+            })
+            .catch(() => {});
+    }
 });
