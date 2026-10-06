@@ -21,13 +21,13 @@ interface BudgetSummaryFooterProps {
 
 type Field = keyof Omit<BudgetTotals, 'pesoCD'>;
 
-const ROWS: Array<{ field: Field; label: (p: ParametrosPresupuesto) => string; strong?: boolean; highlight?: boolean }> = [
-    { field: 'costoDirecto', label: () => 'Costo directo', strong: true },
-    { field: 'gastosGenerales', label: (p) => `Gastos generales (${fmtPct(p.gastosGenerales)})` },
-    { field: 'utilidad', label: (p) => `Utilidad (${fmtPct(p.utilidad)})` },
-    { field: 'subTotal', label: () => 'Sub total', strong: true },
-    { field: 'igv', label: (p) => `IGV (${fmtPct(p.igv)})` },
-    { field: 'total', label: () => 'Total presupuesto', strong: true, highlight: true },
+const ROWS: Array<{ field: Field; label: (p: ParametrosPresupuesto) => string; formula: string; strong?: boolean; highlight?: boolean }> = [
+    { field: 'costoDirecto', label: () => 'Costo directo', formula: 'CD = Σ parciales de las partidas (metrado × P.U., redondeado a 2 decimales)', strong: true },
+    { field: 'gastosGenerales', label: (p) => `Gastos generales (${fmtPct(p.gastosGenerales)})`, formula: 'GG = ROUND(CD × %GG, 2)' },
+    { field: 'utilidad', label: (p) => `Utilidad (${fmtPct(p.utilidad)})`, formula: 'UT = ROUND(CD × %Utilidad, 2)' },
+    { field: 'subTotal', label: () => 'Sub total', formula: 'Sub total = CD + GG + UT', strong: true },
+    { field: 'igv', label: (p) => `IGV (${fmtPct(p.igv)})`, formula: 'IGV = ROUND(Sub total × %IGV, 2)' },
+    { field: 'total', label: () => 'Total presupuesto', formula: 'Total = Sub total + IGV', strong: true, highlight: true },
 ];
 
 /**
@@ -49,7 +49,7 @@ export function BudgetSummaryFooter({ labelColSpan, parametros, cells, showPeso 
                         row.highlight && 'bg-amber-100 text-stone-900 dark:bg-amber-500/15 dark:text-amber-100',
                     )}
                 >
-                    <td colSpan={labelColSpan} className={cn(base, 'bg-inherit text-right text-[11px] tracking-wide uppercase lg:sticky lg:left-0')}>
+                    <td colSpan={labelColSpan} title={row.formula} className={cn(base, 'cursor-help bg-inherit text-right text-[11px] tracking-wide uppercase lg:sticky lg:left-0')}>
                         {row.field === 'total' ? totalLabel : row.label(parametros)}
                     </td>
                     {cells.map((totals, index) => (

@@ -1369,13 +1369,15 @@ tests/
 
 #### Verificación Fase 9
 
-- [ ] Tests unitarios pasan: `npm test`
-- [ ] Tests backend: `php artisan test --filter=ValorizacionV2`
-- [ ] `npm run types` → 0 errores
-- [ ] `npm run build` → compila sin warnings
-- [ ] Formatos correctos en todos los tabs
-- [ ] Impresión: cada tab imprime correctamente
-- [ ] Validaciones: errores se muestran correctamente
+- [x] Validaciones de negocio (`validation/validarValorizacion.ts` + test): mayor metrado (aviso), avance > 100 % (error), programado > presupuesto (error), valorizado > contrato vigente (error), retención > garantía (error), amortización > adelanto y líquido negativo (aviso), penalidades > 10 % del contrato (aviso), fechas/plazo inválidos (error), mes fuera de plazo o sin metrados (aviso)
+- [x] Decisión: los errores **bloquean APROBAR**, no el autoguardado (bloquear el guardado perdería trabajo). Chip en la cabecera con la lista y enlace a la hoja donde se corrige; panel en Resumen de pago en lugar del botón Aprobar
+- [x] Imprimir / PDF: A4 apaisado, solo la hoja + encabezado del expediente, tablas sin scroll, siempre en tema claro; PDF = "Guardar como PDF" del navegador (sin librería nueva)
+- [x] Tooltips con la fórmula en el pie presupuestal (CD, GG, UT, IGV, total); breadcrumb ya existente
+- [x] Tests unitarios: 115 (vitest) · backend `--filter=ValorizacionV2`: 2 pasan, 3 omitidos (requieren MySQL)
+- [x] tsc 0 errores en el módulo · eslint limpio
+- [ ] `npm run build` (no se corre con `npm run dev` activo)
+- [ ] Prueba del usuario: impresión de cada hoja y Excel exportado
+- [x] Exportar la valorización COMPLETA con el **formato formal del expediente del cliente** (`export/libro/`): 17 pestañas con los mismos nombres y orden (FT … RH-EM), cada una construida desde los datos calculados (`compute/derivarValorizacion.ts`, la misma cadena que usan los hooks), no desde la pantalla. Banda de título azul, encabezado del expediente (obra, entidad, ejecutor, supervisor, residente, ing. supervisor + VR/monto/plazo), cabeceras celestes, ítems morado/rojo/azul por nivel, pie presupuestal, textos legales/montos en letras, fuente Agency FB, sin cuadrícula, A4 ajustado al ancho, cabecera repetida al imprimir. Gráficos (Curva S, torta de avance físico, torta de control financiero) dibujados como SVG con el estilo del expediente e insertados como PNG (ExcelJS no crea gráficos nativos). Test: pestañas, cifras clave, imágenes y escritura del .xlsx; imprimir sigue siendo por hoja
 
 ---
 

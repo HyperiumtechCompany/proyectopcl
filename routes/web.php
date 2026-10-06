@@ -15,6 +15,9 @@ use App\Http\Controllers\CronogramaController;
 use App\Http\Controllers\CronogramaV2Controller;
 use App\Http\Controllers\CronoMaterialesController;
 use App\Http\Controllers\CronoValorizadoController;
+use App\Http\Controllers\Cuaderno\CuadernoAsientoController;
+use App\Http\Controllers\Cuaderno\CuadernoConexionController;
+use App\Http\Controllers\Cuaderno\CuadernoVinculoController;
 use App\Http\Controllers\CurvaSController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DelphinController;
@@ -67,6 +70,7 @@ use App\Http\Controllers\SpattPararrayoSpreadsheetController;
 use App\Http\Controllers\UbigeoController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ValorizacionV2\ValorizacionV2Controller;
+use App\Http\Middleware\EnsureCuadernoEnabled;
 use App\Http\Middleware\EnsureMaintenanceSchema;
 use App\Http\Middleware\EnsureValorizacionV2Schema;
 use App\Http\Middleware\SetCostosDatabase;
@@ -340,6 +344,26 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
     Route::delete('/{costoProject}', [CostoProjectController::class, 'destroy'])->name('destroy');
     Route::post('/{costoProject}/migrate', [CostoProjectController::class, 'runMigration'])->name('migrate');
     Route::put('/{costoProject}', [CostoProjectController::class, 'update'])->name('update');
+
+    Route::middleware(EnsureCuadernoEnabled::class)
+        ->prefix('/{costoProject}/cuaderno')->name('cuaderno.')->group(function (): void {
+            Route::get('/', [CuadernoVinculoController::class, 'show'])->name('show');
+            Route::post('/', [CuadernoVinculoController::class, 'store'])->name('store');
+            Route::delete('/', [CuadernoVinculoController::class, 'destroy'])->name('destroy');
+            foreach (['connect', 'inspect', 'select', 'preview', 'confirm', 'sync', 'capture', 'switch', 'disconnect'] as $action) {
+                Route::post('/'.$action, [CuadernoConexionController::class, 'operate'])->name($action);
+            }
+            Route::post('/screen', [CuadernoConexionController::class, 'remote'])->name('screen');
+            Route::post('/interact', [CuadernoConexionController::class, 'remote'])->name('interact');
+            Route::post('/conector/iniciar', [CuadernoConexionController::class, 'startRunner'])->name('runner.start');
+            Route::get('/exportar', [CuadernoAsientoController::class, 'export'])->name('export');
+            Route::get('/pdfs', [CuadernoAsientoController::class, 'zip'])->name('pdfs');
+            Route::patch('/asientos/{asiento}', [CuadernoAsientoController::class, 'update'])->name('asientos.update');
+            Route::post('/asientos/{asiento}/oficial', [CuadernoAsientoController::class, 'oficial'])->name('asientos.oficial');
+            Route::get('/asientos/{asiento}/pdf', [CuadernoAsientoController::class, 'pdf'])->name('asientos.pdf');
+            Route::post('/asientos/{asiento}/referencias', [CuadernoAsientoController::class, 'link'])->name('asientos.link');
+            Route::delete('/asientos/{asiento}/referencias/{referencia}', [CuadernoAsientoController::class, 'unlink'])->name('asientos.unlink');
+        });
 
     // ─── Módulos dentro de un proyecto (con middleware de BD dinámica) ────
     Route::middleware([SetCostosDatabase::class])

@@ -1,5 +1,5 @@
-import type { CellMap } from '../cellMap';
 import type { PartidaInput } from '../../types';
+import type { CellMap } from '../cellMap';
 
 /** Conserva las conexiones por código cuando una importación reemplaza los IDs del árbol. */
 export function remapPartidaCells(

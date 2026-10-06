@@ -212,6 +212,7 @@ class CostoProjectController extends Controller
         $costoProject->load('enabledModules');
 
         return Inertia::render('costos/Show', [
+            'cuadernoEnabled' => (bool) config('cuaderno.enabled'),
             'project' => [
                 'id' => $costoProject->id,
                 'nombre' => $costoProject->nombre,

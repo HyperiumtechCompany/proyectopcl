@@ -89,6 +89,11 @@ class CostoProject extends Model
         return $this->modules()->where('enabled', true);
     }
 
+    public function cuadernoVinculos(): HasMany
+    {
+        return $this->hasMany(CuadernoVinculo::class);
+    }
+
     // ─── Relaciones de Ubicación ─────────────────────────────────────────────
 
     public function departamento(): BelongsTo

@@ -37,6 +37,7 @@ import {
 import React, { useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
+import { show as cuadernoShow } from '@/actions/App/Http/Controllers/Cuaderno/CuadernoVinculoController';
 
 interface ProjectDetail {
     id: number;
@@ -63,6 +64,7 @@ interface ProjectDetail {
 
 interface PageProps {
     project: ProjectDetail;
+    cuadernoEnabled?: boolean;
     flash?: { success?: string | null; error?: string | null };
     [key: string]: unknown;
 }
@@ -399,7 +401,7 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function Show() {
-    const { project, flash } = usePage<PageProps>().props;
+    const { project, flash, cuadernoEnabled } = usePage<PageProps>().props;
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [migrating, setMigrating] = useState(false);
 
@@ -447,7 +449,7 @@ export default function Show() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <div className="max-w-8xl mx-auto w-full space-y-2 px-4 py-8">
+            <div className="max-w-9xl mx-auto w-full space-y-2 px-2 py-8">
                 {/* ── Header ─────────────────────────────────────────────── */}
                 <div>
                     <Link
@@ -477,6 +479,21 @@ export default function Show() {
                 </div>
 
                 {/* ── Grid de Información y Módulos ───────────────────────────── */}
+                {cuadernoEnabled && (
+                    <Link
+                        href={cuadernoShow(project.id)}
+                        className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-5 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800/60 dark:hover:bg-gray-800"
+                    >
+                        <BookOpen size={20} className="text-blue-600 dark:text-blue-400" />
+                        <div className="flex-1">
+                            <h2 className="text-sm font-semibold">Cuaderno de incidencias</h2>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Configurar el cuaderno asociado a este proyecto.
+                            </p>
+                        </div>
+                        <ChevronRight size={16} />
+                    </Link>
+                )}
                 <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                     {/* ── Información General ─────────────────────────────────── */}
                     {(identificationFields.length > 0 ||

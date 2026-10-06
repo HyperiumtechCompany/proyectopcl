@@ -1,9 +1,11 @@
 import type Decimal from 'decimal.js';
 import { BadgeCheck, LockOpen, Stamp } from 'lucide-react';
 import { useState } from 'react';
+import { useValidaciones } from '../hooks/useValidaciones';
 import { formatDate } from '../lib/dates';
 import { usePersistencia } from '../store/PersistenciaProvider';
 import { useValorizacionStore } from '../store/ValorizacionStoreProvider';
+import { HallazgosList } from './ValidacionesMenu';
 
 interface Props {
     valorizado: Decimal;
@@ -13,13 +15,15 @@ interface Props {
 
 /**
  * Aprobar / reabrir la valorización activa. Aprobar guarda primero y congela en
- * el servidor una copia de los datos (valorizacion_v2_cortes).
+ * el servidor una copia de los datos (valorizacion_v2_cortes). Los errores de
+ * negocio (validarValorizacion) bloquean la aprobación, no el autoguardado.
  */
 export function AprobacionControl({ valorizado, liquido, avanceAcumulado }: Props) {
     const periodo = useValorizacionStore((state) => state.input.periodo);
     const { cortes, aprobar, reabrir } = usePersistencia();
     const [ocupado, setOcupado] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const { errores } = useValidaciones();
     const corte = cortes.find((c) => c.numero === periodo.numero);
     const numero = String(periodo.numero).padStart(2, '0');
 
@@ -52,6 +56,17 @@ export function AprobacionControl({ valorizado, liquido, avanceAcumulado }: Prop
                     </button>
                 </div>
                 {error && <p className="text-xs text-red-600">{error}</p>}
+            </div>
+        );
+    }
+
+    if (errores.length > 0) {
+        return (
+            <div className="w-full max-w-md rounded-lg border border-red-200 bg-red-50/60 px-3 py-2 dark:border-red-500/30 dark:bg-red-500/10">
+                <p className="text-xs font-semibold text-red-800 dark:text-red-200">
+                    No se puede aprobar la N°{numero}: {errores.length} error{errores.length === 1 ? '' : 'es'} por corregir.
+                </p>
+                <HallazgosList hallazgos={errores} />
             </div>
         );
     }

@@ -9,6 +9,7 @@ import { PeriodoSelector } from './PeriodoSelector';
 import { ProyectoNav } from './ProyectoNav';
 import type { ProyectoRef, ValorizacionRef } from './ProyectoNav';
 import { SaveStatus } from './SaveStatus';
+import { ValidacionesMenu } from './ValidacionesMenu';
 
 function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
     return (
@@ -53,6 +54,7 @@ export function ValorizacionHeader(nav: { proyecto: ProyectoRef; proyectos: Proy
                                     <Chip tone="danger">Ficha: {pendientesFicha} pendiente{pendientesFicha === 1 ? '' : 's'}</Chip>
                                 </a>
                             )}
+                            <ValidacionesMenu />
                             {aprobada && <Chip tone="orange" title="Existe una copia aprobada de esta valorización; los cambios no la alteran">Aprobada</Chip>}
                         </div>
                         <p className="mt-1 max-w-5xl text-sm leading-relaxed text-stone-300" title={ficha.datosGenerales.obra}>

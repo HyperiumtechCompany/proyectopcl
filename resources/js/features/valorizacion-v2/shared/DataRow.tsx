@@ -23,6 +23,7 @@ export function DataRow({ label, children, formula, pending, numeric = false, em
                     <span className="text-[13px] leading-relaxed text-stone-500 dark:text-stone-400">{pending}</span>
                 ) : (
                     <div
+                        data-export-value
                         className={cn(
                             'min-w-0 basis-full text-[13px] leading-relaxed text-stone-900 dark:text-stone-100',
                             numeric && 'font-mono tabular-nums [&_button]:whitespace-nowrap',

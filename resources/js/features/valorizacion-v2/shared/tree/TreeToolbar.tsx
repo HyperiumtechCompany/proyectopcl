@@ -11,7 +11,7 @@ export function TreeToolbar({ state, children }: { state: PartidaTreeState; chil
     const button = 'min-h-9 rounded px-2 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900 focus-visible:ring-2 focus-visible:ring-orange-500 dark:text-stone-300 dark:hover:bg-stone-800';
 
     return (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 print:hidden" data-export="skip">
             <label className="relative min-w-0 basis-full sm:min-w-48 sm:flex-1 sm:basis-auto sm:max-w-sm">
                 <span className="sr-only">Buscar partida</span>
                 <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-stone-400" />

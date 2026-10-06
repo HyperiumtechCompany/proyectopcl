@@ -6,6 +6,8 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class CrearValorizacionV2Request extends FormRequest
 {
+    use ReglasDatosValorizacion;
+
     public function authorize(): bool
     {
         return true;
@@ -22,14 +24,7 @@ class CrearValorizacionV2Request extends FormRequest
         return [
             'nombre' => ['required', 'string', 'max:255'],
             'schema_version' => ['required', 'integer', 'min:1'],
-            'datos' => ['required', 'array'],
-            'datos.periodo' => ['required', 'array'],
-            'datos.periodo.numero' => ['required', 'integer', 'min:1'],
-            'datos.periodo.mes' => ['required', 'date_format:Y-m-d'],
-            'datos.fichaTecnica' => ['required', 'array'],
-            'datos.parametros' => ['required', 'array'],
-            'datos.presupuesto' => ['required', 'array'],
-            'datos.presupuesto.partidas' => ['present', 'array'],
+            ...$this->reglasDatos(),
         ];
     }
 }
