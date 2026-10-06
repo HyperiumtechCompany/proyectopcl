@@ -59,5 +59,7 @@ php artisan queue:restart
 sudo supervisorctl restart pcl-worker:*
 # Worker de planos CAD pesados (ver planes/infra-planos-pesados.md); no falla el deploy si aún no existe.
 sudo supervisorctl restart pcl-cad-worker || true
+# Conector del Cuaderno de incidencias (Chrome invisible); no recarga código solo.
+sudo supervisorctl restart pcl-cuaderno || true
 
 echo "[OK] Deploy completado exitosamente"
