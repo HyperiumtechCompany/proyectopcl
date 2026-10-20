@@ -13,6 +13,7 @@ use App\Services\CostoDatabaseService;
 use App\Services\GGFijoDesagregadoService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\ConcurrencyErrorDetector;
+use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -336,35 +337,13 @@ class PresupuestoController extends Controller
                     }
                 }
 
-                // Eliminar ACUs huérfanos cuya partida ya no existe en presupuesto_general
-                if ($subsection === 'general') {
-                    // Match por código normalizado, no por string exacto — presupuesto_general.partida
-                    // y presupuesto_acus.partida pueden diferir en padding de ceros (mismo criterio que
-                    // syncAllPrecioUnitarioFromAcus/calculateACU, ver CostoDatabaseService::normalizePartidaCode()).
-                    // Un whereNotIn exacto trataba como huérfano (y borraba en cascada) cualquier ACU
-                    // cuyo padding no calzara byte a byte con el presupuesto_general recién reinsertado,
-                    // dejando vivo solo el ACU recién re-sincronizado vía calculateACU (que sí escribe el
-                    // mismo formato que el payload actual) — el bug reportado de "guarda uno, borra el resto".
-                    $validNormalizedPartidas = array_flip(
-                        $connection->table('presupuesto_general')
-                            ->where('presupuesto_id', $tenantPresupuestoId)
-                            ->pluck('partida')
-                            ->map(fn ($p) => $this->dbService->normalizePartidaCode((string) $p))
-                            ->all()
-                    );
-
-                    $orphanAcuIds = $connection->table('presupuesto_acus')
-                        ->where('presupuesto_id', $tenantPresupuestoId)
-                        ->get(['id', 'partida'])
-                        ->filter(fn ($acu) => ! isset($validNormalizedPartidas[$this->dbService->normalizePartidaCode((string) $acu->partida)]))
-                        ->pluck('id');
-
-                    if ($orphanAcuIds->isNotEmpty()) {
-                        foreach (['acu_mano_de_obra', 'acu_materiales', 'acu_equipos', 'acu_subcontratos', 'acu_subpartidas'] as $childTable) {
-                            $connection->table($childTable)->whereIn('acu_id', $orphanAcuIds)->delete();
-                        }
-                        $connection->table('presupuesto_acus')->whereIn('id', $orphanAcuIds)->delete();
-                    }
+                // Todo lo que se guarda por CÓDIGO de partida (ACU, Cronograma Valorizado, Cronograma
+                // Ejecutado, niveles de Gast. Fin.) sigue a su partida cuando el código cambia
+                // (Renumerar, indentar bajo un padre nuevo, renombrar la raíz). Y los ACU NUNCA se
+                // borran: antes se eliminaban aquí como "huérfanos" — incidente 2026-10-20: 478 ACU
+                // perdidos en un guardado. Ver syncPartidaLinkedTables().
+                if ($subsection === 'general' && $tenantPresupuestoId !== null) {
+                    $this->syncPartidaLinkedTables($connection, $tenantPresupuestoId, $request->input('partida_renames', []));
                 }
 
                 $connection->commit();
@@ -2748,6 +2727,286 @@ class PresupuestoController extends Controller
     }
 
     /**
+     * Tablas que guardan datos por código de partida. true = lo que no encuentra pareja se aparta con
+     * "~" (ACU: nunca se borra, nunca lo hereda otra partida); false = se deja tal cual.
+     */
+    private const PARTIDA_LINKED_TABLES = [
+        'presupuesto_acus' => true,
+        'cronograma_valorizado' => false,
+        'cronograma_ejecutado' => false,
+    ];
+
+    /**
+     * Tras guardar presupuesto_general: aplica los renombres que envía Delphin (precisos) y concilia
+     * por descripción lo que siga desenganchado (red de seguridad si el navegador no los envió).
+     */
+    private function syncPartidaLinkedTables(ConnectionInterface $connection, int $presupuestoId, mixed $renames): void
+    {
+        $renameMap = $this->partidaRenameMap($renames);
+        foreach (self::PARTIDA_LINKED_TABLES as $table => $tombstone) {
+            if (! Schema::connection('costos_tenant')->hasTable($table)) {
+                continue;
+            }
+            $this->applyPartidaRenames($connection, $presupuestoId, $table, $renameMap);
+            $this->reconcilePartidaLinks($connection, $presupuestoId, $table, $tombstone);
+        }
+        $this->applyGastFinRootRenames($connection, $presupuestoId, $renameMap);
+    }
+
+    /**
+     * [{from, to}, …] del request → [código normalizado anterior => código nuevo tal cual].
+     *
+     * @return array<string, string>
+     */
+    private function partidaRenameMap(mixed $renames): array
+    {
+        if (! is_array($renames)) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($renames as $rename) {
+            $from = is_array($rename) ? trim((string) ($rename['from'] ?? '')) : '';
+            $to = is_array($rename) ? trim((string) ($rename['to'] ?? '')) : '';
+            if ($from === '' || $to === '' || $from === $to || mb_strlen($to) > 50) {
+                continue;
+            }
+            $map[$this->dbService->normalizePartidaCode($from)] = $to;
+        }
+
+        return $map;
+    }
+
+    /**
+     * Mueve las filas de $table de cada partida renombrada a su código nuevo. Todos los renombres se
+     * aplican a la vez sobre el estado previo, así un intercambio A↔B no se pisa a sí mismo.
+     *
+     * @param  array<string, string>  $renameMap
+     */
+    private function applyPartidaRenames(ConnectionInterface $connection, int $presupuestoId, string $table, array $renameMap): void
+    {
+        if ($renameMap === []) {
+            return;
+        }
+
+        $rows = $connection->table($table)
+            ->where('presupuesto_id', $presupuestoId)
+            ->get(['id', 'partida'])
+            ->filter(fn ($row) => isset($renameMap[$this->dbService->normalizePartidaCode((string) $row->partida)]));
+
+        foreach ($rows as $row) {
+            $connection->table($table)
+                ->where('id', $row->id)
+                ->update(['partida' => $renameMap[$this->dbService->normalizePartidaCode((string) $row->partida)]]);
+        }
+    }
+
+    /** @param  mixed  $renames  [{from: string, to: string}, …] tal cual llega del request */
+    private function applyAcuPartidaRenames(ConnectionInterface $connection, ?int $presupuestoId, mixed $renames): void
+    {
+        if ($presupuestoId !== null) {
+            $this->applyPartidaRenames($connection, $presupuestoId, 'presupuesto_acus', $this->partidaRenameMap($renames));
+        }
+    }
+
+    private function reconcileOrphanAcus(ConnectionInterface $connection, int $presupuestoId): void
+    {
+        $this->reconcilePartidaLinks($connection, $presupuestoId, 'presupuesto_acus', true);
+    }
+
+    /**
+     * Concilia las filas de $table (ACU, cronograma valorizado/ejecutado) con las partidas recién
+     * guardadas. Una fila necesita revisión si:
+     *  a) su código ya no está en presupuesto_general (la partida se renumeró, se movió o se borró), o
+     *  b) su código existe pero ahora es de otra partida con otra descripción (al meter la rama bajo un
+     *     padre nuevo, el código viejo de una partida pasa a un título).
+     * Se revincula a una partida SIN fila en $table con la misma descripción:
+     *  a) única candidata, o la que comparte más segmentos finales de código (sin empate);
+     *  b) solo si el código nuevo TERMINA en el código anterior ("01.05" → "02.01.05"): así una
+     *     descripción editada a propósito no arrastra la fila a otra partida con el texto viejo.
+     * Lo que no encuentra pareja: en ACU se aparta con "~<código anterior>" ($tombstone); en los
+     * cronogramas se deja tal cual. Nunca borra. Códigos comparados normalizados (ceros a la izquierda).
+     */
+    private function reconcilePartidaLinks(ConnectionInterface $connection, int $presupuestoId, string $table, bool $tombstone): void
+    {
+        $normalize = fn (string $code) => $this->dbService->normalizePartidaCode(ltrim(trim($code), '~'));
+        $normalizeDesc = function (?string $text): string {
+            $text = (string) $text;
+            if (class_exists(\Normalizer::class)) {
+                $text = (string) \Normalizer::normalize($text, \Normalizer::FORM_D);
+            }
+
+            return trim((string) preg_replace('/\s+/u', ' ', mb_strtoupper((string) preg_replace('/\p{Mn}/u', '', $text))));
+        };
+
+        $partidas = $connection->table('presupuesto_general')
+            ->where('presupuesto_id', $presupuestoId)
+            ->get(['partida', 'descripcion']);
+        $validCodes = [];
+        $descByCode = [];
+        foreach ($partidas as $row) {
+            $validCodes[$normalize((string) $row->partida)] = (string) $row->partida;
+            $descByCode[$normalize((string) $row->partida)] = $normalizeDesc($row->descripcion);
+        }
+
+        $rows = $connection->table($table)
+            ->where('presupuesto_id', $presupuestoId)
+            ->get(['id', 'partida', 'descripcion']);
+
+        $linked = [];
+        $orphans = [];
+        $misplaced = [];
+        foreach ($rows as $row) {
+            $code = (string) $row->partida;
+            $normalizedCode = $normalize($code);
+            if (trim($code) === '') {
+                continue;
+            }
+            if (str_starts_with(ltrim($code), '~') || ! isset($validCodes[$normalizedCode])) {
+                $orphans[] = $row;
+
+                continue;
+            }
+            $rowDesc = $normalizeDesc($row->descripcion);
+            if ($rowDesc !== '' && ($descByCode[$normalizedCode] ?? '') !== '' && $rowDesc !== $descByCode[$normalizedCode]) {
+                $misplaced[] = $row;
+
+                continue;
+            }
+            $linked[$normalizedCode] = true;
+        }
+        if ($orphans === [] && $misplaced === []) {
+            return;
+        }
+
+        // Partidas disponibles (sin fila en $table) por descripción normalizada.
+        $freeByDesc = [];
+        foreach ($partidas as $row) {
+            $code = $normalize((string) $row->partida);
+            if (! isset($linked[$code])) {
+                $freeByDesc[$normalizeDesc($row->descripcion)][$code] = (string) $row->partida;
+            }
+        }
+
+        $commonTail = function (string $a, string $b): int {
+            $sa = array_reverse(explode('.', $a));
+            $sb = array_reverse(explode('.', $b));
+            $n = 0;
+            while (isset($sa[$n], $sb[$n]) && $sa[$n] === $sb[$n]) {
+                $n++;
+            }
+
+            return $n;
+        };
+
+        $relinked = 0;
+        $preserved = 0;
+        $kept = 0;
+        $isMisplaced = array_flip(array_map(fn ($row) => $row->id, $misplaced));
+        foreach ([...$misplaced, ...$orphans] as $row) {
+            $old = $normalize((string) $row->partida);
+            $descKey = $normalizeDesc($row->descripcion);
+            $candidates = $freeByDesc[$descKey] ?? [];
+            if (isset($isMisplaced[$row->id])) {
+                $candidates = array_filter($candidates, fn ($code) => str_ends_with((string) $code, '.'.$old), ARRAY_FILTER_USE_KEY);
+            }
+
+            $target = null;
+            if (count($candidates) === 1) {
+                $target = array_key_first($candidates);
+            } elseif (count($candidates) > 1) {
+                $scores = [];
+                foreach (array_keys($candidates) as $code) {
+                    $scores[$code] = $commonTail($old, (string) $code);
+                }
+                arsort($scores);
+                $best = array_slice($scores, 0, 2, true);
+                $values = array_values($best);
+                if ($values[0] > 0 && ($values[1] ?? -1) < $values[0]) {
+                    $target = array_key_first($best);
+                }
+            }
+
+            if ($target !== null) {
+                $connection->table($table)->where('id', $row->id)->update(['partida' => $candidates[$target]]);
+                unset($freeByDesc[$descKey][$target]);
+                $relinked++;
+
+                continue;
+            }
+
+            if (isset($isMisplaced[$row->id]) || ! $tombstone) {
+                $kept++;
+
+                continue;
+            }
+
+            if (! str_starts_with(ltrim((string) $row->partida), '~')) {
+                $connection->table($table)->where('id', $row->id)
+                    ->update(['partida' => mb_substr('~'.trim((string) $row->partida), 0, 50)]);
+            }
+            $preserved++;
+        }
+
+        Log::info("{$table}: filas conciliadas con sus partidas (no se borra ninguna)", [
+            'presupuesto_id' => $presupuestoId,
+            'revinculadas' => $relinked,
+            'apartadas' => $preserved,
+            'sin_pareja_sin_cambios' => $kept,
+        ]);
+    }
+
+    /**
+     * Gast. Fin. guarda sus niveles por código RAÍZ normalizado (gastfin_*.grupo_ref). Si una raíz
+     * cambia de código ("04" → "01"), sus pagos, compras y clasificación la acompañan. Solo raíz →
+     * raíz; un código de destino ya ocupado (y que no se libera en este mismo guardado) no se pisa.
+     *
+     * @param  array<string, string>  $renameMap
+     */
+    private function applyGastFinRootRenames(ConnectionInterface $connection, int $presupuestoId, array $renameMap): void
+    {
+        $schema = Schema::connection('costos_tenant');
+        if ($renameMap === [] || ! $schema->hasTable('gastfin_grupos') || ! $schema->hasColumn('mantenimiento_documentos', 'origen')) {
+            return;
+        }
+
+        $roots = [];
+        foreach ($renameMap as $from => $to) {
+            if (! str_contains($from, '.') && ! str_contains($to, '.')) {
+                $roots[$from] = $this->dbService->normalizePartidaCode($to);
+            }
+        }
+        $documentIds = $connection->table('mantenimiento_documentos')
+            ->where('origen', 'delphin')->where('presupuesto_id', $presupuestoId)->pluck('id');
+        if ($roots === [] || $documentIds->isEmpty()) {
+            return;
+        }
+
+        $pagoIds = $connection->table('gastfin_mo_pagos')->whereIn('documento_id', $documentIds)->pluck('id');
+        $scopes = [
+            'gastfin_grupos' => fn () => $connection->table('gastfin_grupos')->whereIn('documento_id', $documentIds),
+            'gastfin_mat_insumos' => fn () => $connection->table('gastfin_mat_insumos')->whereIn('documento_id', $documentIds),
+            'gastfin_mat_compras' => fn () => $connection->table('gastfin_mat_compras')->whereIn('documento_id', $documentIds),
+            'gastfin_mo_pago_valores' => fn () => $connection->table('gastfin_mo_pago_valores')->whereIn('pago_id', $pagoIds),
+        ];
+
+        $inUse = array_flip($scopes['gastfin_grupos']()->pluck('grupo_ref')->all());
+        $roots = array_filter($roots, fn ($to, $from) => ! isset($inUse[$to]) || isset($roots[$to]), ARRAY_FILTER_USE_BOTH);
+
+        // Dos pasadas con prefijo temporal: un intercambio "01" ↔ "02" no choca con la clave única.
+        foreach ($scopes as $scope) {
+            foreach ($roots as $from => $to) {
+                $scope()->where('grupo_ref', $from)->update(['grupo_ref' => '#'.$to]);
+            }
+        }
+        foreach ($scopes as $scope) {
+            foreach ($roots as $to) {
+                $scope()->where('grupo_ref', '#'.$to)->update(['grupo_ref' => $to]);
+            }
+        }
+    }
+
+    /**
      * Verificar que el usuario actual es dueño del proyecto
      */
     private function authorizeProject(CostoProject $project): void
@@ -3918,7 +4177,8 @@ class PresupuestoController extends Controller
         $sheetAcus->getColumnDimension('G')->setWidth(15);
 
         // Obtener todos los ACUs
-        $acus = DB::connection('costos_tenant')->table('presupuesto_acus')->orderBy('partida')->get();
+        // Los ACU apartados ("~", sin partida) no se exportan; ver reconcilePartidaLinks().
+        $acus = DB::connection('costos_tenant')->table('presupuesto_acus')->where('partida', 'not like', '~%')->orderBy('partida')->get();
 
         $filaAcu = 1;
 
@@ -4555,6 +4815,7 @@ class PresupuestoController extends Controller
         // Fetch all acus for this project
         $acus = $connection->table('presupuesto_acus')
             ->where('presupuesto_id', $tenantPresupuestoId)
+            ->where('partida', 'not like', '~%') // apartados sin partida: ver reconcilePartidaLinks()
             ->orderBy('item_order', 'asc')
             ->get();
 

@@ -55,7 +55,8 @@ export const CPM_COLUMNS: ColumnDef[] = [
     { key: 'presupuesto',   label: 'Costo (S/)',   type: 'readonly',     width: 110, align: 'right',  editable: false, decimals: 2 },
 ];
 
-export type DelphinMode = 'budget' | 'cpm';
+// gastfin = Gast. Fin. (Gastos Financieros): vista propia a ancho completo, ver features/gastos-financieros.
+export type DelphinMode = 'budget' | 'cpm' | 'gastfin';
 export type DelphinBudgetView = 'presupuesto' | 'formula_polinomica';
 export type DelphinSubView = 'gantt' | 'network';
 export type InsumosScope = 'especialidad' | 'presupuesto';

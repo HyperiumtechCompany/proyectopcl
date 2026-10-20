@@ -6,6 +6,7 @@ import type { ParseAcuResult, ParsedAcu } from '../helpers/parseAcuExcel';
 import { parseAcuExcel } from '../helpers/parseAcuExcel';
 import type { ParsePresupuestoResult } from '../helpers/parsePresupuestoExcel';
 import { parsePresupuestoExcel } from '../helpers/parsePresupuestoExcel';
+import { parseS10AcuExcel, parseS10PresupuestoExcel } from '../helpers/parseS10Excel';
 import type { AcuMatch } from '../helpers/matchAcuToPartida';
 import { matchAcuToPartida, summarizeMatches } from '../helpers/matchAcuToPartida';
 import type { DelphinRow } from '../types';
@@ -32,7 +33,35 @@ interface Props {
     onBudgetImported:  (result: ParsePresupuestoResult) => { createdPartidas: string[] };
     // Receives the built ACU payloads ready to apply locally — no DB call
     onAcusImported?:   (payloads: Array<Record<string, any>>) => void;
+    /** Origen del Excel: Delphin Express (por defecto) o los reportes exportados por S10. */
+    source?:           ImportSource;
 }
+
+export type ImportSource = 'delphin' | 's10';
+
+// Solo cambian el parser y los textos: aplicar, vincular ACUs y guardar es el mismo flujo.
+const SOURCES = {
+    delphin: {
+        title:          'Importar desde Excel',
+        budgetHint:     'Sube el Excel exportado desde Delphin Express. Se importará el árbol de partidas completo.',
+        acuHint:        'Sube uno o varios archivos Excel de ACUs (Delphin Express por especialidad). Cada ACU se vincula automáticamente a su partida por código o por nombre.',
+        parseBudget:    parsePresupuestoExcel,
+        parseAcus:      parseAcuExcel,
+    },
+    s10: {
+        title:          'Importar desde Excel S10',
+        budgetHint:     'Sube el reporte "Presupuesto" exportado desde S10 (Item, Descripción, Und., Metrado, Precio, Parcial). Se importará el árbol de partidas completo.',
+        acuHint:        'Sube uno o varios reportes "Análisis de precios unitarios" exportados desde S10 (uno por subpresupuesto). Cada ACU se vincula automáticamente a su partida por código o por nombre.',
+        parseBudget:    parseS10PresupuestoExcel,
+        parseAcus:      parseS10AcuExcel,
+    },
+} satisfies Record<ImportSource, {
+    title: string;
+    budgetHint: string;
+    acuHint: string;
+    parseBudget: (file: File) => Promise<ParsePresupuestoResult>;
+    parseAcus: (file: File) => Promise<ParseAcuResult>;
+}>;
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
 
@@ -99,10 +128,12 @@ function DropZone({ accept, multiple, onFiles, disabled, label }: {
 // ─── Step 1: Presupuesto General ──────────────────────────────────────────────
 
 function StepBudget({
+    source,
     hasExistingRows,
     onImported,
     onNext,
 }: {
+    source:          ImportSource;
     hasExistingRows: boolean;
     onImported:      (r: ParsePresupuestoResult) => { createdPartidas: string[] };
     onNext:          () => void;
@@ -118,7 +149,7 @@ function StepBudget({
         setError('');
         setCreatedPartidas([]);
         try {
-            const r = await parsePresupuestoExcel(file);
+            const r = await SOURCES[source].parseBudget(file);
             setResult(r);
             setStatus('ready');
         } catch (e: any) {
@@ -140,7 +171,7 @@ function StepBudget({
             <div>
                 <h3 className="text-sm font-semibold text-slate-100">Paso 1 — Presupuesto General</h3>
                 <p className="mt-0.5 text-xs text-slate-400">
-                    Sube el Excel exportado desde Delphin Express. Se importará el árbol de partidas completo.
+                    {SOURCES[source].budgetHint}
                 </p>
             </div>
 
@@ -354,10 +385,12 @@ function AcuFileRow({ state, onRemove }: { state: AcuFileState; onRemove: () => 
 }
 
 function StepAcus({
+    source,
     delphinRows,
     onDone,
     onAcusImported,
 }: {
+    source:           ImportSource;
     delphinRows:      DelphinRow[];
     onDone:           () => void;
     onAcusImported?:  (payloads: Array<Record<string, any>>) => void;
@@ -374,7 +407,7 @@ function StepAcus({
         for (let i = 0; i < newFiles.length; i++) {
             const file = newFiles[i];
             try {
-                const result: ParseAcuResult = await parseAcuExcel(file);
+                const result: ParseAcuResult = await SOURCES[source].parseAcus(file);
                 const matches = matchAcuToPartida(result.acus, delphinRows);
                 setFiles((prev) =>
                     prev.map((s) =>
@@ -391,7 +424,7 @@ function StepAcus({
                 );
             }
         }
-    }, [delphinRows]);
+    }, [delphinRows, source]);
 
     const removeFile = useCallback((file: File) => {
         setFiles((prev) => prev.filter((s) => s.file !== file));
@@ -417,8 +450,7 @@ function StepAcus({
             <div>
                 <h3 className="text-sm font-semibold text-slate-100">Paso 2 — ACUs por especialidad</h3>
                 <p className="mt-0.5 text-xs text-slate-400">
-                    Sube uno o varios archivos Excel de ACUs (Delphin Express por especialidad). Cada ACU se vincula
-                    automáticamente a su partida por código o por nombre.
+                    {SOURCES[source].acuHint}
                 </p>
             </div>
 
@@ -552,6 +584,7 @@ export function ImportDelphinModal({
     onClose,
     onBudgetImported,
     onAcusImported,
+    source = 'delphin',
 }: Props) {
     // Default to ACUs tab when presupuesto already exists; reset each time the modal opens
     const [step, setStep] = useState<Step>('budget');
@@ -574,7 +607,7 @@ export function ImportDelphinModal({
                 {/* Header */}
                 <div className="flex shrink-0 items-center justify-between border-b border-slate-700 px-4 py-3">
                     <div className="flex items-center gap-3">
-                        <span className="text-sm font-semibold text-slate-100">Importar desde Excel</span>
+                        <span className="text-sm font-semibold text-slate-100">{SOURCES[source].title}</span>
                         <div className="flex items-center gap-1">
                             {(['budget', 'acus'] as Step[]).map((s, i) => (
                                 <React.Fragment key={s}>
@@ -602,12 +635,14 @@ export function ImportDelphinModal({
                 <div className="min-h-0 flex-1 overflow-y-auto p-4">
                     {step === 'budget' ? (
                         <StepBudget
+                            source={source}
                             hasExistingRows={delphinRows.length > 0}
                             onImported={onBudgetImported}
                             onNext={() => setStep('acus')}
                         />
                     ) : (
                         <StepAcus
+                            source={source}
                             delphinRows={delphinRows}
                             onDone={onClose}
                             onAcusImported={onAcusImported}

@@ -197,3 +197,71 @@ describe('getReservedTemporaryId', () => {
         expect(getReservedTemporaryId(importedTasks)).toBe(-701);
     });
 });
+
+describe('recomputeHierarchy — modo conservar códigos (Delphin)', () => {
+    const codes = (tasks: GanttTask[]) => tasks.map((t) => [t.descripcion, t.partida]);
+
+    // Árbol importado de S10 tal cual: ESTRUCTURAS "01" con su rama, y una fila nueva "Modulo I"
+    // como raíz anterior, a la que se le acaba de mover ESTRUCTURAS (indentar).
+    const imported = [
+        task({ id: 10, partida: '01', descripcion: 'Modulo I' }),
+        task({ id: 1, parent_id: 10, partida: '01', descripcion: 'ESTRUCTURAS' }),
+        task({ id: 2, parent_id: 1, partida: '01.01', descripcion: 'OBRAS PROVISIONALES' }),
+        task({ id: 3, parent_id: 2, partida: '01.01.01', descripcion: 'CONSTRUCCIONES PROVISIONALES' }),
+        task({ id: 4, parent_id: 3, partida: '01.01.01.01', descripcion: 'OFICINA TÉCNICA' }),
+        task({ id: 5, parent_id: 3, partida: '01.01.01.02', descripcion: 'ALMACÉN' }),
+    ];
+
+    it('renumbers the moved row under its new parent and keeps the suffix of its whole branch', () => {
+        const result = recomputeHierarchy(imported, undefined, true, new Set([1]));
+
+        expect(codes(result)).toEqual([
+            ['Modulo I', '01'],
+            ['ESTRUCTURAS', '01.01'],
+            ['OBRAS PROVISIONALES', '01.01.01'],
+            ['CONSTRUCCIONES PROVISIONALES', '01.01.01.01'],
+            ['OFICINA TÉCNICA', '01.01.01.01.01'],
+            ['ALMACÉN', '01.01.01.01.02'],
+        ]);
+    });
+
+    it('never renumbers on load: without moved rows every stored code stays as is', () => {
+        const result = recomputeHierarchy(imported, undefined, true);
+        expect(result.map((t) => t.partida)).toEqual(['01', '01', '01.01', '01.01.01', '01.01.01.01', '01.01.01.02']);
+    });
+
+    it('outdenting to the root takes the next free root code, never a duplicate', () => {
+        const tree = [
+            task({ id: 10, partida: '01', descripcion: 'Modulo I' }),
+            task({ id: 1, parent_id: null, partida: '01.01', descripcion: 'ESTRUCTURAS' }),
+            task({ id: 2, parent_id: 1, partida: '01.01.01', descripcion: 'OBRAS PROVISIONALES' }),
+        ];
+        expect(codes(recomputeHierarchy(tree, undefined, true, new Set([1])))).toEqual([
+            ['Modulo I', '01'],
+            ['ESTRUCTURAS', '02'],
+            ['OBRAS PROVISIONALES', '02.01'],
+        ]);
+    });
+
+    it('gives a new row the next free code with the same zero padding as its siblings', () => {
+        const tree = [
+            task({ id: 1, partida: '01', descripcion: 'ESTRUCTURAS' }),
+            task({ id: 2, parent_id: 1, partida: '01.01', descripcion: 'OBRAS PROVISIONALES' }),
+            task({ id: 3, parent_id: 1, partida: '01.04', descripcion: 'CONCRETO' }),
+            task({ id: -1, parent_id: 1, partida: '', descripcion: 'Nueva' }),
+            task({ id: -2, partida: '', descripcion: 'Raíz nueva' }),
+        ];
+        expect(codes(recomputeHierarchy(tree, undefined, true))).toEqual([
+            ['ESTRUCTURAS', '01'],
+            ['OBRAS PROVISIONALES', '01.01'],
+            ['CONCRETO', '01.04'],
+            ['Nueva', '01.05'],
+            ['Raíz nueva', '02'],
+        ]);
+    });
+
+    it('leaves the positional numbering of Cronograma (codes not preserved) unchanged', () => {
+        const result = recomputeHierarchy(imported, undefined, false, new Set([1]));
+        expect(result.map((t) => t.partida)).toEqual(['1', '1.1', '1.1.1', '1.1.1.1', '1.1.1.1.1', '1.1.1.1.2']);
+    });
+});

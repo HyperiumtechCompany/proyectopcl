@@ -39,6 +39,7 @@ use App\Http\Controllers\Dialux\V2\PlanFileController as DialuxV2PlanFileControl
 use App\Http\Controllers\Dialux\V2\ProjectController as DialuxV2ProjectController;
 use App\Http\Controllers\Dialux\V2\ProjectSummaryController as DialuxV2ProjectSummaryController;
 use App\Http\Controllers\EttpController;
+use App\Http\Controllers\GastFin\GastFinController;
 use App\Http\Controllers\GestorProyectoController;
 use App\Http\Controllers\GestorProyectoNodoController;
 use App\Http\Controllers\InsumoProductoController;
@@ -72,6 +73,7 @@ use App\Http\Controllers\UbigeoController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ValorizacionV2\ValorizacionV2Controller;
 use App\Http\Middleware\EnsureCuadernoEnabled;
+use App\Http\Middleware\EnsureGastFinSchema;
 use App\Http\Middleware\EnsureMaintenanceSchema;
 use App\Http\Middleware\EnsureValorizacionV2Schema;
 use App\Http\Middleware\SetCostosDatabase;
@@ -395,6 +397,39 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
                     Route::post('/duplicar', [ValorizacionV2Controller::class, 'duplicar'])->name('duplicar');
                     Route::post('/cortes', [ValorizacionV2Controller::class, 'aprobar'])->name('aprobar');
                     Route::delete('/cortes/{numero}', [ValorizacionV2Controller::class, 'reabrir'])->whereNumber('numero')->name('reabrir');
+                });
+            });
+
+            // Gast. Fin. (Gastos Financieros), modo de Delphin: insumos ACU consolidados por nivel 1.
+            // GG reutiliza las rutas de Mantenimiento con el documento que devuelve show().
+            Route::middleware([EnsureGastFinSchema::class])->prefix('/gastos-financieros')->name('gastos-financieros.')->group(function () {
+                Route::get('/', [GastFinController::class, 'show'])->name('show');
+                Route::patch('/grupos/{grupoRef}', [GastFinController::class, 'updateGrupo'])->where('grupoRef', '[A-Za-z0-9_]+')->name('grupos.update');
+                Route::get('/resumen', [GastFinController::class, 'resumen'])->name('resumen.show');
+                Route::patch('/resumen/parametros', [GastFinController::class, 'updateParametros'])->name('resumen.parametros.update');
+
+                Route::prefix('/mo')->name('mo.')->group(function () {
+                    Route::get('/', [GastFinController::class, 'mo'])->name('show');
+                    Route::post('/pagos', [GastFinController::class, 'storeMoPago'])->name('pagos.store');
+                    Route::patch('/pagos/{pagoId}', [GastFinController::class, 'updateMoPago'])->name('pagos.update');
+                    Route::delete('/pagos/{pagoId}', [GastFinController::class, 'destroyMoPago'])->name('pagos.destroy');
+                    Route::put('/pagos/{pagoId}/valores/{grupoRef}/{franja}', [GastFinController::class, 'setMoValor'])
+                        ->where('grupoRef', '[A-Za-z0-9_]+')->whereIn('franja', ['valorizacion', 'adelanto'])->name('pagos.valores.set');
+                });
+
+                Route::prefix('/mat')->name('mat.')->group(function () {
+                    Route::patch('/compras/{compraId}', [GastFinController::class, 'updateMatCompra'])->name('compras.update');
+                    Route::delete('/compras/{compraId}', [GastFinController::class, 'destroyMatCompra'])->name('compras.destroy');
+                    Route::put('/compras/{compraId}/valores', [GastFinController::class, 'setMatCompraValor'])->name('compras.valores.set');
+                    Route::patch('/insumos/{insumoId}', [GastFinController::class, 'updateMatInsumo'])->name('insumos.update');
+                    Route::delete('/insumos/{insumoId}', [GastFinController::class, 'destroyMatInsumo'])->name('insumos.destroy');
+
+                    Route::prefix('/{grupoRef}')->where(['grupoRef' => '[A-Za-z0-9_]+'])->group(function () {
+                        Route::get('/', [GastFinController::class, 'mat'])->name('show');
+                        Route::put('/cotizacion', [GastFinController::class, 'setMatCotizacion'])->name('cotizacion.set');
+                        Route::post('/compras', [GastFinController::class, 'storeMatCompra'])->name('compras.store');
+                        Route::post('/insumos', [GastFinController::class, 'storeMatInsumo'])->name('insumos.store');
+                    });
                 });
             });
 

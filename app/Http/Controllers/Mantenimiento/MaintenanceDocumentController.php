@@ -34,6 +34,7 @@ class MaintenanceDocumentController extends MaintenanceController
         return Inertia::render('costos/mantenimiento/Index', [
             'project' => ['id' => $costoProject->id, 'nombre' => $costoProject->nombre],
             'documents' => MaintenanceDocument::query()
+                ->where('origen', 'mantenimiento')
                 ->latest('updated_at')
                 ->get(['public_id', 'nombre', 'moneda', 'estado', 'revision', 'updated_at']),
         ]);

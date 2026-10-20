@@ -26,7 +26,11 @@ export interface ResumenGeneral {
 }
 
 export interface DesagRowLinea {
-    tipo: 'linea' | 'rollup';
+    // 'grupo' = línea por nivel de Gast. Fin. (Aprobado Ideal editable por nivel).
+    tipo: 'linea' | 'rollup' | 'grupo';
+    grupo_ref?: string;
+    campo?: 'mo_aprobado' | 'mat_aprobado';
+    ideal_manual?: boolean;
     label: string;
     aprobado_ideal: string;
     proyectado_real: string;

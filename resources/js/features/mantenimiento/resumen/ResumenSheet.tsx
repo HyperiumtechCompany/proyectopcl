@@ -10,6 +10,10 @@ interface Props {
     documentId: string;
     initial: ResumenPayload;
     onRevision: (revision: number, payload: ResumenPayload) => void;
+    /** Gast. Fin. guarda los parámetros por su propia ruta; por defecto, la de Mantenimiento. */
+    saveParametros?: (partial: DeepPartial<ResumenParametros>) => Promise<ResumenResponse>;
+    /** Gast. Fin.: Aprobado Ideal por nivel (null = vuelve al E.T. sugerido). */
+    saveGrupoIdeal?: (grupoRef: string, campo: 'mo_aprobado' | 'mat_aprobado', value: string | null) => Promise<ResumenResponse>;
 }
 
 type DeepPartial<T> = T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
@@ -28,7 +32,7 @@ function pct(value: string | null): string {
     return value === null ? '—' : `${value}%`;
 }
 
-export default function ResumenSheet({ projectId, documentId, initial, onRevision }: Props) {
+export default function ResumenSheet({ projectId, documentId, initial, onRevision, saveParametros, saveGrupoIdeal }: Props) {
     const [payload, setPayload] = useState<ResumenPayload>(initial);
     const [busy, setBusy] = useState(false);
 
@@ -49,7 +53,8 @@ export default function ResumenSheet({ projectId, documentId, initial, onRevisio
         }
     };
 
-    const patch = (partial: DeepPartial<ResumenParametros>) => void run(() => resumenApi.updateParametros(projectId, documentId, partial));
+    const patch = (partial: DeepPartial<ResumenParametros>) =>
+        void run(() => (saveParametros ? saveParametros(partial) : resumenApi.updateParametros(projectId, documentId, partial)));
 
     const moneyCell = (value: string, editable: boolean, onCommit: (v: string) => void, bold = false) =>
         editable ? (
@@ -135,10 +140,27 @@ export default function ResumenSheet({ projectId, documentId, initial, onRevisio
                                         <tr key={`sub-${index}`}><td className="px-2 pt-2 pb-1 font-semibold" colSpan={8}>{row.label}</td></tr>
                                     );
                                     const bold = row.tipo === 'rollup';
+                                    const grupo = row.tipo === 'grupo';
                                     return (
-                                        <tr key={`row-${index}`} className={`[&>td]:border-b [&>td]:border-slate-100 dark:[&>td]:border-slate-800 ${bold ? 'bg-slate-50 font-semibold dark:bg-slate-900/60' : ''}`}>
-                                            <td className="px-2 py-1" style={{ paddingLeft: bold ? '8px' : '20px' }}>{row.label}</td>
-                                            <td className="px-2 py-1 text-right tabular-nums">{money(row.aprobado_ideal)}</td>
+                                        <tr key={`row-${index}`} className={`[&>td]:border-b [&>td]:border-slate-100 dark:[&>td]:border-slate-800 ${bold ? 'bg-slate-50 font-semibold dark:bg-slate-900/60' : ''} ${grupo ? 'bg-sky-50/70 text-sky-900 dark:bg-sky-950/30 dark:text-sky-200' : ''}`}>
+                                            <td className="px-2 py-1" style={{ paddingLeft: bold ? '8px' : grupo ? '34px' : '20px' }}>{row.label}</td>
+                                            {grupo && saveGrupoIdeal && row.grupo_ref !== undefined && row.campo ? (
+                                                <td className="p-0" title={row.ideal_manual ? 'Aprobado ideal del nivel (vaciar = volver al E.T.)' : 'Sugerido = E.T. del nivel; escribe para fijarlo'}>
+                                                    <MoNumberCell
+                                                        value={row.aprobado_ideal}
+                                                        editable
+                                                        muted={!row.ideal_manual}
+                                                        onCommit={(v) => {
+                                                            const unchanged = v === null ? !row.ideal_manual : Number(v) === Number(row.aprobado_ideal);
+                                                            if (!unchanged) {
+                                                                void run(() => saveGrupoIdeal(row.grupo_ref as string, row.campo as 'mo_aprobado' | 'mat_aprobado', v));
+                                                            }
+                                                        }}
+                                                    />
+                                                </td>
+                                            ) : (
+                                                <td className="px-2 py-1 text-right tabular-nums">{money(row.aprobado_ideal)}</td>
+                                            )}
                                             <td className="px-2 py-1 text-right tabular-nums">{money(row.proyectado_real)}</td>
                                             <td className="px-2 py-1 text-right tabular-nums">{money(row.actual)}</td>
                                             <td className="px-2 py-1 text-right tabular-nums">{money(row.deuda)}</td>

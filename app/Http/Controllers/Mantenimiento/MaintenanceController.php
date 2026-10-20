@@ -19,7 +19,7 @@ abstract class MaintenanceController extends Controller
     protected function authorizeProject(Request $request, CostoProject $project): void
     {
         abort_unless($project->user_id === $request->user()?->id, 403);
-        abort_unless($project->hasModule('mantenimiento'), 404);
+        abort_unless(MaintenanceDocument::allowedFor($project, $request->route('documentId')), 404);
     }
 
     protected function document(string $id): MaintenanceDocument

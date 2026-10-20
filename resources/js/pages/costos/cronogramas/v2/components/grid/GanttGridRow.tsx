@@ -172,10 +172,12 @@ const GanttGridRowComponent = function GanttGridRow({
                                         ? task.partida
                                         : undefined
                                 }
+                                // Raíz editable aunque aún no tenga hijos (p. ej. un "Modulo II"
+                                // recién creado al que se le meterá una rama). Solo Delphin pasa
+                                // onRenamePartida; el Cronograma V2 no muestra este editor.
                                 prefixEditable={
                                     col.key === 'descripcion' &&
                                     task.nivel === 1 &&
-                                    isGroup &&
                                     !!onRenamePartida
                                 }
                                 onPrefixCommit={

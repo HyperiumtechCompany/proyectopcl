@@ -27,7 +27,9 @@ import {
     Plus,
     Save,
     Settings,
+    ListOrdered,
     Trash2,
+    Wallet,
     Upload,
 } from 'lucide-react';
 import type { SchedulingMode } from '../../cronogramas/v2/types/task';
@@ -59,6 +61,7 @@ interface Props {
     onAddChild: () => void;
     onDeleteRow: () => void;
     onResetAll: () => void;
+    onRenumber?: () => void;
     onIndent: () => void;
     onOutdent: () => void;
     onMoveUp: () => void;
@@ -80,6 +83,7 @@ interface Props {
     onOpenSnapshots: () => void;
     onImport?: () => void;
     onImportExcel?: () => void;
+    onImportS10?: () => void;
     onImportMetrados?: () => void;
     onOpenInsumos?: (scope: InsumosScope) => void;
 
@@ -186,9 +190,11 @@ function InsumosDropdown({ onSelect }: { onSelect?: (scope: InsumosScope) => voi
 function ImportBudgetDropdown({
     onImportMetrados,
     onImportExcel,
+    onImportS10,
 }: {
     onImportMetrados?: () => void;
     onImportExcel?: () => void;
+    onImportS10?: () => void;
 }) {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
@@ -227,6 +233,10 @@ function ImportBudgetDropdown({
                     <button type="button" className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-sky-600 hover:text-white dark:text-slate-200 dark:hover:bg-sky-700" onClick={() => select(onImportExcel)}>
                         <span className="block font-medium">Desde Excel Delphin</span>
                         <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">Importa presupuesto y ACUs desde el archivo</span>
+                    </button>
+                    <button type="button" className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-sky-600 hover:text-white dark:text-slate-200 dark:hover:bg-sky-700" onClick={() => select(onImportS10)}>
+                        <span className="block font-medium">Desde Excel S10</span>
+                        <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">Reportes Presupuesto y Análisis de precios unitarios de S10</span>
                     </button>
                 </div>
             )}
@@ -408,11 +418,11 @@ function ConfigDropdown({
 // ─────────────────────────────────────────────────────────────────────────────
 export const DelphinToolbar = React.memo(function DelphinToolbar({
     mode, budgetView, subView, onModeChange, onBudgetView, onSubView,
-    selectedRowId, onAddRow, onAddChild, onDeleteRow, onResetAll, onIndent, onOutdent,
+    selectedRowId, onAddRow, onAddChild, onDeleteRow, onResetAll, onRenumber, onIndent, onOutdent,
     onMoveUp, onMoveDown, onDuplicate, onExpandAll, onCollapseAll,
     zoomLevel, showCriticalPath, schedulingMode, ganttBarLabel,
     onZoomChange, onToggleCritical, onSchedulingMode, onBarLabelChange,
-    onOpenSettings, onOpenSnapshots, onImport, onImportExcel, onImportMetrados, onOpenInsumos, onExport,
+    onOpenSettings, onOpenSnapshots, onImport, onImportExcel, onImportS10, onImportMetrados, onOpenInsumos, onExport,
     isParentSelected, onFormulaView,
     incompatiblesCount, onOpenCompatibilidad,
     circularPredecessorsCount, onOpenCircularPredecessors,
@@ -456,6 +466,17 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                     <CalendarDays size={11} />
                     <span className="hidden sm:inline">CPM</span>
                     <span className="sm:hidden">⏱</span>
+                </button>
+                <button
+                    type="button"
+                    title="Gast. Fin. — Gastos Financieros (insumos del ACU por nivel)"
+                    onClick={() => onModeChange('gastfin')}
+                    className={`flex items-center gap-1 rounded px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${mode === 'gastfin'
+                            ? 'bg-amber-600 text-white'
+                            : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+                        }`}>
+                    <Wallet size={11} />
+                    <span className="hidden sm:inline">Gast. Fin.</span>
                 </button>
             </div>
 
@@ -568,6 +589,7 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                     )}
 
                     {/* ── Row ops: icon-only with portal tooltips ── */}
+                    {mode !== 'gastfin' && (<>
                     <IconBtn icon={<Plus size={13} />} tooltip="Agregar fila  ·  Insert" onClick={onAddRow} />
                     <IconBtn icon={<CornerDownRight size={13} />} tooltip="Agregar sub-fila  ·  Ctrl+Insert" disabled={noSel} onClick={onAddChild} />
                     <IconBtn icon={<Trash2 size={13} />} tooltip="Eliminar fila  ·  Supr" variant="danger" disabled={noSel} onClick={onDeleteRow} />
@@ -575,6 +597,7 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                     <Divider />
                     <IconBtn icon={<IndentIncrease size={13} />} tooltip="Indentar  ·  Tab" disabled={noSel} onClick={onIndent} />
                     <IconBtn icon={<IndentDecrease size={13} />} tooltip="Outdentar  ·  Shift+Tab" disabled={noSel} onClick={onOutdent} />
+                    {onRenumber && <IconBtn icon={<ListOrdered size={13} />} tooltip="Renumerar partidas según el árbol (01, 01.01…)" onClick={onRenumber} />}
                     <Divider />
                     <IconBtn icon={<ArrowUp size={13} />} tooltip="Subir fila  ·  Alt+↑" disabled={noSel} onClick={onMoveUp} />
                     <IconBtn icon={<ArrowDown size={13} />} tooltip="Bajar fila  ·  Alt+↓" disabled={noSel} onClick={onMoveDown} />
@@ -582,6 +605,12 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                     <Divider />
                     <IconBtn icon={<ChevronsUpDown size={13} />} tooltip="Expandir todo" onClick={onExpandAll} />
                     <IconBtn icon={<ChevronsDownUp size={13} />} tooltip="Colapsar todo" onClick={onCollapseAll} />
+                    </>)}
+                    {mode === 'gastfin' && (
+                        <span className="shrink-0 text-[10px] text-slate-500 dark:text-slate-400">
+                            Insumos del ACU consolidados por nivel 1 · cada celda se guarda sola
+                        </span>
+                    )}
 
                     {/* CPM-only: Programador + Ruta crítica + Zoom */}
                     {mode === 'cpm' && (
@@ -703,7 +732,7 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
 
             {/* ── RIGHT: dirty indicator + import + save ─────────────────── */}
             <div className="flex shrink-0 items-center gap-1.5">
-                {isDirty && (
+                {isDirty && mode !== 'gastfin' && (
                     <span className="shrink-0 text-[10px] text-amber-400">
                         ●<span className="ml-1 hidden sm:inline">Sin guardar</span>
                     </span>
@@ -713,7 +742,8 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                         <InsumosDropdown onSelect={onOpenInsumos} />
                         <ImportBudgetDropdown
                             onImportMetrados={onImportMetrados}
-                            onImportExcel={onImportExcel} />
+                            onImportExcel={onImportExcel}
+                            onImportS10={onImportS10} />
                     </>
                 )}
                 {mode === 'cpm' && (
@@ -724,18 +754,22 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                         variant="danger"
                         onClick={onImport} />
                 )}
-                <Btn
-                    icon={<NotepadTextIcon size={13} />}
-                    label="Exportar"
-                    title="Exportar a Excel"
-                    variant="default"
-                    onClick={onExport} />
-                <Btn
-                    icon={<Save size={13} />}
-                    label={isSaving ? 'Guardando…' : 'Guardar'}
-                    variant="primary"
-                    disabled={isSaving || !isDirty}
-                    onClick={onSave} />
+                {mode !== 'gastfin' && (
+                    <>
+                        <Btn
+                            icon={<NotepadTextIcon size={13} />}
+                            label="Exportar"
+                            title="Exportar a Excel"
+                            variant="default"
+                            onClick={onExport} />
+                        <Btn
+                            icon={<Save size={13} />}
+                            label={isSaving ? 'Guardando…' : 'Guardar'}
+                            variant="primary"
+                            disabled={isSaving || !isDirty}
+                            onClick={onSave} />
+                    </>
+                )}
             </div>
         </div>
     );

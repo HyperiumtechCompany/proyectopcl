@@ -14,6 +14,7 @@ import {
     type DelphinRow,
 } from '../types';
 import type { ParsePresupuestoResult } from '../helpers/parsePresupuestoExcel';
+import { renumberPartidas } from '../helpers/renumberPartidas';
 
 interface Options {
     initialTasks: GanttTask[];
@@ -366,6 +367,18 @@ export function useDelphinData({
         true,
     );
 
+    // ── Código guardado de cada fila (id real → partida) ───────────────────────
+    // Los ACU se enlazan a su partida por CÓDIGO y PresupuestoController borra los ACU cuyo
+    // código ya no existe al guardar. Si una fila cambia de código (renumerar al indentar,
+    // renombrar la raíz…), el guardado envía partida_renames para que el backend mueva sus ACU
+    // al código nuevo ANTES de esa limpieza — sin esto se perderían.
+    // Estado (no ref): DelphinView también lo lee al renderizar para buscar el ACU de una fila por
+    // su código GUARDADO mientras haya una renumeración sin guardar (los ACU siguen en BD con el
+    // código viejo hasta el Guardar; el código viejo puede tenerlo ya otra fila, p. ej. un título).
+    const [savedPartidaById, setSavedPartidaById] = useState<Map<number, string>>(
+        () => new Map(effectiveTasks.filter((t) => t.id > 0).map((t) => [t.id, t.partida])),
+    );
+
     // ── Pending budget from Excel import (partida or desc → BudgetFields) ─────
     const pendingBudgetRef = useRef<Map<string, BudgetFields> | null>(null);
 
@@ -573,10 +586,17 @@ export function useDelphinData({
                         // not parent_id/nivel — omit to avoid column-not-found 500
                     };
                 });
+                const saved = savedPartidaById;
+                const partida_renames = ganttState.tasks
+                    .filter((task) => task.id > 0 && saved.has(task.id) && saved.get(task.id) !== task.partida && task.partida)
+                    .map((task) => ({ from: saved.get(task.id)!, to: task.partida }));
                 await axios.patch(
                     `/costos/proyectos/${projectId}/presupuesto/general`,
-                    { rows },
+                    partida_renames.length > 0 ? { rows, partida_renames } : { rows },
                 );
+                setSavedPartidaById(new Map(
+                    ganttState.tasks.filter((t) => t.id > 0).map((t) => [t.id, t.partida]),
+                ));
                 setBudgetDirty(false);
                 return true;
             } catch {
@@ -585,7 +605,7 @@ export function useDelphinData({
                 setIsSavingBudget(false);
             }
         },
-        [ganttState.tasks, budgetMap],
+        [ganttState.tasks, budgetMap, savedPartidaById],
     );
 
     // ── Bulk import from Excel (Presupuesto General) ──────────────────────────
@@ -852,6 +872,18 @@ export function useDelphinData({
         [ganttState.batchUpdatePartidas],
     );
 
+    // ── Renumerar todo el árbol por posición (botón "Renumerar") ─────────────
+    // Devuelve cuántas filas cambiaron de código. Los ACU siguen a su partida al guardar.
+    const renumberAll = useCallback((): number => {
+        const updates = renumberPartidas(latestTasksRef.current);
+        if (updates.length > 0) {
+            ganttState.batchUpdatePartidas(updates);
+            setBudgetDirty(true);
+        }
+        return updates.length;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ganttState.batchUpdatePartidas]);
+
     // ── Import Cronograma (MS Project XML) with budget preservation ───────────
     // When budget data already exists, the incoming tasks are matched by partida
     // (exact) then by normalized description (fallback) so that budget fields
@@ -964,7 +996,9 @@ export function useDelphinData({
         applyBarMove: ganttState.applyBarMove,
         importTasks: ganttState.importTasks,
         importDelphinRows,
+        savedPartidaById,
         importCronogramaTasks,
         renameRootPartida,
+        renumberAll,
     };
 }

@@ -122,7 +122,7 @@ class ResumenCalculator
         ];
     }
 
-    private function desagRow(string $tipo, string $label, string $ideal, string $proy, string $actual, ?string $avancePct = null, ?string $avanceKey = null): array
+    public function desagRow(string $tipo, string $label, string $ideal, string $proy, string $actual, ?string $avancePct = null, ?string $avanceKey = null): array
     {
         $deuda = $this->r2($this->math->subtract($proy, $actual));
         $deficit = $this->r2($this->math->subtract($ideal, $proy));

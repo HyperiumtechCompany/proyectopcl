@@ -99,7 +99,13 @@ function normalizeTaskDates(
 // When preservePartidaCodes=true, keeps each task's stored .partida instead of
 // auto-generating from sibling position. Used for the presupuesto view so that
 // Excel-imported codes survive page reloads without being overwritten.
-function recomputeOrder(taskList: GanttTask[], preservePartidaCodes = false): GanttTask[] {
+function recomputeOrder(
+    taskList: GanttTask[],
+    preservePartidaCodes = false,
+    reparentedIds?: ReadonlySet<number>,
+): GanttTask[] {
+    if (preservePartidaCodes) return recomputeOrderPreservingCodes(taskList, reparentedIds ?? new Set());
+
     const childrenOf = new Map<number | null, GanttTask[]>();
     taskList.forEach((t) => {
         if (!childrenOf.has(t.parent_id)) childrenOf.set(t.parent_id, []);
@@ -141,14 +147,75 @@ function recomputeOrder(taskList: GanttTask[], preservePartidaCodes = false): Ga
     return result;
 }
 
+// ─── Modo "conservar códigos" (Delphin) ───────────────────────────────────────
+// Los códigos importados (S10, Excel Delphin) se conservan tal cual al cargar; solo se recalculan:
+//  · filas nuevas sin código → siguiente número libre bajo su padre, con el mismo relleno de ceros
+//    que sus hermanos/padre ("01.03" si el árbol usa "01.01"), nunca un código ya usado;
+//  · filas que cambiaron de padre (indentar/outdentar, `reparentedIds`) → siguiente número libre
+//    bajo el nuevo padre (ESTRUCTURAS "01" bajo "Modulo I" 01 → "01.01"), y toda su rama conserva
+//    su sufijo ("01.01.01" → "01.01.01.01"; si choca, el siguiente libre).
+// Nunca renumera al cargar: un árbol ya guardado sale idéntico.
+function lastSegment(code: string): string {
+    const segs = code.split('.');
+    return segs[segs.length - 1] ?? '';
+}
+
+function joinCode(parentCode: string, segment: string): string {
+    return parentCode ? `${parentCode}.${segment}` : segment;
+}
+
+function recomputeOrderPreservingCodes(taskList: GanttTask[], reparentedIds: ReadonlySet<number>): GanttTask[] {
+    const childrenOf = new Map<number | null, GanttTask[]>();
+    taskList.forEach((t) => {
+        if (!childrenOf.has(t.parent_id)) childrenOf.set(t.parent_id, []);
+        childrenOf.get(t.parent_id)!.push(t);
+    });
+
+    const result: GanttTask[] = [];
+    let counter = 0;
+
+    const visit = (siblings: GanttTask[], parentCode: string, nivel: number, parentRenamed: boolean) => {
+        const needsCode = (t: GanttTask) => !t.partida || parentRenamed || reparentedIds.has(t.id);
+        const used = new Set(siblings.filter((t) => !needsCode(t)).map((t) => t.partida));
+        const padded = [...siblings.map((t) => lastSegment(t.partida)), ...parentCode.split('.')]
+            .some((seg) => /^0\d/.test(seg));
+        const nextFree = () => {
+            let max = 0;
+            used.forEach((code) => {
+                const n = parseInt(lastSegment(code), 10);
+                if (!Number.isNaN(n)) max = Math.max(max, n);
+            });
+            return joinCode(parentCode, String(max + 1).padStart(padded ? 2 : 1, '0'));
+        };
+
+        for (const task of siblings) {
+            let partida = task.partida;
+            if (needsCode(task)) {
+                // La fila que cambió de padre toma el siguiente libre; su rama conserva su sufijo.
+                const candidate = parentRenamed && task.partida ? joinCode(parentCode, lastSegment(task.partida)) : '';
+                partida = candidate && !used.has(candidate) ? candidate : nextFree();
+            }
+            used.add(partida);
+            result.push({ ...task, partida, nivel, item_order: ++counter });
+            visit(childrenOf.get(task.id) ?? [], partida, nivel + 1, partida !== task.partida && Boolean(task.partida));
+        }
+    };
+
+    visit(childrenOf.get(null) ?? [], '', 1, false);
+
+    return result;
+}
+
 export function recomputeHierarchy(
     taskList: GanttTask[],
     calendarSettings?: GanttCalendarSettings,
     preservePartidaCodes = false,
+    reparentedIds?: ReadonlySet<number>,
 ): GanttTask[] {
     const ordered = recomputeOrder(
         taskList.map((task) => normalizeTaskDates(task, calendarSettings)),
         preservePartidaCodes,
+        reparentedIds,
     );
     const taskById = new Map(ordered.map((t) => [t.id, { ...t }]));
     const childrenOf = new Map<number, GanttTask[]>();
@@ -704,6 +771,7 @@ export function useGanttTasks(
                     ),
                     calendarSettings,
                     preserveRef.current,
+                    new Set([id]),
                 );
             });
             setDirtyIds((prev) => new Set([...prev, id]));
@@ -724,6 +792,7 @@ export function useGanttTasks(
                     ),
                     calendarSettings,
                     preserveRef.current,
+                    new Set([id]),
                 );
             });
             setDirtyIds((prev) => new Set([...prev, id]));

@@ -36,14 +36,14 @@ interface ExportParams {
 
 // Convierte el string decimal del payload a number para escribir en la celda. null/undefined/''
 // quedan en blanco (no en "0.00") para no inventar un valor que el backend no mandó.
-function n(value: string | null | undefined): number | null {
+export function n(value: string | null | undefined): number | null {
     if (value == null || value.trim() === '') return null;
     const parsed = Number(value);
     return Number.isNaN(parsed) ? null : parsed;
 }
 
-type CellKind = 'text' | 'center' | 'qty' | 'rate' | 'money' | 'pct';
-interface Cell {
+export type CellKind = 'text' | 'center' | 'qty' | 'rate' | 'money' | 'pct';
+export interface Cell {
     value: string | number | null;
     kind?: CellKind;
 }
@@ -53,7 +53,7 @@ function borderThin(color = 'FFD1D5DB'): Partial<ExcelJS.Borders> {
     return { top: b, left: b, bottom: b, right: b };
 }
 
-function pushRow(ws: ExcelJS.Worksheet, cells: Cell[]): ExcelJS.Row {
+export function pushRow(ws: ExcelJS.Worksheet, cells: Cell[]): ExcelJS.Row {
     const row = ws.addRow(cells.map((c) => c.value));
     row.eachCell((cell, col) => {
         const kind = cells[col - 1]?.kind ?? 'text';
@@ -73,7 +73,7 @@ function pushRow(ws: ExcelJS.Worksheet, cells: Cell[]): ExcelJS.Row {
     return row;
 }
 
-function styleHeaderRow(row: ExcelJS.Row, bg = 'FF1F2937'): void {
+export function styleHeaderRow(row: ExcelJS.Row, bg = 'FF1F2937'): void {
     row.eachCell((cell) => {
         cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
@@ -83,7 +83,7 @@ function styleHeaderRow(row: ExcelJS.Row, bg = 'FF1F2937'): void {
     row.height = 26;
 }
 
-function boldRow(row: ExcelJS.Row, bg = 'FFE5E7EB'): void {
+export function boldRow(row: ExcelJS.Row, bg = 'FFE5E7EB'): void {
     row.eachCell((cell) => {
         cell.font = { ...(cell.font as Partial<ExcelJS.Font>), bold: true };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
@@ -244,7 +244,7 @@ function buildMatSheet(wb: ExcelJS.Workbook, mat: MatPayload): void {
 
 // ───────────────────────────── GG ─────────────────────────────
 
-function buildGgSheet(wb: ExcelJS.Workbook, gg: GgPayload): void {
+export function buildGgSheet(wb: ExcelJS.Workbook, gg: GgPayload): void {
     const ws = wb.addWorksheet('GG', { views: [{ state: 'frozen', ySplit: 1 }] });
     const pagoLabels = gg.pagos.map((p) => p.etiqueta ?? `Pago ${p.indice}`);
 
@@ -295,7 +295,7 @@ function buildGgSheet(wb: ExcelJS.Workbook, gg: GgPayload): void {
 
 // ───────────────────────────── RESUMEN ─────────────────────────────
 
-function buildResumenSheet(wb: ExcelJS.Workbook, resumen: ResumenPayload): void {
+export function buildResumenSheet(wb: ExcelJS.Workbook, resumen: ResumenPayload): void {
     const ws = wb.addWorksheet('RESUMEN', { views: [{ state: 'frozen', ySplit: 0 }] });
     ws.columns = [{ width: 34 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 16 }];
 
@@ -338,6 +338,7 @@ function buildResumenSheet(wb: ExcelJS.Workbook, resumen: ResumenPayload): void 
             { value: row.pct_avance == null ? null : Number(row.pct_avance), kind: 'pct' },
         ]);
         if (row.tipo === 'rollup') r.getCell(1).font = { bold: true };
+        if (row.tipo === 'grupo') r.getCell(1).alignment = { horizontal: 'left', vertical: 'middle', indent: 2 }; // nivel de Gast. Fin.
     });
     ws.addRow([]);
 

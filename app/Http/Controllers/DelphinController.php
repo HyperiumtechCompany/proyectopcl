@@ -214,16 +214,25 @@ class DelphinController extends Controller
 
     private function fetchTasks(int $presupuestoId): array
     {
+        // Subconsulta (no leftJoin): si dos partidas comparten código (p. ej. "01" al meter un
+        // árbol importado bajo un padre nuevo), el join multiplicaba cada tarea del cronograma
+        // y Delphin recibía filas repetidas con el mismo id. Con códigos únicos da lo mismo.
+        $presupuesto = DB::connection('costos_tenant')
+            ->table('presupuesto_general as pg')
+            ->select('pg.parcial')
+            ->whereColumn('pg.partida', 'cg.partida')
+            ->where('pg.presupuesto_id', $presupuestoId)
+            ->orderBy('pg.id')
+            ->limit(1);
+
         $records = DB::connection('costos_tenant')
             ->table('cronograma_general as cg')
-            ->leftJoin('presupuesto_general as pg', function ($join) use ($presupuestoId) {
-                $join->on('cg.partida', '=', 'pg.partida')
-                    ->where('pg.presupuesto_id', '=', $presupuestoId);
-            })
             ->where('cg.presupuesto_id', $presupuestoId)
             ->orderBy('cg.item_order')
-            ->select('cg.*', DB::raw('COALESCE(pg.parcial, 0) as presupuesto'))
-            ->get();
+            ->select('cg.*')
+            ->selectSub($presupuesto, 'presupuesto')
+            ->get()
+            ->each(fn (object $row) => $row->presupuesto ??= 0);
 
         // Map partida → id so we can derive parent_id from dotted notation
         // when the DB rows have parent_id = null (e.g. data imported externally).

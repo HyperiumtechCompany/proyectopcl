@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\CostoProject;
+use App\Models\Mantenimiento\MaintenanceDocument;
 use App\Services\CostoDatabaseService;
 use Closure;
 use Illuminate\Http\Request;
@@ -18,13 +19,18 @@ class EnsureMaintenanceSchema
         $project = $request->route('costoProject');
         if ($project instanceof CostoProject) {
             abort_unless($project->user_id === $request->user()?->id, 403);
-            abort_unless($project->hasModule('mantenimiento'), 404);
         }
 
-        if (! Schema::connection('costos_tenant')->hasTable('mantenimiento_mo_parcial')) {
+        // Última tabla del esquema (Gast. Fin. agrega mantenimiento_documentos.origen, que el
+        // chequeo de módulo de abajo necesita).
+        if (! Schema::connection('costos_tenant')->hasTable('gastfin_mat_compra_valores')) {
             if ($project instanceof CostoProject) {
                 $this->databases->runTenantMigrations($project->database_name);
             }
+        }
+
+        if ($project instanceof CostoProject) {
+            abort_unless(MaintenanceDocument::allowedFor($project, $request->route('documentId')), 404);
         }
 
         return $next($request);

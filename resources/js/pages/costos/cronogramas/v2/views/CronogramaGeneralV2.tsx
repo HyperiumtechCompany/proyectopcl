@@ -225,16 +225,19 @@ export default function CronogramaGeneralV2({
             confirmButtonColor: '#dc2626',
         }).then((r) => {
             if (!r.isConfirmed) return;
-            void saveTasks(project, true).then((ok) =>
+            const hadNewRows = tasks.some((t) => t.id < 0);
+            void saveTasks(project, true).then((ok) => {
                 toast(
                     ok
                         ? 'Cronograma guardado.'
                         : 'Error al guardar el cronograma.',
                     ok ? 'success' : 'error',
-                ),
-            );
+                );
+                // Ver handleSave: sin ids reales el próximo Guardar duplicaría filas.
+                if (ok && hadNewRows) router.visit(window.location.href, { preserveState: false, preserveScroll: true });
+            });
         });
-    }, [pendingShrinkWarning, clearShrinkWarning, saveTasks, project]);
+    }, [pendingShrinkWarning, clearShrinkWarning, saveTasks, project, tasks]);
 
     // ── Keyboard ─────────────────────────────────────────────────────────────
     const onKeyDown = useGanttKeyboard({
@@ -254,7 +257,12 @@ export default function CronogramaGeneralV2({
     });
 
     // ── Guardar ──────────────────────────────────────────────────────────────
+    // Las filas nuevas viajan al backend con id temporal negativo y el guardado del cronograma
+    // no devuelve los ids reales. Si la vista sigue con esos ids, el siguiente Guardar las vuelve a
+    // INSERTAR (cronograma_general duplicado: tareas repetidas y "two children with the same key").
+    // Tras un guardado completo que creó filas, se remonta la vista con los datos del servidor.
     const handleSave = useCallback(async () => {
+        const hadNewRows = tasks.some((t) => t.id < 0);
         const ok = await saveTasks(project);
         toast(
             ok
@@ -262,7 +270,10 @@ export default function CronogramaGeneralV2({
                 : 'Error al guardar el cronograma.',
             ok ? 'success' : 'error',
         );
-    }, [saveTasks, project]);
+        if (ok && hadNewRows) {
+            router.visit(window.location.href, { preserveState: false, preserveScroll: true });
+        }
+    }, [saveTasks, project, tasks]);
 
     const handleSchedulingModeChange = useCallback(
         (mode: SchedulingMode) => {

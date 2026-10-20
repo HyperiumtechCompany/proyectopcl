@@ -4,7 +4,7 @@ import { Head } from '@inertiajs/react';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import { ListFilter, Search, X } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Swal from 'sweetalert2';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { GanttChart } from '../cronogramas/v2/components/chart/GanttChart';
@@ -83,6 +83,9 @@ function getIconForPartida(partida: string): string {
 }
 
 function modeKey(pid: string) { return `pcl:delphin:${pid}:mode`; }
+
+// Chunk aparte: Delphin no descarga Gast. Fin. hasta que se elige ese modo.
+const GastFinView = lazy(() => import('@/features/gastos-financieros/GastFinView'));
 function schedulingKey(pid: string) { return `pcl:gantt:v2:${pid}:scheduling-mode`; }
 
 const swalDark = {
@@ -175,7 +178,8 @@ export default function DelphinView({
     // ── Mode & sub-view ───────────────────────────────────────────────────────
     const [mode, setMode] = useState<DelphinMode>(() => {
         if (typeof window === 'undefined') return 'budget';
-        return localStorage.getItem(modeKey(project)) === 'cpm' ? 'cpm' : 'budget';
+        const stored = localStorage.getItem(modeKey(project));
+        return stored === 'cpm' || stored === 'gastfin' ? stored : 'budget';
     });
 
     const handleModeChange = useCallback((m: DelphinMode) => {
@@ -212,6 +216,7 @@ export default function DelphinView({
     const [snapshotsOpen, setSnapshotsOpen] = useState(false);
     const [exportOpen, setExportOpen] = useState(false);
     const [importExcelOpen, setImportExcelOpen] = useState(false);
+    const [importS10Open, setImportS10Open] = useState(false);
     const [importMetradosOpen, setImportMetradosOpen] = useState(false);
     const [insumosOpen, setInsumosOpen] = useState(false);
     const [insumosScope, setInsumosScope] = useState<InsumosScope>('presupuesto');
@@ -280,8 +285,8 @@ export default function DelphinView({
         toggleExpand, expandAll, collapseAll,
         addTaskAfter, addChildTask, deleteTask, indentTask, outdentTask,
         moveTaskUp, moveTaskDown, duplicateTask,
-        saveTasks, applyBarMove, importTasks, importDelphinRows, importCronogramaTasks,
-        renameRootPartida, pendingShrinkWarning, clearShrinkWarning,
+        saveTasks, applyBarMove, importTasks, importDelphinRows, importCronogramaTasks, savedPartidaById,
+        renameRootPartida, renumberAll, pendingShrinkWarning, clearShrinkWarning,
     } = useDelphinData({ initialTasks, initialRows, schedulingMode, calendarSettings });
 
     // Guarda de cordura del backend (422 suspicious_shrink): ofrecer forzar.
@@ -300,15 +305,18 @@ export default function DelphinView({
             confirmButtonColor: '#dc2626',
         }).then((r) => {
             if (!r.isConfirmed) return;
+            const hadNewRows = tasks.some((t) => t.id < 0);
             void saveTasks(project, true).then((ok) => {
                 void Swal.fire(
                     ok
                         ? { icon: 'success', title: 'Cronograma guardado', timer: 1800, showConfirmButton: false, ...swalDark }
                         : { icon: 'error', title: 'Error al guardar el cronograma', ...swalDark },
                 );
+                // Ver reloadWithServerIds: sin ids reales el próximo Guardar duplicaría filas.
+                if (ok && hadNewRows) router.visit(window.location.href, { preserveState: false, preserveScroll: true });
             });
         });
-    }, [pendingShrinkWarning, clearShrinkWarning, saveTasks, project]);
+    }, [pendingShrinkWarning, clearShrinkWarning, saveTasks, project, tasks]);
 
     // Elimina una fila (y su rama); si la partida está vinculada como predecesora
     // de otra tarea del cronograma, pide confirmación antes de borrar — de lo
@@ -335,10 +343,38 @@ export default function DelphinView({
 
     const handleRenameRootPartida = useCallback(
         (taskId: number, newPartida: string) => {
+            const code = newPartida.trim();
+            // Dos raíces con el mismo código mezclan sus ramas (y sus ACU, que van por código).
+            if (code && tasks.some((t) => t.parent_id === null && t.id !== taskId && t.partida === code)) {
+                void Swal.fire({ icon: 'warning', title: 'Código en uso', text: `Ya existe otra partida raíz con el código ${code}. Usa "Renumerar" para ordenar los códigos del árbol.`, ...swalDark });
+                return;
+            }
             renameRootPartida(taskId, newPartida);
         },
-        [renameRootPartida],
+        [renameRootPartida, tasks],
     );
+
+    const handleRenumber = useCallback(async () => {
+        const result = await Swal.fire({
+            icon: 'question',
+            title: 'Renumerar partidas',
+            text: 'Se recalculan los códigos de todo el árbol según su posición (01, 01.01, 01.01.01…). Los ACU se moverán con sus partidas al guardar.',
+            showCancelButton: true,
+            confirmButtonText: 'Renumerar',
+            cancelButtonText: 'Cancelar',
+            ...swalDark,
+        });
+        if (!result.isConfirmed) return;
+        const changed = renumberAll();
+        void Swal.fire({
+            icon: changed > 0 ? 'success' : 'info',
+            title: changed > 0 ? `${changed} partidas renumeradas` : 'Los códigos ya están en orden',
+            text: changed > 0 ? 'Revisa y pulsa Guardar para aplicarlo.' : undefined,
+            timer: 2200,
+            showConfirmButton: false,
+            ...swalDark,
+        });
+    }, [renumberAll]);
 
     const availableSpecialties = useMemo(() => {
         return delphinRows
@@ -463,6 +499,14 @@ export default function DelphinView({
     // ── ACU panel (budget mode) ───────────────────────────────────────────────
     const selectedTask = selectedRowId !== null ? taskById.get(selectedRowId) : null;
 
+    // Los ACU viven en BD con el código GUARDADO de su partida. Tras renumerar (indentar/outdentar)
+    // y antes de Guardar, cada fila se busca por su código guardado: si no, el panel sale vacío o,
+    // peor, muestra el ACU de otra fila que heredó ese código (un título).
+    const acuCodeOf = useCallback(
+        (id: number, partida: string) => savedPartidaById.get(id) ?? partida,
+        [savedPartidaById],
+    );
+
     const selectedPartidaData = useMemo(() => {
         if (!selectedTask) return null;
         const row = delphinRows.find((r) => r.id === selectedTask.id);
@@ -484,7 +528,7 @@ export default function DelphinView({
         projectId: project_id_int,
         subsection: 'acus',
         selectedCell: null,
-        selectedPartidaCode: selectedPartidaData ? normalizeCode(selectedTask?.partida ?? '') : null,
+        selectedPartidaCode: selectedPartidaData && selectedTask ? normalizeCode(acuCodeOf(selectedTask.id, selectedTask.partida ?? '')) : null,
         selectedPartidaData,
         lastSaved: null,
         setSheetVersion: () => { },
@@ -501,10 +545,10 @@ export default function DelphinView({
         for (const row of delphinRows) {
             if (groupIds.has(row.id)) continue;
             if (!row.unidad?.trim()) continue;
-            const acu = acuByPartida.get(normP(String(row.partida ?? '')));
+            const acu = acuByPartida.get(normP(acuCodeOf(row.id, String(row.partida ?? ''))));
             if (!acu || acu.costo_unitario_total === 0 || Math.abs(row.precio_unitario - acu.costo_unitario_total) > 0.01) {count++;}}
         return count;
-    }, [delphinRows, acuRows, groupIds]);
+    }, [delphinRows, acuRows, groupIds, acuCodeOf]);
 
     // ── Referencias circulares en predecesoras (mismo criterio que el export a MS Project) ──
     const circularPredecessors = useMemo(() => findCircularPredecessors(tasks), [tasks]);
@@ -651,7 +695,7 @@ export default function DelphinView({
             case 'copyWithAcu': {
                 const row = delphinRows.find((r) => r.id === taskId);
                 if (!row) break;
-                const normPartida = normalizeCode(row.partida ?? '');
+                const normPartida = normalizeCode(acuCodeOf(row.id, row.partida ?? ''));
                 const acu = acuRows.find((a: any) => normalizeCode(a.partida) === normPartida) ?? null;
                 setDelphinClipboard({
                     taskId,
@@ -677,7 +721,7 @@ export default function DelphinView({
         }
     }, [addTaskAfter, addChildTask, confirmDeleteTask, indentTask, outdentTask,
         moveTaskUp, moveTaskDown, duplicateTask, toggleExpand, setPendingSelect,
-        delphinRows, acuRows, setDelphinClipboard]);
+        delphinRows, acuRows, setDelphinClipboard, acuCodeOf]);
 
     // ── Save functions ────────────────────────────────────────────────────────
     const saveSwalHtml = (statusText: string) => `
@@ -695,8 +739,37 @@ export default function DelphinView({
     // guarda presupuesto_general, una partida eliminada/agregada/reordenada desde
     // esta pestaña sigue viva en cronograma_general y "resucita" (sin datos de
     // presupuesto, con guiones) la próxima vez que se recarga la página.
+    // Las filas nuevas viajan al backend con id temporal negativo y el guardado del cronograma
+    // no devuelve los ids reales. Si la vista sigue con esos ids, el siguiente Guardar las vuelve a
+    // INSERTAR (cronograma_general duplicado: tareas repetidas y "two children with the same key").
+    // Tras un guardado completo que creó filas, se remonta la vista con los datos del servidor.
+    const reloadWithServerIds = useCallback(() => {
+        router.visit(window.location.href, { preserveState: false, preserveScroll: true });
+    }, []);
+
+    // Guardado PARCIAL (el cronograma creó sus filas nuevas pero falló el presupuesto o los ACU): la
+    // vista sigue con ids temporales y otro Guardar volvería a insertar esas filas. Se bloquea el
+    // siguiente Guardar hasta recargar — sin recargar solos, para no perder lo que falta guardar sin aviso.
+    const staleNewRowIdsRef = useRef(false);
+    const blockIfStaleIds = useCallback(async (): Promise<boolean> => {
+        if (!staleNewRowIdsRef.current) return false;
+        const result = await Swal.fire({
+            icon: 'warning',
+            title: 'Recarga antes de volver a guardar',
+            text: 'El último guardado fue parcial: el cronograma ya creó las filas nuevas, pero no se pudo guardar todo. Si guardas otra vez sin recargar, esas filas se duplicarían. Recarga la página y vuelve a aplicar lo que faltó.',
+            showCancelButton: true,
+            confirmButtonText: 'Recargar ahora',
+            cancelButtonText: 'Cerrar',
+            ...swalDark,
+        });
+        if (result.isConfirmed) reloadWithServerIds();
+        return true;
+    }, [reloadWithServerIds]);
+
     const handleSaveBudget = useCallback(async () => {
+        if (await blockIfStaleIds()) return;
         const ac = new AbortController();
+        const hadNewRows = tasks.some((t) => t.id < 0);
         // Editar solo montos/cantidades/textos del presupuesto NO debe reescribir
         // el cronograma. saveTasks() solo corre si el cronograma cambió de verdad
         // (fechas, duración, predecesoras, o estructura: agregar/quitar/mover/
@@ -742,20 +815,25 @@ export default function DelphinView({
         });
 
         if (ac.signal.aborted) {
+            if (hadNewRows && mustSaveGantt && ganttOk) staleNewRowIdsRef.current = true;
             await Swal.fire({ icon: 'warning', title: 'Guardado cancelado', text: 'Las partidas fueron guardadas. Los ACUs pendientes se guardarán en el próximo guardado.', ...swalDark });
             return;
         }
         if (ganttOk && budgetOk && acuOk) {
             setAcuRefetchVersion((v) => v + 1);
             void Swal.fire({ icon: 'success', title: 'Presupuesto guardado', timer: 2000, showConfirmButton: false, ...swalDark });
+            if (hadNewRows && mustSaveGantt) reloadWithServerIds();
         } else {
+            if (hadNewRows && mustSaveGantt && ganttOk) staleNewRowIdsRef.current = true;
             const errMsg = !ganttOk ? 'Error al guardar el cronograma.' : !budgetOk ? 'Error al guardar las partidas.' : 'Error al guardar los ACUs.';
             await Swal.fire({ icon: 'error', title: 'Error al guardar', text: errMsg, ...swalDark });
         }
-    }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus, ganttDirty]);
+    }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus, ganttDirty, tasks, reloadWithServerIds, blockIfStaleIds]);
 
     const handleSaveGantt = useCallback(async () => {
+        if (await blockIfStaleIds()) return;
         const ac = new AbortController();
+        const hadNewRows = tasks.some((t) => t.id < 0);
         // Simétrico a handleSaveBudget: mover barras / cambiar fechas NO debe
         // reescribir presupuesto_general (clear+reinsert). saveBudget() solo corre
         // si el presupuesto cambió (precio/cantidad) o hubo cambio estructural
@@ -800,17 +878,20 @@ export default function DelphinView({
         });
 
         if (ac.signal.aborted) {
+            if (hadNewRows && ganttOk) staleNewRowIdsRef.current = true;
             await Swal.fire({ icon: 'warning', title: 'Guardado cancelado', text: 'El cronograma y partidas fueron guardados. Los ACUs pendientes se guardarán en el próximo guardado.', ...swalDark });
             return;
         }
         if (ganttOk && budgetOk && acuOk) {
             setAcuRefetchVersion((v) => v + 1);
             void Swal.fire({ icon: 'success', title: 'Delphin guardado', timer: 2000, showConfirmButton: false, ...swalDark });
+            if (hadNewRows) reloadWithServerIds();
         } else {
+            if (hadNewRows && ganttOk) staleNewRowIdsRef.current = true;
             const errMsg = !ganttOk ? 'Error al guardar el cronograma.' : !budgetOk ? 'Error al guardar las partidas.' : 'Error al guardar los ACUs.';
             await Swal.fire({ icon: 'error', title: 'Error al guardar', text: errMsg, ...swalDark });
         }
-    }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus, budgetDirty, acuDirty]);
+    }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus, budgetDirty, acuDirty, tasks, reloadWithServerIds, blockIfStaleIds]);
 
     // ── Alertar antes de ir a Valorizado si hay cambios sin guardar ──────────
     const handleNavigateValorizado = useCallback(
@@ -895,6 +976,7 @@ export default function DelphinView({
         const handler = (e: KeyboardEvent) => {
             if (!(e.ctrlKey || e.metaKey) || e.key !== 's') return;
             e.preventDefault();
+            if (mode === 'gastfin') return; // Gast. Fin. guarda cada celda al confirmarla
             if (mode === 'budget') {
                 if ((budgetDirty || acuDirty) && !isSavingBudget) void handleSaveBudget();
             } else {
@@ -976,6 +1058,7 @@ export default function DelphinView({
     const handleOpenSettingsClick = useCallback(() => setSettingsOpen(true), []);
     const handleOpenSnapshotsClick = useCallback(() => setSnapshotsOpen(true), []);
     const handleOpenImportExcelClick = useCallback(() => setImportExcelOpen(true), []);
+    const handleOpenImportS10Click = useCallback(() => setImportS10Open(true), []);
     const handleOpenImportMetradosClick = useCallback(() => setImportMetradosOpen(true), []);
     const handleOpenInsumosModal = useCallback((scope: InsumosScope) => {
         setInsumosScope(scope);
@@ -1009,6 +1092,7 @@ export default function DelphinView({
                     onAddChild={handleAddChild}
                     onDeleteRow={handleDeleteRowClick}
                     onResetAll={handleResetAllClick}
+                    onRenumber={() => void handleRenumber()}
                     onIndent={handleIndentClick}
                     onOutdent={handleOutdentClick}
                     onMoveUp={handleMoveUpClick}
@@ -1029,6 +1113,7 @@ export default function DelphinView({
                     onOpenSnapshots={handleOpenSnapshotsClick}
                     onImport={handleImportClick}
                     onImportExcel={handleOpenImportExcelClick}
+                    onImportS10={handleOpenImportS10Click}
                     onImportMetrados={handleOpenImportMetradosClick}
                     onOpenInsumos={handleOpenInsumosModal}
 
@@ -1053,7 +1138,11 @@ export default function DelphinView({
                 />
 
                 {/* ──  vista formula polinomida────────────────────────────── */}
-                {mode === 'budget' && budgetView === 'formula_polinomica' && formulaParentId !== null ? (
+                {mode === 'gastfin' ? (
+                    <Suspense fallback={<div className="flex flex-1 items-center justify-center text-xs text-slate-500">Cargando Gast. Fin.…</div>}>
+                        <GastFinView projectId={project_id_int} projectData={projectData} budgetDirty={budgetDirty || acuDirty} />
+                    </Suspense>
+                ) : mode === 'budget' && budgetView === 'formula_polinomica' && formulaParentId !== null ? (
                     <FormulaPolinomicaSplitView
                         key={String(formulaParentId)}
                         projectId={project_id_int}
@@ -1297,6 +1386,15 @@ export default function DelphinView({
                     project_id_int={project_id_int}
                     delphinRows={delphinRows}
                     onClose={() => setImportExcelOpen(false)}
+                    onBudgetImported={importDelphinRows}
+                    onAcusImported={handleAcusImported} />
+                <ImportDelphinModal
+                    source="s10"
+                    open={importS10Open}
+                    project={project}
+                    project_id_int={project_id_int}
+                    delphinRows={delphinRows}
+                    onClose={() => setImportS10Open(false)}
                     onBudgetImported={importDelphinRows}
                     onAcusImported={handleAcusImported} />
                 <ImportMetradosModal

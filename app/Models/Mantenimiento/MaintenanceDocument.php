@@ -2,6 +2,7 @@
 
 namespace App\Models\Mantenimiento;
 
+use App\Models\CostoProject;
 use App\Models\CostosTenantModel;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -11,6 +12,20 @@ class MaintenanceDocument extends CostosTenantModel
     use SoftDeletes;
 
     protected $table = 'mantenimiento_documentos';
+
+    /**
+     * Mantenimiento exige su módulo. Excepción: los documentos de Gast. Fin. (origen = 'delphin')
+     * reutilizan las rutas de GG de Mantenimiento aunque el proyecto no tenga ese módulo.
+     */
+    public static function allowedFor(CostoProject $project, mixed $documentId): bool
+    {
+        if ($project->hasModule('mantenimiento')) {
+            return true;
+        }
+
+        return is_string($documentId)
+            && static::query()->where('public_id', $documentId)->where('origen', 'delphin')->exists();
+    }
 
     public function getRouteKeyName(): string
     {
