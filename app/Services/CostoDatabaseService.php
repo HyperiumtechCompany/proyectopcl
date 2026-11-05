@@ -611,6 +611,11 @@ class CostoDatabaseService
      */
     private function recalculateAcuFromJson($connection, object $acu, int $tenantPresupuestoId, array $generalIdByNormalizedPartida = []): void
     {
+        // Un PDF importado conserva sus parciales y el precio contractual del Excel.
+        // Al editar un recurso, la huella deja de coincidir y sigue el cálculo habitual.
+        if (S10PdfSnapshot::calculate((array) $acu) !== null) {
+            return;
+        }
         $manoDeObra = $this->decodeAcuComponentField($acu->mano_de_obra ?? null);
         $costoManoObra = 0.0;
         $manoDeObraChanged = false;
@@ -621,6 +626,9 @@ class CostoDatabaseService
                 $manoDeObraChanged = true;
             }
             $parcial = round($cantidad * (float) ($item['precio_unitario'] ?? 0), 10);
+            if (($item['source_pdf']['format'] ?? null) === 's10_pdf' && strtolower($item['unidad'] ?? '') === '%mt') {
+                $parcial = round($cantidad * (float) ($item['precio_unitario'] ?? 0) / 100, 10);
+            }
             if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000000001) {
                 $item['parcial'] = $parcial;
                 $manoDeObraChanged = true;
@@ -796,10 +804,19 @@ class CostoDatabaseService
     /**
      * Recalcula los parciales de las filas padre (títulos/subtítulos) de presupuesto_general.
      * Las partidas (hojas): parcial = round(metrado × precio_unitario, 10).
+     * Las importadas del PDF sin editar conservan el redondeo contractual a 2 decimales.
      * Los títulos/subtítulos (padres): parcial = suma de parciales de sus hijos directos.
      */
     public function recalculateParciales($connection, int $tenantPresupuestoId): void
     {
+        $pdfPartidas = [];
+        if ($connection->getSchemaBuilder()->hasTable('presupuesto_acus')) {
+            foreach ($connection->table('presupuesto_acus')->where('presupuesto_id', $tenantPresupuestoId)->get() as $acu) {
+                if (S10PdfSnapshot::calculate((array) $acu) !== null) {
+                    $pdfPartidas[$this->normalizePartidaCode($acu->partida)] = true;
+                }
+            }
+        }
         $rows = $connection->table('presupuesto_general')
             ->where('presupuesto_id', $tenantPresupuestoId)
             ->orderByRaw('LENGTH(partida) - LENGTH(REPLACE(partida, ".", "")) DESC')
@@ -819,7 +836,7 @@ class CostoDatabaseService
         $parciales = [];
         foreach ($rows as $row) {
             if (! in_array($row->partida, $parentCodes)) {
-                $newParcial = round((float) $row->metrado * (float) $row->precio_unitario, 10);
+                $newParcial = round((float) $row->metrado * (float) $row->precio_unitario, isset($pdfPartidas[$this->normalizePartidaCode($row->partida)]) ? 2 : 10);
                 $parciales[$row->partida] = $newParcial;
 
                 // Umbral ajustado a la nueva precisión (10dp, antes 1e-5 con 6dp): con

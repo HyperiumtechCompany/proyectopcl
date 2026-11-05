@@ -167,7 +167,25 @@ export interface ColumnDef {
 
 export type RendimientoModo = 'dia' | 'hora' | 'global';
 
+export interface S10PdfSource {
+    format: 's10_pdf';
+    quantity: number;
+    price: number;
+    partial: number;
+    unit: string;
+    original_unit: string | null;
+    description: string;
+    code: string | null;
+    resources: number;
+    factor: number;
+    rendimiento: number;
+    original_rendimiento: number | null;
+    declared_cost: number;
+    page: number;
+}
+
 export interface ACUComponenteRow {
+    source_pdf?: S10PdfSource;
     id?: number;
     insumo_id?: number | null;
     // Código INEI corto (diccionario.codigo, ej. "47") — usado por la Fórmula Polinómica.

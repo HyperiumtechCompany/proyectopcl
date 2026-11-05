@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react';
 import laravel from 'laravel-vite-plugin';
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath, URL } from 'node:url';
+import s10PdfLabPlugin from './scripts/s10-pdf-lab-plugin';
 
 export default defineConfig(({ command }) => ({
   resolve: {
@@ -51,6 +52,7 @@ export default defineConfig(({ command }) => ({
 },
 
     plugins: [
+        s10PdfLabPlugin(),
         laravel({
             input: ['resources/css/app.css', 'resources/js/app.tsx'],
             ssr: 'resources/js/ssr.tsx',

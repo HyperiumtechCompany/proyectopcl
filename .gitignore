@@ -50,3 +50,7 @@ yarn-error.log
 # Radiance (LBNL, ~30 MB de binarios) instalado localmente por
 # `npm run setup:radiance` — nunca se versiona, cada máquina lo genera.
 /.radiance/
+
+# Informes locales del laboratorio S10; los originales no se modifican.
+/planes/costos/s10-lab-local/
+/scripts/__pycache__/

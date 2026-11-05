@@ -23,7 +23,7 @@ import type {
     ACURowSummary,
     InsumoProducto,
 } from '@/types/presupuestos';
-import { calculateAcuLocally } from '../hooks/usePresupuestoAcu';
+import { calculateAcuLocally, calculateS10PdfSnapshot } from '../hooks/usePresupuestoAcu';
 import { useProjectParamsStore } from '../stores/projectParamsStore';
 
 const fmt = (n: number | undefined | null, d = 2) =>
@@ -1267,10 +1267,11 @@ export const AcuPanel = React.memo(function AcuPanel({
         null,
     );
 
-    // Sync localAcu only when a different partida is selected (not on every prop update)
+    // Importar puede completar la misma partida que antes mostraba una plantilla vacía.
+    // Actualizarla si no hay una edición local pendiente; no pisar un borrador del usuario.
     useEffect(() => {
         const newPartida = selectedAcu?.partida;
-        if (newPartida !== prevPartidaRef.current) {
+        if (newPartida !== prevPartidaRef.current || !isDirty) {
             prevPartidaRef.current = newPartida;
             setIsDirty(false);
             if (!selectedAcu) {
@@ -1278,6 +1279,7 @@ export const AcuPanel = React.memo(function AcuPanel({
                 return;
             }
             const loadedRendimiento = selectedAcu.rendimiento || 1;
+            const preservePdf = calculateS10PdfSnapshot(selectedAcu) !== null;
             setRendimiento(loadedRendimiento);
 
             // Normalize crew item quantities on load: cantidad = (recursos × horasPerDia) / rendimiento.
@@ -1286,6 +1288,7 @@ export const AcuPanel = React.memo(function AcuPanel({
             // different horasPerDia settings.
             const normalizeItems = (items: ACUComponenteRow[]): ACUComponenteRow[] =>
                 items.map((item) => {
+                    if (preservePdf) return item;
                     if (isHerramientasRow(item)) return item;
                     const rec = Number(item.recursos ?? 0);
                     if (rec <= 0) return item; // no recursos data — keep stored cantidad
@@ -1582,10 +1585,17 @@ export const AcuPanel = React.memo(function AcuPanel({
     }
 
     const grandTotal = localAcu.costo_unitario_total || 0;
+    const pdfSnapshot = calculateS10PdfSnapshot(localAcu);
+    const pdfSources = pdfSnapshot ? [...localAcu.mano_de_obra, ...localAcu.materiales, ...localAcu.equipos, ...localAcu.subcontratos, ...localAcu.subpartidas].flatMap((item) => item.source_pdf ? [item.source_pdf] : []) : [];
 
     return (
         <div className="flex h-full flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
             {/* Header */}
+            {pdfSnapshot && <div className="border-b border-sky-300 bg-sky-50 px-4 py-2 text-xs text-sky-900 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-200">
+                ACU importado del PDF: conserva sus parciales originales. Al editar recursos se vuelve al cálculo habitual.
+                {pdfSources.some((source) => source.original_rendimiento === null) && <p>El PDF no declara rendimiento; 1 es el valor técnico requerido por el formulario.</p>}
+                {pdfSources.some((source) => !source.original_unit) && <p>Hay recursos sin unidad en el PDF; se muestran como und y se conserva la ausencia original.</p>}
+            </div>}
             <div className="border-b border-slate-300 bg-white px-4 py-2.5 dark:border-slate-700 dark:bg-slate-800">
                 <div className="flex items-start justify-between">
                     <div>

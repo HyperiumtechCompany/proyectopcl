@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\CalculateAcuRequest;
+use App\Http\Requests\PreviewS10PdfRequest;
 use App\Http\Requests\SaveFormulaPolinomicaRequest;
 use App\Models\AcuEquipo;
 use App\Models\AcuManoDeObra;
@@ -11,6 +13,8 @@ use App\Models\AcuSubpartida;
 use App\Models\CostoProject;
 use App\Services\CostoDatabaseService;
 use App\Services\GGFijoDesagregadoService;
+use App\Services\S10PdfReader;
+use App\Services\S10PdfSnapshot;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\ConcurrencyErrorDetector;
 use Illuminate\Database\ConnectionInterface;
@@ -34,6 +38,14 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class PresupuestoController extends Controller
 {
+    public function previewPdf(CostoProject $project, PreviewS10PdfRequest $request, S10PdfReader $reader): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        return response()->json($reader->read($request->validated('pdf_bytes')));
+    }
+
     public function getFormulaPolinomica(CostoProject $project, Request $request): JsonResponse
     {
         $this->authorizeProject($project);
@@ -1810,7 +1822,7 @@ class PresupuestoController extends Controller
      */
     public function calculateACU(
         CostoProject $project,
-        Request $request
+        CalculateAcuRequest $request
     ): JsonResponse {
         $this->authorizeProject($project);
         $this->validateModuleEnabled($project);
@@ -1819,62 +1831,7 @@ class PresupuestoController extends Controller
         $this->ensureAcuSchema();
 
         // Validate request data
-        $validated = $request->validate([
-            'id' => 'nullable|integer',
-            'partida' => 'required|string|max:50',
-            'descripcion' => 'required|string',
-            'unidad' => 'required|string|max:20',
-            'rendimiento' => 'required|numeric|min:0.0001',
-            'mano_de_obra' => 'nullable|array',
-            'mano_de_obra.*.descripcion' => 'required|string',
-            'mano_de_obra.*.unidad' => 'required|string|max:20',
-            'mano_de_obra.*.cantidad' => 'required|numeric|min:0',
-            'mano_de_obra.*.recursos' => 'nullable|numeric|min:0',
-            'mano_de_obra.*.precio_unitario' => 'required|numeric|min:0',
-            'mano_de_obra.*.insumo_id' => 'nullable|integer',
-            'mano_de_obra.*.cod_insumo' => 'nullable|string|max:50',
-            'mano_de_obra.*.codigo_producto' => 'nullable|string|max:50',
-            'mano_de_obra.*.proveedor' => 'nullable|string|max:100',
-            'materiales' => 'nullable|array',
-            'materiales.*.descripcion' => 'required|string',
-            'materiales.*.unidad' => 'required|string|max:20',
-            'materiales.*.cantidad' => 'required|numeric|min:0',
-            'materiales.*.precio_unitario' => 'required|numeric|min:0',
-            'materiales.*.factor_desperdicio' => 'nullable|numeric|min:1',
-            'materiales.*.insumo_id' => 'nullable|integer',
-            'materiales.*.cod_insumo' => 'nullable|string|max:50',
-            'materiales.*.codigo_producto' => 'nullable|string|max:50',
-            'materiales.*.proveedor' => 'nullable|string|max:100',
-            'equipos' => 'nullable|array',
-            'equipos.*.descripcion' => 'required|string',
-            'equipos.*.unidad' => 'required|string|max:20',
-            'equipos.*.cantidad' => 'required|numeric|min:0',
-            'equipos.*.recursos' => 'nullable|numeric|min:0',
-            'equipos.*.precio_hora' => 'required|numeric|min:0',
-            'equipos.*.insumo_id' => 'nullable|integer',
-            'equipos.*.cod_insumo' => 'nullable|string|max:50',
-            'equipos.*.codigo_producto' => 'nullable|string|max:50',
-            'equipos.*.proveedor' => 'nullable|string|max:100',
-            'subcontratos' => 'nullable|array',
-            'subcontratos.*.descripcion' => 'required|string',
-            'subcontratos.*.unidad' => 'required|string|max:20',
-            'subcontratos.*.cantidad' => 'required|numeric|min:0',
-            'subcontratos.*.precio_unitario' => 'required|numeric|min:0',
-            'subcontratos.*.insumo_id' => 'nullable|integer',
-            'subcontratos.*.cod_insumo' => 'nullable|string|max:50',
-            'subcontratos.*.codigo_producto' => 'nullable|string|max:50',
-            'subcontratos.*.proveedor' => 'nullable|string|max:100',
-            'subpartidas' => 'nullable|array',
-            'subpartidas.*.descripcion' => 'required|string',
-            'subpartidas.*.unidad' => 'required|string|max:20',
-            'subpartidas.*.cantidad' => 'required|numeric|min:0',
-            'subpartidas.*.precio_unitario' => 'required|numeric|min:0',
-            'subpartidas.*.insumo_id' => 'nullable|integer',
-            'subpartidas.*.cod_insumo' => 'nullable|string|max:50',
-            'subpartidas.*.codigo_producto' => 'nullable|string|max:50',
-            'subpartidas.*.proveedor' => 'nullable|string|max:100',
-            'update_project_prices' => 'nullable|boolean',
-        ]);
+        $validated = $request->validated();
 
         // Concurrent calculateACU calls (flushPendingAcus batches up to 8 at once) can
         // deadlock each other: syncCostoDirecto() below recalculates every ACU/partida in
@@ -1898,6 +1855,9 @@ class PresupuestoController extends Controller
                     $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
                     // Formula: cantidad * precio_unitario
                     $parcial = $componente['cantidad'] * $componente['precio_unitario'];
+                    if (($componente['source_pdf']['format'] ?? null) === 's10_pdf' && strtolower($componente['unidad']) === '%mt') {
+                        $parcial /= 100;
+                    }
                     $componente['parcial'] = round($parcial, 10);
                     $costoManoObra += $componente['parcial'];
                 }
@@ -1961,6 +1921,20 @@ class PresupuestoController extends Controller
                     $parcial = $componente['cantidad'] * $componente['precio_unitario'];
                     $componente['parcial'] = round($parcial, 10);
                     $costoSubpartidas += $componente['parcial'];
+                }
+
+                $pdfSnapshot = S10PdfSnapshot::calculate($validated);
+                if ($pdfSnapshot !== null) {
+                    $manoDeObra = $pdfSnapshot['mano_de_obra'];
+                    $materiales = $pdfSnapshot['materiales'];
+                    $equipos = $pdfSnapshot['equipos'];
+                    $subcontratos = $pdfSnapshot['subcontratos'];
+                    $subpartidas = $pdfSnapshot['subpartidas'];
+                    $costoManoObra = $pdfSnapshot['costo_mano_obra'];
+                    $costoMateriales = $pdfSnapshot['costo_materiales'];
+                    $costoEquipos = $pdfSnapshot['costo_equipos'];
+                    $costoSubcontratos = $pdfSnapshot['costo_subcontratos'];
+                    $costoSubpartidas = $pdfSnapshot['costo_subpartidas'];
                 }
 
                 // ─── Update Master Project Prices if flag is active ────────────
@@ -2096,7 +2070,7 @@ class PresupuestoController extends Controller
 
                 // ── Sincronizar con Presupuesto General ───────────────────────────
                 // Buscamos la partida en presupuesto_general para actualizar su precio_unitario
-                if ($calculatedAcu) {
+                if ($calculatedAcu && $pdfSnapshot === null) {
                     $newUnitPrice = (float) ($calculatedAcu->costo_unitario_total ?? 0);
 
                     // Match por código normalizado — ver CostoDatabaseService::normalizePartidaCode():

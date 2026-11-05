@@ -1,5 +1,5 @@
 import Decimal from 'decimal.js';
-import { AlertCircle, CheckCircle2, ChevronRight, FileSpreadsheet, Loader2, Upload, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronRight, FileSpreadsheet, FileText, Loader2, Upload, X } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ParseAcuResult, ParsedAcu } from '../helpers/parseAcuExcel';
@@ -10,6 +10,9 @@ import { parseS10AcuExcel, parseS10PresupuestoExcel } from '../helpers/parseS10E
 import type { AcuMatch } from '../helpers/matchAcuToPartida';
 import { matchAcuToPartida, summarizeMatches } from '../helpers/matchAcuToPartida';
 import type { DelphinRow } from '../types';
+import { previewS10Pdf, readLocalS10Pdf, type S10PdfPreview } from '../helpers/previewS10Pdf';
+import { S10PdfPreviewPanel } from './S10PdfPreviewPanel';
+import { detectAcuFileKind, requireAcuRecords, type AcuFileKind } from '../helpers/detectAcuFile';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,6 +25,9 @@ interface AcuFileState {
     acus:     ParsedAcu[];
     matches:  AcuMatch[];
     warnings: string[];
+    pdfPreview?: S10PdfPreview;
+    includePdf?: boolean;
+    kind?: AcuFileKind;
 }
 
 interface Props {
@@ -35,6 +41,7 @@ interface Props {
     onAcusImported?:   (payloads: Array<Record<string, any>>) => void;
     /** Origen del Excel: Delphin Express (por defecto) o los reportes exportados por S10. */
     source?:           ImportSource;
+    pdfEnabled?:       boolean;
 }
 
 export type ImportSource = 'delphin' | 's10';
@@ -92,6 +99,7 @@ function DropZone({ accept, multiple, onFiles, disabled, label }: {
     const handle = useCallback((files: FileList | null) => {
         if (!files?.length) return;
         onFiles(Array.from(files));
+        if (inputRef.current) inputRef.current.value = '';
     }, [onFiles]);
 
     return (
@@ -302,17 +310,24 @@ function StepBudget({
 
 // ─── Step 2: ACUs por especialidad ────────────────────────────────────────────
 
-function AcuFileRow({ state, onRemove }: { state: AcuFileState; onRemove: () => void }) {
+function AcuFileRow({ state, onRemove, onIncludePdf, imported }: {
+    state: AcuFileState;
+    onRemove: () => void;
+    onIncludePdf: (included: boolean) => void;
+    imported: boolean;
+}) {
     const summary = state.status === 'ready' ? summarizeMatches(state.matches) : null;
 
     return (
         <div className="rounded-md border border-slate-700 bg-slate-800/60 p-3">
             <div className="flex items-start justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
-                    <FileSpreadsheet size={14} className="shrink-0 text-slate-400" />
+                    {state.kind === 'pdf'
+                        ? <FileText size={14} className="shrink-0 text-slate-400" />
+                        : <FileSpreadsheet size={14} className="shrink-0 text-slate-400" />}
                     <span className="truncate text-xs font-medium text-slate-200">{state.file.name}</span>
                 </div>
-                <button onClick={onRemove} className="shrink-0 text-slate-500 hover:text-slate-300">
+                <button onClick={onRemove} disabled={imported} className="shrink-0 text-slate-500 hover:text-slate-300 disabled:opacity-50">
                     <X size={13} />
                 </button>
             </div>
@@ -324,10 +339,15 @@ function AcuFileRow({ state, onRemove }: { state: AcuFileState; onRemove: () => 
             )}
 
             {state.status === 'error' && (
-                <div className="mt-2 text-[11px] text-red-400">{state.error}</div>
+                <div role="alert" className="mt-2 text-[11px] text-red-400">{state.error}</div>
             )}
 
-            {state.status === 'ready' && summary && (
+            {state.status === 'ready' && state.pdfPreview && (
+                <S10PdfPreviewPanel preview={state.pdfPreview} included={state.includePdf ?? false}
+                    disabled={imported} onInclude={onIncludePdf} />
+            )}
+
+            {state.status === 'ready' && summary && !state.pdfPreview && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                     <Badge color="blue">{state.acus.length} ACUs</Badge>
                     <Badge color="green">✓ {summary.byCode} por código</Badge>
@@ -337,7 +357,7 @@ function AcuFileRow({ state, onRemove }: { state: AcuFileState; onRemove: () => 
             )}
 
             {/* ACU content inspector — shows parsed insumos per section */}
-            {state.status === 'ready' && state.acus.length > 0 && (
+            {state.status === 'ready' && state.acus.length > 0 && !state.pdfPreview && (
                 <details className="mt-2">
                     <summary className="cursor-pointer text-[11px] text-blue-400 hover:text-blue-300">
                         Inspeccionar insumos parseados ({state.acus.length} ACUs)
@@ -386,17 +406,25 @@ function AcuFileRow({ state, onRemove }: { state: AcuFileState; onRemove: () => 
 
 function StepAcus({
     source,
+    projectId,
+    pdfEnabled,
     delphinRows,
     onDone,
     onAcusImported,
 }: {
     source:           ImportSource;
+    projectId:        number;
+    pdfEnabled:       boolean;
     delphinRows:      DelphinRow[];
     onDone:           () => void;
     onAcusImported?:  (payloads: Array<Record<string, any>>) => void;
 }) {
     const [files,      setFiles]      = useState<AcuFileState[]>([]);
     const [importDone, setImportDone] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const pdfReading = useRef<{ file: File; controller: AbortController } | null>(null);
+    useEffect(() => () => pdfReading.current?.controller.abort(), []);
+    const localPdfEnabled = source === 's10' && pdfEnabled;
 
     const addFiles = useCallback(async (newFiles: File[]) => {
         const stubs: AcuFileState[] = newFiles.map((f) => ({
@@ -407,7 +435,26 @@ function StepAcus({
         for (let i = 0; i < newFiles.length; i++) {
             const file = newFiles[i];
             try {
+                const kind = await detectAcuFileKind(file);
+                setFiles((previous) => previous.map((state) => state.file === file ? { ...state, kind } : state));
+                if (kind === 'pdf') {
+                    if (!localPdfEnabled) throw new Error('El lector PDF solo está habilitado en el entorno local de este proyecto.');
+                    const controller = new AbortController();
+                    pdfReading.current = { file, controller };
+                    try {
+                        const document = await readLocalS10Pdf(file, controller.signal, projectId);
+                        const preview = previewS10Pdf(document, delphinRows);
+                        setFiles((previous) => previous.map((state) => state.file === file ? {
+                            ...state, status: 'ready', pdfPreview: preview, includePdf: false,
+                            acus: preview.entries.map((entry) => entry.match.acu), matches: [], warnings: [],
+                        } : state));
+                    } finally {
+                        if (pdfReading.current?.file === file) pdfReading.current = null;
+                    }
+                    continue;
+                }
                 const result: ParseAcuResult = await SOURCES[source].parseAcus(file);
+                requireAcuRecords(result);
                 const matches = matchAcuToPartida(result.acus, delphinRows);
                 setFiles((prev) =>
                     prev.map((s) =>
@@ -419,14 +466,15 @@ function StepAcus({
             } catch (e: any) {
                 setFiles((prev) =>
                     prev.map((s) =>
-                        s.file === file ? { ...s, status: 'error', error: e?.message ?? 'Error' } : s,
+                        s.file === file ? { ...s, status: 'error', error: e?.name === 'AbortError' ? 'Lectura PDF cancelada.' : e?.response?.data?.errors ? Object.values(e.response.data.errors).flat().join(' ') : e?.response?.data?.message ?? e?.message ?? 'Error' } : s,
                     ),
                 );
             }
         }
-    }, [delphinRows, source]);
+    }, [delphinRows, source, localPdfEnabled, projectId]);
 
     const removeFile = useCallback((file: File) => {
+        if (pdfReading.current?.file === file) pdfReading.current.controller.abort();
         setFiles((prev) => prev.filter((s) => s.file !== file));
     }, []);
 
@@ -438,6 +486,14 @@ function StepAcus({
     // Visual-only: build payloads and send to parent — no API call here
     const handleImport = () => {
         const allMatched: AcuMatch[] = files.flatMap((s) => s.matches.filter((m) => m.method !== 'none'));
+        if (files.some((state) => state.pdfPreview)) {
+            const targets = allMatched.map((match) => match.row?.id);
+            if (new Set(targets).size !== targets.length) {
+                setLoadError('Varios archivos apuntan a la misma partida. Retira los duplicados antes de cargar.');
+                return;
+            }
+        }
+        setLoadError(null);
         const payloads = allMatched
             .filter((m) => m.row)
             .map((m) => buildAcuPayload(m.acu, m.row!.partida));
@@ -452,6 +508,8 @@ function StepAcus({
                 <p className="mt-0.5 text-xs text-slate-400">
                     {SOURCES[source].acuHint}
                 </p>
+                {localPdfEnabled && <p className="mt-2 text-xs text-blue-300">También puedes seleccionar un PDF de ACU para la prueba local. Primero se revisarán sus costos y vínculos.</p>}
+                {source === 's10' && !pdfEnabled && <p className="mt-2 text-xs text-amber-300">El lector PDF está habilitado únicamente en el entorno local del proyecto.</p>}
             </div>
 
             {!importDone && delphinRows.length === 0 && (
@@ -463,13 +521,18 @@ function StepAcus({
 
             {!importDone && (
                 <DropZone
-                    accept=".xlsx,.xls"
+                    accept={localPdfEnabled ? '' : '.xlsx,.xls'}
                     multiple
-                    disabled={delphinRows.length === 0}
-                    label="Arrastra o haz clic para agregar archivos de ACUs (puedes subir varios)"
+                    disabled={delphinRows.length === 0 || files.some((state) => state.status === 'parsing')}
+                    label={localPdfEnabled ? 'Agregar ACUs Excel o PDF, incluso sin extensión (prueba local)' : 'Arrastra o haz clic para agregar archivos de ACUs (puedes subir varios)'}
                     onFiles={addFiles}
                 />
             )}
+
+            {files.some((state) => state.status === 'parsing' && state.kind === 'pdf') && (
+                <button onClick={() => pdfReading.current?.controller.abort()} className="text-left text-xs text-amber-300">Cancelar lectura PDF</button>
+            )}
+            {loadError && <p role="alert" className="text-xs text-red-300">{loadError}</p>}
 
             {files.length > 0 && (
                 <div className="flex flex-col gap-2">
@@ -478,6 +541,10 @@ function StepAcus({
                             key={s.file.name + s.file.size}
                             state={s}
                             onRemove={() => removeFile(s.file)}
+                            imported={importDone}
+                            onIncludePdf={(included) => setFiles((previous) => previous.map((state) => state.file === s.file && state.pdfPreview ? {
+                                ...state, includePdf: included, matches: included ? state.pdfPreview.applicableMatches : [],
+                            } : state))}
                         />
                     ))}
                 </div>
@@ -500,6 +567,7 @@ function StepAcus({
                 totalMatched > 0 && (
                     <button
                         onClick={handleImport}
+                        disabled={files.some((state) => state.status === 'parsing')}
                         className="flex items-center justify-center gap-2 rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600"
                     >
                         <Upload size={14} />
@@ -515,7 +583,7 @@ function StepAcus({
 
 const roundCantidad = (value: number) => new Decimal(value).toDecimalPlaces(4).toNumber();
 
-function buildAcuPayload(acu: ParsedAcu, partida: string) {
+export function buildAcuPayload(acu: ParsedAcu, partida: string) {
     return {
         id:                   null,
         partida,
@@ -523,6 +591,7 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
         unidad:               acu.unidad || 'und',
         rendimiento:          acu.rendimiento || 1,
         mano_de_obra:         acu.mano_de_obra.map((c) => ({
+            ...(c.source_pdf ? { source_pdf: c.source_pdf } : {}),
             descripcion:    c.descripcion,
             unidad:         c.unidad || 'hh',
             cantidad:       roundCantidad(c.cantidad),
@@ -533,6 +602,7 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
             proveedor:      c.proveedor || null,
         })),
         materiales:           acu.materiales.map((c) => ({
+            ...(c.source_pdf ? { source_pdf: c.source_pdf } : {}),
             descripcion:        c.descripcion,
             unidad:             c.unidad || 'und',
             cantidad:           roundCantidad(c.cantidad),
@@ -543,6 +613,7 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
             proveedor:          c.proveedor || null,
         })),
         equipos:              acu.equipos.map((c) => ({
+            ...(c.source_pdf ? { source_pdf: c.source_pdf } : {}),
             descripcion: c.descripcion,
             unidad:      c.unidad || 'hm',
             cantidad:    roundCantidad(c.cantidad),
@@ -553,6 +624,7 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
             proveedor:   c.proveedor || null,
         })),
         subcontratos:         acu.subcontratos.map((c) => ({
+            ...(c.source_pdf ? { source_pdf: c.source_pdf } : {}),
             descripcion:     c.descripcion,
             unidad:          c.unidad || 'glb',
             cantidad:        roundCantidad(c.cantidad),
@@ -562,6 +634,7 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
             proveedor:       c.proveedor || null,
         })),
         subpartidas:          acu.subpartidas.map((c) => ({
+            ...(c.source_pdf ? { source_pdf: c.source_pdf } : {}),
             descripcion:     c.descripcion,
             unidad:          c.unidad || 'und',
             cantidad:        roundCantidad(c.cantidad),
@@ -580,6 +653,7 @@ export function ImportDelphinModal({
     open,
     project: _project,
     project_id_int: _pid,
+    pdfEnabled = import.meta.env.DEV,
     delphinRows,
     onClose,
     onBudgetImported,
@@ -607,7 +681,7 @@ export function ImportDelphinModal({
                 {/* Header */}
                 <div className="flex shrink-0 items-center justify-between border-b border-slate-700 px-4 py-3">
                     <div className="flex items-center gap-3">
-                        <span className="text-sm font-semibold text-slate-100">{SOURCES[source].title}</span>
+                        <span className="text-sm font-semibold text-slate-100">{source === 's10' && pdfEnabled ? 'Importar S10 · Excel / PDF local' : SOURCES[source].title}</span>
                         <div className="flex items-center gap-1">
                             {(['budget', 'acus'] as Step[]).map((s, i) => (
                                 <React.Fragment key={s}>
@@ -643,6 +717,8 @@ export function ImportDelphinModal({
                     ) : (
                         <StepAcus
                             source={source}
+                            projectId={_pid}
+                            pdfEnabled={pdfEnabled}
                             delphinRows={delphinRows}
                             onDone={onClose}
                             onAcusImported={onAcusImported}

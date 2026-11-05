@@ -50,13 +50,52 @@ function decimalMul(...factors: number[]): number {
         .toNumber();
 }
 
+const PDF_SECTIONS = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'subpartidas'] as const;
+
+export function calculateS10PdfSnapshot(acuData: Record<string, any>) {
+    const items = PDF_SECTIONS.flatMap((section) => acuData[section] ?? []);
+    if (items.length === 0) return null;
+    const total = items[0]?.source_pdf?.declared_cost;
+    if (typeof total !== 'number' || !Number.isFinite(total)) return null;
+    for (const section of PDF_SECTIONS) {
+        for (const item of acuData[section] ?? []) {
+            const source = item.source_pdf;
+            const price = section === 'equipos' ? item.precio_hora : item.precio_unitario;
+            if (!source || source.format !== 's10_pdf' || source.declared_cost !== total ||
+                source.description !== item.descripcion || source.unit !== item.unidad ||
+                (source.code ?? null) !== (item.cod_insumo ?? item.codigo ?? null) ||
+                !Number.isFinite(source.partial) || source.partial < 0 ||
+                !new Decimal(item.cantidad ?? 0).equals(source.quantity) ||
+                !new Decimal(price ?? 0).equals(source.price) ||
+                !new Decimal(item.recursos ?? 0).equals(source.resources) ||
+                !new Decimal(item.factor_desperdicio ?? 1).equals(source.factor) ||
+                !new Decimal(acuData.rendimiento ?? 1).equals(source.rendimiento)) return null;
+        }
+    }
+    const sections = Object.fromEntries(PDF_SECTIONS.map((section) => [section,
+        (acuData[section] ?? []).map((item: Record<string, any>) => ({ ...item, parcial: item.source_pdf.partial })),
+    ]));
+    const subtotal = (section: string): number => (sections[section] as Array<{ parcial: number }>).reduce((s, item) => s.plus(item.parcial), new Decimal(0)).toNumber();
+    const values = PDF_SECTIONS.map(subtotal);
+    const sum = values.reduce((s, value) => s.plus(value), new Decimal(0));
+    if (!sum.equals(total)) return null;
+    return {
+        mano_de_obra: sections.mano_de_obra, materiales: sections.materiales, equipos: sections.equipos,
+        subcontratos: sections.subcontratos, subpartidas: sections.subpartidas,
+        costo_mano_obra: values[0], costo_materiales: values[1], costo_equipos: values[2],
+        costo_subcontratos: values[3], costo_subpartidas: values[4], costo_unitario_total: total,
+    };
+}
+
 export function calculateAcuLocally(acuData: Record<string, any>) {
+    const imported = calculateS10PdfSnapshot(acuData);
+    if (imported) return imported;
     const manoDeObra = (acuData.mano_de_obra as any[] || []).map((item: any) => {
         const cantidad = roundCantidad(Number(item.cantidad ?? 0));
         return {
             ...item,
             cantidad,
-            parcial: decimalMul(cantidad, Number(item.precio_unitario ?? 0)),
+            parcial: decimalMul(cantidad, Number(item.precio_unitario ?? 0), item.source_pdf?.format === 's10_pdf' && String(item.unidad).toLowerCase() === '%mt' ? 0.01 : 1),
         };
     });
     const costoManoObra = r2(manoDeObra.reduce((s: number, i: any) => s + (i.parcial ?? 0), 0));
@@ -151,6 +190,91 @@ interface UsePresupuestoAcuProps {
     refreshKey?: number;
     refetchVersion?: number;
 }
+
+const normalizeNumber = (value: unknown, fallback = 0): number => {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num < 0) {
+        return fallback;
+    }
+    return num;
+};
+
+const normalizeAcuComponent = (
+    item: Record<string, unknown>,
+    type: 'mano_de_obra' | 'materiales' | 'equipos' | 'subcontratos' | 'subpartidas',
+) => {
+    const normalized: Record<string, unknown> = {
+        id: item.id,
+        insumo_id: item.insumo_id,
+        cod_insumo: ((item.cod_insumo as string | null | undefined) ?? (item.codigo as string | null | undefined)) || null,
+        proveedor: (item.proveedor as string | null | undefined) || null,
+        descripcion: String(item.descripcion ?? '').trim(),
+        unidad: String(item.unidad ?? '').trim() || 'und',
+        cantidad: roundCantidad(normalizeNumber(item.cantidad, 0)),
+        ...(item.source_pdf ? { source_pdf: item.source_pdf } : {}),
+    };
+
+    if (type === 'mano_de_obra' || type === 'equipos') {
+        normalized.recursos = normalizeNumber(item.recursos, 0);
+    }
+
+    if (type === 'materiales' || type === 'subcontratos' || type === 'subpartidas') {
+        normalized.precio_unitario = item.source_pdf ? normalizeNumber(item.precio_unitario, 0) : roundPrecio(normalizeNumber(item.precio_unitario, 0));
+    }
+
+    if (type === 'mano_de_obra') {
+        normalized.precio_unitario = item.source_pdf ? normalizeNumber(item.precio_unitario, 0) : roundPrecio(normalizeNumber(item.precio_unitario, 0));
+    }
+
+    if (type === 'equipos') {
+        normalized.precio_hora = item.source_pdf ? normalizeNumber(item.precio_hora, 0) : roundPrecio(normalizeNumber(item.precio_hora, 0));
+    }
+
+    if (type === 'materiales') {
+        const factor = normalizeNumber(item.factor_desperdicio, 1);
+        normalized.factor_desperdicio = factor < 1 ? 1 : factor;
+    }
+
+    return normalized;
+};
+
+export const normalizeAcuData = (data: Record<string, any>): Record<string, any> => {
+    return {
+        ...data,
+        descripcion: String(data.descripcion ?? '').trim(),
+        unidad: String(data.unidad ?? '').trim() || 'und',
+        rendimiento:
+            normalizeNumber(data.rendimiento, 1) <= 0
+                ? 1
+                : normalizeNumber(data.rendimiento, 1),
+        mano_de_obra: Array.isArray(data.mano_de_obra)
+            ? data.mano_de_obra.map((item: Record<string, unknown>) =>
+                  normalizeAcuComponent(item, 'mano_de_obra'),
+              )
+            : [],
+        materiales: Array.isArray(data.materiales)
+            ? data.materiales.map((item: Record<string, unknown>) =>
+                  normalizeAcuComponent(item, 'materiales'),
+              )
+            : [],
+        equipos: Array.isArray(data.equipos)
+            ? data.equipos.map((item: Record<string, unknown>) =>
+                  normalizeAcuComponent(item, 'equipos'),
+              )
+            : [],
+        subcontratos: Array.isArray(data.subcontratos)
+            ? data.subcontratos.map((item: Record<string, unknown>) =>
+                  normalizeAcuComponent(item, 'subcontratos'),
+              )
+            : [],
+        subpartidas: Array.isArray(data.subpartidas)
+            ? data.subpartidas.map((item: Record<string, unknown>) =>
+                  normalizeAcuComponent(item, 'subpartidas'),
+              )
+            : [],
+    };
+};
+
 
 export function usePresupuestoAcu({
     projectId,
@@ -343,89 +467,6 @@ export function usePresupuestoAcu({
         return () => controller.abort();
     }, [mapAcuRows, projectId, subsection, refreshKey, refetchVersion]);
 
-    const normalizeNumber = (value: unknown, fallback = 0): number => {
-        const num = Number(value);
-        if (!Number.isFinite(num) || num < 0) {
-            return fallback;
-        }
-        return num;
-    };
-
-    const normalizeAcuComponent = (
-        item: Record<string, unknown>,
-        type: 'mano_de_obra' | 'materiales' | 'equipos' | 'subcontratos' | 'subpartidas',
-    ) => {
-        const normalized: Record<string, unknown> = {
-            id: item.id,
-            insumo_id: item.insumo_id,
-            cod_insumo: ((item.cod_insumo as string | null | undefined) ?? (item.codigo as string | null | undefined)) || null,
-            proveedor: (item.proveedor as string | null | undefined) || null,
-            descripcion: String(item.descripcion ?? '').trim(),
-            unidad: String(item.unidad ?? '').trim() || 'und',
-            cantidad: roundCantidad(normalizeNumber(item.cantidad, 0)),
-        };
-
-        if (type === 'mano_de_obra' || type === 'equipos') {
-            normalized.recursos = normalizeNumber(item.recursos, 0);
-        }
-
-        if (type === 'materiales' || type === 'subcontratos' || type === 'subpartidas') {
-            normalized.precio_unitario = roundPrecio(normalizeNumber(item.precio_unitario, 0));
-        }
-
-        if (type === 'mano_de_obra') {
-            normalized.precio_unitario = roundPrecio(normalizeNumber(item.precio_unitario, 0));
-        }
-
-        if (type === 'equipos') {
-            normalized.precio_hora = roundPrecio(normalizeNumber(item.precio_hora, 0));
-        }
-
-        if (type === 'materiales') {
-            const factor = normalizeNumber(item.factor_desperdicio, 1);
-            normalized.factor_desperdicio = factor < 1 ? 1 : factor;
-        }
-
-        return normalized;
-    };
-
-    const normalizeAcuData = (data: Record<string, any>): Record<string, any> => {
-        return {
-            ...data,
-            descripcion: String(data.descripcion ?? '').trim(),
-            unidad: String(data.unidad ?? '').trim() || 'und',
-            rendimiento:
-                normalizeNumber(data.rendimiento, 1) <= 0
-                    ? 1
-                    : normalizeNumber(data.rendimiento, 1),
-            mano_de_obra: Array.isArray(data.mano_de_obra)
-                ? data.mano_de_obra.map((item: Record<string, unknown>) =>
-                      normalizeAcuComponent(item, 'mano_de_obra'),
-                  )
-                : [],
-            materiales: Array.isArray(data.materiales)
-                ? data.materiales.map((item: Record<string, unknown>) =>
-                      normalizeAcuComponent(item, 'materiales'),
-                  )
-                : [],
-            equipos: Array.isArray(data.equipos)
-                ? data.equipos.map((item: Record<string, unknown>) =>
-                      normalizeAcuComponent(item, 'equipos'),
-                  )
-                : [],
-            subcontratos: Array.isArray(data.subcontratos)
-                ? data.subcontratos.map((item: Record<string, unknown>) =>
-                      normalizeAcuComponent(item, 'subcontratos'),
-                  )
-                : [],
-            subpartidas: Array.isArray(data.subpartidas)
-                ? data.subpartidas.map((item: Record<string, unknown>) =>
-                      normalizeAcuComponent(item, 'subpartidas'),
-                  )
-                : [],
-        };
-    };
-
     const saveAcu = useCallback(async (acuData: Record<string, any>, options?: { updateProjectPrices?: boolean }) => {
         try {
             const payload = normalizeAcuData(acuData);
@@ -479,6 +520,24 @@ export function usePresupuestoAcu({
         setAcuDirty(true);
         return { success: true as const, acu: updatedAcu };
     }, [normalizeAcuData]);
+
+    const localSaveAcus = useCallback((payloads: Array<Record<string, any>>) => {
+        const updated = payloads.map((data): ACURowSummary => {
+            const normalized = normalizeAcuData(data);
+            const acu = { id: Number(normalized.id ?? 0), partida: String(normalized.partida ?? ''),
+                descripcion: String(normalized.descripcion ?? ''), unidad: String(normalized.unidad ?? ''),
+                rendimiento: Number(normalized.rendimiento ?? 1), ...calculateAcuLocally(normalized) };
+            pendingAcuRef.current.set(acu.partida, normalized);
+            return acu;
+        });
+        setAcuRows((previous) => {
+            const indexed = new Map(previous.map((acu) => [normalizePartidaKey(acu.partida), acu]));
+            for (const acu of updated) indexed.set(normalizePartidaKey(acu.partida), acu);
+            return [...indexed.values()];
+        });
+        if (updated.length) setAcuDirty(true);
+        return updated;
+    }, []);
 
     // Batch-persists all pending ACU edits to DB (called on global save).
     // Accepts an optional AbortSignal to cancel mid-flush; pending map stays
@@ -546,6 +605,7 @@ export function usePresupuestoAcu({
         selectedAcu,
         saveAcu,
         localSaveAcu,
+        localSaveAcus,
         flushPendingAcus,
         acuDirty,
         pendingAcuCount: pendingAcuRef.current.size,

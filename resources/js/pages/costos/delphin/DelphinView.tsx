@@ -100,6 +100,7 @@ interface PageProps {
     project_id_int: number;
     project_name: string;
     initialRows: any[];
+    s10PdfEnabled?: boolean;
     initialTasks: GanttTask[];
     initialCalendarSettings?: Partial<GanttCalendarSettings> | null;
     projectParams: Record<string, any> | null;
@@ -123,6 +124,7 @@ interface PageProps {
 export default function DelphinView({
     project, project_id_int, project_name,
     initialRows, initialTasks, initialCalendarSettings, projectParams,
+    s10PdfEnabled = false,
     projectData, resumenPresupuesto: initialResumenPresupuesto,
 }: PageProps) {
 
@@ -522,6 +524,7 @@ export default function DelphinView({
         acuLoading,
         selectedAcu,
         localSaveAcu,
+        localSaveAcus,
         flushPendingAcus,
         acuDirty,
     } = usePresupuestoAcu({
@@ -589,18 +592,21 @@ export default function DelphinView({
 
     // Called by ImportDelphinModal after ACU Excel parse — applies locally, no DB call
     const handleAcusImported = useCallback((payloads: Array<Record<string, any>>) => {
-        for (const payload of payloads) {
+        const normalized = payloads.map((payload) => ({ ...payload, partida: normalizeCode(String(payload.partida ?? '')) }));
+        const updated = localSaveAcus(normalized);
+        for (let index = 0; index < payloads.length; index++) {
+            const payload = payloads[index];
             // Normalize partida so it matches selectedPartidaCode (which uses normalizeCode)
             const rawPartida = String(payload.partida ?? '');
-            const normalizedPayload = { ...payload, partida: normalizeCode(rawPartida) };
-            const result = localSaveAcu(normalizedPayload);
-            if (result.success && result.acu && result.acu.costo_unitario_total > 0) {
+            const acu = updated[index];
+            if (acu && acu.costo_unitario_total > 0) {
                 // Update price in budget grid — match by original raw partida from delphinRows
                 const row = delphinRows.find((r) => r.partida === rawPartida);
-                if (row) commitField(row.id, 'precio_unitario', result.acu.costo_unitario_total);
+                const importedPdf = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'subpartidas'].some((section) => payload[section]?.some((item: any) => item.source_pdf?.format === 's10_pdf'));
+                if (row && !importedPdf) commitField(row.id, 'precio_unitario', acu.costo_unitario_total);
             }
         }
-    }, [localSaveAcu, delphinRows, commitField]);
+    }, [localSaveAcus, delphinRows, commitField]);
 
     // ── Row alignment (CPM gantt mode): keep table rows pixel-aligned with bars ──
     // The left grid has its own header stack (search bar + DelphinGridHeader's title
@@ -1114,6 +1120,7 @@ export default function DelphinView({
                     onImport={handleImportClick}
                     onImportExcel={handleOpenImportExcelClick}
                     onImportS10={handleOpenImportS10Click}
+                    pdfEnabled={s10PdfEnabled}
                     onImportMetrados={handleOpenImportMetradosClick}
                     onOpenInsumos={handleOpenInsumosModal}
 
@@ -1390,6 +1397,7 @@ export default function DelphinView({
                     onAcusImported={handleAcusImported} />
                 <ImportDelphinModal
                     source="s10"
+                    pdfEnabled={s10PdfEnabled}
                     open={importS10Open}
                     project={project}
                     project_id_int={project_id_int}

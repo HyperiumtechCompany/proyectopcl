@@ -1,9 +1,11 @@
 import Decimal from 'decimal.js';
 import * as XLSX from 'xlsx';
+import type { S10PdfSource } from '@/types/presupuestos';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ParsedAcuComponente {
+    source_pdf?: S10PdfSource;
     codigo: string | null;
     proveedor: string | null;
     descripcion: string;

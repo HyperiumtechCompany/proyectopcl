@@ -84,6 +84,7 @@ interface Props {
     onImport?: () => void;
     onImportExcel?: () => void;
     onImportS10?: () => void;
+    pdfEnabled?: boolean;
     onImportMetrados?: () => void;
     onOpenInsumos?: (scope: InsumosScope) => void;
 
@@ -191,10 +192,12 @@ function ImportBudgetDropdown({
     onImportMetrados,
     onImportExcel,
     onImportS10,
+    pdfEnabled = false,
 }: {
     onImportMetrados?: () => void;
     onImportExcel?: () => void;
     onImportS10?: () => void;
+    pdfEnabled?: boolean;
 }) {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
@@ -235,7 +238,7 @@ function ImportBudgetDropdown({
                         <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">Importa presupuesto y ACUs desde el archivo</span>
                     </button>
                     <button type="button" className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-sky-600 hover:text-white dark:text-slate-200 dark:hover:bg-sky-700" onClick={() => select(onImportS10)}>
-                        <span className="block font-medium">Desde Excel S10</span>
+                        <span className="block font-medium">{pdfEnabled ? 'Desde S10 (Excel / PDF local)' : 'Desde Excel S10'}</span>
                         <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">Reportes Presupuesto y Análisis de precios unitarios de S10</span>
                     </button>
                 </div>
@@ -422,7 +425,7 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
     onMoveUp, onMoveDown, onDuplicate, onExpandAll, onCollapseAll,
     zoomLevel, showCriticalPath, schedulingMode, ganttBarLabel,
     onZoomChange, onToggleCritical, onSchedulingMode, onBarLabelChange,
-    onOpenSettings, onOpenSnapshots, onImport, onImportExcel, onImportS10, onImportMetrados, onOpenInsumos, onExport,
+    onOpenSettings, onOpenSnapshots, onImport, onImportExcel, onImportS10, pdfEnabled, onImportMetrados, onOpenInsumos, onExport,
     isParentSelected, onFormulaView,
     incompatiblesCount, onOpenCompatibilidad,
     circularPredecessorsCount, onOpenCircularPredecessors,
@@ -741,6 +744,7 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                     <>
                         <InsumosDropdown onSelect={onOpenInsumos} />
                         <ImportBudgetDropdown
+                            pdfEnabled={pdfEnabled}
                             onImportMetrados={onImportMetrados}
                             onImportExcel={onImportExcel}
                             onImportS10={onImportS10} />

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import Decimal from 'decimal.js';
+import { calculateS10PdfSnapshot } from '../../presupuesto/hooks/usePresupuestoAcu';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
@@ -271,6 +272,9 @@ export function flattenInsumos(
         if (presupuestoCantidad === 0) continue;
 
         procesados++;
+        const pdfSnapshot = calculateS10PdfSnapshot(acu);
+        const originalAmount = pdfSnapshot ? new Decimal(pdfSnapshot.costo_unitario_total).times(presupuestoCantidad) : new Decimal(0);
+        const pdfRoundingFactor = originalAmount.isZero() ? new Decimal(1) : originalAmount.toDecimalPlaces(2).div(originalAmount);
 
         for (const { key } of INSUMO_TYPES) {
             if (!tiposValidos.includes(key)) continue;
@@ -306,6 +310,10 @@ export function flattenInsumos(
                         precio,
                         itemCostFactor(key, item),
                     );
+                if (pdfSnapshot && item.source_pdf) {
+                    usage.parcial = new Decimal(item.source_pdf.partial).times(presupuestoCantidad).times(pdfRoundingFactor).toDecimalPlaces(10).toNumber();
+                    if (esPorcentaje) usage.cantidad = usage.parcial;
+                }
 
                 const baseKey = [
                     key,

@@ -39,4 +39,8 @@ return [
         'binary' => env('DIALUX_PHOTOMETRY_BINARY'),
     ],
 
+    's10_pdf' => [
+        'python' => env('S10_PDF_PYTHON', 'python'),
+    ],
+
 ];
