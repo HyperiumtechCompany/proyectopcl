@@ -13,7 +13,8 @@ class PreviewS10PdfRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return app()->environment('local');
+        // El controlador comprueba el acceso al proyecto y al módulo.
+        return true;
     }
 
     /**

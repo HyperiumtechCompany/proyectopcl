@@ -424,7 +424,7 @@ function StepAcus({
     const [loadError, setLoadError] = useState<string | null>(null);
     const pdfReading = useRef<{ file: File; controller: AbortController } | null>(null);
     useEffect(() => () => pdfReading.current?.controller.abort(), []);
-    const localPdfEnabled = source === 's10' && pdfEnabled;
+    const s10PdfEnabled = source === 's10' && pdfEnabled;
 
     const addFiles = useCallback(async (newFiles: File[]) => {
         const stubs: AcuFileState[] = newFiles.map((f) => ({
@@ -438,7 +438,7 @@ function StepAcus({
                 const kind = await detectAcuFileKind(file);
                 setFiles((previous) => previous.map((state) => state.file === file ? { ...state, kind } : state));
                 if (kind === 'pdf') {
-                    if (!localPdfEnabled) throw new Error('El lector PDF solo está habilitado en el entorno local de este proyecto.');
+                    if (!s10PdfEnabled) throw new Error('El lector PDF no está habilitado para esta importación.');
                     const controller = new AbortController();
                     pdfReading.current = { file, controller };
                     try {
@@ -471,7 +471,7 @@ function StepAcus({
                 );
             }
         }
-    }, [delphinRows, source, localPdfEnabled, projectId]);
+    }, [delphinRows, source, s10PdfEnabled, projectId]);
 
     const removeFile = useCallback((file: File) => {
         if (pdfReading.current?.file === file) pdfReading.current.controller.abort();
@@ -508,8 +508,8 @@ function StepAcus({
                 <p className="mt-0.5 text-xs text-slate-400">
                     {SOURCES[source].acuHint}
                 </p>
-                {localPdfEnabled && <p className="mt-2 text-xs text-blue-300">También puedes seleccionar un PDF de ACU para la prueba local. Primero se revisarán sus costos y vínculos.</p>}
-                {source === 's10' && !pdfEnabled && <p className="mt-2 text-xs text-amber-300">El lector PDF está habilitado únicamente en el entorno local del proyecto.</p>}
+                {s10PdfEnabled && <p className="mt-2 text-xs text-blue-300">También puedes seleccionar un PDF de ACU de S10. Primero se revisarán sus costos y vínculos.</p>}
+                {source === 's10' && !pdfEnabled && <p className="mt-2 text-xs text-amber-300">El lector PDF no está habilitado para esta importación.</p>}
             </div>
 
             {!importDone && delphinRows.length === 0 && (
@@ -521,10 +521,10 @@ function StepAcus({
 
             {!importDone && (
                 <DropZone
-                    accept={localPdfEnabled ? '' : '.xlsx,.xls'}
+                    accept={s10PdfEnabled ? '' : '.xlsx,.xls'}
                     multiple
                     disabled={delphinRows.length === 0 || files.some((state) => state.status === 'parsing')}
-                    label={localPdfEnabled ? 'Agregar ACUs Excel o PDF, incluso sin extensión (prueba local)' : 'Arrastra o haz clic para agregar archivos de ACUs (puedes subir varios)'}
+                    label={s10PdfEnabled ? 'Agregar ACUs Excel o PDF, incluso sin extensión' : 'Arrastra o haz clic para agregar archivos de ACUs (puedes subir varios)'}
                     onFiles={addFiles}
                 />
             )}
@@ -653,7 +653,7 @@ export function ImportDelphinModal({
     open,
     project: _project,
     project_id_int: _pid,
-    pdfEnabled = import.meta.env.DEV,
+    pdfEnabled = true,
     delphinRows,
     onClose,
     onBudgetImported,
@@ -681,7 +681,7 @@ export function ImportDelphinModal({
                 {/* Header */}
                 <div className="flex shrink-0 items-center justify-between border-b border-slate-700 px-4 py-3">
                     <div className="flex items-center gap-3">
-                        <span className="text-sm font-semibold text-slate-100">{source === 's10' && pdfEnabled ? 'Importar S10 · Excel / PDF local' : SOURCES[source].title}</span>
+                        <span className="text-sm font-semibold text-slate-100">{source === 's10' && pdfEnabled ? 'Importar S10 · Excel / PDF' : SOURCES[source].title}</span>
                         <div className="flex items-center gap-1">
                             {(['budget', 'acus'] as Step[]).map((s, i) => (
                                 <React.Fragment key={s}>

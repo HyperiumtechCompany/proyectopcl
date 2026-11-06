@@ -459,3 +459,13 @@ El inspector tiene páginas de 100 filas con Anterior/Siguiente y aclara que la 
 Archivos principales: `S10PdfSnapshot.php`, `S10PdfReader.php`, los FormRequest de cálculo/lectura, `PresupuestoController.php`, `CostoDatabaseService.php`, `usePresupuestoAcu.ts`, `previewS10Pdf.ts`, modal/panel de revisión, `AcuPanel.tsx`, consolidado y sus pruebas. La procedencia se almacena en JSON existente; no hay tablas ni columnas nuevas.
 
 No se ejecutó una importación ni un guardado sobre la base de datos del usuario. La validación masiva fue de datos y cálculo; la prueba de escritura usó exclusivamente SQLite en memoria. El usuario realizará el build y la importación final en su presupuesto.
+
+## 17. Liberación del lector en producción
+
+Se retira la condición `APP_ENV=local` del indicador de interfaz y de la solicitud de lectura. El endpoint Laravel existente funciona con assets compilados, conserva autenticación, acceso al proyecto y comprobación del módulo presupuesto. No se habilita acceso anónimo. Se mantienen revisión previa, selección explícita, límite de 20 MB y guardado existente. El laboratorio Vite continúa aislado y solo sirve para pruebas de desarrollo.
+
+Requisitos del servidor: Python con PyMuPDF (ya utilizado por este lector), ejecución de procesos desde PHP y presencia de `scripts/s10_import_pdf.py` en el despliegue. Configurar `S10_PDF_PYTHON` con el ejecutable correcto, por ejemplo `/var/www/venvs/s10/bin/python` o `python3`. El Python indicado debe permitir ejecutar `-c "import fitz"`; no basta con que PyMuPDF esté instalado en el equipo del desarrollador. El despliegue comprueba este requisito antes del build, sin instalar paquetes automáticamente. Mantener el límite HTTP/PHP por encima del tamaño del PDF y un timeout compatible con la lectura (hasta 120 segundos).
+
+Publicación: desplegar los archivos PHP, React y el script Python; configurar el ejecutable; compilar con `npm run build` y renovar la caché de configuración según el flujo habitual de despliegue. No requiere migraciones nuevas. El build y la publicación real quedan a cargo del usuario; no se ejecutaron en este cambio.
+
+Verificación de liberación: 22 pruebas frontend y 21 pruebas backend aprobadas. Se comprueba lectura desde un build sin Vite y permisos del controlador en entorno `production`, incluidos rechazo de proyecto ajeno y módulo deshabilitado. Las pruebas no escriben en proyectos reales.

@@ -1,4 +1,4 @@
-"""Lector experimental local. Extrae datos; no importa ni guarda en Laravel."""
+"""Lector de ACU S10 en PDF. Extrae datos; no importa ni guarda en Laravel."""
 
 import argparse
 import json

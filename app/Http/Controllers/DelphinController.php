@@ -80,7 +80,7 @@ class DelphinController extends Controller
             'project_id_int' => (int) $projectId,
             'project_name' => $costoProject->nombre ?? '',
             'initialRows' => $rows,
-            's10PdfEnabled' => app()->environment('local'),
+            's10PdfEnabled' => true,
             'initialTasks' => $tasks,
             'initialCalendarSettings' => $this->fetchCalendarSettings((string) $projectId),
             'projectParams' => $projectParams ? (array) $projectParams : null,

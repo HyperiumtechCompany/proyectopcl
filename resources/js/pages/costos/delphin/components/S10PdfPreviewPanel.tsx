@@ -34,7 +34,7 @@ export function S10PdfPreviewPanel({
     return (
         <div className="mt-3 flex flex-col gap-3 text-xs text-slate-300">
             <p className="rounded border border-blue-800 bg-blue-950/40 px-3 py-2 text-blue-200">
-                PDF de prueba local: {preview.pages} páginas,{' '}
+                PDF de ACU: {preview.pages} páginas,{' '}
                 {preview.entries.length} ACU principales y{' '}
                 {preview.auxiliaryCount} auxiliares. {linked} vinculados con
                 este presupuesto.

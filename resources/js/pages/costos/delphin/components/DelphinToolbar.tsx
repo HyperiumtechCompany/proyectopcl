@@ -238,7 +238,7 @@ function ImportBudgetDropdown({
                         <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">Importa presupuesto y ACUs desde el archivo</span>
                     </button>
                     <button type="button" className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-sky-600 hover:text-white dark:text-slate-200 dark:hover:bg-sky-700" onClick={() => select(onImportS10)}>
-                        <span className="block font-medium">{pdfEnabled ? 'Desde S10 (Excel / PDF local)' : 'Desde Excel S10'}</span>
+                        <span className="block font-medium">{pdfEnabled ? 'Desde S10 (Excel / PDF)' : 'Desde Excel S10'}</span>
                         <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">Reportes Presupuesto y Análisis de precios unitarios de S10</span>
                     </button>
                 </div>

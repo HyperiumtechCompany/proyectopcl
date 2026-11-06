@@ -138,7 +138,7 @@ export async function readLocalS10Pdf(
     if ((await detectAcuFileKind(file)) !== 'pdf')
         throw new Error('Selecciona un archivo PDF.');
     if (file.size > 20 * 1024 * 1024)
-        throw new Error('El PDF supera el límite local de 20 MB.');
+        throw new Error('El PDF supera el límite de 20 MB.');
     let data: unknown;
     if (projectId > 0) {
         const response = await axios.post(previewPdf.url(projectId), file, {
@@ -174,7 +174,7 @@ export async function readLocalS10Pdf(
     }
     if (!isS10PdfDocument(data))
         throw new Error(
-            'El lector local devolvió datos incompletos. No se cargó ningún ACU.',
+            'El lector PDF devolvió datos incompletos. No se cargó ningún ACU.',
         );
     if (!data.analyses.some((analysis) => analysis.kind === 'main'))
         throw new Error(

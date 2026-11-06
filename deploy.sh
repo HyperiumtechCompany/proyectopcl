@@ -14,6 +14,20 @@ composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
 echo "[CACHE] Limpiando caches anteriores..."
 php artisan optimize:clear
 
+echo "[S10 PDF] Verificando Python y PyMuPDF..."
+php -r '
+require "vendor/autoload.php";
+$app = require "bootstrap/app.php";
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$result = Illuminate\Support\Facades\Process::run([
+    config("services.s10_pdf.python", "python"), "-c", "import fitz"
+]);
+if ($result->failed()) {
+    fwrite(STDERR, "[S10 PDF] Configura S10_PDF_PYTHON con un Python que tenga PyMuPDF instalado.\n");
+    exit(1);
+}
+'
+
 echo "[FRONTEND] Instalando y compilando assets..."
 npm ci --include=dev --legacy-peer-deps --no-audit --no-fund
 npm run build

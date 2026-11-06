@@ -15,7 +15,7 @@ class S10PdfReader
             '--stdin',
         ]);
         if ($result->failed()) {
-            throw ValidationException::withMessages(['pdf_bytes' => 'No se pudo leer el PDF. Comprueba Python/PyMuPDF en el entorno local.']);
+            throw ValidationException::withMessages(['pdf_bytes' => 'No se pudo leer el PDF. Comprueba que Python y PyMuPDF estén disponibles en el servidor.']);
         }
         try {
             $data = json_decode($result->output(), true, 512, JSON_THROW_ON_ERROR);

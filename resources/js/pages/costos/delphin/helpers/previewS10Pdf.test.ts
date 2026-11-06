@@ -77,7 +77,7 @@ afterEach(() => {
     vi.unstubAllEnvs();
 });
 
-describe('PDF S10 desde la interfaz local', () => {
+describe('PDF S10 desde la interfaz', () => {
     it('conserva el origen al normalizar, serializar y recargar, y recalcula al editar', () => {
         const source = acu();
         const imported = previewS10Pdf(document([source]), [row()])
@@ -95,7 +95,7 @@ describe('PDF S10 desde la interfaz local', () => {
         expect(calculateAcuLocally(reloaded).costo_unitario_total).toBe(20);
     });
 
-    it('funciona en build local usando Laravel en lugar de Vite', async () => {
+    it('funciona en build de producción usando Laravel en lugar de Vite', async () => {
         vi.stubEnv('DEV', false);
         const post = vi
             .spyOn(axios, 'post')

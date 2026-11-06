@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -123,15 +124,43 @@ it('guarda y recarga en SQLite aislado sin cambiar el precio Excel', function ()
         ->and((float) DB::connection('costos_tenant')->table('presupuesto_general')->where('id', 2)->value('parcial'))->toEqualWithDelta(1.5162, .0000000001);
 });
 
-it('lee por stdin sin Vite y restringe el lector al entorno local', function () {
+it('lee por stdin sin Vite también en producción', function () {
     Process::fake(['*' => Process::result(output: json_encode(['analyses' => [['kind' => 'main']]]))]);
     expect(app(S10PdfReader::class)->read('%PDF-1.7')['analyses'])->toHaveCount(1);
     Process::assertRan(fn ($process) => $process->input === '%PDF-1.7' && in_array('--stdin', $process->command, true));
     app()->instance('env', 'local');
     expect((new PreviewS10PdfRequest)->authorize())->toBeTrue();
     app()->instance('env', 'production');
-    expect((new PreviewS10PdfRequest)->authorize())->toBeFalse();
+    expect((new PreviewS10PdfRequest)->authorize())->toBeTrue();
 });
+
+it('mantiene el acceso al proyecto y al modulo en produccion', function (int $ownerId, bool $moduleEnabled, bool $allowed) {
+    app()->instance('env', 'production');
+    Auth::setUser((new User)->forceFill(['id' => 7]));
+    $project = Mockery::mock(CostoProject::class)->makePartial();
+    $project->forceFill(['id' => 1, 'user_id' => $ownerId]);
+    $project->shouldReceive('hasUnifiedPresupuesto')->andReturn($moduleEnabled);
+    $request = Mockery::mock(PreviewS10PdfRequest::class);
+    $reader = Mockery::mock(S10PdfReader::class);
+    if ($allowed) {
+        $request->shouldReceive('validated')->once()->with('pdf_bytes')->andReturn('%PDF-1.7');
+        $reader->shouldReceive('read')->once()->with('%PDF-1.7')->andReturn(['analyses' => [['kind' => 'main']]]);
+        $response = app(PresupuestoController::class)->previewPdf($project, $request, $reader);
+        expect($response->getStatusCode())->toBe(200);
+    } else {
+        $reader->shouldNotReceive('read');
+        try {
+            app(PresupuestoController::class)->previewPdf($project, $request, $reader);
+            $this->fail('El lector debe rechazar el acceso.');
+        } catch (HttpException $exception) {
+            expect($exception->getStatusCode())->toBe(403);
+        }
+    }
+})->with([
+    'propietario con presupuesto' => [7, true, true],
+    'proyecto de otro usuario' => [8, true, false],
+    'presupuesto deshabilitado' => [7, false, false],
+]);
 
 it('informa errores del lector y rechaza archivos vacios o falsos', function () {
     Process::fake(['*' => Process::result(errorOutput: 'invalid PDF', exitCode: 1)]);
