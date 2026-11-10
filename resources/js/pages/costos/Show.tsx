@@ -65,6 +65,7 @@ interface ProjectDetail {
 interface PageProps {
     project: ProjectDetail;
     cuadernoEnabled?: boolean;
+    costosAccess?: 'owner' | 'editor' | 'viewer';
     flash?: { success?: string | null; error?: string | null };
     [key: string]: unknown;
 }
@@ -401,7 +402,7 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function Show() {
-    const { project, flash, cuadernoEnabled } = usePage<PageProps>().props;
+    const { project, flash, cuadernoEnabled, costosAccess = 'owner' } = usePage<PageProps>().props;
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [migrating, setMigrating] = useState(false);
 
@@ -614,6 +615,8 @@ export default function Show() {
                 </div>
 
                 {/* ── Sección de Migración ─────────────────────────────────── */}
+                {/* Migrar y eliminar son del dueño; los colaboradores no las ven. */}
+                {costosAccess === 'owner' && (<>
                 <section className="rounded-xl border border-blue-100 bg-blue-50/40 p-5 dark:border-blue-900/40 dark:bg-blue-950/20">
                     <div className="flex items-start gap-3">
                         <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-500 dark:bg-blue-900/40 dark:text-blue-400">
@@ -721,6 +724,7 @@ export default function Show() {
                         </div>
                     </div>
                 </section>
+                </>)}
 
             </div>
         </AppLayout>

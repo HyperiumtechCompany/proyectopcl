@@ -1,9 +1,11 @@
 import { router, usePage } from '@inertiajs/react';
 import React, { useEffect, useState } from 'react';
+import { QuotaBadge } from '@/components/quota-badge';
+import type { QuotaStatus } from '@/components/quota-badge';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 
-interface PageProps { moduleTypes: string[]; [key: string]: unknown; }
+interface PageProps { moduleTypes: string[]; quota?: QuotaStatus | null; [key: string]: unknown; }
 interface UbigeoItem { id: string; nombre: string; }
 
 const MODULE_LABELS: Record<string, string> = {
@@ -74,7 +76,7 @@ const DEMO = {
 };
 
 export default function Create() {
-    const { moduleTypes } = usePage<PageProps>().props;
+    const { moduleTypes, quota } = usePage<PageProps>().props;
     const [step, setStep] = useState(1);
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -255,6 +257,7 @@ export default function Create() {
                             </div>
                             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Registro de Proyecto de Costos</h1>
                             <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Complete los datos del expediente técnico para continuar.</p>
+                            <div className="mt-2"><QuotaBadge quota={quota} /></div>
                         </div>
 
                         {/* Demo data button */}

@@ -10,6 +10,7 @@ use App\Http\Controllers\ControlAvanFisicoController;
 use App\Http\Controllers\ControlFinancieroController;
 use App\Http\Controllers\CostoModuleController;
 use App\Http\Controllers\CostoProjectController;
+use App\Http\Controllers\CostoProjectShareController;
 use App\Http\Controllers\CronoEjecutadoController;
 use App\Http\Controllers\CronogramaController;
 use App\Http\Controllers\CronogramaV2Controller;
@@ -340,6 +341,15 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
         Route::get('/', [MaintenancePlantillaController::class, 'index'])->name('index');
         Route::delete('/{plantilla}', [MaintenancePlantillaController::class, 'destroy'])->name('destroy');
     });
+
+    // Compartir: unirse con código (cualquier usuario del sistema), gestionar colaboradores
+    // (dueño) y transferir a la cuenta de otro usuario (root/gerencia, ver TransferCostoProjectRequest).
+    Route::post('/unirse', [CostoProjectShareController::class, 'join'])->name('join');
+    Route::get('/{costoProject}/compartir', [CostoProjectShareController::class, 'show'])->name('share.show');
+    Route::post('/{costoProject}/compartir', [CostoProjectShareController::class, 'share'])->name('share.store');
+    Route::patch('/{costoProject}/compartir/{user}', [CostoProjectShareController::class, 'updateRole'])->name('share.update');
+    Route::delete('/{costoProject}/compartir/{user}', [CostoProjectShareController::class, 'remove'])->name('share.remove');
+    Route::post('/{costoProject}/transferir', [CostoProjectShareController::class, 'transfer'])->name('transfer');
 
     Route::get('/{costoProject}/edit', [CostoProjectController::class, 'edit'])->name('edit');
     Route::post('/', [CostoProjectController::class, 'store'])->name('store');

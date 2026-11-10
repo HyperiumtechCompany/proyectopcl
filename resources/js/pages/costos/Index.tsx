@@ -1,14 +1,19 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import {
-    FolderOpen, Plus, Pencil, Trash2, ChevronRight,
+    FolderOpen, Plus, ChevronRight,
     LayoutGrid, List, Search, Building2, Hash,
     Layers, Clock, CheckCircle2, Archive,
-    FileX, SlidersHorizontal, TrendingUp,
+    FileX, SlidersHorizontal, TrendingUp, KeyRound,
 } from 'lucide-react';
 import React, { useState } from 'react';
 import Swal from 'sweetalert2';
+import { join as joinProject } from '@/actions/App/Http/Controllers/CostoProjectShareController';
+import { QuotaBadge } from '@/components/quota-badge';
+import type { QuotaStatus } from '@/components/quota-badge';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
+import { CostoProjectActions, CostoSharedBadge } from './components/CostoProjectActions';
+import type { CostoAccess } from './components/CostoProjectActions';
 
 interface Project {
     id: number;
@@ -20,10 +25,15 @@ interface Project {
     modules_count: number;
     created_at: string;
     updated_at: string;
+    access: CostoAccess;
+    owner_name: string | null;
+    collaborators_count: number | null;
 }
 
 interface PageProps {
     projects: Project[];
+    quota?: QuotaStatus | null;
+    canTransfer?: boolean;
     [key: string]: unknown;
 }
 
@@ -48,7 +58,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function Index() {
-    const { projects } = usePage<PageProps>().props;
+    const { projects, quota, canTransfer = false } = usePage<PageProps>().props;
     const [viewMode, setViewMode] = useState<ViewMode>('grid');
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
@@ -94,6 +104,25 @@ export default function Index() {
         if (result.isConfirmed) router.delete(`/costos/${project.id}`);
     };
 
+    const joinWithCode = async () => {
+        const result = await Swal.fire({
+            title: 'Unirse con código',
+            text: 'Ingresa el código de 8 caracteres que te compartió el dueño del proyecto.',
+            input: 'text',
+            inputAttributes: { maxlength: '8', autocapitalize: 'characters' },
+            showCancelButton: true,
+            confirmButtonText: 'Unirme',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#2563eb',
+        });
+
+        if (!result.isConfirmed || !result.value) return;
+
+        router.post(joinProject.url(), { code: String(result.value) }, {
+            onError: (errors) => void Swal.fire({ icon: 'error', title: 'No se pudo unir', text: Object.values(errors)[0] ?? '' }),
+        });
+    };
+
     const breadcrumbs: BreadcrumbItem[] = [{ title: 'Costos', href: '/costos' }];
 
     return (
@@ -114,14 +143,26 @@ export default function Index() {
                                 <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
                                     Gestión de expedientes técnicos y bases de datos aisladas
                                 </p>
+                                <div className="mt-2">
+                                    <QuotaBadge quota={quota} />
+                                </div>
                             </div>
                         </div>
-                        <Link
-                            href="/costos/create"
-                            className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-blue-200 transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:scale-[0.97] dark:shadow-blue-900/30">
-                            <Plus className="h-4 w-4" />
-                            Nuevo Proyecto
-                        </Link>
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => void joinWithCode()}
+                                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">
+                                <KeyRound className="h-4 w-4" />
+                                Unirse con código
+                            </button>
+                            <Link
+                                href="/costos/create"
+                                className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-blue-200 transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:scale-[0.97] dark:shadow-blue-900/30">
+                                <Plus className="h-4 w-4" />
+                                Nuevo Proyecto
+                            </Link>
+                        </div>
                     </div>
 
                     {/* ── STATS ROW ───────────────────────────────────────── */}
@@ -244,6 +285,7 @@ export default function Index() {
                                                     <h3 className="line-clamp-2 text-sm font-bold leading-snug text-gray-900 transition-colors group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">
                                                         {p.nombre}
                                                     </h3>
+                                                    <div className="mt-1"><CostoSharedBadge project={p} /></div>
                                                 </div>
                                             </div>
                                             <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide
@@ -294,22 +336,13 @@ export default function Index() {
                                             <TrendingUp className="h-3.5 w-3.5" />
                                             <span>Ver expediente</span>
                                         </div>
-                                        <div className="flex items-center gap-1">
-                                            <button
-                                                onClick={async (e) => { e.stopPropagation(); await confirmEdit(p); }}
-                                                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-amber-600 transition hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/20"
-                                                title="Editar proyecto">
-                                                <Pencil className="h-3.5 w-3.5" />
-                                                Editar
-                                            </button>
-                                            <div className="h-4 w-px bg-gray-200 dark:bg-gray-700" />
-                                            <button
-                                                onClick={async (e) => { e.stopPropagation(); await confirmDelete(p); }}
-                                                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-red-500 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                                                title="Eliminar proyecto">
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                                Eliminar
-                                            </button>
+                                        <div className="flex flex-wrap items-center justify-end gap-1">
+                                            <CostoProjectActions
+                                                project={p}
+                                                canTransfer={canTransfer}
+                                                onEdit={() => void confirmEdit(p)}
+                                                onDelete={() => void confirmDelete(p)}
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -343,6 +376,7 @@ export default function Index() {
                                             </div>
                                             <div className="min-w-0">
                                                 <p className="truncate text-sm font-bold text-gray-900 group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">{p.nombre}</p>
+                                                <CostoSharedBadge project={p} />
                                                 <div className="mt-0.5 flex items-center gap-3">
                                                     {p.codigo_cui && (
                                                         <span className="flex items-center gap-1 text-[11px] text-gray-400">
@@ -387,19 +421,14 @@ export default function Index() {
                                         </div>
 
                                         {/* Actions */}
-                                        <div className="col-span-1 flex items-center justify-end gap-1">
-                                            <button
-                                                onClick={async (e) => { e.stopPropagation(); await confirmEdit(p); }}
-                                                className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20 dark:hover:text-amber-400"
-                                                title="Editar">
-                                                <Pencil className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                onClick={async (e) => { e.stopPropagation(); await confirmDelete(p); }}
-                                                className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-                                                title="Eliminar">
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
+                                        <div className="col-span-1 flex flex-wrap items-center justify-end gap-0.5">
+                                            <CostoProjectActions
+                                                project={p}
+                                                canTransfer={canTransfer}
+                                                onEdit={() => void confirmEdit(p)}
+                                                onDelete={() => void confirmDelete(p)}
+                                                compact
+                                            />
                                             <ChevronRight className="ml-1 h-4 w-4 text-gray-300 dark:text-gray-600" />
                                         </div>
                                     </div>

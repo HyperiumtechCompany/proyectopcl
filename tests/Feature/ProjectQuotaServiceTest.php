@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\ProjectQuotaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
@@ -38,7 +39,7 @@ class ProjectQuotaServiceTest extends TestCase
             'demo_expires_at' => now()->addDays(5),
         ]);
 
-        $this->expectException(HttpException::class);
+        $this->expectException(ValidationException::class);
         $this->service->assertCanCreate($user, 'costos');
     }
 
@@ -67,7 +68,7 @@ class ProjectQuotaServiceTest extends TestCase
 
         CostoProject::factory()->create(['user_id' => $user->id]);
 
-        $this->expectException(HttpException::class);
+        $this->expectException(ValidationException::class);
         $this->service->assertCanCreate($user, 'costos');
     }
 
@@ -143,6 +144,39 @@ class ProjectQuotaServiceTest extends TestCase
         }
     }
 
+    public function test_quota_status_reports_remaining_projects(): void
+    {
+        $org = Organization::factory()->create(['plan' => 'negocios']); // 5 costos
+        $user = User::factory()->create(['organization_id' => $org->id]);
+        CostoProject::factory()->count(3)->create(['user_id' => $user->id]);
+
+        $status = $this->service->quotaStatus($user, 'costos');
+
+        $this->assertSame(5, $status['limit']);
+        $this->assertSame(3, $status['used']);
+        $this->assertSame(2, $status['remaining']);
+        $this->assertTrue($status['shared']);
+        $this->assertSame('Te quedan 2 proyectos de 5 en tu plan.', $this->service->remainingNotice($user, 'costos'));
+    }
+
+    public function test_remaining_notice_warns_when_last_slot_was_used(): void
+    {
+        $user = User::factory()->create(['plan' => 'mensual']); // 10 costos
+        CostoProject::factory()->count(10)->create(['user_id' => $user->id]);
+
+        $this->assertSame(0, $this->service->quotaStatus($user, 'costos')['remaining']);
+        $this->assertStringStartsWith('Usaste tu último cupo (10 de 10)', $this->service->remainingNotice($user, 'costos'));
+    }
+
+    public function test_quota_status_is_unlimited_when_plan_has_no_limit(): void
+    {
+        $org = Organization::factory()->create(['plan' => 'negocios']); // sin 'resto'
+        $user = User::factory()->create(['organization_id' => $org->id]);
+
+        $this->assertNull($this->service->quotaStatus($user, 'agua')['limit']);
+        $this->assertNull($this->service->remainingNotice($user, 'agua'));
+    }
+
     public function test_organization_quota_is_a_shared_pool_across_members(): void
     {
         $org = Organization::factory()->create(['plan' => 'negocios']); // 5 costos, shared
@@ -154,7 +188,7 @@ class ProjectQuotaServiceTest extends TestCase
         CostoProject::factory()->create(['user_id' => $userB->id]);
 
         // Doesn't matter which member tries next — the shared pool is full.
-        $this->expectException(HttpException::class);
+        $this->expectException(ValidationException::class);
         $this->service->assertCanCreate($userA, 'costos');
     }
 
@@ -186,7 +220,7 @@ class ProjectQuotaServiceTest extends TestCase
 
         CostoProject::factory()->count(10)->create(['user_id' => $user->id]);
 
-        $this->expectException(HttpException::class);
+        $this->expectException(ValidationException::class);
         $this->service->assertCanCreate($user, 'costos');
     }
 

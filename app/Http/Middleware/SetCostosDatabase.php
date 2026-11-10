@@ -3,10 +3,12 @@
 namespace App\Http\Middleware;
 
 use App\Models\CostoProject;
+use App\Models\CostoProjectCollaborator;
 use App\Services\CostoDatabaseService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
 class SetCostosDatabase
@@ -36,10 +38,17 @@ class SetCostosDatabase
             $project = CostoProject::findOrFail($project);
         }
 
-        // Verificar dueño del proyecto — sin esto, cualquier usuario autenticado
-        // que conozca/adivine el ID puede leer y modificar datos de otro proyecto.
-        if ($project->user_id !== Auth::id()) {
+        // Verificar acceso (dueño o colaborador) — sin esto, cualquier usuario
+        // autenticado que conozca/adivine el ID puede leer y modificar otro proyecto.
+        $role = $project->accessRoleFor(Auth::user());
+        if ($role === null) {
             abort(403, 'No tienes acceso a este proyecto.');
+        }
+
+        // Lector: solo lectura. Se bloquea toda escritura aquí, en un solo lugar,
+        // en vez de confiar en que cada pantalla oculte sus botones de guardar.
+        if ($role === CostoProjectCollaborator::ROLE_VIEWER && $this->isWriteRequest($request)) {
+            return $this->readOnlyResponse($request);
         }
 
         if ($project->is_demo && $project->demo_expires_at?->isPast()) {
@@ -56,7 +65,39 @@ class SetCostosDatabase
 
         // Share project instance in request for downstream usage
         $request->attributes->set('costoProject', $project);
+        Inertia::share('costosAccess', $role);
 
         return $next($request);
+    }
+
+    /**
+     * POST que solo leen (generan una vista previa) y por tanto se permiten al lector.
+     */
+    private const READ_ONLY_POST_ROUTES = [
+        'costos.proyectos.presupuesto.acus.preview-pdf',
+    ];
+
+    private function isWriteRequest(Request $request): bool
+    {
+        if ($request->isMethodSafe()) {
+            return false;
+        }
+
+        return ! in_array($request->route()?->getName(), self::READ_ONLY_POST_ROUTES, true);
+    }
+
+    private function readOnlyResponse(Request $request): Response
+    {
+        $message = 'Tienes acceso de solo lectura a este proyecto. Pide al dueño permiso de editor para hacer cambios.';
+
+        if ($request->header('X-Inertia')) {
+            return back()->withErrors(['read_only' => $message]);
+        }
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json(['message' => $message], 403);
+        }
+
+        abort(403, $message);
     }
 }

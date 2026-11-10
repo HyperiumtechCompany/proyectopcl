@@ -2985,7 +2985,7 @@ class PresupuestoController extends Controller
      */
     private function authorizeProject(CostoProject $project): void
     {
-        if ($project->user_id !== Auth::id()) {
+        if (! $project->canBeViewedBy(Auth::user())) {
             abort(403, 'No tienes acceso a este proyecto.');
         }
     }

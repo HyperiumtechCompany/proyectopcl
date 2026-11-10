@@ -174,7 +174,7 @@ class GastFinController extends Controller
 
     private function document(Request $request, CostoProject $project): MaintenanceDocument
     {
-        abort_unless($project->user_id === $request->user()?->id, 403);
+        abort_unless($project->canBeViewedBy($request->user()), 403);
 
         return $this->documents->resolve($project);
     }

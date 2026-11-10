@@ -26,8 +26,14 @@ class CostoProjectController extends Controller
      */
     public function index()
     {
-        $projects = CostoProject::where('user_id', Auth::id())
-            ->with('enabledModules')
+        $user = Auth::user();
+
+        // Propios + compartidos conmigo (como editor o lector).
+        $projects = CostoProject::query()
+            ->where('user_id', $user->id)
+            ->orWhereHas('collaborators', fn ($query) => $query->where('users.id', $user->id))
+            ->with(['enabledModules', 'user:id,name', 'collaborators' => fn ($query) => $query->where('users.id', $user->id)])
+            ->withCount('collaborators')
             ->orderByDesc('updated_at')
             ->get()
             ->map(fn (CostoProject $p) => [
@@ -40,10 +46,15 @@ class CostoProjectController extends Controller
                 'modules_count' => $p->enabledModules->count(),
                 'created_at' => $p->created_at->format('d/m/Y'),
                 'updated_at' => $p->updated_at->diffForHumans(),
+                'access' => $p->user_id === $user->id ? 'owner' : ($p->collaborators->first()?->pivot->role ?? 'viewer'),
+                'owner_name' => $p->user_id === $user->id ? null : $p->user?->name,
+                'collaborators_count' => $p->user_id === $user->id ? $p->collaborators_count : null,
             ]);
 
         return Inertia::render('costos/Index', [
             'projects' => $projects,
+            'quota' => $this->quotaService->quotaStatus($user, 'costos'),
+            'canTransfer' => $user->hasAnyRole(['root', 'gerencia']),
         ]);
     }
 
@@ -54,6 +65,7 @@ class CostoProjectController extends Controller
     {
         return Inertia::render('costos/Create', [
             'moduleTypes' => CostoProject::MODULE_TYPES,
+            'quota' => $this->quotaService->quotaStatus(Auth::user(), 'costos'),
         ]);
     }
 
@@ -171,7 +183,8 @@ class CostoProjectController extends Controller
             }
 
             return redirect()->route('costos.show', $project)
-                ->with('success', 'Proyecto de costos creado exitosamente.');
+                ->with('success', 'Proyecto de costos creado exitosamente.')
+                ->with('quota', $this->quotaService->remainingNotice($request->user(), 'costos'));
 
         } catch (\Exception $e) {
 
@@ -207,12 +220,15 @@ class CostoProjectController extends Controller
      */
     public function show(CostoProject $costoProject)
     {
-        $this->authorizeProject($costoProject);
+        $accessRole = $costoProject->accessRoleFor(Auth::user());
+        abort_if($accessRole === null, 403, 'No tienes acceso a este proyecto.');
 
         $costoProject->load('enabledModules');
 
         return Inertia::render('costos/Show', [
-            'cuadernoEnabled' => (bool) config('cuaderno.enabled'),
+            // El Cuaderno usa la sesión OECE del dueño: nunca se comparte.
+            'cuadernoEnabled' => $accessRole === 'owner' && (bool) config('cuaderno.enabled'),
+            'costosAccess' => $accessRole,
             'project' => [
                 'id' => $costoProject->id,
                 'nombre' => $costoProject->nombre,
@@ -457,7 +473,8 @@ class CostoProjectController extends Controller
     }
 
     /**
-     * Verificar dueño del proyecto.
+     * Verificar dueño del proyecto (editar, borrar, migrar). Los colaboradores
+     * entran a los módulos vía SetCostosDatabase, no por aquí.
      */
     protected function authorizeProject(CostoProject $project): void
     {

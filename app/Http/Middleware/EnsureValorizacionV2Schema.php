@@ -21,7 +21,7 @@ class EnsureValorizacionV2Schema
     {
         $project = $request->route('costoProject');
         if ($project instanceof CostoProject) {
-            abort_unless($project->user_id === $request->user()?->id, 403);
+            abort_unless($project->canBeViewedBy($request->user()), 403);
             abort_unless($project->hasModule('crono_valorizado'), 404);
 
             if (! Schema::connection('costos_tenant')->hasTable('valorizacion_v2_cortes')) {

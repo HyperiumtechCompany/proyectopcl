@@ -18,7 +18,7 @@ class EnsureMaintenanceSchema
     {
         $project = $request->route('costoProject');
         if ($project instanceof CostoProject) {
-            abort_unless($project->user_id === $request->user()?->id, 403);
+            abort_unless($project->canBeViewedBy($request->user()), 403);
         }
 
         // Última tabla del esquema (Gast. Fin. agrega mantenimiento_documentos.origen, que el

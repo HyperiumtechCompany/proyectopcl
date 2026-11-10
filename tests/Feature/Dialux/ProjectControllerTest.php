@@ -32,7 +32,8 @@ test('creating a dialux project respects the plan quota', function () {
         'name' => 'Once and beyond',
     ]);
 
-    $response->assertStatus(422);
+    // Petición Inertia/web: vuelve atrás con errors.quota (no el modal crudo de 422).
+    $response->assertRedirect()->assertSessionHasErrors('quota');
     expect(DialuxProject::where('user_id', $user->id)->count())->toBe(10);
 });
 
